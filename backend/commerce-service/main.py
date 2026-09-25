@@ -21,6 +21,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session as OrmSession
 
 from common import economy, events, settings
+from common import agefeatures
 from common.auth import AdminUser, CurrentUser
 from common.notify import notify, notify_many
 from common.database import get_db
@@ -104,6 +105,10 @@ def pricing_preview(vendor_price: Decimal):
 
 @app.post("/commerce/products", status_code=201, tags=["marketplace"])
 def create_product(payload: ProductIn, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    # Selling to strangers is a contract, not a post. The refusal is 403 and
+    # says nothing about which age would qualify.
+    agefeatures.require(principal.user_id, "marketplace_sell")
+
     data = payload.model_dump(exclude={"images"})
     product = models.Product(
         id=new_id("prd"),
@@ -311,6 +316,8 @@ def escrow_terms():
 async def create_order(payload: OrderIn, principal: CurrentUser, db: OrmSession = Depends(get_db)):
     """Places an order. Nothing is posted to the ledger and nothing reaches the
     seller yet — the next step is payment into the custodian's hands."""
+    agefeatures.require(principal.user_id, "marketplace_buy")
+
     product = db.get(models.Product, payload.product_id)
     if product is None or product.status != "active":
         raise HTTPException(status_code=404, detail="Product not available")

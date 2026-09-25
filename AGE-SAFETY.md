@@ -343,11 +343,54 @@ expired ticket refused · a ticket for one asset does not open another.
 
 ---
 
-## 15. Livestream ⬜ · 16. Monetization ✅ (engine) 🟨 (enforcement)
+## 24–25. Livestream and monetization ✅
 
-`can_use_feature` already refuses livestream, monetization, marketplace and
-payments to under-18s and is unit-tested. The call is **not yet wired into**
-commerce-service and creator-service — the rule exists and nothing asks it yet.
+`common/agefeatures.py` — one helper, used by every service that sells or pays,
+because a marketplace that checks and a checkout that does not is a marketplace
+with a checkout-shaped hole.
+
+This gate is deliberately blunter than the content one: no grading, no
+per-category ceiling, no "restrict rather than refuse". Money is where an age
+rule stops being a judgement about suitability and becomes a legal one. A
+15-year-old seeing an unsuitable post is a moderation failure; a 15-year-old
+entering a contract, selling to strangers or receiving a payout is a different
+problem with different consequences.
+
+| Surface | Gate |
+|---|---|
+| list a product | `marketplace_sell` |
+| place an order | `marketplace_buy` |
+| **any** checkout | `payments` |
+| add a payout destination | `monetization` |
+| enable creator monetization | `monetization` |
+| buy a referral-pool seat | `referral_pool` |
+
+The checkout gate sits on the single door every payment goes through, not only
+on the features that lead to it, so a surface that forgets its own check still
+cannot take a minor's money.
+
+**403, not 404**, unlike the content paths. Hiding the existence of a
+marketplace from a teenager would be absurd — it is advertised on the marketing
+pages — and the honest answer is that they may not use it yet, not that it is
+not there. One sentence for every feature and every reason, naming no age.
+
+`GET /creators/eligibility` lets a client grey a button out and say why,
+instead of letting somebody fill in a payment form and refusing at the end. It
+is a readout; the gates on the endpoints are what enforce anything, and they do
+not consult it.
+
+### Livestreaming, honestly
+
+**There is no streaming backend.** No ingest, no session, no key — the `/live`
+page is a front-end demonstration. What exists is `GET /live/eligibility`: the
+age decision, exposed at the address a streaming stack would have to ask,
+returning the tier, the minimum age, whether gifting and monetization are
+allowed, and the policy version it came from.
+
+Building the gate first is deliberate. The alternative is shipping the stack
+and remembering the age rule afterwards, which is how a 13-year-old ends up
+live to strangers. The endpoint says in its own payload that the
+infrastructure is not built, so nobody reads it as more than it is.
 
 ---
 
@@ -428,6 +471,7 @@ backend/tests/e2e_messaging_age.py (live API)           → 18 checks passed
 backend/tests/e2e_classifier.py    (live API)           → 24 checks passed
 backend/tests/test_classifier.py                        → 26 passed
 backend/tests/e2e_discovery_forums.py (live API)        → 26 checks passed
+backend/tests/e2e_money_age.py     (live API)           → 26 checks passed
 backend/tests/schema_drift.py                           → no drift
 ```
 
@@ -476,9 +520,8 @@ minor→adult · locked settings · policy version on every verdict.
 - The heuristic lexicon is a stopgap with the failure modes of any word list.
   Every decision it makes is stamped `classifier_source="heuristic"` so its
   work can be found and re-run when a model arrives.
-- Livestream and monetization call sites are not yet on the engine, though the
-  rules for them are written and tested.
 - Comments and notifications are not yet filtered.
+- There is no streaming backend at all; only the age decision it will need.
 - `POST /internal/*` relies on network isolation. That is how the rest of this
   platform already works, but an authenticated service mesh would be better.
 - Nothing here has been reviewed by a lawyer. The jurisdiction table ships with
