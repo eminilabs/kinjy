@@ -117,13 +117,27 @@ if post_id:
           f"{r.status_code} {r.text[:100]}")
 
 print("\n== unclassified content is withheld from minors ==")
+# Plain text no longer produces an unclassified post: publication classifies
+# inline, and ordinary prose clears to GENERAL. The state this asserts is now
+# reached by a post carrying media, which no text pass can see into and which
+# therefore stays unrated until a human or a vision model settles it.
 r = c.post("/posts", headers=auth(adult_tok),
-           json={"body": "Freshly posted, not yet classified.", "visibility": "public"})
+           json={"body": "A picture from this morning.", "visibility": "public",
+                 "format": "image",
+                 "media": [{"media_id": "mda_none", "url": "/media/mda_none", "kind": "image"}]})
 fresh = r.json().get("id") if r.status_code in (200, 201) else None
 if fresh:
+    rating = httpx.get(
+        f"http://localhost:8203/internal/classification/{fresh}", timeout=10
+    ).json()
+    check("a media post is left unrated rather than guessed at",
+          rating.get("age_rating") == "UNCLASSIFIED", rating)
     r = c.get(f"/posts/{fresh}", headers=auth(teen_tok))
     check("a 14-year-old cannot read an unclassified post", r.status_code == 404,
           f"{r.status_code} {r.text[:100]}")
+    r = c.get(f"/posts/{fresh}", headers=auth(adult_tok))
+    check("an adult can, because unrated means adult-only not invisible",
+          r.status_code == 200, f"{r.status_code}")
 
 print("\n== the client cannot assert its own age ==")
 if post_id:

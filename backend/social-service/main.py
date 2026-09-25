@@ -13,7 +13,7 @@ from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session as OrmSession
 
 from common import events, notify
-from common.auth import CurrentUser, MaybeUser
+from common.auth import AdminUser, CurrentUser, MaybeUser
 from common.database import SessionLocal, get_db
 from common.ids import new_id
 from common.service import create_app
@@ -22,6 +22,7 @@ from common import ageclient, mediasign
 from common.agesafety import engine as age_engine
 
 import agefilter
+import classifier
 import models
 import ranking
 
@@ -139,6 +140,49 @@ def extract_hashtags(body: str) -> list[str]:
     \w would silently drop a Swahili or Arabic tag.
     """
     return [tag.lower() for tag in HASHTAG_RE.findall(body or "")]
+
+
+def _classify_and_store(
+    db: OrmSession, post: models.Post, media_kinds: list[str], author_is_minor: bool
+) -> classifier.Classification:
+    """Run the classifier and write the result alongside the post.
+
+    Inline rather than queued. A post that is published first and classified a
+    few seconds later is a post that was visible to everybody for those
+    seconds, and "a few seconds" is the entire lifetime of most feed
+    impressions. The classifier is a regex pass over one body of text; it costs
+    less than the insert it accompanies.
+    """
+    result = classifier.classify(
+        body=post.body or "",
+        media_kinds=media_kinds,
+        author_is_minor=author_is_minor,
+        declared_mature=bool(post.mature),
+    )
+
+    row = db.scalar(
+        select(models.ContentSafetyClassification).where(
+            models.ContentSafetyClassification.content_id == post.id
+        )
+    )
+    if row is None:
+        row = models.ContentSafetyClassification(id=new_id("csc"), content_id=post.id)
+        db.add(row)
+    for key, value in result.as_payload().items():
+        setattr(row, key, value)
+
+    if result.block_publication:
+        # Never published, not published-and-then-hidden. The difference is
+        # whether anybody saw it.
+        post.status = "withheld"
+    if result.escalate_child_safety:
+        # Out of the ordinary queue entirely. Logged at error level so it
+        # surfaces in alerting rather than waiting to be noticed in a backlog.
+        log.error(
+            "child-safety escalation on %s by %s (risk %s)",
+            post.id, post.author_id, result.exploitation_risk,
+        )
+    return result
 
 
 def _restrict_attached_media(media_ids: list[str | None]) -> None:
@@ -403,8 +447,24 @@ async def create_post(payload: PostIn, principal: CurrentUser, db: OrmSession = 
                 duration_seconds=item.get("duration_seconds"),
             )
         )
+    # Classified before it is committed as published: the age filter reads the
+    # classification row, so a post that reaches the feed without one would be
+    # invisible to minors at best and unrated at worst.
+    verdict = _classify_and_store(
+        db, post, [m.get("kind", "image") for m in payload.media],
+        _viewer_age(principal.user_id).is_minor,
+    )
     db.commit()
     db.refresh(post)
+
+    if verdict.block_publication:
+        # Deliberately vague, and identical whatever the reason. A message that
+        # explains which rule was tripped is a message that explains how to get
+        # around it next time.
+        raise HTTPException(
+            status_code=403,
+            detail="This post cannot be published. If you believe this is a mistake, contact support.",
+        )
 
     # Attached media stops being publicly fetchable from this moment. Marked
     # here, server-side, rather than declared by the uploader: a client that
@@ -551,6 +611,86 @@ def read_classification(post_id: str, db: OrmSession = Depends(get_db)):
         "human_review_status": row.human_review_status,
         "classifier_source": row.classifier_source,
     }
+
+
+@app.get("/admin/classification-queue", tags=["admin"])
+def classification_queue(_: AdminUser, limit: int = 50, db: OrmSession = Depends(get_db)):
+    """Content the classifier would not settle on its own.
+
+    Mostly posts carrying media, which no text pass can see into. Until a
+    reviewer or a vision model rates them they stay restricted, so the queue
+    being long costs reach, not safety.
+    """
+    rows = db.scalars(
+        select(models.ContentSafetyClassification)
+        .where(models.ContentSafetyClassification.human_review_status == "pending")
+        .order_by(models.ContentSafetyClassification.created_at)
+        .limit(min(limit, 200))
+    ).all()
+    return {
+        "pending": len(rows),
+        "items": [
+            {
+                "content_id": r.content_id,
+                "age_rating": r.age_rating,
+                "classifier_source": r.classifier_source,
+                "confidence": r.classifier_confidence,
+                "exploitation_risk": r.exploitation_risk,
+                "created_at": r.created_at,
+            }
+            for r in rows
+        ],
+    }
+
+
+@app.post("/admin/classification/{post_id}/review", tags=["admin"])
+def review_classification(
+    post_id: str, payload: ClassificationIn, admin: AdminUser, db: OrmSession = Depends(get_db)
+):
+    """A human settles a rating. Their answer outranks the classifier's."""
+    result = classify_post(post_id, payload, db)
+    row = db.scalar(
+        select(models.ContentSafetyClassification).where(
+            models.ContentSafetyClassification.content_id == post_id
+        )
+    )
+    if row is not None:
+        row.human_review_status = "confirmed"
+        row.classifier_source = f"human:{admin.user_id}"
+        row.classifier_confidence = 1.0
+        db.commit()
+    return result
+
+
+# Not /internal/classify/backfill: that path is swallowed by
+# /internal/classify/{post_id}, which matched "backfill" as an id and
+# then demanded a classification body.
+@app.post("/internal/classification-backfill", tags=["internal"])
+def backfill_classifications(limit: int = 500, db: OrmSession = Depends(get_db)):
+    """Classify posts that predate the classifier.
+
+    They are currently unrated, which means restricted - safe, and invisible to
+    every minor. This releases the ones that can be released and queues the
+    rest. Idempotent: a post that already has a row is skipped.
+    """
+    classified = select(models.ContentSafetyClassification.content_id)
+    rows = db.scalars(
+        select(models.Post).where(models.Post.id.not_in(classified)).limit(min(limit, 2000))
+    ).all()
+
+    done, blocked, queued = 0, 0, 0
+    for post in rows:
+        kinds = db.scalars(
+            select(models.PostMedia.kind).where(models.PostMedia.post_id == post.id)
+        ).all()
+        # The author's age today, not at the time of writing. Their tier may
+        # have changed, and the current one is the one that governs.
+        result = _classify_and_store(db, post, list(kinds), _viewer_age(post.author_id).is_minor)
+        done += 1
+        blocked += 1 if result.block_publication else 0
+        queued += 1 if result.human_review_status == "pending" else 0
+    db.commit()
+    return {"classified": done, "withheld": blocked, "queued_for_review": queued}
 
 
 @app.get("/posts/{post_id}", tags=["posts"])

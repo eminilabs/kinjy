@@ -180,10 +180,50 @@ not a classification.
 at error level for the child-safety process, rather than queueing it behind
 ordinary moderation.
 
-⬜ **Not built:** the ML classifier itself. Until it runs, every new post is
-`UNCLASSIFIED`, which the engine treats as adult-only — invisible to minors
-rather than visible to everyone. That is the correct direction to be incomplete
-in, and it is tested.
+### The classifier ✅
+
+`social-service/classifier.py`, run **inline at publication** — before the post
+is committed as published, because a post classified a few seconds after it
+goes out was visible to everyone for those seconds, and that is the entire
+lifetime of most feed impressions.
+
+Three backends in order: a **model** when one is configured, the **heuristic**
+below, and a **human** for anything neither settles.
+
+**The admission this is built around: a text heuristic cannot look at a
+photograph.** So it does not pretend to. A post carrying an image, video or
+audio is never auto-cleared — no amount of reading the caption tells you what
+is in the picture. Those stay `UNCLASSIFIED` (adult-only) and go to
+`/admin/classification-queue`. A classifier that marked them GENERAL because
+the caption was innocuous would be the worst bug this codebase could hold.
+
+The lexicon is deliberately small, about **acts rather than identities**, and
+stored as data so Trust & Safety can edit it without a deploy. A long word list
+is not a better classifier; it is a longer list of ways to mis-flag somebody
+describing their own life, and the categories most often over-flagged —
+sexuality, health, religion, ethnicity — are where a false positive does real
+harm.
+
+| Input | Result |
+|---|---|
+| ordinary text | `GENERAL`, confidence 0.75 |
+| explicit text | `ADULT_18_PLUS` |
+| gambling promotion | `TEEN_16_PLUS` + `gambling_level 2` (which the per-tier ceiling then blocks for **every** minor) |
+| any media, no model | `UNCLASSIFIED` + queued — never guessed |
+| author's own content warning | only ever **tightens** |
+| minor + sexual content | publication **blocked**, child-safety escalation |
+| exploitation signal | publication blocked, out of ordinary moderation entirely |
+
+**Self-labelling** is believed when it restricts and never when it releases. It
+is useful precisely because honest people use it, and useless as the only check
+because dishonest ones do not.
+
+**Community reports** restrict and never release: three reports pull `GENERAL`
+back to `UNCLASSIFIED` pending review. The reverse would make brigading a way
+to un-rate adult content.
+
+**Backfill.** `POST /internal/classification-backfill` rates posts that predate
+the classifier — 117 on first run, 35 queued. Idempotent.
 
 ---
 
@@ -338,6 +378,8 @@ python -m pytest backend/tests/test_agesafety.py -q     → 58 passed
 backend/tests/e2e_agesafety.py     (live API)           → 33 checks passed
 backend/tests/e2e_signed_media.py  (live API)           → 17 checks passed
 backend/tests/e2e_messaging_age.py (live API)           → 18 checks passed
+backend/tests/e2e_classifier.py    (live API)           → 24 checks passed
+backend/tests/test_classifier.py                        → 26 passed
 backend/tests/schema_drift.py                           → no drift
 ```
 
@@ -379,8 +421,13 @@ minor→adult · locked settings · policy version on every verdict.
 
 ## Honest limitations
 
-- The classifier does not exist; everything is `UNCLASSIFIED` until something
-  rates it. Safe, but it means adults currently see less than intended.
+- **No vision model is configured**, so every post carrying media needs a human
+  before a teenager can see it. Text is classified; pictures are not. This is
+  safe and it is also a real cost: a teenager's feed is currently text-heavy,
+  and the review queue is the bottleneck.
+- The heuristic lexicon is a stopgap with the failure modes of any word list.
+  Every decision it makes is stamped `classifier_source="heuristic"` so its
+  work can be found and re-run when a model arrives.
 - Community, search, livestream and monetization call sites are not yet on the
   engine, though the rules for them are written and tested.
 - `POST /internal/*` relies on network isolation. That is how the rest of this
