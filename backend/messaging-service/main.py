@@ -14,12 +14,13 @@ from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session as OrmSession
 
 from common import permissions
-from common.auth import CurrentUser
+from common.auth import AdminUser, CurrentUser
 from common.database import SessionLocal, get_db
 from common.ids import new_id
 from common.security import decode_token, ACCESS
 from common.service import create_app
 
+import agecheck
 import models
 
 log = logging.getLogger("messaging-service")
@@ -45,9 +46,25 @@ def _profiles(user_ids: set[str]) -> dict[str, dict]:
         log.warning("could not resolve conversation participants: %s", exc)
         return {}
 
+MIGRATIONS = [
+    f"ALTER TABLE {models.SCHEMA}.participants ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ",
+    # Disappearing messages shipped their model without these, so every attempt
+    # to create a conversation raised UndefinedColumn - and the caller saw it
+    # as "could not verify permission", which points nowhere near the cause.
+    f"ALTER TABLE {models.SCHEMA}.conversations "
+    "ADD COLUMN IF NOT EXISTS disappear_after_seconds INTEGER DEFAULT 0",
+    f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ",
+    # Conversations that already exist predate the request model, so everyone
+    # in them is treated as having accepted. Retro-fitting a request state onto
+    # live threads would silently block attachments between people who have
+    # been talking for months.
+    f"UPDATE {models.SCHEMA}.participants SET accepted_at = joined_at WHERE accepted_at IS NULL",
+]
+
 app = create_app(
     name="messaging-service",
     schema=models.SCHEMA,
+    migrations=MIGRATIONS,
     description="End-to-end encrypted direct messages, group conversations, notifications.",
 )
 
@@ -149,6 +166,67 @@ def _member(db: OrmSession, conversation_id: str, user_id: str) -> models.Partic
     return participant
 
 
+def _accept(db: OrmSession, conversation_id: str, user_id: str) -> None:
+    """Mark a participant as having accepted. Idempotent."""
+    row = db.scalar(
+        select(models.Participant).where(
+            models.Participant.conversation_id == conversation_id,
+            models.Participant.user_id == user_id,
+        )
+    )
+    if row is not None and row.accepted_at is None:
+        row.accepted_at = datetime.now(timezone.utc)
+
+
+@app.post("/conversations/{conversation_id}/accept", tags=["messages"])
+def accept_conversation(
+    conversation_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)
+):
+    """Accept a message request, which unlocks attachments from the sender."""
+    _member(db, conversation_id, principal.user_id)
+    _accept(db, conversation_id, principal.user_id)
+    db.commit()
+    return {"id": conversation_id, "accepted": True}
+
+
+@app.get("/admin/contact-risk", tags=["admin"])
+def contact_risk(_: AdminUser, limit: int = 50, db: OrmSession = Depends(get_db)):
+    """Accounts whose contact attempts towards minors look like a pattern.
+
+    A queue for humans, not a verdict. Ranked by how many *distinct* minors
+    refused them, because ten attempts at one person is a different behaviour
+    from one attempt at ten people.
+    """
+    since = datetime.now(timezone.utc) - agecheck.RISK_WINDOW
+    rows = db.execute(
+        select(
+            models.ContactAttempt.sender_id,
+            func.count(func.distinct(models.ContactAttempt.recipient_id)),
+            func.count(),
+        )
+        .where(
+            models.ContactAttempt.outcome == "refused_adult_to_minor",
+            models.ContactAttempt.created_at >= since,
+        )
+        .group_by(models.ContactAttempt.sender_id)
+        .order_by(func.count(func.distinct(models.ContactAttempt.recipient_id)).desc())
+        .limit(min(limit, 200))
+    ).all()
+    return {
+        "window_days": agecheck.RISK_WINDOW.days,
+        "items": [
+            {
+                "sender_id": sender,
+                "distinct_minors_refused": distinct,
+                "total_attempts": total,
+                "risk_score": agecheck.risk_score(db, sender),
+                "note": "A signal for review. Not a finding about the person.",
+            }
+            for sender, distinct, total in rows
+        ],
+    }
+
+
 @app.post("/conversations", status_code=201, tags=["messages"])
 def create_conversation(payload: ConversationIn, principal: CurrentUser, db: OrmSession = Depends(get_db)):
     members = sorted({*payload.participant_ids, principal.user_id})
@@ -164,6 +242,14 @@ def create_conversation(payload: ConversationIn, principal: CurrentUser, db: Orm
         allowed, reason = permissions.check(principal.user_id, member, 'can_message', 'message this member')
         if not allowed:
             raise HTTPException(status_code=403, detail=reason)
+
+        # And the layer the recipient cannot set for themselves. A teenager who
+        # has left their messages open to anyone has not thereby agreed to
+        # unknown adults, and their own setting is not the whole answer.
+        age_ok, age_reason = agecheck.may_open_conversation(db, principal.user_id, member)
+        if not age_ok:
+            db.commit()   # keep the attempt record even though the call fails
+            raise HTTPException(status_code=403, detail=age_reason)
 
     if payload.kind == "direct":
         # Reuse the existing thread rather than creating a duplicate.
@@ -193,6 +279,9 @@ def create_conversation(payload: ConversationIn, principal: CurrentUser, db: Orm
                 conversation_id=conversation.id,
                 user_id=uid,
                 role="owner" if uid == principal.user_id else "member",
+                # Starting a conversation is consent to it; being added to one
+                # is not. Everybody else accepts by replying or by accepting.
+                accepted_at=datetime.now(timezone.utc) if uid == principal.user_id else None,
             )
         )
     db.commit()
@@ -408,6 +497,17 @@ async def send_message(
             )
     elif not payload.body:
         raise HTTPException(status_code=400, detail="body is required")
+
+    # Text first. An attachment sent before the other side accepted has already
+    # been seen by the time anybody can report it.
+    if payload.media_url or payload.kind not in ("text", ""):
+        media_ok, media_reason = agecheck.may_send_media(db, principal.user_id, conversation_id)
+        if not media_ok:
+            raise HTTPException(status_code=403, detail=media_reason)
+
+    # Replying accepts the conversation: it is a clearer statement of consent
+    # than any button, and it is what people actually do.
+    _accept(db, conversation_id, principal.user_id)
 
     message = models.Message(
         id=new_id("msg"),

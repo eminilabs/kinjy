@@ -73,6 +73,8 @@ ADMIN_ROUTES: dict[str, str] = {
     "/api/admin/leaders-pool": "http://ledger-service:8000",
     "/api/admin/referral-pool": "http://auth-service:8000",
     "/api/admin/disputes": "http://commerce-service:8000",
+    "/api/admin/contact-risk": "http://messaging-service:8000",
+    "/api/admin/age": "http://auth-service:8000",
     "/api/admin/refunds": "http://payment-service:8000",
     "/api/admin/payouts": "http://payment-service:8000",
     "/api/admin/memorials": "http://memorial-service:8000",

@@ -23,9 +23,22 @@ AUTH_URL = "http://auth-service:8000"
 
 log = logging.getLogger("user-service")
 
+# Columns added to Preferences after the first deploy. create_all never
+# alters an existing table, so without these the privacy work shipped a model
+# the database did not have - and /internal/permissions returned 500 for every
+# pair of members, which silently turned every permission check on the platform
+# into "could not verify".
+MIGRATIONS = [
+    f"ALTER TABLE {models.SCHEMA}.preferences "
+    "ADD COLUMN IF NOT EXISTS who_can_see_family VARCHAR(20) DEFAULT 'family'",
+    f"ALTER TABLE {models.SCHEMA}.preferences "
+    "ADD COLUMN IF NOT EXISTS family_tree_shared BOOLEAN DEFAULT TRUE",
+]
+
 app = create_app(
     name="user-service",
     schema=models.SCHEMA,
+    migrations=MIGRATIONS,
     description="Profiles, follow graph, Circles, preferences.",
 )
 

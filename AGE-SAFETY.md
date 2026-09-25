@@ -264,14 +264,41 @@ commerce-service and creator-service — the rule exists and nothing asks it yet
 
 ---
 
-## 17–19. Messaging ✅ (engine) ⬜ (wiring)
+## 17–19. Messaging ✅
 
-`can_message_user` and `can_receive_media_in_request` implement: unknown adult
-→ minor denied; unconnected teen → younger teen restricted; risk score ≥ 0.6
-blocks contact with minors even where an ordinary account could; attachments
-only after the recipient accepts.
+Wired in `messaging-service/agecheck.py`, **on top of** the existing privacy
+check rather than instead of it. The order matters: a member's own
+`who_can_message` setting is asked first, and the age layer is what that
+setting cannot waive. A 14-year-old who has opened their messages to everyone
+has not thereby agreed to unknown adults.
 
-⬜ messaging-service does not call them yet.
+| Case | Outcome |
+|---|---|
+| unknown adult → 14-year-old | refused, wording names neither age nor rule |
+| unknown adult → 17-year-old | refused |
+| adult → adult | allowed |
+| 14-year-old → adult (they start it) | allowed — their choice, their initiation |
+| unconnected teen → 13–15 | refused, "connect first" |
+| attachment to an unaccepted minor | refused, text still delivered |
+| the same after acceptance | allowed |
+
+**Message requests.** `Participant.accepted_at` is null until somebody replies
+or accepts. Starting a conversation is consent to it; being added to one is
+not. Attachments wait for acceptance — an image that arrives before consent has
+already been seen by the time anyone can report it, and "delete for everyone"
+does not unsee it.
+
+**Risk signal (§21).** `ContactAttempt` records every refusal: two ids, an
+outcome, two tiers, a timestamp — no message content, because a safety signal
+does not need to read what people wrote and a table that did would be worth
+attacking. `risk_score` counts **distinct** minors who refused an account in 30
+days, because ten attempts at one person is a different behaviour from one
+attempt at ten people. At 0.6 the engine refuses contact with minors even where
+an ordinary account could; at any level it is a reason to put a case in front
+of a human, never a finding about the person.
+
+`GET /admin/contact-risk` is the queue. Admin-only, and labelled in the payload
+as a signal rather than a conclusion.
 
 ---
 
@@ -310,6 +337,8 @@ reviewer opens the case.
 python -m pytest backend/tests/test_agesafety.py -q     → 58 passed
 backend/tests/e2e_agesafety.py     (live API)           → 33 checks passed
 backend/tests/e2e_signed_media.py  (live API)           → 17 checks passed
+backend/tests/e2e_messaging_age.py (live API)           → 18 checks passed
+backend/tests/schema_drift.py                           → no drift
 ```
 
 Covering: age arithmetic across leap days and birthday boundaries · every tier
@@ -352,8 +381,8 @@ minor→adult · locked settings · policy version on every verdict.
 
 - The classifier does not exist; everything is `UNCLASSIFIED` until something
   rates it. Safe, but it means adults currently see less than intended.
-- Messaging, community, search, livestream and monetization call sites are not
-  yet on the engine, though the rules for them are written and tested.
+- Community, search, livestream and monetization call sites are not yet on the
+  engine, though the rules for them are written and tested.
 - `POST /internal/*` relies on network isolation. That is how the rest of this
   platform already works, but an authenticated service mesh would be better.
 - Nothing here has been reviewed by a lawyer. The jurisdiction table ships with
@@ -373,3 +402,24 @@ passed without ever reaching media-service.
 The test now probes `/health` and asserts it is talking to `media-service`
 before trusting a single 404. Any test whose pass condition is "something was
 refused" must first prove it reached the thing that was supposed to refuse it.
+
+
+---
+
+## Addendum: schema drift, and the tool for it
+
+Wiring the messaging rules surfaced two pre-existing faults of the same kind.
+`preferences.who_can_see_family`, `preferences.family_tree_shared`,
+`conversations.disappear_after_seconds` and `messages.expires_at` were all in
+their models and absent from the database, because `create_all` never alters a
+table that already exists.
+
+The symptom was nothing like the cause. `/internal/permissions` raised
+UndefinedColumn, `permissions.check` caught it and returned "could not verify",
+and **every permission check on the platform silently failed closed** — which
+looked like a privacy setting, not a missing column.
+
+`backend/tests/schema_drift.py` compares every model against the live database
+and prints what is missing. Run it after adding any column and before any
+deploy. It reads the models with a regex rather than importing them, so it
+needs no service and no settings to run.

@@ -2,7 +2,16 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Integer, LargeBinary, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Index,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from common.database import Base
@@ -43,6 +52,11 @@ class Participant(Base):
     conversation_id: Mapped[str] = mapped_column(String(40), index=True)
     user_id: Mapped[str] = mapped_column(String(40), index=True)
     role: Mapped[str] = mapped_column(String(20), default="member")
+    # Null until this member has accepted the conversation. The person who
+    # started it is accepted on creation; everybody else is in a request until
+    # they reply or accept. Attachments wait for this, so an image cannot
+    # arrive before anyone consented to hear from the sender at all.
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
@@ -89,4 +103,34 @@ class Notification(Base):
     link: Mapped[str | None] = mapped_column(String(300))
     lang: Mapped[str] = mapped_column(String(5), default="en")
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class ContactAttempt(Base):
+    """Who tried to open a conversation with whom, and how it went.
+
+    Exists for the pattern, not the individual row: one refusal is somebody
+    mistyping a handle, and the same account refused by a dozen different
+    minors in a month is the thing a Trust and Safety team needs to see. You
+    cannot notice the second without having kept the first.
+
+    Deliberately narrow - two ids, an outcome, two tiers and a timestamp. No
+    message content, because a safety signal does not need to read what people
+    wrote, and a table that did would be worth attacking.
+    """
+
+    __tablename__ = "contact_attempts"
+    __table_args__ = (
+        Index("ix_contact_sender_time", "sender_id", "created_at"),
+        Index("ix_contact_outcome", "outcome", "created_at"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    sender_id: Mapped[str] = mapped_column(String(40), index=True)
+    recipient_id: Mapped[str] = mapped_column(String(40), index=True)
+    # allowed | refused_adult_to_minor | refused_not_connected
+    outcome: Mapped[str] = mapped_column(String(40))
+    sender_tier: Mapped[str] = mapped_column(String(30), default="")
+    recipient_tier: Mapped[str] = mapped_column(String(30), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
