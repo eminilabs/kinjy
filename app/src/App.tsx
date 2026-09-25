@@ -32,6 +32,7 @@ const Explore = lazy(() => import('./pages/app/Explore'))
 const Live = lazy(() => import('./pages/app/Live'))
 const Shorts = lazy(() => import('./pages/app/Shorts'))
 const Earn = lazy(() => import('./pages/app/Earn'))
+const Supervision = lazy(() => import('./pages/app/Supervision'))
 const Profile = lazy(() => import('./pages/app/Profile'))
 
 function PageFallback() {
@@ -81,6 +82,9 @@ export default function App() {
           <Route path="/live" element={<Live />} />
           <Route path="/shorts" element={<Shorts />} />
           <Route path="/earn" element={<Earn />} />
+          {/* Notifications about supervision link here, so the path is fixed. */}
+          <Route path="/supervision" element={<Supervision />} />
+          <Route path="/settings/supervision" element={<Supervision />} />
           {/* Every avatar in the app links here. */}
           <Route path="/u/:handle" element={<Profile />} />
           <Route path="*" element={<Home />} />

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import httpx
 from fastapi import Depends, HTTPException
@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.orm import Session as OrmSession
 
-from common import notify
+from common import ageclient, notify
 from common.auth import CurrentUser, MaybeUser
 from common.database import get_db
 from common.ids import new_id
@@ -19,6 +19,7 @@ from common.service import create_app
 
 import agediscovery
 import models
+import parental
 
 AUTH_URL = "http://auth-service:8000"
 
@@ -436,6 +437,296 @@ def delete_circle(circle_id: str, principal: CurrentUser, db: OrmSession = Depen
 
 # --- preferences -----------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Parental supervision
+# ---------------------------------------------------------------------------
+
+class SupervisionInviteIn(BaseModel):
+    """Either side may start it; the other has to agree."""
+
+    other_handle: str = Field(min_length=3, max_length=40)
+
+
+class SupervisionAnswerIn(BaseModel):
+    approve: bool
+
+
+class TimeLimitIn(BaseModel):
+    daily_limit_minutes: int | None = Field(default=None, ge=0, le=1440)
+
+
+@app.get("/supervision/disclosure", tags=["supervision"])
+def supervision_disclosure():
+    """What a parent can and cannot see, in plain words.
+
+    Public, and returned by the API rather than buried in a policy document,
+    so neither the parent nor the teenager has to take anybody's word for what
+    was agreed. Read it before inviting, read it before accepting.
+    """
+    return parental.disclosure()
+
+
+@app.get("/supervision", tags=["supervision"])
+def my_supervision(principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """Every supervision link this member is part of, from either side."""
+    links = parental.links_for(db, principal.user_id)
+    # A teenager sees their own requests and the answers, including the refusals.
+    # A setting that will not move with no record of why is how a teenager learns
+    # to look for a way round the product instead of asking.
+    requests = db.scalars(
+        select(models.SupervisionRequest)
+        .where(
+            or_(
+                models.SupervisionRequest.teen_id == principal.user_id,
+                models.SupervisionRequest.parent_id == principal.user_id,
+            )
+        )
+        .order_by(models.SupervisionRequest.created_at.desc())
+        .limit(50)
+    ).all()
+    return {
+        "items": [parental.link_out(link, principal.user_id) for link in links],
+        "requests": [
+            {
+                "id": r.id, "setting": r.setting, "requested_value": r.requested_value,
+                "status": r.status, "created_at": r.created_at, "answered_at": r.answered_at,
+                "role": "parent" if r.parent_id == principal.user_id else "teen",
+            }
+            for r in requests
+        ],
+        "disclosure": parental.disclosure(),
+    }
+
+
+@app.post("/supervision/invite", status_code=201, tags=["supervision"])
+def invite_supervision(
+    payload: SupervisionInviteIn, principal: CurrentUser, db: OrmSession = Depends(get_db)
+):
+    """Invite somebody into a supervision link.
+
+    Whoever is the minor becomes the supervised party; the ages decide the
+    roles, not whoever happened to send the invitation. A parent cannot
+    nominate themselves as the teenager, and a teenager inviting an adult is
+    asking to be supervised rather than to supervise.
+    """
+    other = db.scalar(
+        select(models.Profile).where(models.Profile.handle == payload.other_handle.strip().lower())
+    )
+    if other is None or other.user_id == principal.user_id:
+        raise HTTPException(status_code=404, detail="No such member")
+
+    me = ageclient.age_profile(principal.user_id)
+    them = ageclient.age_profile(other.user_id)
+
+    if me.is_minor and them.is_minor:
+        raise HTTPException(
+            status_code=400,
+            detail="A supervising adult has to be an adult account.",
+        )
+    if not me.is_minor and not them.is_minor:
+        raise HTTPException(
+            status_code=400,
+            detail="Supervision is for accounts under 18.",
+        )
+
+    teen_id, parent_id = (
+        (principal.user_id, other.user_id) if me.is_minor else (other.user_id, principal.user_id)
+    )
+
+    if parental.active_link(db, teen_id) is not None:
+        raise HTTPException(status_code=409, detail="This account already has a supervising adult.")
+
+    existing = db.scalar(
+        select(models.ParentalSupervision).where(
+            models.ParentalSupervision.teen_id == teen_id,
+            models.ParentalSupervision.parent_id == parent_id,
+            models.ParentalSupervision.status == "invited",
+        )
+    )
+    if existing is not None:
+        return {**parental.link_out(existing, principal.user_id), "existing": True}
+
+    link = models.ParentalSupervision(
+        id=new_id("sup"), teen_id=teen_id, parent_id=parent_id,
+        status="invited", invited_by=principal.user_id,
+    )
+    db.add(link)
+    db.commit()
+
+    other_id = teen_id if principal.user_id == parent_id else parent_id
+    notify.notify(
+        other_id, "supervision_invite",
+        "Someone invited you to a supervision link",
+        body="Read what it does and does not share before you accept.",
+        link="/settings/supervision",
+    )
+    return {**parental.link_out(link, principal.user_id), "existing": False}
+
+
+@app.post("/supervision/{link_id}/answer", tags=["supervision"])
+def answer_supervision(
+    link_id: str, payload: SupervisionAnswerIn, principal: CurrentUser,
+    db: OrmSession = Depends(get_db),
+):
+    """Accept or decline an invitation. Only the invited side may answer."""
+    link = db.get(models.ParentalSupervision, link_id)
+    if link is None or principal.user_id not in (link.teen_id, link.parent_id):
+        raise HTTPException(status_code=404, detail="Not found")
+    if principal.user_id == link.invited_by:
+        raise HTTPException(status_code=403, detail="The other person has to answer this.")
+    if link.status != "invited":
+        raise HTTPException(status_code=409, detail="This invitation has already been answered.")
+
+    link.status = "active" if payload.approve else "declined"
+    if payload.approve:
+        link.accepted_at = parental.now()
+    db.commit()
+
+    notify.notify(
+        link.invited_by, "supervision_answer",
+        "Your supervision invitation was accepted" if payload.approve
+        else "Your supervision invitation was declined",
+        link="/settings/supervision",
+    )
+    return parental.link_out(link, principal.user_id)
+
+
+@app.post("/supervision/{link_id}/end", tags=["supervision"])
+def end_supervision(link_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """End supervision. Either side may, and the other is told.
+
+    The teenager can do this themselves on purpose: supervision somebody cannot
+    leave is not supervision. What leaving does **not** do is unlock anything —
+    the account returns to the defaults for its age, so removing a parent is
+    never the way to get permissions.
+    """
+    link = db.get(models.ParentalSupervision, link_id)
+    if link is None or principal.user_id not in (link.teen_id, link.parent_id):
+        raise HTTPException(status_code=404, detail="Not found")
+    if link.status not in ("invited", "active"):
+        raise HTTPException(status_code=409, detail="This link has already ended.")
+
+    link.status = "ended"
+    link.ended_at = parental.now()
+    link.ended_by = principal.user_id
+    parental.revert_to_strictest(db, link.teen_id)
+    db.commit()
+
+    other = link.parent_id if principal.user_id == link.teen_id else link.teen_id
+    notify.notify(
+        other, "supervision_ended", "A supervision link has ended",
+        link="/settings/supervision",
+    )
+    return {
+        **parental.link_out(link, principal.user_id),
+        "note": "Settings were returned to the defaults for this account's age group.",
+    }
+
+
+@app.get("/supervision/{link_id}/view", tags=["supervision"])
+def supervised_view(link_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """What the parent is shown. Exactly the list in the disclosure.
+
+    There is no endpoint here for messages, contacts, posts or searches, and
+    that is the design rather than an omission: a teenager who believes their
+    parent can read their private messages stops using private messages for the
+    things private messages are for, including telling somebody that an adult
+    is pressuring them.
+    """
+    link = db.get(models.ParentalSupervision, link_id)
+    if link is None or link.parent_id != principal.user_id or link.status != "active":
+        raise HTTPException(status_code=404, detail="Not found")
+
+    prefs = db.get(models.Preferences, link.teen_id)
+    usage = db.scalar(
+        select(models.Usage).where(
+            models.Usage.user_id == link.teen_id,
+            models.Usage.day == date.today(),
+        )
+    )
+    pending = db.scalars(
+        select(models.SupervisionRequest).where(
+            models.SupervisionRequest.supervision_id == link.id
+        ).order_by(models.SupervisionRequest.created_at.desc()).limit(25)
+    ).all()
+
+    return {
+        "supervision": parental.link_out(link, principal.user_id),
+        "settings": {
+            "who_can_message": getattr(prefs, "who_can_message", None),
+            "who_can_invite": getattr(prefs, "who_can_invite", None),
+            "discoverable": getattr(prefs, "discoverable", None),
+            "sensitive_content": "blocked_for_this_age_group",
+        },
+        "time": {
+            "daily_limit_minutes": link.daily_limit_minutes
+            or getattr(prefs, "daily_limit_minutes", None),
+            "minutes_today": getattr(usage, "minutes", 0) if usage else 0,
+        },
+        "requests": [
+            {
+                "id": r.id, "setting": r.setting, "requested_value": r.requested_value,
+                "status": r.status, "created_at": r.created_at,
+            }
+            for r in pending
+        ],
+        "not_included": parental.CANNOT_SEE,
+    }
+
+
+@app.post("/supervision/{link_id}/time-limit", tags=["supervision"])
+def set_time_limit(
+    link_id: str, payload: TimeLimitIn, principal: CurrentUser, db: OrmSession = Depends(get_db)
+):
+    """The one setting a parent may change directly."""
+    link = db.get(models.ParentalSupervision, link_id)
+    if link is None or link.parent_id != principal.user_id or link.status != "active":
+        raise HTTPException(status_code=404, detail="Not found")
+    link.daily_limit_minutes = payload.daily_limit_minutes
+    prefs = db.get(models.Preferences, link.teen_id)
+    if prefs is not None:
+        prefs.daily_limit_minutes = payload.daily_limit_minutes
+    db.commit()
+    notify.notify(
+        link.teen_id, "supervision_time_limit",
+        "Your daily time limit was changed",
+        link="/settings/supervision",
+    )
+    return {"daily_limit_minutes": link.daily_limit_minutes}
+
+
+@app.post("/supervision/requests/{request_id}", tags=["supervision"])
+def answer_request(
+    request_id: str, payload: SupervisionAnswerIn, principal: CurrentUser,
+    db: OrmSession = Depends(get_db),
+):
+    """A parent answering a request to loosen a safety setting."""
+    request = db.get(models.SupervisionRequest, request_id)
+    if request is None or request.parent_id != principal.user_id:
+        raise HTTPException(status_code=404, detail="Not found")
+    if request.status != "pending":
+        raise HTTPException(status_code=409, detail="This has already been answered.")
+
+    request.status = "approved" if payload.approve else "declined"
+    request.answered_at = parental.now()
+
+    if payload.approve:
+        prefs = db.get(models.Preferences, request.teen_id)
+        if prefs is not None and hasattr(prefs, request.setting):
+            value = request.requested_value
+            if value in ("True", "False"):
+                value = value == "True"
+            setattr(prefs, request.setting, value)
+    db.commit()
+
+    notify.notify(
+        request.teen_id, "supervision_request_answered",
+        "Your request was approved" if payload.approve else "Your request was declined",
+        link="/settings/supervision",
+    )
+    return {"id": request.id, "status": request.status}
+
+
 @app.get("/preferences", tags=["preferences"])
 def get_preferences(principal: CurrentUser, db: OrmSession = Depends(get_db)):
     prefs = db.get(models.Preferences, principal.user_id)
@@ -460,8 +751,27 @@ def set_preferences(payload: PreferencesIn, principal: CurrentUser, db: OrmSessi
     if prefs is None:
         prefs = models.Preferences(user_id=principal.user_id)
         db.add(prefs)
+    # A supervised younger teen may always make their own account *stricter*
+    # without asking. Loosening a safety setting goes to their parent instead
+    # of being applied — and it is recorded either way, so the teenager can see
+    # what was refused rather than finding a setting that will not move.
+    held: list[dict] = []
+
     for key, value in payload.model_dump(exclude_unset=True).items():
         if value is None:
+            continue
+        refused = parental.refusal(db, principal.user_id, key, value)
+        if refused:
+            raise HTTPException(status_code=403, detail=refused)
+        if parental.needs_approval(db, principal.user_id, key, value):
+            link = parental.active_link(db, principal.user_id)
+            request = parental.open_request(db, link, key, value)
+            held.append({"setting": key, "requested_value": str(value), "request_id": request.id})
+            notify.notify(
+                link.parent_id, "supervision_request",
+                "A setting change is waiting for you",
+                link="/settings/supervision",
+            )
             continue
         if key == "interest_topics":
             # Stored as csv, normalised the same way post topics are, so a
@@ -472,7 +782,11 @@ def set_preferences(payload: PreferencesIn, principal: CurrentUser, db: OrmSessi
         setattr(prefs, key, value)
     db.commit()
     db.refresh(prefs)
-    return _prefs_out(prefs)
+    out = _prefs_out(prefs)
+    if held:
+        out["awaiting_approval"] = held
+        out["note"] = "Some changes need approval from the adult supervising this account."
+    return out
 
 
 # --- blocks ----------------------------------------------------------------

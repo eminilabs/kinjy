@@ -552,7 +552,9 @@ minor→adult · locked settings · policy version on every verdict.
    tested and simply not called.
 3. **Community/search** onto `restrict_query`.
 4. **The classifier**, so `UNCLASSIFIED` stops being the common case.
-5. **Parental supervision**, **appeals**, **the T&S dashboard**.
+5. ~~**Parental supervision**~~ — built (`user-service/parental.py`), 64
+   checks in `backend/tests/e2e_parental.py`. **Appeals** and **the T&S
+   dashboard** remain.
 
 ---
 
@@ -566,8 +568,28 @@ minor→adult · locked settings · policy version on every verdict.
   Every decision it makes is stamped `classifier_source="heuristic"` so its
   work can be found and re-run when a model arrives.
 - There is no streaming backend at all; only the age decision it will need.
-- Parental supervision, appeals and the Trust & Safety console are designed
-  here and not built.
+- Appeals and the Trust & Safety console are designed here and not built.
+- Parental supervision is built, and deliberately narrow. A parent sees that
+  supervision is active, the teen's safety settings, the time limit and today's
+  usage total, and the requests the teen has made. There is no endpoint — not a
+  filtered one, not a metadata one — for messages, contacts, posts, searches or
+  location, and `e2e_parental.py` asserts their absence rather than trusting it.
+  Supervision that quietly becomes surveillance is worse than none: a teenager
+  who believes a parent reads their private messages stops using them for the
+  thing they are most needed for, which is telling somebody that an adult is
+  pressuring them.
+- Building it exposed a gap that had nothing to do with parents.
+  `may_change_setting` had been written with the policy engine and **never
+  called**, so until now any 14-year-old could set `who_can_message` to
+  `everyone` themselves. That also made the supervision design a fiction:
+  "remove your parent" would have been the documented route to the permission
+  the parent had just refused. The tier is now the lock and supervision is the
+  key — an unsupervised younger teen is refused outright (403), a supervised one
+  can ask, and ending supervision reverts the account to its tier defaults and
+  removes the only way to ask.
+- 16- and 17-year-olds are not treated as 13-year-olds here: they decide who may
+  message them without an adult's approval. Flattening "minor" into one rule is
+  the easy mistake and it is why teenagers lie about their age.
 - `POST /internal/*` relies on network isolation. That is how the rest of this
   platform already works, but an authenticated service mesh would be better.
 - Nothing here has been reviewed by a lawyer. The jurisdiction table ships with

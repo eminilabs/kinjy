@@ -1,6 +1,13 @@
 fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
-sqlalchemy>=2.0.35
+# Pinned below 2.1 deliberately. SQLAlchemy 2.1 changed the default DBAPI for a
+# plain `postgresql://` URL from psycopg2 to psycopg (v3), which is not
+# installed here - so an unpinned rebuild produces an image that cannot open a
+# database connection at all. It is not a gradual failure: every service exits
+# on import with ModuleNotFoundError: No module named 'psycopg'. Production runs
+# 2.0.54; this keeps the next rebuild on it. To move to 2.1, add psycopg[binary]
+# and change the URL scheme in the same commit.
+sqlalchemy>=2.0.35,<2.1
 alembic>=1.14.0
 psycopg2-binary>=2.9.9
 pydantic>=2.9.0

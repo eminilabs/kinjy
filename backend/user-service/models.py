@@ -197,3 +197,61 @@ class Block(Base):
     user_id: Mapped[str] = mapped_column(String(40), index=True)
     blocked_id: Mapped[str] = mapped_column(String(40), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class ParentalSupervision(Base):
+    """A supervision link between a parent and a teenager.
+
+    Both sides must agree: whoever starts it invites, and the other accepts.
+    Either can end it afterwards and the other is told, because supervision
+    somebody cannot leave is not supervision, and supervision that ends in
+    silence is its own problem.
+
+    No message content, no contact list, no browsing. What this row grants is
+    written out in parental.CAN_SEE and parental.CANNOT_SEE, and served to both
+    parties before either agrees.
+    """
+
+    __tablename__ = "parental_supervision"
+    __table_args__ = (
+        Index("ix_supervision_teen", "teen_id", "status"),
+        Index("ix_supervision_parent", "parent_id", "status"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("sup"))
+    teen_id: Mapped[str] = mapped_column(String(40), index=True)
+    parent_id: Mapped[str] = mapped_column(String(40), index=True)
+    # invited | active | declined | ended
+    status: Mapped[str] = mapped_column(String(20), default="invited")
+    invited_by: Mapped[str] = mapped_column(String(40))
+    daily_limit_minutes: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ended_by: Mapped[str | None] = mapped_column(String(40))
+
+
+class SupervisionRequest(Base):
+    """A teenager asking to loosen a safety setting, and the answer.
+
+    Kept after it is answered. A teenager should be able to see what was
+    refused and when, rather than finding a setting that will not move and no
+    record of why.
+    """
+
+    __tablename__ = "supervision_requests"
+    __table_args__ = (
+        Index("ix_supervision_request_state", "parent_id", "status"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("spr"))
+    supervision_id: Mapped[str] = mapped_column(String(40), index=True)
+    teen_id: Mapped[str] = mapped_column(String(40), index=True)
+    parent_id: Mapped[str] = mapped_column(String(40), index=True)
+    setting: Mapped[str] = mapped_column(String(60))
+    requested_value: Mapped[str] = mapped_column(String(60))
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|approved|declined
+    answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)

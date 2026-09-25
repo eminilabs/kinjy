@@ -903,6 +903,51 @@ function serializeCredential(credential: PublicKeyCredential): Record<string, un
 export const passkeysSupported = () =>
   typeof window !== 'undefined' && Boolean(window.PublicKeyCredential)
 
+export interface SupervisionDisclosure {
+  can_see: string[]
+  cannot_see: string[]
+  can_do: string[]
+  cannot_do: string[]
+  note: string
+}
+
+export interface SupervisionLink {
+  id: string
+  role: 'parent' | 'teen'
+  parent_id: string
+  teen_id: string
+  status: 'invited' | 'active' | 'declined' | 'ended'
+  invited_by: string
+  created_at: string
+  accepted_at: string | null
+  ended_at: string | null
+  ended_by: string | null
+}
+
+export interface SupervisionRequest {
+  id: string
+  setting: string
+  requested_value: string
+  status: 'pending' | 'approved' | 'declined'
+  created_at: string
+  answered_at?: string | null
+  role: 'parent' | 'teen'
+}
+
+export interface SupervisionState {
+  items: SupervisionLink[]
+  requests: SupervisionRequest[]
+  disclosure: SupervisionDisclosure
+}
+
+export interface SupervisedView {
+  supervision: SupervisionLink
+  settings: Record<string, unknown>
+  time: { daily_limit_minutes: number | null; minutes_today: number }
+  requests: Omit<SupervisionRequest, 'role'>[]
+  not_included: string[]
+}
+
 export const kaluta = {
   status: () => api.get<StackStatus>('/status', { auth: false }),
 
@@ -1473,6 +1518,30 @@ export const kaluta = {
       tokens.clear()
     },
     isSignedIn: () => Boolean(tokens.access),
+  },
+
+  /**
+   * Parental supervision.
+   *
+   * `disclosure` is deliberately unauthenticated and fetched by both sides
+   * before either agrees: what a parent can and cannot see is part of the
+   * agreement, not a policy page somebody may or may not have read.
+   */
+  supervision: {
+    disclosure: () => api.get<SupervisionDisclosure>('/supervision/disclosure', { auth: false }),
+    mine: () => api.get<SupervisionState>('/supervision'),
+    invite: (other_handle: string) =>
+      api.post<SupervisionLink>('/supervision/invite', { other_handle }),
+    answer: (id: string, approve: boolean) =>
+      api.post<SupervisionLink>(`/supervision/${id}/answer`, { approve }),
+    end: (id: string) => api.post<SupervisionLink>(`/supervision/${id}/end`),
+    view: (id: string) => api.get<SupervisedView>(`/supervision/${id}/view`),
+    setTimeLimit: (id: string, daily_limit_minutes: number | null) =>
+      api.post<{ daily_limit_minutes: number | null }>(
+        `/supervision/${id}/time-limit`, { daily_limit_minutes },
+      ),
+    answerRequest: (id: string, approve: boolean) =>
+      api.post<{ id: string; status: string }>(`/supervision/requests/${id}`, { approve }),
   },
 
   /** Everything behind the member dashboard. */
