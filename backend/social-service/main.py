@@ -18,11 +18,10 @@ from common.database import SessionLocal, get_db
 from common.ids import new_id
 from common.service import create_app
 
-from common import ageclient, mediasign
+from common import ageclient, classifier, mediasign
 from common.agesafety import engine as age_engine
 
 import agefilter
-import classifier
 import models
 import ranking
 

@@ -252,8 +252,55 @@ forgets the filter still cannot leak.
 | Author timeline | ✅ |
 | Single post by ID | ✅ |
 | Post media list | ✅ |
-| Search, hashtags, discover | 🟨 community-service not yet on the engine |
-| Comments, groups, livestreams, notifications | ⬜ |
+| People search and suggestions | ✅ |
+| Forum threads and replies | ✅ |
+| Community discovery | ✅ |
+| Comments, livestreams, notifications | ⬜ |
+
+---
+
+## 15–16, 22. Discovery, search and forums ✅
+
+**People (§22).** `user-service/agediscovery.py`. An adult searching or
+browsing suggestions does not see minors; a minor searching still finds
+everybody, including other minors, because a teenager looking for their own
+teacher or football club should find them. The restriction protects the people
+being listed, not the person looking.
+
+The messaging rules stop an adult who has already found a 14-year-old from
+writing to them. This stops them finding one, which is cheaper, earlier, and
+does not depend on the adult behaving badly first.
+
+*Cost, stated plainly:* filtering after the query means a page can come back
+short. The fetch is widened threefold to compensate. The alternative — joining
+an age table that lives in another service's schema — would couple two
+databases together to save a few rows.
+
+*Failure direction:* when the **viewer's** own age cannot be established they
+are treated as a minor, which widens what they see. That is right here: an
+unknown-age viewer is not the threat this addresses, and treating them as an
+adult would hide the platform from a teenager whose profile lookup happened to
+fail.
+
+**Forums.** `community-service/agecommunity.py`. Threads and replies are
+classified on creation and filtered on read, through the same engine as the
+feed. Forum text carries no media of its own, so unlike a post it can usually
+be settled outright — which is why forums stay readable to teenagers even while
+the image queue is backed up.
+
+Replies are rated **individually**: one unsuitable answer removes that answer,
+not the discussion. A direct link to a thread is gated exactly as a direct link
+to a post is, and returns 404 for the same reason.
+
+**Communities.** A community is not content, it is a door. It is judged on its
+own name and description — a door is adult because of what it advertises, and
+one heated thread in a gardening group does not make the group adult. Secret
+communities were already excluded from discovery; this adds the public
+community whose whole subject is adult.
+
+The classifier moved to `common/classifier.py` when the second service needed
+it. Duplicating a classifier is exactly the drift this architecture exists to
+avoid.
 
 ---
 
@@ -380,6 +427,7 @@ backend/tests/e2e_signed_media.py  (live API)           → 17 checks passed
 backend/tests/e2e_messaging_age.py (live API)           → 18 checks passed
 backend/tests/e2e_classifier.py    (live API)           → 24 checks passed
 backend/tests/test_classifier.py                        → 26 passed
+backend/tests/e2e_discovery_forums.py (live API)        → 26 checks passed
 backend/tests/schema_drift.py                           → no drift
 ```
 
@@ -428,8 +476,9 @@ minor→adult · locked settings · policy version on every verdict.
 - The heuristic lexicon is a stopgap with the failure modes of any word list.
   Every decision it makes is stamped `classifier_source="heuristic"` so its
   work can be found and re-run when a model arrives.
-- Community, search, livestream and monetization call sites are not yet on the
-  engine, though the rules for them are written and tested.
+- Livestream and monetization call sites are not yet on the engine, though the
+  rules for them are written and tested.
+- Comments and notifications are not yet filtered.
 - `POST /internal/*` relies on network isolation. That is how the rest of this
   platform already works, but an authenticated service mesh would be better.
 - Nothing here has been reviewed by a lawyer. The jurisdiction table ships with

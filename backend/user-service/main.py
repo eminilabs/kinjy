@@ -17,6 +17,7 @@ from common.database import get_db
 from common.ids import new_id
 from common.service import create_app
 
+import agediscovery
 import models
 
 AUTH_URL = "http://auth-service:8000"
@@ -181,6 +182,10 @@ def people_suggestions(principal: CurrentUser, limit: int = 5, db: OrmSession = 
     Ranked by follower count, which is the only signal available before there is
     a real graph to mine — and stated as such in the UI rather than dressed up as
     personalisation. Anyone already followed, blocked, or blocking is excluded.
+
+    Minors are not suggested to unrelated adults. Suggestion is where most
+    unwanted contact starts, so the cheapest place to stop it is before the
+    suggestion is made rather than after somebody acts on it.
     """
     following = set(
         db.scalars(select(models.Follow.followee_id).where(models.Follow.follower_id == principal.user_id)).all()
@@ -193,12 +198,15 @@ def people_suggestions(principal: CurrentUser, limit: int = 5, db: OrmSession = 
     )
     excluded = following | blocked | blocking | {principal.user_id}
 
+    # Over-fetched because minors are trimmed out below for adult viewers, and a
+    # page that comes back three-quarters empty is worse than one extra query.
     rows = db.scalars(
         select(models.Profile)
         .where(models.Profile.user_id.not_in(excluded) if excluded else True)
         .order_by(models.Profile.followers_count.desc(), models.Profile.created_at.desc())
-        .limit(min(limit, 20))
+        .limit(agediscovery.widened(min(limit, 20), 60))
     ).all()
+    rows = agediscovery.filter_profiles(principal.user_id, list(rows), min(limit, 20))
 
     return {
         "reason": "most_followed",
@@ -238,6 +246,10 @@ def search_people(
     who turned it off should not surface in a stranger's search. Blocks work in
     both directions — someone you blocked is hidden, and so is someone who
     blocked you, because appearing in their search is exactly what they refused.
+
+    And an adult searching does not find minors at all. A teenager searching
+    still finds everybody, including other teenagers: the restriction protects
+    the people being listed, not the person looking.
     """
     query = q.strip().lower()
     if len(query) < 2:
@@ -267,8 +279,9 @@ def search_people(
             ),
         )
         .order_by(models.Profile.followers_count.desc())
-        .limit(min(limit, 25))
+        .limit(agediscovery.widened(min(limit, 25), 75))
     ).all()
+    rows = agediscovery.filter_profiles(principal.user_id, list(rows), min(limit, 25))
 
     return {
         "items": [

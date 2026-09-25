@@ -2,7 +2,17 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from common.database import Base
@@ -127,3 +137,46 @@ class KnowledgeEntry(Base):
     confidence: Mapped[float] = mapped_column(Numeric(4, 3), default=0)
     reviewed_by: Mapped[str | None] = mapped_column(String(40))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class ContentSafetyClassification(Base):
+    """Age suitability for a thread, a reply or a community.
+
+    Same shape as the social schema's table on purpose: one vocabulary across
+    the platform means one engine can read both, and a rating means the same
+    thing wherever it was written.
+    """
+
+    __tablename__ = "content_safety"
+    __table_args__ = (
+        Index("ix_community_safety_rating", "age_rating"),
+        Index("ix_community_safety_review", "human_review_status"),
+        UniqueConstraint("content_id", name="uq_community_safety_content"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("csc"))
+    content_id: Mapped[str] = mapped_column(String(40), index=True)
+    content_kind: Mapped[str] = mapped_column(String(20), default="thread")  # thread|reply|community
+
+    age_rating: Mapped[str] = mapped_column(String(20), default="UNCLASSIFIED")
+
+    sexual_content_level: Mapped[int] = mapped_column(Integer, default=0)
+    nudity_level: Mapped[int] = mapped_column(Integer, default=0)
+    violence_level: Mapped[int] = mapped_column(Integer, default=0)
+    graphic_content_level: Mapped[int] = mapped_column(Integer, default=0)
+    drugs_level: Mapped[int] = mapped_column(Integer, default=0)
+    alcohol_level: Mapped[int] = mapped_column(Integer, default=0)
+    gambling_level: Mapped[int] = mapped_column(Integer, default=0)
+    dangerous_activity_level: Mapped[int] = mapped_column(Integer, default=0)
+    self_harm_risk: Mapped[int] = mapped_column(Integer, default=0)
+    hate_or_abuse_risk: Mapped[int] = mapped_column(Integer, default=0)
+    exploitation_risk: Mapped[int] = mapped_column(Integer, default=0)
+
+    classifier_source: Mapped[str] = mapped_column(String(60), default="")
+    classifier_confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    human_review_status: Mapped[str] = mapped_column(String(20), default="none")
+    jurisdiction_overrides: Mapped[str] = mapped_column(Text, default="{}")
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
