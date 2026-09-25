@@ -36,6 +36,16 @@ class Asset(Base):
     url: Mapped[str] = mapped_column(String(500))
     kind: Mapped[str] = mapped_column(String(20))  # image|video|audio|document
 
+    # public     - avatars, marketing art: served to anyone, no ticket.
+    # restricted - anything attached to a post, i.e. anything that can carry an
+    #              age rating. Served only against a short-lived signed ticket
+    #              minted by a service that has already run the age check.
+    #
+    # Assets are marked restricted server-side when they are attached to a
+    # post, not declared by the uploader: a client that could label its own
+    # media "public" would be the age gate.
+    access: Mapped[str] = mapped_column(String(20), default="public", index=True)
+
     provenance: Mapped[str] = mapped_column(String(20), default="original")
     provenance_signed: Mapped[bool] = mapped_column(Boolean, default=False)
     c2pa_manifest: Mapped[str | None] = mapped_column(Text)

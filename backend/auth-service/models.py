@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -201,4 +202,157 @@ class PoolAssignment(Base):
     sponsor_id: Mapped[str] = mapped_column(String(40), index=True)
     new_member_id: Mapped[str] = mapped_column(String(40), index=True)
     seats_in_draw: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class UserAgeProfile(Base):
+    """The authoritative age record. One row per account.
+
+    Deliberately not columns on :class:`User`. The user row is serialised into
+    a dozen responses across the platform, and a date of birth that lives there
+    leaks the first time somebody adds a field to a profile payload. Here it
+    has to be fetched on purpose.
+
+    ``tier`` is derived from ``date_of_birth`` and the jurisdiction policy, and
+    it is the value every other service reads. Nothing a client sends can
+    change it, and the member never chooses it.
+    """
+
+    __tablename__ = "user_age_profiles"
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_age_profile_user"),
+        Index("ix_age_profile_tier", "tier"),
+        # The transition job scans this: whose tier is due to change today?
+        Index("ix_age_profile_next_transition", "next_transition_on"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("agp"))
+    user_id: Mapped[str] = mapped_column(String(40), index=True)
+
+    date_of_birth: Mapped[date] = mapped_column(Date, nullable=False)
+    # Never rendered publicly, at any granularity, for a minor.
+    tier: Mapped[str] = mapped_column(String(30), default="UNKNOWN")
+    jurisdiction: Mapped[str] = mapped_column(String(2), default="XX")
+    policy_version: Mapped[str] = mapped_column(String(40), default="")
+
+    # self_declared | risk_based | verified - how much we actually know.
+    assurance_level: Mapped[str] = mapped_column(String(20), default="self_declared")
+    assurance_method: Mapped[str | None] = mapped_column(String(40))
+    assured_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # Set when credible signals contradict the stated age. While this is true
+    # the tier resolves to AGE_REVIEW_REQUIRED and the account is treated as a
+    # minor until a human resolves it.
+    under_review: Mapped[bool] = mapped_column(Boolean, default=False)
+    review_opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # The next date the tier changes by itself, so the transition job is an
+    # indexed lookup rather than a scan of every account.
+    next_transition_on: Mapped[date | None] = mapped_column(Date)
+
+    dob_change_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_dob_change_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
+
+
+class RegistrationAttempt(Base):
+    """Rejected sign-up attempts, kept briefly to blunt date-of-birth probing.
+
+    The attack this exists for: enter 12, get refused, enter 19, get in. Keyed
+    on a hash of the identifier rather than the identifier itself, so the table
+    cannot be mined for who tried to join and failed.
+    """
+
+    __tablename__ = "registration_attempts"
+    __table_args__ = (
+        Index("ix_reg_attempt_key_time", "subject_hash", "created_at"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    subject_hash: Mapped[str] = mapped_column(String(64), index=True)
+    outcome: Mapped[str] = mapped_column(String(30))   # under_minimum|allowed|blocked
+    declared_age: Mapped[int | None] = mapped_column(Integer)
+    jurisdiction: Mapped[str | None] = mapped_column(String(2))
+    ip: Mapped[str | None] = mapped_column(String(45))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class AgeVerification(Base):
+    """One age-assurance attempt and its outcome.
+
+    Stores the *conclusion*, not the evidence: that this account is over a
+    threshold, a provider reference, and when it was established. Identity
+    documents are never stored here, which is the whole point of preferring an
+    over-threshold assertion to a copy of a passport.
+    """
+
+    __tablename__ = "age_verifications"
+    __table_args__ = {"schema": SCHEMA}
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("agv"))
+    user_id: Mapped[str] = mapped_column(String(40), index=True)
+    method: Mapped[str] = mapped_column(String(40))   # provider_token|id_check|vouching|inference
+    provider: Mapped[str | None] = mapped_column(String(60))
+    provider_reference: Mapped[str | None] = mapped_column(String(120))
+    threshold_age: Mapped[int] = mapped_column(Integer, default=18)
+    result: Mapped[str] = mapped_column(String(20), default="pending")  # pending|over|under|failed
+    confidence: Mapped[str] = mapped_column(String(20), default="")
+    requested_by: Mapped[str | None] = mapped_column(String(40))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AgeReviewCase(Base):
+    """An open question about how old somebody actually is."""
+
+    __tablename__ = "age_review_cases"
+    __table_args__ = (
+        Index("ix_age_review_status", "status", "created_at"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("arc"))
+    user_id: Mapped[str] = mapped_column(String(40), index=True)
+    # reported_underage | dob_change | signal_mismatch | appeal
+    source: Mapped[str] = mapped_column(String(40))
+    detail: Mapped[str] = mapped_column(Text, default="")
+    reported_by: Mapped[str | None] = mapped_column(String(40))
+    status: Mapped[str] = mapped_column(String(24), default="open")  # open|verifying|closed
+    outcome: Mapped[str | None] = mapped_column(String(40))
+    resolved_by: Mapped[str | None] = mapped_column(String(40))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class JurisdictionPolicy(Base):
+    """A jurisdiction's age rules, versioned, editable without a deploy.
+
+    Superseded rows are kept rather than updated in place, so a decision taken
+    under last quarter's policy can still be explained by it.
+    """
+
+    __tablename__ = "jurisdiction_policies"
+    __table_args__ = (
+        UniqueConstraint("jurisdiction", "policy_version", name="uq_jurisdiction_version"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    jurisdiction: Mapped[str] = mapped_column(String(2), index=True)
+    policy_version: Mapped[str] = mapped_column(String(40))
+    minimum_registration_age: Mapped[int] = mapped_column(Integer, default=13)
+    teen_high_protection_until: Mapped[int] = mapped_column(Integer, default=16)
+    adult_age: Mapped[int] = mapped_column(Integer, default=18)
+    parental_consent_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    age_assurance_level: Mapped[str] = mapped_column(String(20), default="self_declared")
+    restricted_features: Mapped[str] = mapped_column(Text, default="")            # csv
+    prohibited_content_categories: Mapped[str] = mapped_column(Text, default="")  # csv
+    feature_minimum_ages: Mapped[str] = mapped_column(Text, default="{}")         # json
+    effective_date: Mapped[date | None] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(String(20), default="active")  # active|draft|superseded
+    updated_by: Mapped[str | None] = mapped_column(String(40))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

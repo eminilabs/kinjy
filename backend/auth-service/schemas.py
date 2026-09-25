@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -10,6 +10,9 @@ HANDLE_RE = re.compile(r"^[a-z0-9](?:[a-z0-9_.]{1,38}[a-z0-9])$")
 
 class RegisterIn(BaseModel):
     email: EmailStr
+    # Required. The tier it produces is decided by the server; the member never
+    # picks whether they are a teenager or an adult.
+    date_of_birth: date
     password: str = Field(min_length=10, max_length=128)
     display_name: str = Field(min_length=2, max_length=120)
     handle: str = Field(min_length=3, max_length=40)
@@ -122,3 +125,25 @@ class PoolSeatIn(BaseModel):
     amount: str
     currency: str = "USD"
     payment_ref: str | None = None
+
+
+class AgeProfileOut(BaseModel):
+    """The authoritative age record, as other services receive it.
+
+    No date of birth: a service needs to know how old somebody is, not when
+    they were born.
+    """
+
+    user_id: str
+    tier: str
+    age: int
+    jurisdiction: str
+    policy_version: str
+    assurance_level: str
+    under_review: bool
+
+
+class DobCorrectionIn(BaseModel):
+    """A member correcting a birth date they entered wrongly."""
+
+    date_of_birth: date

@@ -12,6 +12,8 @@ export interface AuthState {
     password: string
     display_name: string
     handle: string
+    date_of_birth: string
+    country?: string
     lang?: string
     referral_code?: string
   }) => Promise<AuthUser>

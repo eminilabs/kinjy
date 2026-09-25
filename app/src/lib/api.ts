@@ -1421,6 +1421,11 @@ export const kaluta = {
       password: string
       display_name: string
       handle: string
+      /** ISO date. Required: the server derives the account's age tier from it
+          and will refuse a registration without one. The tier itself is never
+          sent by the client. */
+      date_of_birth: string
+      country?: string
       lang?: string
       referral_code?: string
     }) {

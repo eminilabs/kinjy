@@ -1,6 +1,7 @@
 """Kinjy · social-service — posts, feed modes, algorithm marketplace, reactions."""
 from __future__ import annotations
 
+import json
 import logging
 import re
 from datetime import datetime, timezone
@@ -17,11 +18,16 @@ from common.database import SessionLocal, get_db
 from common.ids import new_id
 from common.service import create_app
 
+from common import ageclient, mediasign
+from common.agesafety import engine as age_engine
+
+import agefilter
 import models
 import ranking
 
 log = logging.getLogger("social-service")
 USER_URL = "http://user-service:8000"
+MEDIA_URL = "http://media-service:8000"
 MESSAGING_URL = "http://messaging-service:8000"
 
 
@@ -70,6 +76,11 @@ def seed_algorithms() -> None:
     finally:
         db.close()
 
+
+# content_safety is a new table; create_all makes it, but existing posts have
+# no row. restrict_query treats a missing row as UNCLASSIFIED, i.e. hidden from
+# minors, so the gap is closed in the safe direction until the backfill runs.
+MIGRATIONS: list[str] = []
 
 app = create_app(
     name="social-service",
@@ -130,6 +141,22 @@ def extract_hashtags(body: str) -> list[str]:
     return [tag.lower() for tag in HASHTAG_RE.findall(body or "")]
 
 
+def _restrict_attached_media(media_ids: list[str | None]) -> None:
+    """Tell media-service these assets now need a ticket.
+
+    Best-effort and logged loudly on failure. The alternative - refusing the
+    post because one HTTP call did not land - would take posting down whenever
+    media-service hiccups, and the asset is already unreferenced and
+    unguessable in the meantime. The reconciliation job in NOT-DONE.md is the
+    proper backstop.
+    """
+    for media_id in {m for m in media_ids if m}:
+        try:
+            httpx.post(f"{MEDIA_URL}/internal/media/{media_id}/restrict", timeout=4).raise_for_status()
+        except Exception as exc:
+            log.error("could not restrict media %s: %s", media_id, exc)
+
+
 def _post_out(
     post: models.Post,
     db: OrmSession,
@@ -141,6 +168,13 @@ def _post_out(
     media = db.scalars(
         select(models.PostMedia).where(models.PostMedia.post_id == post.id).order_by(models.PostMedia.position)
     ).all()
+    # Every media URL leaves here as a short-lived ticket bound to this viewer.
+    # Minted only at this point, which is downstream of the age check that
+    # selected the post in the first place - so a URL cannot exist for a viewer
+    # who was never allowed the post it belongs to.
+    signed_media = {
+        m.media_id: mediasign.sign_url(m.url, m.media_id, viewer) for m in media
+    }
     return {
         "id": post.id,
         "author_id": post.author_id,
@@ -179,7 +213,7 @@ def _post_out(
         "edited_at": post.edited_at,
         "media": [
             {
-                "url": m.url,
+                "url": signed_media[m.media_id],
                 "kind": m.kind,
                 "alt_text": m.alt_text,
                 "width": m.width,
@@ -253,23 +287,32 @@ def _resolve_authors(ids: set[str]) -> dict[str, dict]:
         return {}
 
 
-def _viewer_prefs(user_id: str | None) -> dict:
-    """The viewer's settings, from the service that owns them.
+def _viewer_age(user_id: str | None):
+    """The viewer's authoritative age profile.
 
-    Fails **safe, not open**: if user-service is unreachable we assume the
-    strictest reading the member might have chosen — teen filtering on, data
-    saver on — because guessing "adult, full media" on an outage is exactly the
-    wrong way to be wrong.
+    Not a preference. ``age_mode`` used to come from the member's own settings,
+    which meant the age gate was a checkbox the person being gated could clear.
+    This comes from the identity record, and a failed lookup returns UNKNOWN —
+    which the policy engine treats as a minor.
+    """
+    return ageclient.age_profile(user_id)
+
+
+def _viewer_prefs(user_id: str | None) -> dict:
+    """The viewer's *display* settings — data saver, autoplay.
+
+    Age is deliberately no longer in here. These are preferences a member is
+    entitled to set for themselves; age is not one of them.
     """
     if not user_id:
-        return {"age_mode": "adult", "data_saver": False, "autoplay_media": True, "degraded": False}
+        return {"data_saver": False, "autoplay_media": True, "degraded": False}
     try:
         response = httpx.get(f"{USER_URL}/internal/preferences/{user_id}", timeout=4)
         response.raise_for_status()
         return {**response.json(), "degraded": False}
     except Exception as exc:
         log.warning("preferences lookup failed for %s: %s", user_id, exc)
-        return {"age_mode": "teen", "data_saver": True, "autoplay_media": False, "degraded": True}
+        return {"data_saver": True, "autoplay_media": False, "degraded": True}
 
 
 # Media kinds a data-saver feed will not carry inline.
@@ -363,6 +406,12 @@ async def create_post(payload: PostIn, principal: CurrentUser, db: OrmSession = 
     db.commit()
     db.refresh(post)
 
+    # Attached media stops being publicly fetchable from this moment. Marked
+    # here, server-side, rather than declared by the uploader: a client that
+    # could label its own media "public" would be the age gate.
+    _restrict_attached_media([m.get("media_id") for m in payload.media])
+    db.refresh(post)
+
     await events.publish(
         "post.published",
         {"post_id": post.id, "author_id": post.author_id, "format": post.format, "lang": post.lang},
@@ -395,11 +444,12 @@ def posts_by_author(
     """
     viewer = principal.user_id if principal else None
     prefs = _viewer_prefs(viewer)
+    age = _viewer_age(viewer)
     stmt = select(models.Post).where(
         models.Post.author_id == author_id, models.Post.status == "published"
     )
-    if prefs.get("age_mode") in ("child", "teen"):
-        stmt = stmt.where(models.Post.mature.is_(False))
+    # Before ordering and before paging: restricted rows are never fetched.
+    stmt = agefilter.restrict_query(stmt, age)
     if viewer != author_id:
         stmt = stmt.where(models.Post.visibility == "public")
 
@@ -409,9 +459,97 @@ def posts_by_author(
     ).all()
     authors = _resolve_authors(_author_ids(db, list(rows)))
     reposted = _reposted_by(db, viewer, list(rows))
+    items = [
+        _apply_prefs(_post_out(p, db, viewer=viewer, authors=authors, reposted=reposted), prefs)
+        for p in rows
+    ]
+    return {"total": total, "items": agefilter.filter_items(db, age, items)}
+
+
+class ClassificationIn(BaseModel):
+    """A safety classification, as the pipeline or a reviewer writes it."""
+
+    age_rating: str = Field(
+        default="UNCLASSIFIED",
+        pattern="^(GENERAL|TEEN_13_PLUS|TEEN_16_PLUS|ADULT_18_PLUS|PROHIBITED|UNCLASSIFIED)$",
+    )
+    sexual_content_level: int = Field(default=0, ge=0, le=3)
+    nudity_level: int = Field(default=0, ge=0, le=3)
+    violence_level: int = Field(default=0, ge=0, le=3)
+    graphic_content_level: int = Field(default=0, ge=0, le=3)
+    drugs_level: int = Field(default=0, ge=0, le=3)
+    alcohol_level: int = Field(default=0, ge=0, le=3)
+    gambling_level: int = Field(default=0, ge=0, le=3)
+    dangerous_activity_level: int = Field(default=0, ge=0, le=3)
+    self_harm_risk: int = Field(default=0, ge=0, le=3)
+    hate_or_abuse_risk: int = Field(default=0, ge=0, le=3)
+    exploitation_risk: int = Field(default=0, ge=0, le=3)
+    classifier_source: str = ""
+    classifier_confidence: float = 0.0
+    human_review_status: str = "none"
+    jurisdiction_overrides: dict = {}
+
+
+@app.post("/internal/classify/{post_id}", tags=["internal"])
+def classify_post(post_id: str, payload: ClassificationIn, db: OrmSession = Depends(get_db)):
+    """Record or update a post's safety classification.
+
+    Internal only: the classifier, a reviewer's tooling and the child-safety
+    workflow call it. It is not reachable through the gateway, because a
+    classification a member could set for their own post is not a
+    classification at all.
+
+    Upserted rather than appended so there is exactly one current answer per
+    item, and the read path never has to decide which of several rows wins.
+    """
+    post = db.get(models.Post, post_id)
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    row = db.scalar(
+        select(models.ContentSafetyClassification).where(
+            models.ContentSafetyClassification.content_id == post_id
+        )
+    )
+    if row is None:
+        row = models.ContentSafetyClassification(id=new_id("csc"), content_id=post_id)
+        db.add(row)
+
+    data = payload.model_dump()
+    overrides = data.pop("jurisdiction_overrides", {}) or {}
+    for key, value in data.items():
+        setattr(row, key, value)
+    row.jurisdiction_overrides = json.dumps(overrides)
+
+    # Exploitation risk is not an ordinary moderation outcome. It takes the
+    # post out of circulation immediately and hands it to the child-safety
+    # process rather than leaving it queued behind everything else.
+    if payload.exploitation_risk >= 2 or payload.age_rating == "PROHIBITED":
+        post.status = "removed"
+        log.error("content %s withheld pending child-safety review", post_id)
+
+    db.commit()
+    return {"content_id": post_id, "age_rating": row.age_rating, "status": post.status}
+
+
+@app.get("/internal/classification/{post_id}", tags=["internal"])
+def read_classification(post_id: str, db: OrmSession = Depends(get_db)):
+    row = db.scalar(
+        select(models.ContentSafetyClassification).where(
+            models.ContentSafetyClassification.content_id == post_id
+        )
+    )
+    if row is None:
+        # Not an error: "unrated" is a real state, and the engine treats it as
+        # adult-only. Saying so plainly is better than a 404 the caller has to
+        # interpret.
+        return {"content_id": post_id, "age_rating": "UNCLASSIFIED", "classified": False}
     return {
-        "total": total,
-        "items": [_apply_prefs(_post_out(p, db, viewer=viewer, authors=authors, reposted=reposted), prefs) for p in rows],
+        "content_id": post_id,
+        "age_rating": row.age_rating,
+        "classified": True,
+        "human_review_status": row.human_review_status,
+        "classifier_source": row.classifier_source,
     }
 
 
@@ -422,9 +560,11 @@ def get_post(post_id: str, principal: MaybeUser, db: OrmSession = Depends(get_db
         raise HTTPException(status_code=404, detail="Post not found")
     viewer = principal.user_id if principal else None
     prefs = _viewer_prefs(viewer)
-    # The feed query already excludes mature posts for a minor, but a direct
-    # link bypasses the feed entirely — the same rule has to hold here.
-    if post.mature and prefs.get("age_mode") in ("child", "teen"):
+    age = _viewer_age(viewer)
+    # A direct link bypasses the feed entirely, so the same gate runs here.
+    # 404 rather than 403: confirming that a post exists but is out of reach
+    # tells somebody exactly which links are worth passing to a minor.
+    if not agefilter.visible_to(db, age, post.id):
         raise HTTPException(status_code=404, detail="Post not found")
     post.views_count += 1
     db.commit()
@@ -443,8 +583,12 @@ def get_post_media(post_id: str, principal: MaybeUser, db: OrmSession = Depends(
     post = db.get(models.Post, post_id)
     if post is None or post.status in ("removed", "draft"):
         raise HTTPException(status_code=404, detail="Post not found")
-    prefs = _viewer_prefs(principal.user_id if principal else None)
-    if post.mature and prefs.get("age_mode") in ("child", "teen"):
+    viewer_id = principal.user_id if principal else None
+    prefs = _viewer_prefs(viewer_id)
+    # The bytes themselves. Withholding the URL is the only protection that
+    # actually works - a client told "do not display this" has already
+    # downloaded it.
+    if not agefilter.visible_to(db, _viewer_age(viewer_id), post.id):
         raise HTTPException(status_code=404, detail="Post not found")
     rows = db.scalars(
         select(models.PostMedia)
@@ -453,7 +597,17 @@ def get_post_media(post_id: str, principal: MaybeUser, db: OrmSession = Depends(
     ).all()
     return {
         "post_id": post.id,
-        "media": [{"url": m.url, "kind": m.kind, "alt_text": m.alt_text} for m in rows],
+        # Signed here too: this route is reached by "load it anyway" after data
+        # saver withheld the inline URL, and it is exactly the route somebody
+        # would try if the feed's URLs stopped working unsigned.
+        "media": [
+            {
+                "url": mediasign.sign_url(m.url, m.media_id, viewer_id),
+                "kind": m.kind,
+                "alt_text": m.alt_text,
+            }
+            for m in rows
+        ],
     }
 
 
@@ -485,16 +639,20 @@ def delete_post(post_id: str, principal: CurrentUser, db: OrmSession = Depends(g
 # Feeds
 # ---------------------------------------------------------------------------
 
-def _visible_posts(principal, prefs: dict):
+def _visible_posts(principal, age):
     """The base feed query: published, age-appropriate, and audience-allowed.
 
     Factored out so the shorts reel cannot drift from the feed's rules. A second
     hand-written query is how a post a minor must not see ends up visible on one
     surface and hidden on another.
+
+    ``age`` is the authoritative profile from the identity record, never the
+    viewer's own settings.
     """
     stmt = select(models.Post).where(models.Post.status == "published")
-    if prefs.get("age_mode") in ("child", "teen"):
-        stmt = stmt.where(models.Post.mature.is_(False))
+    # Age eligibility enters the SQL here, before ranking and before paging,
+    # so restricted rows are never candidates in the first place.
+    stmt = agefilter.restrict_query(stmt, age)
     if principal is None:
         return stmt.where(models.Post.visibility == "public")
     return stmt.where(
@@ -528,8 +686,9 @@ def shorts(
     """
     viewer = principal.user_id if principal else None
     prefs = _viewer_prefs(viewer)
+    age = _viewer_age(viewer)
 
-    stmt = _visible_posts(principal, prefs).where(models.Post.format == "short")
+    stmt = _visible_posts(principal, age).where(models.Post.format == "short")
     if author:
         stmt = stmt.where(models.Post.author_id == author)
 
@@ -552,9 +711,11 @@ def shorts(
         "items": items,
         "has_more": len(rows) == limit,
         "applied_settings": {
-            "age_mode": prefs.get("age_mode"),
+            # The tier, so a client can explain why a surface looks the way it
+            # does. It is a readout, never an input.
+            "age_tier": agefilter.tier_of(age),
             "autoplay_media": prefs.get("autoplay_media", True),
-            "degraded": prefs.get("degraded", False),
+            "degraded": prefs.get("degraded", False) or age.degraded,
         },
     }
 
@@ -583,11 +744,12 @@ def feed(
     viewer = principal.user_id if principal else None
     ctx = _context(db, principal)
     prefs = _viewer_prefs(principal.user_id if principal else None)
+    age = _viewer_age(principal.user_id if principal else None)
 
     # Shared with the shorts reel: published, age-appropriate, audience-allowed.
-    # age_mode is applied in the query rather than after — a post a child must
-    # not see should never be selected, never serialised and never sent.
-    stmt = _visible_posts(principal, prefs)
+    # The age rule is applied in the query rather than after - a post a child
+    # must not see should never be selected, never serialised and never sent.
+    stmt = _visible_posts(principal, age)
 
     following: set[str] = set()
     if principal is not None:
@@ -605,7 +767,8 @@ def feed(
 
     if mode == "following":
         if not following:
-            return {"mode": mode, "algorithm": "chronological", "items": [], "empty_reason": "not_following_anyone"}
+            return {"mode": mode, "algorithm": "chronological", "items": [],
+                    "age_tier": agefilter.tier_of(age), "empty_reason": "not_following_anyone"}
         rows = db.scalars(
             stmt.where(models.Post.author_id.in_(following))
             .order_by(models.Post.created_at.desc())
@@ -618,6 +781,7 @@ def feed(
             "mode": mode,
             "algorithm": "chronological",
             "ranked": False,
+            "age_tier": agefilter.tier_of(age),
             "items": [_apply_prefs(_post_out(p, db, viewer=viewer, authors=authors, reposted=reposted), prefs) for p in rows],
         }
 
@@ -629,6 +793,7 @@ def feed(
             "mode": mode,
             "algorithm": "chronological",
             "ranked": False,
+            "age_tier": agefilter.tier_of(age),
             "items": [_apply_prefs(_post_out(p, db, viewer=viewer, authors=authors, reposted=reposted), prefs) for p in rows],
         }
 
@@ -671,9 +836,9 @@ def feed(
         "ranked": True,
         "total_candidates": len(scored),
         "applied_settings": {
-            "age_mode": prefs.get("age_mode"),
+            "age_tier": agefilter.tier_of(age),
             "data_saver": bool(prefs.get("data_saver")),
-            "degraded": bool(prefs.get("degraded")),
+            "degraded": bool(prefs.get("degraded")) or age.degraded,
         },
         "items": [
             _apply_prefs(
