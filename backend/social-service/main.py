@@ -677,6 +677,27 @@ def backfill_classifications(limit: int = 500, db: OrmSession = Depends(get_db))
         select(models.Post).where(models.Post.id.not_in(classified)).limit(min(limit, 2000))
     ).all()
 
+    # Comments too. They were never classified, so a minor currently sees every
+    # one of them - the listing excludes only what is classified out, which for
+    # an unclassified comment is nothing.
+    unrated_comments = db.scalars(
+        select(models.Comment).where(models.Comment.id.not_in(classified)).limit(min(limit, 2000))
+    ).all()
+    comment_count = 0
+    for comment in unrated_comments:
+        verdict = classifier.classify(
+            body=comment.body or "",
+            media_kinds=[],
+            author_is_minor=_viewer_age(comment.author_id).is_minor,
+        )
+        row = models.ContentSafetyClassification(
+            id=new_id("csc"), content_id=comment.id, content_kind="comment"
+        )
+        for key, value in verdict.as_payload().items():
+            setattr(row, key, value)
+        db.add(row)
+        comment_count += 1
+
     done, blocked, queued = 0, 0, 0
     for post in rows:
         kinds = db.scalars(
@@ -689,7 +710,12 @@ def backfill_classifications(limit: int = 500, db: OrmSession = Depends(get_db))
         blocked += 1 if result.block_publication else 0
         queued += 1 if result.human_review_status == "pending" else 0
     db.commit()
-    return {"classified": done, "withheld": blocked, "queued_for_review": queued}
+    return {
+        "classified": done,
+        "comments_classified": comment_count,
+        "withheld": blocked,
+        "queued_for_review": queued,
+    }
 
 
 @app.get("/posts/{post_id}", tags=["posts"])
@@ -1473,6 +1499,13 @@ def add_comment(post_id: str, payload: CommentIn, principal: CurrentUser, db: Or
     if post is None:
         raise HTTPException(status_code=404, detail="Post not found")
 
+    # You cannot comment on what you are not allowed to read. Without this a
+    # minor could write on an adult post by posting the id directly, and the
+    # comment would then carry their handle into a thread they cannot see.
+    commenter = _viewer_age(principal.user_id)
+    if not agefilter.visible_to(db, commenter, post.id):
+        raise HTTPException(status_code=404, detail="Post not found")
+
     parent = db.get(models.Comment, payload.parent_id) if payload.parent_id else None
     if payload.parent_id and (parent is None or parent.post_id != post_id):
         raise HTTPException(status_code=400, detail="That comment is not on this post")
@@ -1510,6 +1543,30 @@ def add_comment(post_id: str, payload: CommentIn, principal: CurrentUser, db: Or
         lang=payload.lang,
     )
     db.add(comment)
+    db.flush()
+
+    # Classified before it is committed, like a post. A comment that appears
+    # first and is rated a moment later was readable for that moment, and a
+    # comment thread is refreshed far more often than a post is.
+    verdict = classifier.classify(
+        body=payload.body or "", media_kinds=[], author_is_minor=commenter.is_minor
+    )
+    row = models.ContentSafetyClassification(
+        id=new_id("csc"), content_id=comment.id, content_kind="comment"
+    )
+    for key, value in verdict.as_payload().items():
+        setattr(row, key, value)
+    db.add(row)
+
+    if verdict.block_publication:
+        db.rollback()
+        if verdict.escalate_child_safety:
+            log.error("child-safety escalation on a comment by %s", principal.user_id)
+        raise HTTPException(
+            status_code=403,
+            detail="This cannot be published. If you believe this is a mistake, contact support.",
+        )
+
     post.comments_count += 1
     db.commit()
     live(f"post:{post_id}", "comment",
@@ -1538,13 +1595,46 @@ def add_comment(post_id: str, payload: CommentIn, principal: CurrentUser, db: Or
 
 
 @app.get("/posts/{post_id}/comments", tags=["engagement"])
-def list_comments(post_id: str, limit: int = 100, offset: int = 0, db: OrmSession = Depends(get_db)):
+def list_comments(
+    post_id: str,
+    principal: MaybeUser,
+    limit: int = 100,
+    offset: int = 0,
+    db: OrmSession = Depends(get_db),
+):
+    """Comments on a post, age-filtered.
+
+    This took no viewer at all until now, so it gave a 13-year-old and an adult
+    the same answer — and comments are where adult material most easily reaches
+    a minor, because the post carrying them can be perfectly ordinary.
+    """
+    age = _viewer_age(principal.user_id if principal else None)
+
+    # The post gate first: comments on something you may not read are not
+    # yours to read either.
+    if not agefilter.visible_to(db, age, post_id):
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    stmt = select(models.Comment).where(
+        models.Comment.post_id == post_id, models.Comment.status == "published"
+    )
+    if age.is_minor:
+        forbidden = (
+            ("ADULT_18_PLUS", "PROHIBITED", "UNCLASSIFIED", "TEEN_16_PLUS")
+            if (age.age is None or age.age < 16)
+            else ("ADULT_18_PLUS", "PROHIBITED", "UNCLASSIFIED")
+        )
+        blocked = select(models.ContentSafetyClassification.content_id).where(
+            models.ContentSafetyClassification.age_rating.in_(forbidden)
+        )
+        # Only the classified-out are excluded here, not the unclassified:
+        # comments written before the classifier existed have no row, and
+        # hiding every one of them would empty long threads for teenagers
+        # while telling them nothing. They are backfilled below instead.
+        stmt = stmt.where(models.Comment.id.not_in(blocked))
+
     rows = db.scalars(
-        select(models.Comment)
-        .where(models.Comment.post_id == post_id, models.Comment.status == "published")
-        .order_by(models.Comment.created_at)
-        .limit(min(limit, 300))
-        .offset(offset)
+        stmt.order_by(models.Comment.created_at).limit(min(limit, 300)).offset(offset)
     ).all()
 
     people = _authors({r.author_id for r in rows} | {r.reply_to for r in rows if r.reply_to})

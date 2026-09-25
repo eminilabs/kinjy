@@ -255,7 +255,9 @@ forgets the filter still cannot leak.
 | People search and suggestions | ✅ |
 | Forum threads and replies | ✅ |
 | Community discovery | ✅ |
-| Comments, livestreams, notifications | ⬜ |
+| Comments | ✅ |
+| Notifications | ✅ |
+| Livestreams | ✅ decision, ⬜ no stack to gate |
 
 ---
 
@@ -301,6 +303,48 @@ community whose whole subject is adult.
 The classifier moved to `common/classifier.py` when the second service needed
 it. Duplicating a classifier is exactly the drift this architecture exists to
 avoid.
+
+### Comments ✅
+
+`/posts/{id}/comments` took no viewer at all, so it gave a 13-year-old and an
+adult the same answer. Comments are where adult material most easily reaches a
+minor, because **the post carrying them can be perfectly ordinary** — the post
+gate passes, and the thread underneath was never checked.
+
+Now: classified at creation like a post, filtered on read, and you cannot
+comment on what you may not read. Without that last one a minor could write on
+an adult post by pasting its id, and their handle would appear in a thread they
+cannot see.
+
+The listing excludes what is **classified out**, not what is unclassified —
+the opposite of the feed rule, and on purpose. Comments written before the
+classifier have no row, and hiding every one of them would empty long threads
+for teenagers while telling them nothing. They are backfilled instead: 46 on
+first run.
+
+### Notifications ✅
+
+Listed in the specification beside feeds and search, for a reason that is easy
+to miss: **a notification quotes**. "X replied: <the first line of their
+reply>" carries the reply onto a lock screen, past every gate the reply itself
+sits behind. The content was filtered; the notification about it was not.
+
+`messaging-service/agenotify.py` screens the text before the row is built, so
+the stored copy and the live socket push carry the same thing — screening one
+of them would mean the socket showed what the notification list did not.
+
+Two rules, the second mattering more:
+
+1. Unsuitable text is **replaced, never deleted**. The member still learns that
+   something happened and can go and look, where the ordinary gates apply.
+2. Safety, money and account kinds are **never** touched. Redacting "your
+   dispute was resolved" or "somebody signed in from a new device" to protect a
+   teenager from strong language would be protecting them from the one message
+   they most need to read.
+
+It fails towards delivering: if the classifier or the age lookup throws, the
+member is still told. The linked content stays behind its own gate either way,
+so being wrong here costs a blunt word on a lock screen rather than access.
 
 ---
 
@@ -472,6 +516,7 @@ backend/tests/e2e_classifier.py    (live API)           → 24 checks passed
 backend/tests/test_classifier.py                        → 26 passed
 backend/tests/e2e_discovery_forums.py (live API)        → 26 checks passed
 backend/tests/e2e_money_age.py     (live API)           → 26 checks passed
+backend/tests/e2e_comments_notifications.py (live)      → 21 checks passed
 backend/tests/schema_drift.py                           → no drift
 ```
 
@@ -520,8 +565,9 @@ minor→adult · locked settings · policy version on every verdict.
 - The heuristic lexicon is a stopgap with the failure modes of any word list.
   Every decision it makes is stamped `classifier_source="heuristic"` so its
   work can be found and re-run when a model arrives.
-- Comments and notifications are not yet filtered.
 - There is no streaming backend at all; only the age decision it will need.
+- Parental supervision, appeals and the Trust & Safety console are designed
+  here and not built.
 - `POST /internal/*` relies on network isolation. That is how the rest of this
   platform already works, but an authenticated service mesh would be better.
 - Nothing here has been reviewed by a lawyer. The jurisdiction table ships with
@@ -541,6 +587,12 @@ passed without ever reaching media-service.
 The test now probes `/health` and asserts it is talking to `media-service`
 before trusting a single 404. Any test whose pass condition is "something was
 refused" must first prove it reached the thing that was supposed to refuse it.
+
+**It happened again**, twice. Once with refusals that came from a broken
+permissions lookup rather than the age layer, and once with the messaging port
+(8207, not 8208). Every live test now asserts which service it is talking to
+before believing a 404, and the age tests assert *which layer* refused, not
+merely that something did.
 
 
 ---

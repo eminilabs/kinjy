@@ -21,6 +21,7 @@ from common.security import decode_token, ACCESS
 from common.service import create_app
 
 import agecheck
+import agenotify
 import models
 
 log = logging.getLogger("messaging-service")
@@ -720,6 +721,15 @@ async def internal_notify(
     have to poll to learn about it. A member who was offline finds it waiting;
     a member who is looking sees it arrive.
     """
+    # A notification quotes. "X replied: <their first line>" carries the reply
+    # onto a lock screen, past every gate the reply itself sits behind - the
+    # content was filtered and the notification about it was not.
+    #
+    # Screened before the row is built, so the stored copy and the live push
+    # below carry the same text. Screening only one of them would mean the
+    # socket showed what the notification list did not.
+    title, body, redacted = agenotify.screen(user_id, kind, title, body)
+
     notification = models.Notification(
         user_id=user_id, kind=kind, title=title, body=body, link=link, lang=lang
     )
@@ -746,4 +756,4 @@ async def internal_notify(
             "created_at": notification.created_at.isoformat(),
         },
     )
-    return {"id": notification.id, "unread": unread}
+    return {"id": notification.id, "unread": unread, "redacted": redacted}
