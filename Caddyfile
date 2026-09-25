@@ -1,0 +1,56 @@
+# Kaluta Society — public edge.
+#
+# Caddy rather than nginx + certbot on the host: it obtains and renews the
+# certificate by itself, with no cron job to forget and no renewal that fails
+# silently three months from now. It also keeps the whole deployment in
+# containers, so there is nothing to configure on the machine itself.
+#
+# Requires ports 80 and 443 to be free on the VPS. If something already listens
+# there (an existing Apache or nginx), drop this service from the compose
+# overlay and proxy that server to ${WEB_PORT} instead — the app does not care
+# which front door it sits behind.
+
+kinjy.com {
+	# The address is the compose service name; Caddy resolves it on the
+	# internal network.
+	reverse_proxy web:80
+
+	encode gzip zstd
+
+	# The realtime hub runs over this same host. Caddy proxies WebSockets
+	# without extra configuration, but the read timeout matters: a socket is
+	# idle by design between messages, and a short timeout would cut it and
+	# force a reconnect every minute.
+	@websocket {
+		header Connection *Upgrade*
+		header Upgrade websocket
+	}
+	reverse_proxy @websocket web:80
+
+	header {
+		# HSTS: once a browser has seen this, it refuses plain http for a year.
+		# Set deliberately — it is hard to walk back, because browsers remember
+		# it regardless of what the server later says.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# The server should not advertise itself.
+		-Server
+	}
+
+	log {
+		output file /var/log/caddy/kaluta.log {
+			roll_size 20mb
+			roll_keep 5
+		}
+	}
+}
+
+# One canonical hostname. Passkeys are bound to an exact origin, so a member who
+# registers a key on www and returns to the bare domain would find it rejected
+# with an opaque browser error — the redirect is what prevents that, not a
+# nicety.
+www.kinjy.com {
+	redir https://kinjy.com{uri} permanent
+}

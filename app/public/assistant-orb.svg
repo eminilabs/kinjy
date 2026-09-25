@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Kaluta Assistant orb">
+  <defs>
+    <radialGradient id="orbcore" cx="0.4" cy="0.35" r="0.85">
+      <stop offset="0" stop-color="#8FB8E8"/>
+      <stop offset="0.45" stop-color="#4A52E0"/>
+      <stop offset="0.8" stop-color="#2E2A6E"/>
+      <stop offset="1" stop-color="#0B0E1D"/>
+    </radialGradient>
+    <linearGradient id="orbsheen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F0C878" stop-opacity="0.9"/>
+      <stop offset="0.5" stop-color="#8FB8E8" stop-opacity="0.25"/>
+      <stop offset="1" stop-color="#4A52E0" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="orbring" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#F0C878"/>
+      <stop offset="0.5" stop-color="#D9A648"/>
+      <stop offset="1" stop-color="#8FB8E8"/>
+    </linearGradient>
+    <filter id="orbblur" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+  <!-- breathing halo -->
+  <circle cx="128" cy="128" r="104" fill="#4A52E0" opacity="0.35" filter="url(#orbblur)"/>
+  <!-- conic wedge ring suggesting indigo -> sky -> gold swirl -->
+  <g opacity="0.9">
+    <path d="M128 20a108 108 0 0 1 93 53L163 106a52 52 0 0 0-35-20Z" fill="#4A52E0" opacity="0.7" filter="url(#orbblur)"/>
+    <path d="M228 96a108 108 0 0 1-14 96l-49-29a52 52 0 0 0 6-38Z" fill="#8FB8E8" opacity="0.55" filter="url(#orbblur)"/>
+    <path d="M200 208a108 108 0 0 1-100 24l15-56a52 52 0 0 0 40-10Z" fill="#F0C878" opacity="0.5" filter="url(#orbblur)"/>
+    <path d="M84 226a108 108 0 0 1-56-92l57 10a52 52 0 0 0 22 36Z" fill="#4A52E0" opacity="0.6" filter="url(#orbblur)"/>
+  </g>
+  <!-- sphere core -->
+  <circle cx="128" cy="128" r="84" fill="url(#orbcore)"/>
+  <circle cx="128" cy="128" r="84" fill="url(#orbsheen)"/>
+  <!-- specular -->
+  <ellipse cx="102" cy="92" rx="34" ry="20" fill="#FFFFFF" opacity="0.28" filter="url(#orbblur)"/>
+  <!-- subtle arc ring -->
+  <g transform="rotate(-18 128 128)">
+    <ellipse cx="128" cy="128" rx="108" ry="36" fill="none" stroke="url(#orbring)" stroke-width="3" opacity="0.85"/>
+    <circle cx="232" cy="118" r="5" fill="#F0C878"/>
+  </g>
+</svg>

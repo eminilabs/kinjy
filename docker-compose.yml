@@ -1,0 +1,206 @@
+name: kaluta
+
+# ---------------------------------------------------------------------------
+# Kaluta Society — local development stack.
+#
+#   Frontend      http://localhost:3030
+#   API gateway   http://localhost:8200        (single origin for the browser)
+#   Postgres      localhost:5445
+#   RabbitMQ UI   http://localhost:15675       (guest/guest)
+#
+# Every service mounts its source read-write and runs uvicorn --reload, so an
+# edit on the host reloads the container without a rebuild.
+# ---------------------------------------------------------------------------
+
+x-service-base: &service-base
+  restart: unless-stopped
+  env_file: [.env]
+  environment: &service-env
+    DATABASE_URL: ${DATABASE_URL}
+    REDIS_URL: ${REDIS_URL}
+    RABBITMQ_URL: ${RABBITMQ_URL}
+    JWT_SECRET: ${JWT_SECRET}
+    JWT_ALGORITHM: ${JWT_ALGORITHM}
+    FRONTEND_URL: ${FRONTEND_URL}
+    GATEWAY_URL: ${GATEWAY_URL}
+    ENV: development
+  depends_on:
+    postgres: {condition: service_healthy}
+    rabbitmq: {condition: service_healthy}
+  command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app
+  networks: [kaluta]
+
+services:
+  # --- infrastructure ------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: kaluta-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports: ["${POSTGRES_PORT:-5445}:5432"]
+    volumes: [kaluta-pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [kaluta]
+
+  redis:
+    image: redis:7-alpine
+    container_name: kaluta-redis
+    restart: unless-stopped
+    ports: ["6382:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [kaluta]
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: kaluta-rabbitmq
+    restart: unless-stopped
+    ports: ["5675:5672", "15675:15672"]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    networks: [kaluta]
+
+  # --- gateway -------------------------------------------------------------
+  gateway:
+    <<: *service-base
+    container_name: kaluta-gateway
+    build: {context: ./backend, dockerfile: Dockerfile, args: {SERVICE: gateway}}
+    ports: ["8200:8000"]
+    volumes:
+      - ./backend/gateway:/app
+      - ./backend/common:/app/common
+    depends_on:
+      postgres: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+      auth-service: {condition: service_started}
+
+  # --- domain services -----------------------------------------------------
+  auth-service:
+    <<: *service-base
+    container_name: kaluta-auth
+    build: {context: ./backend, dockerfile: Dockerfile, args: {SERVICE: auth-service}}
+    ports: ["8201:8000"]
+    volumes: ["./backend/auth-service:/app", "./backend/common:/app/common"]
+
+  user-service:
+    <<: *service-base
+    container_name: kaluta-user
+    build: {context: ./backend, dockerfile: Dockerfile, args: {SERVICE: user-service}}
+    ports: ["8202:8000"]
+    volumes: ["./backend/user-service:/app", "./backend/common:/app/common"]
+
+  social-service:
+    <<: *service-base
+    container_name: kaluta-social
+    build: {context: ./backend, dockerfile: Dockerfile, args: {SERVICE: social-service}}
+    ports: ["8203:8000"]
+    volumes: ["./backend/social-service:/app", "./backend/common:/app/common"]
+
+  community-service:
+    <<: *service-base
+    container_name: kaluta-community
+    build: {context: ./backend, dockerfile: Dockerfile, args: {SERVICE: community-service}}
+    ports: ["8204:8000"]
+    volumes: ["./backend/community-service:/app", "./backend/common:/app/common"]
+
+  family-service:
+    <<: *service-base
+    container_name: kaluta-family
+    build: {context: ./backend, dockerfile: Dockerfile, args: {SERVICE: family-service}}
+    ports: ["8205:8000"]
+    volumes: ["./backend/family-service:/app", "./backend/common:/app/common"]
+
+  memorial-service:
+    <<: *service-base
+    container_name: kaluta-memorial
+    build: {context: ./backend, dockerfile: Dockerfile, args: {SERVICE: memorial-service}}
+    ports: ["8206:8000"]
+    volumes: ["./backend/memorial-service:/app", "./backend/common:/app/common"]
+
+  messaging-service:
+    <<: *service-base
+    container_name: kaluta-messaging
+    build: {context: ./backend, dockerfile: Dockerfile, args: {SERVICE: messaging-service}}
+    ports: ["8207:8000"]
+    volumes: ["./backend/messaging-service:/app", "./backend/common:/app/common"]
+
+  creator-service:
+    <<: *service-base
+    container_name: kaluta-creator
+    build: {context: ./backend, dockerfile: Dockerfile, args: {SERVICE: creator-service}}
+    ports: ["8208:8000"]
+    volumes: ["./backend/creator-service:/app", "./backend/common:/app/common"]
+
+  commerce-service:
+    <<: *service-base
+    container_name: kaluta-commerce
+    build: {context: ./backend, dockerfile: Dockerfile, args: {SERVICE: commerce-service}}
+    ports: ["8209:8000"]
+    volumes: ["./backend/commerce-service:/app", "./backend/common:/app/common"]
+
+  ledger-service:
+    <<: *service-base
+    container_name: kaluta-ledger
+    build: {context: ./backend, dockerfile: Dockerfile, args: {SERVICE: ledger-service}}
+    ports: ["8210:8000"]
+    volumes: ["./backend/ledger-service:/app", "./backend/common:/app/common"]
+
+  payment-service:
+    <<: *service-base
+    container_name: kaluta-payment
+    build: {context: ./backend, dockerfile: Dockerfile, args: {SERVICE: payment-service}}
+    ports: ["8211:8000"]
+    volumes: ["./backend/payment-service:/app", "./backend/common:/app/common"]
+
+  ai-service:
+    <<: *service-base
+    container_name: kaluta-ai
+    build: {context: ./backend, dockerfile: Dockerfile, args: {SERVICE: ai-service}}
+    ports: ["8212:8000"]
+    volumes: ["./backend/ai-service:/app", "./backend/common:/app/common"]
+
+  media-service:
+    <<: *service-base
+    container_name: kaluta-media
+    build: {context: ./backend, dockerfile: Dockerfile, args: {SERVICE: media-service}}
+    ports: ["8213:8000"]
+    volumes:
+      - ./backend/media-service:/app
+      - ./backend/common:/app/common
+      - kaluta-media:/data/media
+
+  # --- frontend ------------------------------------------------------------
+  web:
+    build: {context: ./app, dockerfile: Dockerfile.dev}
+    container_name: kaluta-web
+    restart: unless-stopped
+    ports: ["3030:5173"]
+    environment:
+      VITE_API_BASE: http://localhost:8200/api
+    volumes:
+      - ./app:/app
+      - kaluta-node-modules:/app/node_modules
+    depends_on: [gateway]
+    networks: [kaluta]
+
+volumes:
+  kaluta-pgdata:
+  kaluta-media:
+  kaluta-node-modules:
+
+networks:
+  kaluta:
+    driver: bridge

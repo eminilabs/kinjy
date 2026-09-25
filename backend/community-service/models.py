@@ -1,0 +1,129 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+
+from sqlalchemy import Boolean, DateTime, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column
+
+from common.database import Base
+from common.ids import new_id
+
+SCHEMA = "community"
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class Community(Base):
+    """Blueprint module E — public / private / secret / paid."""
+
+    __tablename__ = "communities"
+    __table_args__ = {"schema": SCHEMA}
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("cmy"))
+    slug: Mapped[str] = mapped_column(String(60), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(140))
+    description: Mapped[str] = mapped_column(Text, default="")
+    owner_id: Mapped[str] = mapped_column(String(40), index=True)
+    kind: Mapped[str] = mapped_column(String(20), default="public")  # public|private|secret|paid
+    price_usd: Mapped[float | None] = mapped_column(Numeric(18, 2))
+    lang: Mapped[str] = mapped_column(String(5), default="en")
+    country: Mapped[str | None] = mapped_column(String(2), index=True)
+    city: Mapped[str | None] = mapped_column(String(120))
+    members_count: Mapped[int] = mapped_column(Integer, default=0)
+    avatar_url: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class Membership(Base):
+    __tablename__ = "memberships"
+    __table_args__ = (
+        UniqueConstraint("community_id", "user_id", name="uq_membership"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    community_id: Mapped[str] = mapped_column(String(40), index=True)
+    user_id: Mapped[str] = mapped_column(String(40), index=True)
+    role: Mapped[str] = mapped_column(String(20), default="member")  # member|moderator|owner
+    status: Mapped[str] = mapped_column(String(20), default="active")  # pending|active|banned
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class Forum(Base):
+    """Blueprint module C — forums nest by geography *and* by topic."""
+
+    __tablename__ = "forums"
+    __table_args__ = {"schema": SCHEMA}
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("frm"))
+    slug: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(140))
+    description: Mapped[str] = mapped_column(Text, default="")
+    parent_id: Mapped[str | None] = mapped_column(String(40), index=True)
+    hierarchy: Mapped[str] = mapped_column(String(20), default="topic")  # topic|geographic
+    scope: Mapped[str | None] = mapped_column(String(40))  # global|continent|country|state|city|neighborhood
+    scope_value: Mapped[str | None] = mapped_column(String(120))
+    community_id: Mapped[str | None] = mapped_column(String(40), index=True)
+    threads_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class Thread(Base):
+    __tablename__ = "threads"
+    __table_args__ = {"schema": SCHEMA}
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("thr"))
+    forum_id: Mapped[str] = mapped_column(String(40), index=True)
+    author_id: Mapped[str] = mapped_column(String(40), index=True)
+    title: Mapped[str] = mapped_column(String(300))
+    body: Mapped[str] = mapped_column(Text)
+    lang: Mapped[str] = mapped_column(String(5), default="en")
+    pinned: Mapped[bool] = mapped_column(Boolean, default=False)
+    locked: Mapped[bool] = mapped_column(Boolean, default=False)
+    replies_count: Mapped[int] = mapped_column(Integer, default=0)
+    views_count: Mapped[int] = mapped_column(Integer, default=0)
+    # Filled by ai-service; kept nullable so a thread is never blocked on the AI.
+    ai_summary: Mapped[str | None] = mapped_column(Text)
+    duplicate_of: Mapped[str | None] = mapped_column(String(40))
+    status: Mapped[str] = mapped_column(String(20), default="open")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+    last_activity_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class Reply(Base):
+    __tablename__ = "replies"
+    __table_args__ = {"schema": SCHEMA}
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("rpl"))
+    thread_id: Mapped[str] = mapped_column(String(40), index=True)
+    author_id: Mapped[str] = mapped_column(String(40), index=True)
+    parent_id: Mapped[str | None] = mapped_column(String(40))
+    body: Mapped[str] = mapped_column(Text)
+    lang: Mapped[str] = mapped_column(String(5), default="en")
+    accepted_answer: Mapped[bool] = mapped_column(Boolean, default=False)
+    upvotes: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(20), default="published")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class KnowledgeEntry(Base):
+    """Forum-to-Knowledge transformation (blueprint §18).
+
+    Every entry keeps its source thread and reply ids: the knowledge base cites
+    the discussion it came from instead of asserting facts anonymously.
+    """
+
+    __tablename__ = "knowledge_entries"
+    __table_args__ = {"schema": SCHEMA}
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("kbe"))
+    forum_id: Mapped[str] = mapped_column(String(40), index=True)
+    question: Mapped[str] = mapped_column(Text)
+    answer: Mapped[str] = mapped_column(Text)
+    lang: Mapped[str] = mapped_column(String(5), default="en")
+    source_thread_ids: Mapped[str] = mapped_column(Text)  # csv
+    confidence: Mapped[float] = mapped_column(Numeric(4, 3), default=0)
+    reviewed_by: Mapped[str | None] = mapped_column(String(40))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

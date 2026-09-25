@@ -1,0 +1,18 @@
+.env
+*.log
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+node_modules/
+dist/
+.DS_Store
+.idea/
+.vscode/
+
+# Filled production secrets — never committed.
+.env.production
+.env.prodtest
+
+# Server-side artefacts, never from a workstation.
+backups/

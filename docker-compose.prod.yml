@@ -1,0 +1,110 @@
+# Kaluta Society — production overlay.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# What this changes, and why each one matters:
+#
+#   * **No --reload and no bind mount.** The dev stack mounts the source and
+#     watches it, so an edit on the server would silently become production.
+#     Here the code is baked into the image and a change requires a rebuild.
+#   * **Only the web container is published.** The dev stack exposes all
+#     thirteen services plus Postgres, Redis and RabbitMQ on the host — on a
+#     public VPS that is thirteen unauthenticated doors into the private
+#     network. Everything now talks over the internal compose network only.
+#   * **The frontend is a static build behind nginx**, which also proxies /api
+#     and the WebSocket, so the browser sees one origin.
+#   * **ENV: production**, which is what services read to decide whether to
+#     expose docs and verbose errors.
+
+services:
+  postgres:
+    # No host port: the database is reachable from the services, from nothing
+    # else. Use `docker compose exec postgres psql` for a shell.
+    ports: !override []
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+
+  redis:
+    ports: !override []
+
+  rabbitmq:
+    ports: !override []
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-kaluta}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}
+
+  gateway: &prod-service
+    ports: !override []
+    volumes: !override []
+    environment:
+      ENV: production
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2
+
+  auth-service: *prod-service
+  user-service: *prod-service
+  social-service: *prod-service
+  community-service: *prod-service
+  family-service: *prod-service
+  memorial-service: *prod-service
+  messaging-service:
+    ports: !override []
+    volumes: !override []
+    environment:
+      ENV: production
+    # Deliberately ONE worker. The realtime hub keeps its topic subscriptions in
+    # process, so a second worker would serve half the sockets and each would
+    # only see its own half — a member would receive some live updates and
+    # silently miss others. Redis pub/sub between workers is the fix; until it
+    # exists, this stays at one.
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1
+
+  creator-service: *prod-service
+  commerce-service: *prod-service
+  ledger-service: *prod-service
+  payment-service: *prod-service
+  ai-service: *prod-service
+
+  media-service:
+    ports: !override []
+    environment:
+      ENV: production
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2
+    # NOT `volumes: !override []` like its siblings. The blanket override was
+    # meant to drop the source bind mount, and it silently dropped the data
+    # volume with it — so every upload landed in the container's writable layer
+    # and was destroyed by the next deploy. Only the bind mount is dropped here;
+    # the named volume stays.
+    volumes: !override
+      - kaluta-media:/data/media
+
+  web:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    # No host port: Caddy reaches it over the internal network. Publishing it
+    # would expose a second, plain-http door to the same app.
+    ports: !override []
+    volumes: !override []
+    environment: !override {}
+
+  # --- public edge -------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    container_name: kaluta-caddy
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates and the ACME account key live here. Losing this volume
+      # means re-issuing on next start, which Let's Encrypt rate-limits — so it
+      # is a named volume, not a container layer.
+      - kaluta-caddy-data:/data
+      - kaluta-caddy-config:/config
+      - kaluta-caddy-logs:/var/log/caddy
+    depends_on: [web]
+    networks: [kaluta]
+
+volumes:
+  kaluta-caddy-data:
+  kaluta-caddy-config:
+  kaluta-caddy-logs:

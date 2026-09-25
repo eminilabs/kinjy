@@ -1,0 +1,15 @@
+# Vite dev server with HMR. Source is bind-mounted; node_modules stays in a
+# named volume so the host's (absent) node_modules never shadows the image's.
+FROM node:20-alpine
+
+WORKDIR /app
+
+RUN apk add --no-cache libc6-compat
+
+COPY package.json package-lock.json* ./
+RUN npm ci --no-audit --no-fund
+
+COPY . .
+
+EXPOSE 5173
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]

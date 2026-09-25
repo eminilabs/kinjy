@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <defs>
+    <style>
+      .g { fill: none; stroke: #D9A648; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+  <symbol id="algo-clock" viewBox="0 0 24 24"><g class="g"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5.2l3.4 2"/></g></symbol>
+  <symbol id="algo-friends" viewBox="0 0 24 24"><g class="g"><circle cx="8.5" cy="8.5" r="3"/><circle cx="16" cy="10" r="2.3"/><path d="M3.5 19.5c0-3.2 2.3-5.2 5-5.2s5 2 5 5.2"/><path d="M14.5 19.5c.2-2.3 1.8-3.8 3.8-3.8 1.5 0 2.6.8 3.2 2"/></g></symbol>
+  <symbol id="algo-family" viewBox="0 0 24 24"><g class="g"><circle cx="12" cy="6" r="2.4"/><circle cx="6.5" cy="13.5" r="2"/><circle cx="17.5" cy="13.5" r="2"/><path d="M12 8.4v2.8M12 11.2c0 .4-2.6.4-5.5.3M12 11.2c0 .4 2.6.4 5.5.3M6.5 15.5V19M17.5 15.5V19M6.5 19h11"/></g></symbol>
+  <symbol id="algo-map-pin" viewBox="0 0 24 24"><g class="g"><path d="M12 21s-6.5-5.6-6.5-10.5a6.5 6.5 0 1 1 13 0C18.5 15.4 12 21 12 21Z"/><circle cx="12" cy="10.3" r="2.3"/></g></symbol>
+  <symbol id="algo-briefcase" viewBox="0 0 24 24"><g class="g"><rect x="3.5" y="7.5" width="17" height="12" rx="2"/><path d="M9 7.5V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1.5M3.5 12.5h17"/></g></symbol>
+  <symbol id="algo-chip" viewBox="0 0 24 24"><g class="g"><rect x="6.5" y="6.5" width="11" height="11" rx="2"/><rect x="10" y="10" width="4" height="4"/><path d="M9.5 3.5v3M14.5 3.5v3M9.5 17.5v3M14.5 17.5v3M3.5 9.5h3M3.5 14.5h3M17.5 9.5h3M17.5 14.5h3"/></g></symbol>
+  <symbol id="algo-film" viewBox="0 0 24 24"><g class="g"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M7.5 5v14M16.5 5v14M3.5 9.5h4M3.5 14.5h4M16.5 9.5h4M16.5 14.5h4"/></g></symbol>
+  <symbol id="algo-book" viewBox="0 0 24 24"><g class="g"><path d="M12 6.5C10.5 5 8.3 4.3 4 4.5v14c4.3-.2 6.5.5 8 2 1.5-1.5 3.7-2.2 8-2v-14c-4.3-.2-6.5.5-8 2Z"/><path d="M12 6.5v14"/></g></symbol>
+  <symbol id="algo-scale" viewBox="0 0 24 24"><g class="g"><path d="M12 4v16M8 20h8M12 6 5.5 8M12 6l6.5 2"/><path d="M3 13.5 5.5 8 8 13.5a2.6 2.6 0 0 1-5 0ZM16 13.5 18.5 8 21 13.5a2.6 2.6 0 0 1-5 0Z"/></g></symbol>
+  <symbol id="algo-sun" viewBox="0 0 24 24"><g class="g"><circle cx="12" cy="12" r="4.2"/><path d="M12 3v2.4M12 18.6V21M3 12h2.4M18.6 12H21M5.6 5.6l1.7 1.7M16.7 16.7l1.7 1.7M18.4 5.6l-1.7 1.7M7.3 16.7l-1.7 1.7"/></g></symbol>
+  <symbol id="algo-longtext" viewBox="0 0 24 24"><g class="g"><path d="M4 6h16M4 10h16M4 14h10M4 18h13"/></g></symbol>
+  <symbol id="algo-video" viewBox="0 0 24 24"><g class="g"><rect x="3.5" y="6" width="17" height="12" rx="3"/><path d="M10.3 9.7v4.6l4.2-2.3Z"/></g></symbol>
+  <symbol id="algo-waveform" viewBox="0 0 24 24"><g class="g"><path d="M4 10v4M7.5 7.5v9M11 4.5v15M14.5 8v8M18 10.5v3M21 12v.01"/></g></symbol>
+  <symbol id="algo-sprout" viewBox="0 0 24 24"><g class="g"><path d="M12 21v-8"/><path d="M12 13c0-4 2.5-6.5 7-6.5 0 4.5-2.5 6.5-7 6.5ZM12 13c0-3-2-5-5.5-5 0 3.5 2 5 5.5 5Z"/></g></symbol>
+  <symbol id="algo-globe" viewBox="0 0 24 24"><g class="g"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 2.3 3.9 5.1 3.9 8.5s-1.3 6.2-3.9 8.5c-2.6-2.3-3.9-5.1-3.9-8.5s1.3-6.2 3.9-8.5Z"/></g></symbol>
+</svg>

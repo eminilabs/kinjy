@@ -1,0 +1,122 @@
+import i18n from 'i18next'
+import { initReactI18next } from 'react-i18next'
+
+export const LANGUAGES = [
+  { code: 'en', label: 'English', dir: 'ltr' as const },
+  { code: 'sw', label: 'Kiswahili', dir: 'ltr' as const },
+  { code: 'fr', label: 'Français', dir: 'ltr' as const },
+  { code: 'ar', label: 'العربية', dir: 'rtl' as const },
+  { code: 'zh', label: '中文', dir: 'ltr' as const },
+]
+
+const resources = {
+  en: {
+    translation: {
+      'nav.platform': 'Platform',
+      'nav.feeds': 'Feeds',
+      'nav.family': 'Family',
+      'nav.memorials': 'Memorials',
+      'nav.creators': 'Creators',
+      'nav.commerce': 'Commerce',
+      'nav.pricing': 'Pricing',
+      'nav.payments': 'Payments',
+      'nav.safety': 'Safety',
+      'nav.developers': 'Developers',
+      'nav.more': 'More',
+      'nav.signIn': 'Sign in',
+      'nav.dashboard': 'Dashboard',
+      'nav.hub': 'Feed',
+      'nav.openApp': 'Open App',
+      'nav.join': 'Join Kinjy',
+    },
+  },
+  sw: {
+    translation: {
+      'nav.platform': 'Jukwaa',
+      'nav.feeds': 'Mlisho',
+      'nav.family': 'Familia',
+      'nav.memorials': 'Makaburi',
+      'nav.creators': 'Waundaji',
+      'nav.commerce': 'Biashara',
+      'nav.pricing': 'Bei',
+      'nav.payments': 'Malipo',
+      'nav.safety': 'Usalama',
+      'nav.developers': 'Wasanidi',
+      'nav.more': 'Zaidi',
+      'nav.signIn': 'Ingia',
+      'nav.dashboard': 'Dashibodi',
+      'nav.hub': 'Mlisho',
+      'nav.openApp': 'Fungua App',
+      'nav.join': 'Jiunge na Kinjy',
+    },
+  },
+  fr: {
+    translation: {
+      'nav.platform': 'Plateforme',
+      'nav.feeds': 'Fils',
+      'nav.family': 'Famille',
+      'nav.memorials': 'Mémoriaux',
+      'nav.creators': 'Créateurs',
+      'nav.commerce': 'Commerce',
+      'nav.pricing': 'Tarifs',
+      'nav.payments': 'Paiements',
+      'nav.safety': 'Sécurité',
+      'nav.developers': 'Développeurs',
+      'nav.more': 'Plus',
+      'nav.signIn': 'Se connecter',
+      'nav.dashboard': 'Tableau de bord',
+      'nav.hub': 'Fil',
+      'nav.openApp': "Ouvrir l'app",
+      'nav.join': 'Rejoindre Kinjy',
+    },
+  },
+  ar: {
+    translation: {
+      'nav.platform': 'المنصة',
+      'nav.feeds': 'الخلاصات',
+      'nav.family': 'العائلة',
+      'nav.memorials': 'النُصُب',
+      'nav.creators': 'المبدعون',
+      'nav.commerce': 'التجارة',
+      'nav.pricing': 'الأسعار',
+      'nav.payments': 'المدفوعات',
+      'nav.safety': 'الأمان',
+      'nav.developers': 'المطورون',
+      'nav.more': 'المزيد',
+      'nav.signIn': 'تسجيل الدخول',
+      'nav.dashboard': 'لوحة التحكم',
+      'nav.hub': 'الموجز',
+      'nav.openApp': 'افتح التطبيق',
+      'nav.join': 'انضم إلى كالوتا',
+    },
+  },
+  zh: {
+    translation: {
+      'nav.platform': '平台',
+      'nav.feeds': '信息流',
+      'nav.family': '家族',
+      'nav.memorials': '纪念园',
+      'nav.creators': '创作者',
+      'nav.commerce': '商务',
+      'nav.pricing': '价格',
+      'nav.payments': '支付',
+      'nav.safety': '安全',
+      'nav.developers': '开发者',
+      'nav.more': '更多',
+      'nav.signIn': '登录',
+      'nav.dashboard': '控制台',
+      'nav.hub': '动态',
+      'nav.openApp': '打开应用',
+      'nav.join': '加入 Kinjy',
+    },
+  },
+}
+
+i18n.use(initReactI18next).init({
+  resources,
+  lng: 'en',
+  fallbackLng: 'en',
+  interpolation: { escapeValue: false },
+})
+
+export default i18n

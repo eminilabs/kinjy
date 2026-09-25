@@ -1,0 +1,268 @@
+import { useState } from 'react'
+import { Crown, Dices, Info, TrendingUp, Users } from 'lucide-react'
+import AppShell from '@/components/app/AppShell'
+import { Panel, PanelState, Stat } from '@/components/dashboard/primitives'
+import { useApi } from '@/hooks/useApi'
+import {
+  ApiError,
+  kaluta,
+  type LeaderBoard,
+  type MyLeaderStanding,
+  type ReferralPoolState,
+} from '@/lib/api'
+
+const usd = (value: string | number) =>
+  `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+/**
+ * Everything a member earns from, on one page.
+ *
+ * The three programmes are separate products but one question — "what am I
+ * making here, and what would make it more?" — so splitting them across three
+ * screens only makes people hunt.
+ */
+export default function Earn() {
+  const standing = useApi<MyLeaderStanding>(() => kaluta.leaders.me(), [])
+  const board = useApi<LeaderBoard>(() => kaluta.leaders.standings(), [])
+  const [poolTick, setPoolTick] = useState(0)
+  const pool = useApi<ReferralPoolState>(() => kaluta.referralPool.mine(), [poolTick])
+  const assignments = useApi(() => kaluta.referralPool.assignments(), [poolTick])
+
+  const [joining, setJoining] = useState(false)
+  const [note, setNote] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const join = async () => {
+    setJoining(true)
+    setError(null)
+    setNote(null)
+    try {
+      const payment = await kaluta.referralPool.join()
+      if (payment.checkout_url) {
+        window.location.href = payment.checkout_url
+        return
+      }
+      setNote(
+        `Payment ${payment.payment_id.slice(0, 14)} created for ${usd(payment.amount)}. Your seat is granted once it settles.`,
+      )
+      setPoolTick((n) => n + 1)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not start the payment')
+    } finally {
+      setJoining(false)
+    }
+  }
+
+  return (
+    <AppShell
+      title="Earning"
+      subtitle="You are paid 20% of Kinjy's revenue on everything the members you sponsored do here. One level — nobody above you earns on them."
+    >
+      <div className="grid gap-5 lg:grid-cols-2">
+        {/* --- Kinjy Leaders ------------------------------------------- */}
+        <Panel
+          title="Kinjy Leaders"
+          subtitle="5% of monthly company revenue, split between the 10,000 members who earned the most commission."
+          className="lg:col-span-2"
+        >
+          <PanelState loading={standing.loading} error={standing.error}>
+            {standing.data && (
+              <>
+                <div className="grid gap-6 sm:grid-cols-4">
+                  <Stat
+                    label="Your commission this month"
+                    value={usd(standing.data.direct_commissions)}
+                    tone="gold"
+                  />
+                  <Stat
+                    label="Your rank"
+                    value={standing.data.rank ? `#${standing.data.rank.toLocaleString()}` : '—'}
+                    hint={
+                      standing.data.qualifying
+                        ? `of the top ${standing.data.pool_size.toLocaleString()}`
+                        : 'not qualifying yet'
+                    }
+                  />
+                  <Stat label="This month’s pool" value={usd(standing.data.pool_amount)} tone="muted" />
+                  <Stat
+                    label="Your projected share"
+                    value={usd(standing.data.projected_payout)}
+                    tone={standing.data.qualifying ? 'gold' : 'muted'}
+                  />
+                </div>
+
+                <p className="caption mt-5 flex items-start gap-2">
+                  <Info size={13} className="mt-0.5 shrink-0" aria-hidden="true" />
+                  <span>
+                    Ranked on commission earned, not on how many people you signed up — and your share is your
+                    commission divided by the total of the qualifying 10,000, so it moves as the month goes on.
+                    Commission that is later clawed back does not count.
+                  </span>
+                </p>
+              </>
+            )}
+          </PanelState>
+        </Panel>
+
+        {/* --- the board ------------------------------------------------ */}
+        <Panel
+          title="This month’s leaders"
+          subtitle="Live, recomputed on every load."
+          action={
+            board.data ? (
+              <span className="mono-data text-xs text-text-low">
+                {board.data.qualifying.toLocaleString()} qualifying
+              </span>
+            ) : undefined
+          }
+        >
+          <PanelState
+            loading={board.loading}
+            error={board.error}
+            empty={board.data?.items.length === 0}
+            emptyLabel="No commission has been earned this month yet."
+          >
+            <ol className="space-y-1.5">
+              {(board.data?.items ?? []).slice(0, 10).map((row) => (
+                <li key={row.member_id} className="flex items-center gap-3 rounded-card-sm px-2 py-1.5">
+                  <span className="mono-data w-7 shrink-0 text-end text-text-low">{row.rank}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-text-mid">
+                    {row.member_id === standing.data?.rank?.toString() ? 'You' : row.member_id.slice(0, 16)}
+                  </span>
+                  <span className="mono-data shrink-0 text-sm text-gold-soft">
+                    {usd(row.direct_commissions)}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </PanelState>
+        </Panel>
+
+        {/* --- referral pool -------------------------------------------- */}
+        <Panel
+          title="Referral pool"
+          subtitle="Buy a seat, and sign-ups who arrive with no invitation link are assigned to seats at random."
+        >
+          <PanelState loading={pool.loading} error={pool.error}>
+            {pool.data && (
+              <>
+                <div className="grid gap-6 sm:grid-cols-3">
+                  <Stat label="Seat price" value={usd(pool.data.entry_price)} tone="gold" />
+                  <Stat
+                    label="Seats taken"
+                    value={`${pool.data.seats_taken.toLocaleString()} / ${pool.data.cap.toLocaleString()}`}
+                  />
+                  <Stat
+                    label="Sent to you"
+                    value={String(pool.data.my_seat?.assigned_count ?? 0)}
+                    tone="muted"
+                    hint="members assigned"
+                  />
+                </div>
+
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/8">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-gold-soft to-gold transition-[width] duration-700"
+                    style={{ width: `${Math.min(100, (pool.data.seats_taken / pool.data.cap) * 100)}%` }}
+                  />
+                </div>
+
+                {pool.data.my_seat ? (
+                  <p className="mt-4 flex items-center gap-2 text-sm text-gold-soft">
+                    <Crown size={14} aria-hidden="true" />
+                    You hold seat #{pool.data.my_seat.seat_number.toLocaleString()} ({pool.data.my_seat.status}).
+                  </p>
+                ) : pool.data.open ? (
+                  <button
+                    type="button"
+                    onClick={join}
+                    disabled={joining}
+                    className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-2.5 text-sm font-bold text-ink disabled:opacity-40"
+                  >
+                    <Dices size={14} aria-hidden="true" />
+                    {joining ? 'Starting…' : `Take a seat — ${usd(pool.data.entry_price)}`}
+                  </button>
+                ) : (
+                  <p className="mt-4 text-sm text-text-mid">
+                    The pool is full at {pool.data.cap.toLocaleString()} seats and closed to new members. The seats
+                    already held keep receiving assignments.
+                  </p>
+                )}
+
+                {note && <p className="mt-3 text-sm text-gold-soft">{note}</p>}
+                {error && (
+                  <p role="alert" className="mt-3 text-sm text-red-200">
+                    {error}
+                  </p>
+                )}
+
+                <p className="caption mt-4">{pool.data.note}</p>
+              </>
+            )}
+          </PanelState>
+        </Panel>
+
+        {/* --- who the pool sent you ------------------------------------ */}
+        <Panel title="Sent to you by the pool" subtitle="Assignments are random, and recorded.">
+          <PanelState
+            loading={assignments.loading}
+            error={assignments.error}
+            empty={assignments.data?.items.length === 0}
+            emptyLabel="Nobody yet. Assignments happen as uninvited members sign up."
+          >
+            <ul className="space-y-1.5">
+              {(assignments.data?.items ?? []).map((row) => (
+                <li key={row.member_id} className="flex items-center gap-3 rounded-card-sm px-2 py-1.5">
+                  <Users size={13} className="shrink-0 text-text-low" aria-hidden="true" />
+                  <span className="min-w-0 flex-1 truncate text-sm text-text-mid">
+                    {row.display_name ?? row.member_id.slice(0, 16)}
+                    {row.handle && <span className="text-text-low"> @{row.handle}</span>}
+                  </span>
+                  <span className="caption shrink-0">
+                    {new Date(row.assigned_at).toLocaleDateString(undefined, {
+                      day: 'numeric',
+                      month: 'short',
+                    })}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </PanelState>
+        </Panel>
+
+        {/* --- how it works --------------------------------------------- */}
+        <Panel title="How the commission works" className="lg:col-span-2">
+          <ul className="space-y-3">
+            {[
+              {
+                icon: TrendingUp,
+                title: 'Paid out of Kinjy’s revenue, not the seller’s price',
+                body: 'When Kinjy connects a buyer to a seller, the seller keeps their asking price and Kinjy adds a 20% markup on top. Your commission is 20% of that markup — $4 on a $100 listing.',
+              },
+              {
+                icon: Users,
+                title: 'One level, for as long as they are here',
+                body: 'You earn on everything the members you sponsored do, for as long as they do it. Nobody above you earns on them, and you earn nothing on the members they in turn sponsor.',
+              },
+              {
+                icon: Crown,
+                title: 'Commission feeds the Leaders pool too',
+                body: 'Every commission-generating transaction also sets 5% of Kinjy’s revenue aside for Kinjy Leaders. It is real money on the balance sheet before the month ends, not a promise against next month.',
+              },
+            ].map((row) => (
+              <li key={row.title} className="flex items-start gap-3">
+                <span className="cloud-glass mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-card-sm">
+                  <row.icon size={16} className="text-gold" aria-hidden="true" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-semibold text-text-hi">{row.title}</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-text-mid">{row.body}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      </div>
+    </AppShell>
+  )
+}

@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1200" role="img" aria-label="The Living Network — a dotted globe with golden arcs connecting people, formats and generations">
+  <defs>
+    <radialGradient id="twilight" cx="0.3" cy="0.2" r="1.2">
+      <stop offset="0" stop-color="#2E2A6E"/>
+      <stop offset="0.6" stop-color="#0B0E1D"/>
+      <stop offset="1" stop-color="#0B0E1D"/>
+    </radialGradient>
+    <radialGradient id="goldglow" cx="0.75" cy="0.8" r="0.55">
+      <stop offset="0" stop-color="#D9A648" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#D9A648" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="arc" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#F0C878"/>
+      <stop offset="0.55" stop-color="#D9A648"/>
+      <stop offset="1" stop-color="#8FB8E8"/>
+    </linearGradient>
+    <radialGradient id="sphere" cx="0.42" cy="0.36" r="0.9">
+      <stop offset="0" stop-color="#1A1F3B"/>
+      <stop offset="1" stop-color="#0B0E1D"/>
+    </radialGradient>
+    <filter id="soft" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="1200" fill="url(#twilight)"/>
+  <rect width="1600" height="1200" fill="url(#goldglow)"/>
+
+  <!-- dotted globe: rings of warm gold dots, denser at silhouette -->
+  <g transform="translate(1020,560)">
+    <circle r="330" fill="url(#sphere)" stroke="#4A52E0" stroke-opacity="0.25"/>
+    <!-- latitude ring dots (stylized continents) -->
+    <g fill="#F0C878" opacity="0.6">
+      <circle cx="-180" cy="-190" r="4.5"/><circle cx="-120" cy="-210" r="4"/><circle cx="-60" cy="-196" r="4.5"/>
+      <circle cx="10" cy="-215" r="4"/><circle cx="80" cy="-190" r="5"/><circle cx="150" cy="-205" r="4"/>
+      <circle cx="215" cy="-165" r="4.5"/><circle cx="-230" cy="-120" r="4"/><circle cx="-150" cy="-130" r="5"/>
+      <circle cx="-80" cy="-110" r="4.5"/><circle cx="0" cy="-135" r="4"/><circle cx="90" cy="-115" r="4.5"/>
+      <circle cx="170" cy="-125" r="4"/><circle cx="245" cy="-90" r="4.5"/><circle cx="-260" cy="-30" r="4"/>
+      <circle cx="-180" cy="-45" r="5"/><circle cx="-95" cy="-25" r="4.5"/><circle cx="-20" cy="-50" r="4"/>
+      <circle cx="60" cy="-30" r="5"/><circle cx="140" cy="-45" r="4.5"/><circle cx="225" cy="-20" r="4"/>
+      <circle cx="285" cy="-10" r="4"/><circle cx="-270" cy="60" r="4"/><circle cx="-190" cy="45" r="4.5"/>
+      <circle cx="-110" cy="70" r="4"/><circle cx="-30" cy="50" r="5"/><circle cx="50" cy="70" r="4.5"/>
+      <circle cx="135" cy="50" r="4"/><circle cx="215" cy="65" r="4.5"/><circle cx="275" cy="70" r="4"/>
+      <circle cx="-240" cy="140" r="4"/><circle cx="-160" cy="155" r="4.5"/><circle cx="-75" cy="140" r="4"/>
+      <circle cx="5" cy="160" r="4.5"/><circle cx="85" cy="140" r="4"/><circle cx="165" cy="155" r="4.5"/>
+      <circle cx="235" cy="145" r="4"/><circle cx="-190" cy="220" r="4"/><circle cx="-110" cy="235" r="4.5"/>
+      <circle cx="-30" cy="220" r="4"/><circle cx="50" cy="235" r="4.5"/><circle cx="130" cy="220" r="4"/>
+      <circle cx="195" cy="230" r="4"/><circle cx="-90" cy="290" r="3.5"/><circle cx="0" cy="300" r="3.5"/>
+      <circle cx="90" cy="290" r="3.5"/>
+    </g>
+    <g fill="#D9A648" opacity="0.35">
+      <circle cx="-140" cy="-160" r="3"/><circle cx="40" cy="-160" r="3"/><circle cx="190" cy="-140" r="3"/>
+      <circle cx="-210" cy="-75" r="3"/><circle cx="-50" cy="-70" r="3"/><circle cx="120" cy="-75" r="3"/>
+      <circle cx="-150" cy="10" r="3"/><circle cx="20" cy="10" r="3"/><circle cx="180" cy="15" r="3"/>
+      <circle cx="-220" cy="105" r="3"/><circle cx="-60" cy="110" r="3"/><circle cx="100" cy="105" r="3"/>
+      <circle cx="-140" cy="190" r="3"/><circle cx="30" cy="195" r="3"/><circle cx="160" cy="190" r="3"/>
+    </g>
+    <!-- arcs -->
+    <g fill="none" stroke="url(#arc)" stroke-width="3" stroke-linecap="round">
+      <path d="M -180 -190 Q -40 -420 215 -165"/>
+      <path d="M -260 -30 Q -180 -260 90 -115" opacity="0.85"/>
+      <path d="M -30 50 Q 120 -140 245 -90" opacity="0.75"/>
+      <path d="M -190 45 Q -260 -120 -95 -25" opacity="0.7"/>
+      <path d="M -110 235 Q 60 60 275 70" opacity="0.6"/>
+      <path d="M 50 70 Q 200 -60 285 -10" opacity="0.55"/>
+    </g>
+    <g fill="#F0C878">
+      <circle cx="-180" cy="-190" r="6"/><circle cx="215" cy="-165" r="6"/>
+      <circle cx="-260" cy="-30" r="5"/><circle cx="90" cy="-115" r="5"/>
+    </g>
+    <!-- orbit rings -->
+    <ellipse rx="480" ry="140" fill="none" stroke="#8FB8E8" stroke-opacity="0.22" transform="rotate(-14)"/>
+    <ellipse rx="480" ry="140" fill="none" stroke="#D9A648" stroke-opacity="0.18" transform="rotate(10)"/>
+    <!-- orbiting chips -->
+    <g font-family="Manrope, sans-serif" font-size="22" font-weight="600">
+      <g transform="rotate(-14)"><g transform="translate(-470,-30) rotate(14)"><rect x="-70" y="-26" width="140" height="52" rx="26" fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.2)"/><text y="8" text-anchor="middle" fill="#F4F2EE">Circles</text></g></g>
+      <g transform="rotate(-14)"><g transform="translate(300,110) rotate(14)"><rect x="-78" y="-26" width="156" height="52" rx="26" fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.2)"/><text y="8" text-anchor="middle" fill="#F4F2EE">Forums</text></g></g>
+      <g transform="rotate(10)"><g transform="translate(460,40) rotate(-10)"><rect x="-95" y="-26" width="190" height="52" rx="26" fill="rgba(217,166,72,0.14)" stroke="rgba(217,166,72,0.45)"/><text y="8" text-anchor="middle" fill="#F0C878">Family Tree</text></g></g>
+      <g transform="rotate(10)"><g transform="translate(-320,110) rotate(-10)"><rect x="-102" y="-26" width="204" height="52" rx="26" fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.2)"/><text y="8" text-anchor="middle" fill="#F4F2EE">Marketplace</text></g></g>
+    </g>
+  </g>
+
+  <!-- One-to-Many morph card -->
+  <g transform="translate(200,330)">
+    <rect width="280" height="360" rx="24" fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.16)"/>
+    <g transform="translate(28,36)" stroke="#F0C878" stroke-width="5" stroke-linecap="round" opacity="0.9">
+      <line x1="0" y1="0" x2="150" y2="0"/><line x1="0" y1="26" x2="224" y2="26"/>
+      <line x1="0" y1="52" x2="196" y2="52"/><line x1="0" y1="78" x2="224" y2="78"/>
+    </g>
+    <!-- morph targets: play / waveform / envelope -->
+    <g transform="translate(28,160)">
+      <rect width="100" height="150" rx="16" fill="rgba(74,82,224,0.25)" stroke="#4A52E0" stroke-opacity="0.5"/>
+      <path d="M 40 60 L 72 75 L 40 90 Z" fill="#F0C878"/>
+      <g transform="translate(120,20)" stroke="#8FB8E8" stroke-width="5" stroke-linecap="round">
+        <line x1="0" y1="45" x2="0" y2="65"/><line x1="16" y1="30" x2="16" y2="80"/>
+        <line x1="32" y1="15" x2="32" y2="95"/><line x1="48" y1="35" x2="48" y2="75"/>
+        <line x1="64" y1="25" x2="64" y2="85"/><line x1="80" y1="42" x2="80" y2="68"/>
+      </g>
+      <g transform="translate(128,120)" fill="none" stroke="#F0C878" stroke-width="4">
+        <rect width="76" height="52" rx="8"/><path d="M 0 4 L 38 32 L 76 4"/>
+      </g>
+    </g>
+    <text x="28" y="336" font-family="'JetBrains Mono', monospace" font-size="16" fill="#D9A648">1 idea &#8594; 4 formats</text>
+  </g>
+
+  <!-- translation bubbles -->
+  <g font-family="Manrope, sans-serif" font-size="20">
+    <g transform="translate(560,240)">
+      <rect width="200" height="56" rx="28" fill="rgba(74,82,224,0.35)" stroke="#4A52E0" stroke-opacity="0.5"/>
+      <text x="100" y="36" text-anchor="middle" fill="#F4F2EE">Habari ya leo?</text>
+    </g>
+    <g transform="translate(620,320)">
+      <rect width="330" height="56" rx="28" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.2)"/>
+      <text x="165" y="36" text-anchor="middle" fill="#F4F2EE">How&#8217;s your day? &#183; <tspan fill="#8FB8E8">Translated &#183; AI</tspan></text>
+    </g>
+    <path d="M 760 298 Q 800 306 790 318" fill="none" stroke="url(#arc)" stroke-width="3"/>
+  </g>
+
+  <!-- family tree micro-graph -->
+  <g transform="translate(180,860)" stroke="url(#arc)" stroke-width="3" fill="none">
+    <path d="M 90 40 Q 90 110 40 130"/><path d="M 90 40 Q 90 110 140 130"/>
+    <path d="M 40 165 Q 40 220 5 235"/><path d="M 40 165 Q 40 220 75 235"/>
+    <path d="M 140 165 Q 140 220 110 235"/><path d="M 140 165 Q 140 220 175 235"/>
+  </g>
+  <g transform="translate(180,860)" fill="#D9A648">
+    <circle cx="90" cy="40" r="14" fill="#F0C878"/>
+    <circle cx="40" cy="140" r="11"/><circle cx="140" cy="140" r="11"/>
+    <circle cx="5" cy="245" r="8"/><circle cx="75" cy="245" r="8"/><circle cx="110" cy="245" r="8"/><circle cx="175" cy="245" r="8"/>
+  </g>
+</svg>
