@@ -23,7 +23,8 @@ async def main():
     pid = p["id"]
 
     got = []
-    async with websockets.connect(f"ws://gateway:8000/api/ws?token={tok}") as ws:
+    async with websockets.connect("ws://gateway:8000/api/ws") as ws:
+        await ws.send(json.dumps({"action": "auth", "token": tok}))
         ready = json.loads(await asyncio.wait_for(ws.recv(), 5))
         await ws.send(json.dumps({"action": "subscribe", "topics": [f"post:{pid}", "feed"]}))
         sub = json.loads(await asyncio.wait_for(ws.recv(), 5))

@@ -395,6 +395,48 @@ still talks to one origin. `useRealtime` reconnects with backoff and the UI show
 Live / Reconnecting rather than silently going stale. Direct messages and Live
 room chat share the same socket.
 
+The access token is the socket's **first frame** (`{"action":"auth","token":…}`),
+never the URL, so no proxy log holds it. The server closes the socket with
+**4401** when that token expires; the client refreshes and reconnects, and the
+messages page then fetches `?after=<last id>` so nothing sent during the gap is
+lost. `messaging-test.py` checks all of it with two fresh members.
+
+On top of that socket, `/messages` has:
+
+- **Friends** — every accepted connection in a strip above the conversations,
+  online first; one tap opens (or reuses) the thread. Pending invitations are
+  answered there too. **See all** opens the full list with a search (name or
+  @handle, case- and accent-insensitive: "helene" finds Hélène) and an
+  Online-only filter; it filters the already-loaded list locally.
+- **Optimistic send** — the bubble shows at once; the request carries a
+  `client_id`, so a retry after a lost response never stores the message twice.
+- **Read receipts** — `POST /conversations/{id}/read`, sent only while the thread
+  is on screen. Fetching a thread no longer marks it read.
+- **Typing** — a `typing` frame, relayed only to members of that thread.
+- **Presence** — online / last seen, visible to connections and conversation
+  partners only (`GET /presence`). Held in memory: `last_seen` is unknown after a
+  restart, and a 5 s grace keeps reconnects from flickering.
+- **Offline notification** — one per thread while unread, never the text of an
+  encrypted message.
+- **Attachments of any type** — photos, video, audio and PDFs play inline; any
+  other file is a download card. Drag and drop, paste a screenshot, or record a
+  voice message. Upload with `purpose=chat`; posts still accept only formats a
+  browser renders. messaging-service takes a `media_id` and asks media-service
+  what it is and who owns it — no client-supplied URL, type or size is stored.
+- **Serving is the XSS boundary.** Media is served from the app's own origin, so
+  only image/video/audio/PDF go out inline; everything else (HTML, SVG, scripts,
+  unknown bytes) is `application/octet-stream` + `attachment`, and every
+  response carries `nosniff` and a `sandbox` CSP (PDF excepted — Chrome will not
+  open a sandboxed PDF).
+- **Privacy holds on every message**, not only when a thread is created: a
+  block or `who_can_message=nobody` ends an existing direct conversation, and a
+  blocked member no longer sees the other's presence or typing.
+- **Phones** — list and thread are two screens, driven by `?c=`; the back button
+  and the back gesture both return to the list. Nothing is opened, or marked
+  read, while it is not on screen.
+- **Dates** — day separators (Today / Yesterday / weekday / date), time only on
+  bubbles, the full moment on hover, all in the app's chosen language.
+
 ### Passkeys
 
 The WebAuthn ceremony is wired end to end: `/auth/passkeys/register/options` →

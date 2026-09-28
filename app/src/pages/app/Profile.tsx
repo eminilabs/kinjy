@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link,useNavigate, useParams } from 'react-router'
 import { Check, Clock, MapPin, MessageSquare, Pencil, UserPlus, Users } from 'lucide-react'
 import AppShell, { RailCard } from '@/components/app/AppShell'
 import MemberAvatar from '@/components/social/MemberAvatar'
@@ -26,6 +26,7 @@ const BLOCKED: Record<string, string> = {
 
 export default function Profile() {
   const { handle = '' } = useParams()
+  const navigate = useNavigate()
   const { user } = useAuth()
   const { tok, lang } = useAppTheme()
 
@@ -106,8 +107,10 @@ export default function Profile() {
     setBusy(true)
     setNote(null)
     try {
-      await kaluta.messages.start([profile.user_id])
-      window.location.href = '/messages'
+      // Straight to this thread: /messages alone opens the most recent one,
+      // which is someone else whenever this conversation is older.
+      const conversation = await kaluta.messages.start([profile.user_id])
+      navigate(`/messages?c=${conversation.id}`)
     } catch (err) {
       setNote(err instanceof ApiError ? err.message : 'Could not open a conversation')
       setBusy(false)
