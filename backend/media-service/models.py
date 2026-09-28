@@ -59,8 +59,9 @@ class Asset(Base):
     external_id: Mapped[str | None] = mapped_column(String(80))
     # avatar | cover for profile images, null for everything else.
     purpose: Mapped[str | None] = mapped_column(String(20))
-    # pending (upload URL issued) -> processing (bytes received, being checked)
-    # -> ready | failed. Only a ready asset may be put on a profile.
+    # pending (upload URL issued) -> uploading (one PUT claimed it, bytes being
+    # stored) -> processing (stored, being checked) -> ready | failed. Only a
+    # ready asset may be put on a profile.
     status: Mapped[str] = mapped_column(String(20), default="ready")
 
     alt_text: Mapped[str | None] = mapped_column(String(500))

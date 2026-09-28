@@ -143,6 +143,26 @@ def test_anything_else_is_not_redirected_to_or_fetched(url):
     assert not profileimages.cdn_url_allowed(url, {"cdn.uploadscenter.com"})
 
 
+def test_a_presigned_storage_url_may_be_uploaded_to():
+    url = "https://abc123.r2.cloudflarestorage.com/bucket/file_1?X-Amz-Signature=deadbeef"
+    assert profileimages.upload_url_allowed(url)
+
+
+@pytest.mark.parametrize("url", [
+    "http://user-service:8000/internal/users/usr_1",   # the private network is plain http
+    "http://169.254.169.254/latest/meta-data/",
+    "https://user:secret@storage.example/file_1",
+    "file:///etc/passwd",
+    "https:///no-host",
+    "",
+    None,
+])
+def test_the_bytes_are_never_sent_anywhere_else(url):
+    """The upload URL comes from UploadCenter; a bad one must not turn
+    media-service into a client for the private network."""
+    assert not profileimages.upload_url_allowed(url)
+
+
 # ---------------------------------------------------------------------------
 # The UploadCenter client
 # ---------------------------------------------------------------------------

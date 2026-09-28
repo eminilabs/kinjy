@@ -12,6 +12,7 @@ import struct
 import sys
 import time
 import zlib
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 
 import httpx
@@ -153,6 +154,19 @@ r = put_bytes(me, g3, PNG + b"\x00" * (6 * 1024 * 1024))  # over the 5 MB avatar
 check("oversized body refused -> 413", r.status_code == 413, r.status_code)
 r = put_bytes(me, g3, PNG)
 check("the same upload can still be sent correctly afterwards", r.status_code == 204, r.text)
+
+print("== two uploads racing on the same grant")
+g5 = presign(me).json()
+
+
+def racing_put(_):
+    with httpx.Client(base_url=BASE, timeout=60) as own:
+        return own.put(g5["upload"]["path"], headers={**me, "Content-Type": "image/png"}, content=PNG).status_code
+
+
+with ThreadPoolExecutor(max_workers=2) as pool:
+    codes = sorted(pool.map(racing_put, range(2)))
+check("exactly one of them stores the file", codes == [204, 409], codes)
 
 if grant["storage"] == "uploadcenter":
     print("== a file UploadCenter rejects (uploadcenter mode)")

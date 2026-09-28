@@ -11,7 +11,7 @@ from pathlib import Path
 from fastapi import Depends, File, Form, HTTPException, UploadFile, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session as OrmSession
 
@@ -324,7 +324,7 @@ def presign_profile_image(payload: ProfileImageRequest, principal: CurrentUser, 
         select(func.count()).select_from(models.Asset).where(
             models.Asset.owner_id == principal.user_id,
             models.Asset.purpose.is_not(None),
-            models.Asset.status.in_(["pending", "processing"]),
+            models.Asset.status.in_(["pending", "uploading", "processing"]),
             models.Asset.created_at >= since,
         )
     )
@@ -371,6 +371,9 @@ async def _read_body(request: Request, limit: int) -> bytes:
 def _send_to_uploadcenter(filename: str, data: bytes, mime_type: str) -> str:
     """Presign, upload and complete on UploadCenter; returns its file id."""
     signed = uploadcenter.presign(filename, len(data), mime_type, visibility="public")
+    if not profileimages.upload_url_allowed(signed.get("upload_url")):
+        log.warning("uploadcenter returned an upload URL that is not https; refusing to send")
+        raise uploadcenter.UploadCenterError("The file storage returned an unusable upload address")
     uploadcenter.put_bytes(signed["upload_url"], data, mime_type)
     uploadcenter.complete(signed["file_id"])
     return signed["file_id"]
@@ -398,11 +401,26 @@ async def receive_profile_image(
         db.commit()
         raise HTTPException(status_code=422, detail="This file is not the image it claims to be")
 
+    # Claimed atomically before storing, so two PUTs racing on the same upload
+    # cannot both store a file (one of them would be orphaned). A conditional
+    # UPDATE rather than SELECT ... FOR UPDATE: this handler is async and the
+    # session is not, so waiting on a row lock would stall every request.
+    claimed = db.execute(
+        update(models.Asset)
+        .where(models.Asset.id == asset.id, models.Asset.status == "pending")
+        .values(status="uploading")
+    ).rowcount
+    db.commit()
+    if not claimed:
+        raise HTTPException(status_code=409, detail="This upload does not accept content")
+
     if asset.provider == "uploadcenter":
         try:
             asset.external_id = await run_in_threadpool(_send_to_uploadcenter, asset.filename, data, asset.content_type)
         except uploadcenter.UploadCenterError as exc:
-            # Left pending: the member can send the same upload again.
+            # Back to pending: the member can send the same upload again.
+            asset.status = "pending"
+            db.commit()
             raise HTTPException(status_code=502, detail=str(exc))
     else:
         folder = ROOT / principal.user_id[:12]

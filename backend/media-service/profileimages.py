@@ -63,6 +63,24 @@ def cdn_url_allowed(url: str | None, hosts: set[str]) -> bool:
     return (parts.hostname or "").lower() in {host.lower() for host in hosts}
 
 
+def upload_url_allowed(url: str | None) -> bool:
+    """Whether a presigned storage URL from UploadCenter may receive the bytes.
+
+    Not an exact host list: the storage host is UploadCenter's choice (today
+    Cloudflare R2, one subdomain per bucket) and pinning it would break uploads
+    the day they move. https is what matters here. Every service on the private
+    network is plain http, so a bad URL cannot turn media-service into a client
+    for user-service, auth-service or a cloud metadata endpoint.
+    """
+    if not url:
+        return False
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return False
+    return parts.scheme == "https" and bool(parts.hostname) and not (parts.username or parts.password)
+
+
 def is_ready(file_out: dict) -> bool:
     return file_out.get("status") == READY_STATUS and bool(file_out.get("url"))
 
