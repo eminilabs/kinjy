@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, Boolean, DateTime, String, Text
+from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from common.database import Base
@@ -63,6 +63,10 @@ class Asset(Base):
     # stored) -> processing (stored, being checked) -> ready | failed. Only a
     # ready asset may be put on a profile.
     status: Mapped[str] = mapped_column(String(20), default="ready")
+    # How often complete has asked UploadCenter whether this file is ready, and
+    # when it last did: the throttle on a client polling in a loop.
+    status_checks: Mapped[int] = mapped_column(Integer, default=0)
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     alt_text: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(

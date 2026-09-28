@@ -7,6 +7,7 @@ rather than on the Content-Type a client chose to declare.
 """
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from urllib.parse import urlsplit
 
 MB = 1024 * 1024
@@ -61,6 +62,26 @@ def cdn_url_allowed(url: str | None, hosts: set[str]) -> bool:
     if parts.scheme != "https" or parts.username or parts.password:
         return False
     return (parts.hostname or "").lower() in {host.lower() for host in hosts}
+
+
+# How often complete may ask UploadCenter about one upload, and how many times
+# in all. The browser waits 2 s between polls and gives up after 30; these
+# bound what a client calling /complete in a loop can cost.
+STATUS_CHECK_INTERVAL = timedelta(seconds=1.5)
+MAX_STATUS_CHECKS = 60
+
+
+def status_check_delay(last_checked_at: datetime | None, checks: int, now: datetime) -> float | None:
+    """Seconds before UploadCenter may be asked again: 0 = ask now, None = stop.
+
+    A scan takes a couple of seconds; an upload still not ready after
+    MAX_STATUS_CHECKS is treated as failed rather than polled forever.
+    """
+    if checks >= MAX_STATUS_CHECKS:
+        return None
+    if last_checked_at is None:
+        return 0.0
+    return max((last_checked_at + STATUS_CHECK_INTERVAL - now).total_seconds(), 0.0)
 
 
 def upload_url_allowed(url: str | None) -> bool:

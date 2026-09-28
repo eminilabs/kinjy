@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import httpx
@@ -141,6 +142,27 @@ def test_the_cdn_host_is_allowed(url):
 def test_anything_else_is_not_redirected_to_or_fetched(url):
     """Stored URLs are redirected to and fetched from: only the CDN qualifies."""
     assert not profileimages.cdn_url_allowed(url, {"cdn.uploadscenter.com"})
+
+
+NOW = datetime(2026, 9, 28, 12, 0, tzinfo=timezone.utc)
+
+
+def test_the_first_status_check_goes_straight_to_uploadcenter():
+    assert profileimages.status_check_delay(None, 0, NOW) == 0
+
+
+def test_checks_closer_than_the_interval_are_answered_without_asking():
+    delay = profileimages.status_check_delay(NOW - timedelta(seconds=0.5), 3, NOW)
+    assert 0 < delay <= profileimages.STATUS_CHECK_INTERVAL.total_seconds()
+
+
+def test_a_check_after_the_interval_asks_again():
+    assert profileimages.status_check_delay(NOW - profileimages.STATUS_CHECK_INTERVAL, 3, NOW) == 0
+
+
+def test_an_upload_that_is_never_ready_stops_being_checked():
+    """Bounds what one upload can cost in calls to UploadCenter."""
+    assert profileimages.status_check_delay(None, profileimages.MAX_STATUS_CHECKS, NOW) is None
 
 
 def test_a_presigned_storage_url_may_be_uploaded_to():

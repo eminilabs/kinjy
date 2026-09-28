@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import math
 import os
 import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import Depends, File, Form, HTTPException, UploadFile, Request
+from fastapi import BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select, update
@@ -45,6 +46,8 @@ MIGRATIONS = [
     f"ALTER TABLE {models.SCHEMA}.assets ADD COLUMN IF NOT EXISTS external_id VARCHAR(80)",
     f"ALTER TABLE {models.SCHEMA}.assets ADD COLUMN IF NOT EXISTS purpose VARCHAR(20)",
     f"ALTER TABLE {models.SCHEMA}.assets ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'ready'",
+    f"ALTER TABLE {models.SCHEMA}.assets ADD COLUMN IF NOT EXISTS status_checks INTEGER DEFAULT 0",
+    f"ALTER TABLE {models.SCHEMA}.assets ADD COLUMN IF NOT EXISTS last_checked_at TIMESTAMPTZ",
 ]
 
 app = create_app(
@@ -258,13 +261,19 @@ def _discard_bytes(asset: models.Asset) -> None:
     """Delete the stored bytes. A remote failure is logged, never raised: the
     member asked for the row to go, and an orphaned remote file is recoverable
     from UploadCenter's console where a stuck delete button is not."""
-    if asset.provider == "uploadcenter" and asset.external_id:
+    _discard_stored(asset.provider, asset.external_id, asset.storage_path)
+
+
+def _discard_stored(provider: str, external_id: str | None, storage_path: str | None) -> None:
+    """_discard_bytes on plain values, for a background task that runs after
+    the request's session is closed."""
+    if provider == "uploadcenter" and external_id:
         try:
-            uploadcenter.delete_file(asset.external_id)
+            uploadcenter.delete_file(external_id)
         except uploadcenter.UploadCenterError as exc:
-            log.warning("could not delete uploadcenter file %s: %s", asset.external_id, exc)
-    elif asset.storage_path:
-        Path(asset.storage_path).unlink(missing_ok=True)
+            log.warning("could not delete uploadcenter file %s: %s", external_id, exc)
+    elif storage_path:
+        Path(storage_path).unlink(missing_ok=True)
 
 
 # ---------------------------------------------------------------------------
@@ -311,11 +320,61 @@ def _profile_image_out(asset: models.Asset) -> dict:
     }
 
 
+def _still_processing(asset: models.Asset, retry_after: int = 2) -> JSONResponse:
+    """202: not ready yet, ask again in ``retry_after`` seconds."""
+    return JSONResponse(status_code=202, content={**_profile_image_out(asset), "retry_after_seconds": retry_after})
+
+
+_UNFINISHED = ("pending", "uploading", "processing")
+MAX_EXPIRED_PER_REQUEST = 20
+
+
+def _expire_abandoned_uploads(db: OrmSession, owner_id: str) -> list[tuple[str, str | None, str | None]]:
+    """Fail this member's uploads left unfinished for longer than PENDING_WINDOW.
+
+    A tab closed mid-upload, a scan the browser stopped polling, a service
+    restarted between claiming an upload and storing it: each leaves a row that
+    never becomes ready, and possibly a stored file nothing will ever show.
+    Swept here, on the member's next upload, rather than by a timer - the same
+    choice as messaging-service's expiry: no scheduler to run or forget.
+
+    Returns what to delete from storage, for after the response.
+    """
+    cutoff = datetime.now(timezone.utc) - PENDING_WINDOW
+    stale = db.scalars(
+        select(models.Asset)
+        .where(
+            models.Asset.owner_id == owner_id,
+            models.Asset.purpose.is_not(None),
+            models.Asset.status.in_(_UNFINISHED),
+            models.Asset.created_at < cutoff,
+        )
+        .limit(MAX_EXPIRED_PER_REQUEST)
+        .with_for_update(skip_locked=True)
+    ).all()
+    stored = []
+    for asset in stale:
+        asset.status = "failed"
+        stored.append((asset.provider, asset.external_id, asset.storage_path))
+    if stale:
+        db.commit()
+        log.info("expired %d abandoned profile uploads for %s", len(stale), owner_id)
+    return stored
+
+
 @app.post("/media/profile-images/presign", status_code=201, tags=["profile images"])
-def presign_profile_image(payload: ProfileImageRequest, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+def presign_profile_image(
+    payload: ProfileImageRequest,
+    principal: CurrentUser,
+    background: BackgroundTasks,
+    db: OrmSession = Depends(get_db),
+):
     problem = profileimages.check_request(payload.purpose, payload.mime_type, payload.size_bytes)
     if problem:
         raise HTTPException(status_code=422, detail=problem)
+
+    for stored in _expire_abandoned_uploads(db, principal.user_id):
+        background.add_task(_discard_stored, *stored)
 
     # Each presign creates a row. A member changing their picture needs a
     # handful; a script needs thousands.
@@ -324,7 +383,7 @@ def presign_profile_image(payload: ProfileImageRequest, principal: CurrentUser, 
         select(func.count()).select_from(models.Asset).where(
             models.Asset.owner_id == principal.user_id,
             models.Asset.purpose.is_not(None),
-            models.Asset.status.in_(["pending", "uploading", "processing"]),
+            models.Asset.status.in_(_UNFINISHED),
             models.Asset.created_at >= since,
         )
     )
@@ -457,9 +516,26 @@ def complete_profile_image(asset_id: str, principal: CurrentUser, db: OrmSession
         db.commit()
         return _profile_image_out(asset)
 
+    # Every check below is a call to UploadCenter. Answered from here when the
+    # last one was too recent, refused for good after too many.
+    now = datetime.now(timezone.utc)
+    delay = profileimages.status_check_delay(asset.last_checked_at, asset.status_checks or 0, now)
+    if delay is None:
+        asset.status = "failed"
+        db.commit()
+        _discard_bytes(asset)
+        log.info("profile image %s never became ready; given up", asset.id)
+        raise HTTPException(status_code=422, detail="This image took too long to process. Please try another one.")
+    if delay > 0:
+        db.commit()
+        return _still_processing(asset, retry_after=math.ceil(delay))
+    asset.status_checks = (asset.status_checks or 0) + 1
+    asset.last_checked_at = now
+
     try:
         record = uploadcenter.get_file(asset.external_id)
     except uploadcenter.UploadCenterError as exc:
+        db.commit()  # the check counts even when UploadCenter did not answer
         raise HTTPException(status_code=502, detail=str(exc))
 
     if profileimages.is_failed(record):
@@ -476,10 +552,7 @@ def complete_profile_image(asset_id: str, principal: CurrentUser, db: OrmSession
 
     if not profileimages.is_ready(record):
         db.commit()
-        return JSONResponse(
-            status_code=202,
-            content={**_profile_image_out(asset), "retry_after_seconds": 2},
-        )
+        return _still_processing(asset)
 
     url = record["url"]
     if not profileimages.cdn_url_allowed(url, uploadcenter.cdn_hosts()):
@@ -496,7 +569,7 @@ def complete_profile_image(asset_id: str, principal: CurrentUser, db: OrmSession
     except uploadcenter.UploadCenterError:
         # CDN propagation can lag the "ready" status by a moment.
         db.commit()
-        return JSONResponse(status_code=202, content={**_profile_image_out(asset), "retry_after_seconds": 2})
+        return _still_processing(asset)
     if profileimages.sniff(head) != asset.content_type:
         asset.status = "failed"
         db.commit()
