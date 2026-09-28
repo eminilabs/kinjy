@@ -7,6 +7,8 @@
  */
 
 const BASE = import.meta.env.VITE_API_BASE ?? '/api'
+/** For the few requests fetch() cannot make, such as uploads that report progress. */
+export const API_BASE = BASE
 
 const ACCESS_KEY = 'kaluta.access_token'
 const REFRESH_KEY = 'kaluta.refresh_token'
@@ -61,7 +63,7 @@ function messageFrom(status: number, body: unknown): string {
 let refreshing: Promise<boolean> | null = null
 
 /** Swap an expired access token for a fresh one. Concurrent 401s share one call. */
-async function refreshAccessToken(): Promise<boolean> {
+export async function refreshAccessToken(): Promise<boolean> {
   const refresh_token = tokens.refresh
   if (!refresh_token) return false
   if (refreshing) return refreshing
@@ -314,19 +316,62 @@ export interface Passkey {
   last_used_at: string | null
 }
 
+/** What anyone can see: `GET /users/{handle}`. */
 export interface Profile {
   user_id: string
   handle: string
   display_name: string
   bio: string | null
   avatar_url: string | null
+  cover_url: string | null
+  /** ISO 3166 alpha-2, upper case. */
   country: string | null
+  state: string | null
   city: string | null
+  /** ISO 639 codes the member speaks, most fluent first, e.g. "fr,ln". */
   languages: string
   is_creator: boolean
   verified: boolean
   followers_count: number
   following_count: number
+  created_at: string
+}
+
+/**
+ * What only the owner sees: `GET /users/me`. The neighbourhood is a precise
+ * location and never appears on the public profile.
+ */
+export interface MyProfile extends Profile {
+  neighborhood: string | null
+  /** Interface language: one Kinjy is translated into. */
+  lang: string
+}
+
+/**
+ * `PATCH /users/me`. Omit a field to leave it unchanged; `null` (or an empty
+ * string) clears it. Images are referenced by the asset id returned by
+ * `uploadProfileImage`, never by URL: the server refuses URLs.
+ */
+export interface ProfileUpdate {
+  display_name?: string
+  bio?: string | null
+  avatar_asset_id?: string | null
+  cover_asset_id?: string | null
+  country?: string | null
+  state?: string | null
+  city?: string | null
+  /** Adults only; refused (403) for younger members. */
+  neighborhood?: string | null
+  languages?: string
+  lang?: string
+}
+
+/**
+ * `GET /users/me/eligibility`: which age-gated fields the editor should offer.
+ * A readout only; `PATCH /users/me` enforces the rule itself.
+ */
+export interface ProfileEligibility {
+  neighborhood: boolean
 }
 
 export interface PostMedia {
@@ -469,6 +514,7 @@ export interface CommentAuthor {
   id: string
   handle: string
   display_name: string
+  avatar_url: string | null
 }
 
 export interface CommentNode {
@@ -1546,7 +1592,7 @@ export const kaluta = {
 
   /** Everything behind the member dashboard. */
   account: {
-    profile: () => api.get<Profile>('/users/me'),
+    profile: () => api.get<MyProfile>('/users/me'),
     profileByHandle: (handle: string) => api.get<Profile>(`/users/${handle}`, { auth: false }),
     preferences: () => api.get<Record<string, unknown>>('/preferences'),
     setPreferences: (patch: Record<string, unknown>) => api.patch('/preferences', patch),
@@ -1559,8 +1605,8 @@ export const kaluta = {
      */
     wellbeingBeat: (minutes: number) =>
       api.post<WellbeingStatus>('/wellbeing/heartbeat', { minutes }),
-    updateProfile: (patch: Partial<Pick<Profile, 'display_name' | 'bio' | 'country' | 'city'>>) =>
-      api.patch<Profile>('/users/me', patch),
+    updateProfile: (patch: ProfileUpdate) => api.patch<MyProfile>('/users/me', patch),
+    profileEligibility: () => api.get<ProfileEligibility>('/users/me/eligibility'),
 
     wallet: () => api.get<Wallet>('/wallet'),
     commissions: (params: { source_kind?: string; limit?: number } = {}) => {
