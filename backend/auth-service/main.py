@@ -12,7 +12,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session as OrmSession
 
@@ -800,6 +800,36 @@ def internal_user(user_id: str, db: OrmSession = Depends(get_db)):
         "status": user.status,
         "invited_by": user.invited_by,
     }
+
+
+class IdentitySyncIn(BaseModel):
+    """What user-service may copy here after a profile edit.
+
+    Name and interface language only. The country on this row is the
+    jurisdiction the age rules run under, fixed at registration: a profile
+    edit that could move it would let a minor choose the country with the
+    lowest minimum age.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    display_name: str | None = Field(default=None, min_length=2, max_length=120)
+    lang: str | None = None
+
+
+@app.patch("/internal/users/{user_id}", tags=["internal"])
+def sync_identity(user_id: str, payload: IdentitySyncIn, db: OrmSession = Depends(get_db)):
+    user = db.get(models.User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if payload.lang is not None and payload.lang not in settings.SUPPORTED_LANGS:
+        raise HTTPException(status_code=422, detail="Unsupported language")
+    if payload.display_name is not None:
+        user.display_name = payload.display_name.strip()
+    if payload.lang is not None:
+        user.lang = payload.lang
+    db.commit()
+    return {"id": user.id, "display_name": user.display_name, "lang": user.lang}
 
 
 @app.get("/internal/referral-counts", tags=["internal"])
