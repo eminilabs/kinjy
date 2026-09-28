@@ -10,6 +10,7 @@ import { useApi } from '@/hooks/useApi'
 import { onChange } from '@/lib/live'
 import { useAuth } from '@/hooks/useAuth'
 import { kaluta, type Profile } from '@/lib/api'
+import { countryName } from '@/lib/profileOptions'
 import { cn } from '@/lib/utils'
 
 /**
@@ -21,7 +22,7 @@ const PINNED: ChromeKey[] = ['home', 'create', 'familyTree', 'messages']
 
 export default function ProfileCard() {
   const { user } = useAuth()
-  const { t, tok } = useAppTheme()
+  const { t, tok, lang } = useAppTheme()
   // Real circles, not the demo's four fixed names: this rail is a switch into
   // the member's own audiences, and inventing "Business" for someone who has
   // no such circle would make it a decoration.
@@ -33,14 +34,17 @@ export default function ProfileCard() {
   useEffect(() => onChange('profile', profile.reload), [profile.reload])
   const data = profile.data
 
-  const initials = (user?.display_name ?? '?')
+  // The profile is what the editor changes; the account copy only stands in
+  // until it has loaded.
+  const displayName = data?.display_name ?? user?.display_name ?? ''
+  const initials = (displayName || '?')
     .split(' ')
     .slice(0, 2)
     .map((part) => part[0])
     .join('')
     .toUpperCase()
 
-  const place = [data?.city, data?.country].filter(Boolean).join(', ')
+  const place = [data?.city, data?.country && countryName(data.country, lang)].filter(Boolean).join(', ')
 
   return (
     <div className="space-y-3">
@@ -61,7 +65,7 @@ export default function ProfileCard() {
         )}
 
         <p className={cn('mt-2.5 flex items-center justify-center gap-1.5 text-sm font-bold', tok.text)}>
-          {user?.display_name}
+          {displayName}
           {user?.kyc_verified && <VerifiedBadge size={15} />}
         </p>
         <p className={cn('text-xs', tok.low)}>
