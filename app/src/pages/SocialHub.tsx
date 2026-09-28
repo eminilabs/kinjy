@@ -123,7 +123,7 @@ export default function SocialHub() {
     if (params.get('focus') !== 'algorithm') return
     const picker = document.getElementById('algorithm-picker') as HTMLSelectElement | null
     if (!picker) return
-    picker.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    picker.scrollIntoView({ block: 'center', behavior: 'auto' })
     picker.focus()
     const next = new URLSearchParams(params)
     next.delete('focus')
@@ -335,9 +335,9 @@ export default function SocialHub() {
               onClick={() => {
                 setPending(0)
                 void load()
-                window.scrollTo({ top: 0, behavior: 'smooth' })
+                window.scrollTo({ top: 0, behavior: 'auto' })
               }}
-              className="mx-auto mt-4 flex items-center gap-2 rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-2 text-sm font-bold text-ink shadow-cloud transition hover:brightness-110"
+              className="mx-auto mt-4 flex items-center gap-2 rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-2 text-sm font-bold text-ink shadow-cloud hover:brightness-110"
             >
               <Sparkles size={14} aria-hidden="true" />
               {pending === 1 ? '1 new post' : `${pending} new posts`}
@@ -396,7 +396,7 @@ export default function SocialHub() {
           onClick={() => setOpenComposer((n) => n + 1)}
           aria-label="Create a post"
           className={cn(
-            'fixed z-40 inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-3 text-sm font-bold text-ink shadow-cloud-hover transition-transform hover:scale-105',
+            'fixed z-40 inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-3 text-sm font-bold text-ink shadow-cloud-hover',
             // Stacked above the assistant orb rather than beside it: both used
             // to anchor to the same corner with slightly different offsets,
             // which read as deliberate and overlapped by 48×44 pixels.

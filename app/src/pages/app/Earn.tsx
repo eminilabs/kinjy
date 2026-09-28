@@ -162,7 +162,7 @@ export default function Earn() {
 
                 <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/8">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-gold-soft to-gold transition-[width] duration-700"
+                    className="h-full rounded-full bg-gradient-to-r from-gold-soft to-gold"
                     style={{ width: `${Math.min(100, (pool.data.seats_taken / pool.data.cap) * 100)}%` }}
                   />
                 </div>

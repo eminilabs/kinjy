@@ -141,7 +141,7 @@ export default function Forums() {
                   type="button"
                   onClick={() => void loadThreads(forum.id)}
                   className={cn(
-                    'flex w-full items-center gap-2.5 rounded-card-sm border p-3 text-start transition-colors',
+                    'flex w-full items-center gap-2.5 rounded-card-sm border p-3 text-start',
                     forumId === forum.id
                       ? 'border-gold/40 bg-gold/5'
                       : 'border-white/8 bg-ink-2/40 hover:border-white/15',
@@ -200,7 +200,7 @@ export default function Forums() {
                     <button
                       type="button"
                       onClick={() => void openThread(thread.id)}
-                      className="w-full rounded-card-sm border border-white/8 bg-ink-2/40 p-4 text-start transition-colors hover:border-gold/30"
+                      className="w-full rounded-card-sm border border-white/8 bg-ink-2/40 p-4 text-start hover:border-gold/30"
                     >
                       <p className="text-sm font-semibold text-text-hi">{thread.title}</p>
                       <p className="caption mt-1">
@@ -232,7 +232,7 @@ export default function Forums() {
                   type="button"
                   onClick={() => void summarise(open.id)}
                   disabled={summarising}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-sky/40 px-3 py-1.5 text-xs font-semibold text-sky transition-colors hover:bg-sky/10 disabled:opacity-40"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-sky/40 px-3 py-1.5 text-xs font-semibold text-sky hover:bg-sky/10 disabled:opacity-40"
                 >
                   <Sparkles size={12} aria-hidden="true" />
                   {summarising ? 'Reading…' : 'Summarise'}

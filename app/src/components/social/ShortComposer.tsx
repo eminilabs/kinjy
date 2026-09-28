@@ -216,7 +216,7 @@ export default function ShortComposer({
                 <button
                   type="button"
                   onClick={() => inputRef.current?.click()}
-                  className="flex h-full w-full flex-col items-center justify-center gap-2 text-text-low transition-colors hover:text-gold-soft"
+                  className="flex h-full w-full flex-col items-center justify-center gap-2 text-text-low hover:text-gold-soft"
                 >
                   <Upload size={22} aria-hidden="true" />
                   <span className="px-4 text-center text-xs">
@@ -326,7 +326,7 @@ export default function ShortComposer({
               <div>
                 <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
                   <div
-                    className="h-full rounded-full bg-gold transition-[width] duration-200"
+                    className="h-full rounded-full bg-gold"
                     style={{ width: `${Math.round(progress * 100)}%` }}
                   />
                 </div>
@@ -369,7 +369,7 @@ export default function ShortComposer({
                 onClick={() => void publish()}
                 disabled={!file || busy}
                 className={cn(
-                  'inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-bold text-ink transition',
+                  'inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-bold text-ink',
                   'bg-gradient-to-br from-gold-soft to-gold hover:brightness-110',
                   'disabled:cursor-not-allowed disabled:opacity-40',
                 )}

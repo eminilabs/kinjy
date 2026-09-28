@@ -78,7 +78,6 @@ function Short({ post, active, muted, onToggleMute, currentUserId, autoplay }: S
   const [reposted, setReposted] = useState(Boolean(post.reposted_by_me))
   const [comments, setComments] = useState(post.comments_count)
   const [showComments, setShowComments] = useState(false)
-  const [burst, setBurst] = useState(false)
   const [note, setNote] = useState<string | null>(null)
   const lastTap = useRef(0)
 
@@ -153,8 +152,6 @@ function Short({ post, active, muted, onToggleMute, currentUserId, autoplay }: S
       lastTap.current = 0
       // Undo the pause the first tap caused, then like.
       togglePlay()
-      setBurst(true)
-      window.setTimeout(() => setBurst(false), 700)
       void like(true)
       return
     }
@@ -227,7 +224,7 @@ function Short({ post, active, muted, onToggleMute, currentUserId, autoplay }: S
         onClick()
       }}
       className={cn(
-        'flex flex-col items-center gap-1 transition-transform active:scale-90',
+        'flex flex-col items-center gap-1',
         on ? 'text-gold-soft' : 'text-white',
       )}
     >
@@ -283,16 +280,6 @@ function Short({ post, active, muted, onToggleMute, currentUserId, autoplay }: S
         </span>
       )}
 
-      {burst && (
-        <span className="pointer-events-none absolute inset-0 grid place-items-center">
-          <Heart
-            size={110}
-            className="animate-[ping_0.7s_ease-out] text-white drop-shadow-xl"
-            fill="currentColor"
-            aria-hidden="true"
-          />
-        </span>
-      )}
 
       {/* Caption */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/45 to-transparent p-4 pb-8 pe-20">
@@ -481,7 +468,7 @@ export default function ShortPlayer({
       if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp'].includes(event.key)) {
         event.preventDefault()
         const step = event.key === 'ArrowDown' || event.key === 'PageDown' ? 1 : -1
-        root.scrollBy({ top: step * root.clientHeight, behavior: 'smooth' })
+        root.scrollBy({ top: step * root.clientHeight, behavior: 'auto' })
       }
       if (event.key === 'm') setMuted((m) => !m)
     }

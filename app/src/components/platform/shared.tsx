@@ -73,23 +73,20 @@ export function useActiveInView<T extends HTMLElement>(amount = 0.4) {
   return { ref, active }
 }
 
-/** Word-level kinetic split for headlines (stagger up, 0.08s). */
-export function KineticWords({ text, className, delay = 0, as: Tag = 'span' }: { text: string; className?: string; delay?: number; as?: 'span' | 'h1' | 'h2' }) {
-  const reduced = useReducedMotion()
+/**
+ * Word-level split for headlines. `delay` is still accepted so callers need
+ * not change; the words no longer animate in.
+ */
+export function KineticWords({ text, className, as: Tag = 'span' }: { text: string; className?: string; delay?: number; as?: 'span' | 'h1' | 'h2' }) {
   const words = text.split(' ')
   return (
     <Tag className={className}>
       {words.map((w, i) => (
         <span key={`${w}-${i}`} className="inline-block overflow-hidden pb-[0.08em] -mb-[0.08em] align-bottom pe-[0.24em] last:pe-0">
-          <motion.span
-            className="inline-block"
-            initial={reduced ? false : { y: '110%' }}
-            animate={{ y: 0 }}
-            transition={{ duration: 0.8, ease: CLOUD_EASE, delay: delay + i * 0.08 }}
-          >
+          <span className="inline-block">
             {w}
             {i < words.length - 1 ? ' ' : ''}
-          </motion.span>
+          </span>
         </span>
       ))}
     </Tag>

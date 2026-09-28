@@ -189,7 +189,7 @@ export default function Messages() {
               type="button"
               onClick={() => setComposing((v) => !v)}
               aria-expanded={composing}
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/12 px-3 py-1.5 text-xs font-semibold text-text-mid transition-colors hover:border-gold/40 hover:text-gold-soft"
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/12 px-3 py-1.5 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
             >
               <Plus size={12} aria-hidden="true" />
               New
@@ -219,7 +219,7 @@ export default function Messages() {
                       <button
                         type="button"
                         onClick={() => void startWith(person.user_id)}
-                        className="flex w-full items-center gap-2.5 rounded-card-sm px-2 py-1.5 text-start transition-colors hover:bg-white/5"
+                        className="flex w-full items-center gap-2.5 rounded-card-sm px-2 py-1.5 text-start hover:bg-white/5"
                       >
                         <MemberAvatar
                           handle={person.handle}
@@ -268,7 +268,7 @@ export default function Messages() {
                     type="button"
                     onClick={() => void openThread(conversation.id)}
                     className={cn(
-                      'w-full rounded-card-sm border p-3 text-start transition-colors',
+                      'w-full rounded-card-sm border p-3 text-start',
                       activeId === conversation.id
                         ? 'border-gold/40 bg-gold/5'
                         : 'border-white/8 bg-ink-2/40 hover:border-white/15',

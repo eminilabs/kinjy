@@ -67,7 +67,7 @@ function PersonPanel({ person, onConfirmed }: { person: Person; onConfirmed: () 
             type="button"
             disabled={busy}
             onClick={() => void decide('confirm')}
-            className="inline-flex items-center gap-1.5 rounded-full border border-success/40 px-3 py-1.5 text-xs font-semibold text-success transition-colors hover:bg-success/10 disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 rounded-full border border-success/40 px-3 py-1.5 text-xs font-semibold text-success hover:bg-success/10 disabled:opacity-40"
           >
             <ShieldCheck size={13} aria-hidden="true" />
             Confirm
@@ -76,7 +76,7 @@ function PersonPanel({ person, onConfirmed }: { person: Person; onConfirmed: () 
             type="button"
             disabled={busy}
             onClick={() => void decide('dispute')}
-            className="inline-flex items-center gap-1.5 rounded-full border border-warning/40 px-3 py-1.5 text-xs font-semibold text-warning transition-colors hover:bg-warning/10 disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 rounded-full border border-warning/40 px-3 py-1.5 text-xs font-semibold text-warning hover:bg-warning/10 disabled:opacity-40"
           >
             <AlertTriangle size={13} aria-hidden="true" />
             Dispute
@@ -87,7 +87,7 @@ function PersonPanel({ person, onConfirmed }: { person: Person; onConfirmed: () 
       <div className="mt-3">
         <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
           <div
-            className="h-full rounded-full bg-success transition-[width] duration-500"
+            className="h-full rounded-full bg-success"
             style={{ width: `${Math.min(100, (confirmations / Math.max(1, threshold)) * 100)}%` }}
           />
         </div>
@@ -362,7 +362,7 @@ export default function FamilyTree() {
               <button
                 type="submit"
                 disabled={!from || !to}
-                className="flex-1 rounded-full border border-white/12 px-3 py-2 text-xs font-semibold text-text-mid transition-colors hover:border-gold/40 hover:text-gold-soft disabled:opacity-40"
+                className="flex-1 rounded-full border border-white/12 px-3 py-2 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft disabled:opacity-40"
               >
                 Link
               </button>
@@ -370,7 +370,7 @@ export default function FamilyTree() {
                 type="button"
                 onClick={checkRelation}
                 disabled={!from || !to}
-                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border border-white/12 px-3 py-2 text-xs font-semibold text-text-mid transition-colors hover:border-sky/40 hover:text-sky disabled:opacity-40"
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border border-white/12 px-3 py-2 text-xs font-semibold text-text-mid hover:border-sky/40 hover:text-sky disabled:opacity-40"
               >
                 <Link2 size={12} aria-hidden="true" />
                 How related?
@@ -446,7 +446,7 @@ export default function FamilyTree() {
                   <button
                     type="button"
                     onClick={() => void loadTree(p.id)}
-                    className="w-full truncate rounded-card-sm px-2 py-1.5 text-start text-sm text-text-mid transition-colors hover:bg-white/5 hover:text-text-hi"
+                    className="w-full truncate rounded-card-sm px-2 py-1.5 text-start text-sm text-text-mid hover:bg-white/5 hover:text-text-hi"
                   >
                     {fullName(p)}
                     {p.status === 'verified' && <span className="caption"> · verified</span>}

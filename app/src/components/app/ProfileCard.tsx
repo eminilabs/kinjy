@@ -102,7 +102,7 @@ export default function ProfileCard() {
                 <Link
                   to={ROUTE_FOR[key]}
                   className={cn(
-                    'flex w-full items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
+                    'flex w-full items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold',
                     tok.mid,
                     tok.hoverBg,
                   )}
@@ -132,7 +132,7 @@ export default function ProfileCard() {
                 key={circle.id}
                 to={`/circles?open=${circle.id}`}
                 className={cn(
-                  'rounded-full px-2.5 py-1 text-[0.68rem] font-semibold transition-colors',
+                  'rounded-full px-2.5 py-1 text-[0.68rem] font-semibold',
                   index === 0
                     ? 'bg-gold/15 text-gold-soft ring-1 ring-gold/40'
                     : cn(tok.subtleBg, tok.mid, tok.hoverBg),
