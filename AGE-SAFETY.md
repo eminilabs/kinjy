@@ -554,7 +554,8 @@ minor→adult · locked settings · policy version on every verdict.
 4. **The classifier**, so `UNCLASSIFIED` stops being the common case.
 5. ~~**Parental supervision**~~ — built (`user-service/parental.py`).
    ~~**Appeals**~~ — built (`social-service/moderation.py`), together with the
-   reporting and decision records they need. **The T&S console UI** remains.
+   reporting and decision records they need. ~~**The T&S console**~~ — built
+   (`app/src/pages/TrustSafety.tsx`, `/trust-safety`).
 
 ---
 
@@ -568,9 +569,21 @@ minor→adult · locked settings · policy version on every verdict.
   Every decision it makes is stamped `classifier_source="heuristic"` so its
   work can be found and re-run when a model arrives.
 - There is no streaming backend at all; only the age decision it will need.
-- The Trust & Safety console is designed here and not built. The appeals
-  endpoints exist and are staff-guarded; there is no screen for them, so a
-  reviewer works the queue through the API.
+- The Trust & Safety console is built, at `/trust-safety`, and is the first
+  admin surface on this platform that reads real data — every other section of
+  `/admin` is still a static mockup. It carries both queues, shows the content
+  being judged rather than linking to it, and puts the overturn rate next to
+  the queue depth, because a reviewer seeing that a quarter of these decisions
+  get overturned is being told something about the classifier rather than about
+  the people appealing.
+- Building it meant deleting fabricated numbers from the admin page. The
+  moderation section there asserted "4.2M items screened / day", "3,180 in
+  queue" and "96 open to humans" as hard-coded strings, beside a row of green
+  dots claiming every system was healthy. On an operations page that is worse
+  than blank: an invented queue depth is indistinguishable from a real one
+  until somebody staffs against it. It now shows counted rows, and says so
+  plainly when the API cannot be reached instead of falling back to a
+  plausible figure.
 - Appeals are built, and so are the two things that had to exist first.
   **Reports**: `reclassify_on_report` had been written with the classifier and
   never called by anything, so community reports did nothing at all. They now

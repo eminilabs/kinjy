@@ -299,10 +299,10 @@ seen running:
 
 ## Moderation: reports, decisions, appeals (28/09)
 
-- **No screen for any of it.** The endpoints exist and are staff-guarded, but a
-  reviewer works the queue with curl. The member side is worse: an author can
-  fetch `/moderation/decisions` and see what was restricted and how their
-  appeal is going, and there is no page that shows it to them.
+- **The member side still has no screen.** An author can fetch
+  `/moderation/decisions` and see what was restricted and how their appeal is
+  going, and nothing shows it to them. The staff console exists; the half that
+  belongs to the person who was moderated does not.
 - **No refusal is appealable, and that is not a bug today.** Every
   `block_publication` in the classifier also sets `escalate_child_safety`, so
   every refusal is a child-safety escalation and correctly leaves the ordinary
@@ -328,3 +328,34 @@ seen running:
   make an error. Pre-existing, one line, untouched here because it is in the
   hashtag regex rather than in anything this change covers.
 
+## Trust & Safety console (28/09)
+
+- **Seen at 1280px and 375px in both themes, with live queues.** The console's
+  own text passes WCAG AA in light and dark (570 elements, size-aware
+  thresholds). Overturning an appeal from the page was exercised end to end and
+  the counters moved (review queue 131 → 130, appeals 5 → 4).
+- **Three app-chrome contrast failures are pre-existing and untouched**: the
+  avatar initial (1.12:1), the mobile bottom-nav labels in light mode (2.25:1),
+  and `AppShell`'s subtitle in dark (3.96:1). Confirmed by running the same
+  audit on `/circles`, which fails on exactly the same elements. They belong to
+  components every app page shares, so they are not this change's to fix.
+- **My first two contrast audits were wrong and would have sent me fixing
+  nothing.** The first compared against a non-composited ancestor background,
+  so a 10%-alpha overlay read as opaque near-white and a dark-mode button came
+  back at 1.0:1. The second applied 4.5:1 to every element, including 24px
+  semibold numerals whose AA threshold is 3:1. Only the third measurement —
+  alpha-composited, size-aware — is the one quoted above.
+- **No pagination.** The queue shows the first 50 of however many; with 131
+  pending there is no way to reach the rest from the page.
+- **No filtering or sorting**, so a reviewer cannot say "media only" or "most
+  reported first", which is how this queue will actually want to be worked.
+- **Rating is one-click and total.** The buttons set `age_rating` only; the
+  graded category levels are shown but cannot be edited, so a reviewer cannot
+  record "violence 1, not sexual 2" — the same bluntness the appeal overturn
+  has.
+- **Nothing refreshes on its own** and there is no optimistic update: every
+  action refetches all three queries, which is fine at this size and will not
+  be at ten times it.
+- **The rest of `/admin` is still a mockup.** Ledger, KYC, fraud, leaders pool
+  and AI watch are all static markup with invented figures, exactly as the
+  moderation section was until today.

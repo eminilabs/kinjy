@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import Depends, HTTPException, Query
@@ -763,6 +763,25 @@ def appeal_queue(_: AdminUser, limit: int = 50, db: OrmSession = Depends(get_db)
             )
         ).all()
     }
+    # The live text, for the decisions that restricted content rather than
+    # refusing it. Those have no snapshot - the post still exists, so copying
+    # it would be duplicating data - but "open pst_01M3... to read it" is not a
+    # workable instruction, and a reviewer who cannot see the content will
+    # either guess or skip.
+    content_ids = [d.content_id for d in decisions.values()]
+    live_bodies = {
+        p.id: p.body
+        for p in db.scalars(
+            select(models.Post).where(models.Post.id.in_(content_ids or [""]))
+        ).all()
+    }
+    live_bodies.update({
+        cm.id: cm.body
+        for cm in db.scalars(
+            select(models.Comment).where(models.Comment.id.in_(content_ids or [""]))
+        ).all()
+    })
+
     now = moderation.now()
     return {
         "stats": moderation.stats(db),
@@ -778,7 +797,12 @@ def appeal_queue(_: AdminUser, limit: int = 50, db: OrmSession = Depends(get_db)
                 "content_kind": getattr(decisions.get(a.decision_id), "content_kind", None),
                 "action": getattr(decisions.get(a.decision_id), "action", None),
                 "age_rating": getattr(decisions.get(a.decision_id), "age_rating", None),
-                "body_snapshot": getattr(decisions.get(a.decision_id), "body_snapshot", None),
+                "body_snapshot": (
+                    getattr(decisions.get(a.decision_id), "body_snapshot", None)
+                    or live_bodies.get(
+                        getattr(decisions.get(a.decision_id), "content_id", None)
+                    )
+                ),
                 "decided_by": getattr(decisions.get(a.decision_id), "decided_by", None),
             }
             for a in appeals
@@ -845,19 +869,121 @@ def classification_queue(_: AdminUser, limit: int = 50, db: OrmSession = Depends
         .order_by(models.ContentSafetyClassification.created_at)
         .limit(min(limit, 200))
     ).all()
+
+    # The body, because a reviewer cannot review what they cannot see. The
+    # queue used to return ids and a rating, which meant the only way to work
+    # it was to look every item up by hand somewhere else - and a queue that is
+    # tedious to work is a queue that does not get worked, which shows up as
+    # teenagers seeing nothing rather than as a backlog anybody notices.
+    posts = {
+        p.id: p
+        for p in db.scalars(
+            select(models.Post).where(models.Post.id.in_([r.content_id for r in rows] or [""]))
+        ).all()
+    }
+    comments = {
+        c.id: c
+        for c in db.scalars(
+            select(models.Comment).where(
+                models.Comment.id.in_([r.content_id for r in rows] or [""])
+            )
+        ).all()
+    }
+    total_pending = db.scalar(
+        select(func.count()).select_from(models.ContentSafetyClassification).where(
+            models.ContentSafetyClassification.human_review_status == "pending"
+        )
+    ) or 0
+
+    # Media lives in its own table, so it is counted in one query rather than
+    # read off the post. An earlier version of this guessed at a `media_ids`
+    # column that does not exist and reported zero attachments on everything -
+    # in a queue that exists *because* nothing can see into pictures, "0 media"
+    # on every row is the most misleading value it could have shown.
+    media_counts = dict(
+        db.execute(
+            select(models.PostMedia.post_id, func.count())
+            .where(models.PostMedia.post_id.in_([r.content_id for r in rows] or [""]))
+            .group_by(models.PostMedia.post_id)
+        ).all()
+    )
+
+    def _content(r):
+        item = posts.get(r.content_id) or comments.get(r.content_id)
+        if item is None:
+            return None, None
+        return item.body, item.author_id
+
+    items = []
+    for r in rows:
+        body, author_id = _content(r)
+        items.append({
+            "content_id": r.content_id,
+            "content_kind": r.content_kind,
+            "age_rating": r.age_rating,
+            "classifier_source": r.classifier_source,
+            "confidence": r.classifier_confidence,
+            "exploitation_risk": r.exploitation_risk,
+            "levels": {
+                "sexual": r.sexual_content_level, "nudity": r.nudity_level,
+                "violence": r.violence_level, "graphic": r.graphic_content_level,
+                "drugs": r.drugs_level, "alcohol": r.alcohol_level,
+                "gambling": r.gambling_level, "dangerous": r.dangerous_activity_level,
+                "self_harm": r.self_harm_risk, "hate": r.hate_or_abuse_risk,
+            },
+            "body": body,
+            "author_id": author_id,
+            "media_count": media_counts.get(r.content_id, 0),
+            "reports": db.scalar(
+                select(func.count()).select_from(models.ContentReport).where(
+                    models.ContentReport.content_id == r.content_id
+                )
+            ) or 0,
+            "created_at": r.created_at,
+        })
+
+    return {"pending": total_pending, "shown": len(rows), "items": items}
+
+
+@app.get("/admin/moderation/overview", tags=["admin"])
+def moderation_overview(_: AdminUser, db: OrmSession = Depends(get_db)):
+    """The real numbers, for a console that used to show invented ones.
+
+    Every figure here is a count of rows. That sounds too obvious to say, but
+    the admin page it replaces carried "4.2M items screened / day" and "96 open
+    to humans" as hard-coded strings, which is worse than showing nothing: a
+    fabricated queue depth is indistinguishable from an empty one right up
+    until somebody trusts it.
+    """
+    since = datetime.now(timezone.utc) - timedelta(days=1)
+    pending = db.scalar(
+        select(func.count()).select_from(models.ContentSafetyClassification).where(
+            models.ContentSafetyClassification.human_review_status == "pending"
+        )
+    ) or 0
+    escalations = db.scalar(
+        select(func.count()).select_from(models.ContentSafetyClassification).where(
+            models.ContentSafetyClassification.exploitation_risk > 1
+        )
+    ) or 0
+    classified = db.scalar(
+        select(func.count()).select_from(models.ContentSafetyClassification)
+    ) or 0
+    reports_day = db.scalar(
+        select(func.count()).select_from(models.ContentReport).where(
+            models.ContentReport.created_at >= since
+        )
+    ) or 0
+    reports_total = db.scalar(
+        select(func.count()).select_from(models.ContentReport)
+    ) or 0
     return {
-        "pending": len(rows),
-        "items": [
-            {
-                "content_id": r.content_id,
-                "age_rating": r.age_rating,
-                "classifier_source": r.classifier_source,
-                "confidence": r.classifier_confidence,
-                "exploitation_risk": r.exploitation_risk,
-                "created_at": r.created_at,
-            }
-            for r in rows
-        ],
+        "classified_total": classified,
+        "pending_review": pending,
+        "child_safety_escalations": escalations,
+        "reports_24h": reports_day,
+        "reports_total": reports_total,
+        "appeals": moderation.stats(db),
     }
 
 

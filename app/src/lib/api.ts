@@ -948,6 +948,51 @@ export interface SupervisedView {
   not_included: string[]
 }
 
+export interface ModerationOverview {
+  classified_total: number
+  pending_review: number
+  child_safety_escalations: number
+  reports_24h: number
+  reports_total: number
+  appeals: {
+    open: number
+    overdue: number
+    answered: number
+    overturned: number
+    overturn_rate: number | null
+  }
+}
+
+export interface ReviewItem {
+  content_id: string
+  content_kind: string
+  age_rating: string
+  classifier_source: string
+  confidence: number
+  exploitation_risk: number
+  levels: Record<string, number>
+  body: string | null
+  author_id: string | null
+  media_count: number
+  reports: number
+  created_at: string
+}
+
+export interface AppealItem {
+  id: string
+  decision_id: string
+  appellant_id: string
+  grounds: string | null
+  due_at: string
+  overdue: boolean
+  content_id: string | null
+  content_kind: string | null
+  action: string | null
+  age_rating: string | null
+  body_snapshot: string | null
+  decided_by: string | null
+}
+
 export const kaluta = {
   status: () => api.get<StackStatus>('/status', { auth: false }),
 
@@ -1542,6 +1587,38 @@ export const kaluta = {
       ),
     answerRequest: (id: string, approve: boolean) =>
       api.post<{ id: string; status: string }>(`/supervision/requests/${id}`, { approve }),
+  },
+
+  /** Trust & Safety. Every call here is staff-only at the service. */
+  trustSafety: {
+    overview: () => api.get<ModerationOverview>('/admin/moderation/overview'),
+    reviewQueue: (limit = 50) =>
+      api.get<{ pending: number; shown: number; items: ReviewItem[] }>(
+        `/admin/classification-queue?limit=${limit}`,
+      ),
+    rate: (contentId: string, body: Record<string, unknown>) =>
+      api.post(`/admin/classification/${contentId}/review`, body),
+    appeals: (limit = 50) =>
+      api.get<{ stats: ModerationOverview['appeals']; items: AppealItem[] }>(
+        `/admin/moderation/appeals?limit=${limit}`,
+      ),
+    decideAppeal: (appealId: string, overturn: boolean, note?: string) =>
+      api.post<{ id: string; status: string }>(`/admin/moderation/appeals/${appealId}`, {
+        overturn,
+        note,
+      }),
+  },
+
+  /** What moderation did to you, and how to contest it. */
+  moderation: {
+    myDecisions: () =>
+      api.get<{ items: Array<Record<string, unknown>> }>('/moderation/decisions'),
+    appeal: (decisionId: string, grounds: string) =>
+      api.post(`/moderation/decisions/${decisionId}/appeal`, { grounds }),
+    reportPost: (postId: string, reason: string, note?: string) =>
+      api.post(`/posts/${postId}/report`, { reason, note }),
+    reportComment: (commentId: string, reason: string, note?: string) =>
+      api.post(`/comments/${commentId}/report`, { reason, note }),
   },
 
   /** Everything behind the member dashboard. */
