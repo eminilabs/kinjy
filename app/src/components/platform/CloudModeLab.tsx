@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { Cloud, Sun, Moon, MonitorCog } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar } from './shared'
+import { FEATURES } from '@/lib/features'
 
 type Mode = 'cloud' | 'light' | 'dark' | 'system'
 
@@ -164,9 +165,12 @@ export default function CloudModeLab() {
             <li className="flex items-center gap-2.5">
               <span className="h-1.5 w-1.5 rounded-full bg-gold" /> Floating shadows, one focal effect per view
             </li>
-            <li className="flex items-center gap-2.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-gold" /> Heritage pages always keep their paper soul
-            </li>
+            {/* Heritage pages belong to the family tree. */}
+            {FEATURES.familyTree && (
+              <li className="flex items-center gap-2.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-gold" /> Heritage pages always keep their paper soul
+              </li>
+            )}
           </ul>
         </div>
 

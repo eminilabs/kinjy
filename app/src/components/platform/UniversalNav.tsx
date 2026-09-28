@@ -4,10 +4,11 @@ import {
   Home, Users, Sparkles, Globe, MessageSquare, MessagesSquare, Users2, Radio, Flame,
   Store, Plus, Coins, Pin, Search, Bell, Compass, MoreHorizontal,
 } from 'lucide-react'
+import { FEATURES, spelled, type Feature } from '@/lib/features'
 import { cn } from '@/lib/utils'
 import { Avatar, CLOUD_EASE } from './shared'
 
-const DESTINATIONS = [
+const ALL_DESTINATIONS: Array<{ key: string; label: string; icon: typeof Home; feature?: Feature }> = [
   { key: 'home', label: 'Home', icon: Home },
   { key: 'following', label: 'Following', icon: Users },
   { key: 'foryou', label: 'For You', icon: Sparkles },
@@ -16,14 +17,17 @@ const DESTINATIONS = [
   { key: 'circles', label: 'Circles', icon: Users2 },
   { key: 'communities', label: 'Communities', icon: Users },
   { key: 'messages', label: 'Messages', icon: MessagesSquare },
-  { key: 'live', label: 'Live', icon: Radio },
-  { key: 'family', label: 'Family Tree', icon: Users2 },
+  { key: 'live', label: 'Live', icon: Radio, feature: 'live' },
+  { key: 'family', label: 'Family Tree', icon: Users2, feature: 'familyTree' },
   { key: 'graveyard', label: 'Graveyard', icon: Flame },
   { key: 'explore', label: 'Explore', icon: Compass },
-  { key: 'marketplace', label: 'Marketplace', icon: Store },
+  { key: 'marketplace', label: 'Marketplace', icon: Store, feature: 'marketplace' },
   { key: 'create', label: 'Create', icon: Plus },
   { key: 'earnings', label: 'Earnings', icon: Coins },
 ]
+
+/** Chips for modules switched off in lib/features.ts are not shown. */
+const DESTINATIONS = ALL_DESTINATIONS.filter((d) => !d.feature || FEATURES[d.feature])
 
 const BULLETS = [
   { title: 'Pin your favorite modules', body: 'Hover any chip and pin it — pinned destinations travel with you.' },
@@ -155,7 +159,7 @@ export default function UniversalNav() {
           <p className="eyebrow text-gold">Universal Navigation</p>
           <h2 className="h2 mt-4">One navigation. Everywhere.</h2>
           <p className="body-lg mt-4 text-text-mid">
-            Fifteen destinations, one scrollable bar — identical on web, PWA and native. Pin what
+            {spelled(DESTINATIONS.length)} destinations, one scrollable bar — identical on web, PWA and native. Pin what
             you love; everything else waits politely in “More”.
           </p>
         </div>

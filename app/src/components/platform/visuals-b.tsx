@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { QrCode } from 'lucide-react'
 import { CandleFlowerWidget } from '@/components/ui-kit'
+import { isRouteAvailable } from '@/lib/features'
 import { CLOUD_EASE, ModuleGlyph, OrbDot, useActiveInView } from './shared'
 
 /* ---------- I · Digital Graveyard — paper card with candle ---------- */
@@ -208,11 +209,13 @@ export function AdsVisual() {
         </AnimatePresence>
         <p className="mt-1 text-[0.7rem] text-text-low">within 20 km of Dar es Salaam · AI-built creative</p>
       </div>
-      <div className="mt-4 flex justify-end">
-        <Link to="/commerce" className="text-sm font-semibold text-gold-soft hover:text-gold">
-          Advertising Engine →
-        </Link>
-      </div>
+      {isRouteAvailable('/commerce') && (
+        <div className="mt-4 flex justify-end">
+          <Link to="/commerce" className="text-sm font-semibold text-gold-soft hover:text-gold">
+            Advertising Engine →
+          </Link>
+        </div>
+      )}
     </div>
   )
 }

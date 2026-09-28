@@ -7,6 +7,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import Navbar from './Navbar'
 import Footer from './Footer'
 import LiveAssistant from './assistant/LiveAssistant'
+import { FEATURES } from '@/lib/features'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -93,7 +94,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   // The App demo (/app) embeds its own Assistant orb inside the product shell,
   // so the global orb is suppressed there to avoid duplication.
-  const showAssistant = !location.pathname.startsWith('/app')
+  const showAssistant = FEATURES.assistant && !location.pathname.startsWith('/app')
 
   return (
     <div className="min-h-[100dvh] bg-ink text-text-hi">

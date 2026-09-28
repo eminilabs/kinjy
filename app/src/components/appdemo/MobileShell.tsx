@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Compass, Home, MessageCircle, Plus, User, X } from 'lucide-react'
+import { FEATURES } from '@/lib/features'
 import { cn } from '@/lib/utils'
 import { avatarStyle, useAppTheme } from './theme'
 
@@ -35,7 +36,8 @@ function MiniFeed() {
 }
 
 function MiniExplore() {
-  const tiles = ['/family-archive-2.jpg', '/marketplace-hero.jpg', '/memorial-hero.jpg', '/creator-formats.jpg', '/ads-engine.jpg', '/family-archive-3.jpg']
+  // The market-stall tile stands for the marketplace; another module takes its square while it is hidden.
+  const tiles = ['/family-archive-2.jpg', FEATURES.marketplace ? '/marketplace-hero.jpg' : '/creator-studio.jpg', '/memorial-hero.jpg', '/creator-formats.jpg', '/ads-engine.jpg', '/family-archive-3.jpg']
   return (
     <div className="grid grid-cols-3 gap-1.5 p-3">
       {tiles.map((src) => (
@@ -69,7 +71,7 @@ function MiniProfile() {
       <p className={cn('mt-2 text-sm font-bold', tok.text)}>Baraka Otieno</p>
       <p className={cn('text-[0.7rem]', tok.low)}>@baraka.o · 12 members sponsored</p>
       <div className="mt-4 grid grid-cols-3 gap-2">
-        {[['Posts', '148'], ['Family', '24'], ['Earnings', '$559']].map(([l, v]) => (
+        {[['Posts', '148'], FEATURES.familyTree ? ['Family', '24'] : ['Circles', '6'], ['Earnings', '$559']].map(([l, v]) => (
           <div key={l} className={cn('rounded-card-md p-2.5', tok.card)}>
             <p className="mono-data text-sm font-semibold text-gold-soft">{v}</p>
             <p className={cn('text-[0.6rem]', tok.low)}>{l}</p>
@@ -140,12 +142,14 @@ export default function MobileShell() {
       </div>
 
       {/* assistant edge tab */}
-      <span
-        aria-hidden="true"
-        className="absolute end-0 top-1/2 h-12 w-2.5 -translate-y-1/2 rounded-s-full"
-        style={{ background: 'var(--grad-orb)' }}
-        title="Assistant edge tab"
-      />
+      {FEATURES.assistant && (
+        <span
+          aria-hidden="true"
+          className="absolute end-0 top-1/2 h-12 w-2.5 -translate-y-1/2 rounded-s-full"
+          style={{ background: 'var(--grad-orb)' }}
+          title="Assistant edge tab"
+        />
+      )}
 
       {/* composer sheet */}
       <AnimatePresence>
@@ -181,7 +185,7 @@ export default function MobileShell() {
                 </button>
               </div>
               <div className="mt-3 flex gap-2">
-                {['Photo', 'Video', 'Audio', 'Article', 'Live'].map((f) => (
+                {['Photo', 'Video', 'Audio', 'Article', ...(FEATURES.live ? ['Live'] : [])].map((f) => (
                   <span key={f} className={cn('rounded-full px-3 py-1.5 text-[0.65rem] font-semibold', tok.subtleBg, tok.mid)}>{f}</span>
                 ))}
               </div>

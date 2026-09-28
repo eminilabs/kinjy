@@ -10,6 +10,7 @@ import AIGateway from '@/components/developers/AIGateway'
 import A2ARegistry from '@/components/developers/A2ARegistry'
 import VerifiableCredentials from '@/components/developers/VerifiableCredentials'
 import TrainingLicensing from '@/components/developers/TrainingLicensing'
+import { FEATURES } from '@/lib/features'
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 
@@ -25,7 +26,9 @@ export default function Developers() {
       <AlgorithmPublish />
       <AgentReadable />
       <AIGateway />
-      <A2ARegistry />
+      {/* The registry is shown through a personal assistant negotiating with
+          business agents; it goes with the assistant (lib/features.ts). */}
+      {FEATURES.assistant && <A2ARegistry />}
       <VerifiableCredentials />
       <TrainingLicensing />
 

@@ -10,6 +10,7 @@ import {
   type MyLeaderStanding,
   type ReferralPoolState,
 } from '@/lib/api'
+import { FEATURES } from '@/lib/features'
 
 const usd = (value: string | number) =>
   `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -234,11 +235,19 @@ export default function Earn() {
         <Panel title="How the commission works" className="lg:col-span-2">
           <ul className="space-y-3">
             {[
-              {
-                icon: TrendingUp,
-                title: 'Paid out of Kinjy’s revenue, not the seller’s price',
-                body: 'When Kinjy connects a buyer to a seller, the seller keeps their asking price and Kinjy adds a 20% markup on top. Your commission is 20% of that markup — $4 on a $100 listing.',
-              },
+              // The seller example is the marketplace's (lib/features.ts); without
+              // it the same rule is shown on an ad, which is Kinjy revenue in full.
+              FEATURES.marketplace
+                ? {
+                    icon: TrendingUp,
+                    title: 'Paid out of Kinjy’s revenue, not the seller’s price',
+                    body: 'When Kinjy connects a buyer to a seller, the seller keeps their asking price and Kinjy adds a 20% markup on top. Your commission is 20% of that markup — $4 on a $100 listing.',
+                  }
+                : {
+                    icon: TrendingUp,
+                    title: 'Paid out of Kinjy’s revenue',
+                    body: 'Your commission is 20% of what Kinjy earns on the members you sponsored — $4 on a $20 ad they buy. It never comes out of what anyone else is paid.',
+                  },
               {
                 icon: Users,
                 title: 'One level, for as long as they are here',

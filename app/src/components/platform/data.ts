@@ -1,3 +1,5 @@
+import { FEATURES, isRouteAvailable, type Feature } from '@/lib/features'
+
 export interface ModuleInfo {
   letter: string
   glyph: string
@@ -8,9 +10,13 @@ export interface ModuleInfo {
   /** ids of letters this module connects to in the constellation */
   connections: string[]
   cta?: { label: string; to: string }
+  /** Left off the public site while this feature is switched off. */
+  feature?: Feature
+  /** The letter the module has in the full blueprint, which keys its illustration. */
+  visual?: string
 }
 
-export const MODULES: ModuleInfo[] = [
+const ALL_MODULES: ModuleInfo[] = [
   {
     letter: 'A',
     glyph: 'mod-home',
@@ -67,8 +73,14 @@ export const MODULES: ModuleInfo[] = [
     name: 'Private Messenger',
     tagline: 'Sealed by default.',
     description:
-      'End-to-end encrypted messaging with voice & video calls and disappearing messages. Your words belong to the people in the room.',
-    bullets: ['E2E encryption, always on', 'Voice & video calls', 'Disappearing messages'],
+      FEATURES.calls
+        ? 'End-to-end encrypted messaging with voice & video calls and disappearing messages. Your words belong to the people in the room.'
+        : 'End-to-end encrypted messaging with disappearing messages. Your words belong to the people in the room.',
+    bullets: [
+      'E2E encryption, always on',
+      ...(FEATURES.calls ? ['Voice & video calls'] : []),
+      'Disappearing messages',
+    ],
     connections: ['A', 'D', 'N'],
   },
   {
@@ -92,6 +104,7 @@ export const MODULES: ModuleInfo[] = [
     bullets: ['Verified relationship graph', 'Infinite generational levels', 'Path-finder between any two'],
     connections: ['A', 'D', 'I', 'N'],
     cta: { label: 'Explore Family Tree →', to: '/family' },
+    feature: 'familyTree',
   },
   {
     letter: 'I',
@@ -124,6 +137,7 @@ export const MODULES: ModuleInfo[] = [
     bullets: ['Shops & service listings', 'Transparent 20% markup', 'Escrowed until you confirm'],
     connections: ['B', 'E', 'G', 'J', 'L', 'M', 'O'],
     cta: { label: 'Explore Commerce →', to: '/commerce' },
+    feature: 'marketplace',
   },
   {
     letter: 'L',
@@ -152,8 +166,12 @@ export const MODULES: ModuleInfo[] = [
     name: 'AI Intelligence Layer',
     tagline: 'Woven through everything.',
     description:
-      'Personal assistants, autonomous creator agents, community managers, forum assistants and knowledge vaults — an intelligent layer, not a feature.',
-    bullets: ['Personal AI per user', 'Autonomous agents with approvals', 'Knowledge vaults'],
+      FEATURES.assistant
+        ? 'Personal assistants, autonomous creator agents, community managers, forum assistants and knowledge vaults — an intelligent layer, not a feature.'
+        : 'Autonomous creator agents, community managers, forum assistants and knowledge vaults — an intelligent layer, not a feature.',
+    bullets: FEATURES.assistant
+      ? ['Personal AI per user', 'Autonomous agents with approvals', 'Knowledge vaults']
+      : ['Autonomous agents with approvals', 'AI community managers', 'Knowledge vaults'],
     connections: ['A', 'C', 'E', 'F', 'G', 'H', 'I', 'L', 'O'],
   },
   {
@@ -168,6 +186,28 @@ export const MODULES: ModuleInfo[] = [
     cta: { label: 'Developer Platform →', to: '/developers' },
   },
 ]
+
+/**
+ * The modules the public site presents.
+ *
+ * One whose feature is switched off in lib/features.ts is left out, and so is
+ * everything that pointed at it — constellation edges, "connects to" names and
+ * calls to action — so a hidden module cannot come back as a link.
+ *
+ * The rest are lettered again from A, so the sequence has no hole where a hidden
+ * module used to be; `visual` keeps the original letter its illustration is
+ * filed under.
+ */
+const SHOWN = ALL_MODULES.filter((m) => !m.feature || FEATURES[m.feature])
+const LETTER = new Map(SHOWN.map((m, i) => [m.letter, String.fromCharCode(65 + i)]))
+
+export const MODULES: ModuleInfo[] = SHOWN.map((m) => ({
+  ...m,
+  letter: LETTER.get(m.letter)!,
+  visual: m.letter,
+  connections: m.connections.flatMap((c) => LETTER.get(c) ?? []),
+  cta: m.cta && isRouteAvailable(m.cta.to) ? m.cta : undefined,
+}))
 
 /** Module lookup by letter. */
 export const MODULE_BY_LETTER = new Map(MODULES.map((m) => [m.letter, m]))

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Globe } from 'lucide-react'
 import ArcButton from './ui-kit/ArcButton'
 import { LANGUAGES } from '@/i18n'
+import { isRouteAvailable } from '@/lib/features'
 
 /** Slow-drifting arc constellation canvas (24 nodes, 12s loop). */
 function ArcConstellation() {
@@ -123,11 +124,11 @@ function ArcConstellation() {
   return <canvas ref={ref} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} aria-hidden="true" />
 }
 
-const COLUMNS: { title: string; links: { label: string; to: string }[] }[] = [
+const ALL_COLUMNS: { title: string; links: { label: string; to: string }[] }[] = [
   {
     title: 'Platform',
     links: [
-      { label: 'All 15 modules', to: '/platform' },
+      { label: 'All modules', to: '/platform' },
       { label: 'Feeds & algorithms', to: '/feeds' },
       { label: 'Family Tree', to: '/family' },
       { label: 'Digital Graveyard', to: '/memorials' },
@@ -163,6 +164,12 @@ const COLUMNS: { title: string; links: { label: string; to: string }[] }[] = [
     ],
   },
 ]
+
+/** Links to a page whose feature is switched off in lib/features.ts are left out. */
+const COLUMNS = ALL_COLUMNS.map((col) => ({
+  ...col,
+  links: col.links.filter((l) => isRouteAvailable(l.to)),
+}))
 
 /** Footer (§7.3) — twilight field, arc constellation, CTA, link columns. */
 export default function Footer() {

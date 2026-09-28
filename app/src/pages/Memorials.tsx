@@ -9,6 +9,7 @@ import QRScanDemo from '@/components/memorials/QRScanDemo'
 import LightCandleModal from '@/components/memorials/LightCandleModal'
 import RemembranceGatherings from '@/components/memorials/RemembranceGatherings'
 import WordRise from '@/components/family/WordRise'
+import { FEATURES } from '@/lib/features'
 import { cn } from '@/lib/utils'
 
 const cloudEase = [0.22, 1, 0.36, 1] as [number, number, number, number]
@@ -298,7 +299,9 @@ export default function Memorials() {
       </section>
 
       {/* ── Section 5b — Remembrance gatherings (cross-link to Family) ── */}
-      <RemembranceGatherings />
+      {/* The Reunion Agent gathers the family around a remembrance date: it goes
+          with the family tree (lib/features.ts). */}
+      {FEATURES.familyTree && <RemembranceGatherings />}
 
       {/* ── Section 6 — Legacy & tomorrow (twilight panel) ────────────── */}
       <section className="twilight-field noise-overlay px-6 py-24">

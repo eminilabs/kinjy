@@ -4,6 +4,7 @@ import { AlertCircle, Fingerprint, Loader2, ShieldCheck } from 'lucide-react'
 import ArcButton from '@/components/ui-kit/ArcButton'
 import { useAuth } from '@/hooks/useAuth'
 import { ApiError } from '@/lib/api'
+import { OPEN_MODULES, spelled } from '@/lib/features'
 import { cn } from '@/lib/utils'
 
 type Mode = 'signin' | 'signup'
@@ -113,7 +114,8 @@ export default function SignIn() {
         <div className="hidden lg:block">
           <p className="eyebrow text-gold">Your society awaits</p>
           <h1 className="h1 mt-4 max-w-lg">
-            One account. <span className="font-display italic text-gold-grad">Fifteen modules.</span>
+            One account.{' '}
+            <span className="font-display italic text-gold-grad">{spelled(OPEN_MODULES)} modules.</span>
           </h1>
           <ul className="mt-8 space-y-4 text-text-mid">
             <li className="flex items-start gap-3">

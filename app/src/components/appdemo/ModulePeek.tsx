@@ -3,6 +3,7 @@ import { BadgeCheck, Eye, MessageSquare, Radio, ShoppingBag, TrendingUp, UsersRo
 import { cn } from '@/lib/utils'
 import { avatarStyle, useAppTheme } from './theme'
 import type { ChromeKey } from './theme'
+import { FEATURES } from '@/lib/features'
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 
@@ -103,7 +104,9 @@ function MessagesView() {
     ['Mama Naliaka', 'The reunion photos are beautiful, my child', 3, 2],
     ['Kito', 'Sending the demo tonight, promise', 5, 0],
     ['Family — Wekesa Clan', 'Demo: see you all on Saturday!', 1, 5],
-    ['Zawadi Ceramics', 'Your order has shipped · tracking inside', 10, 1],
+    FEATURES.marketplace
+      ? (['Zawadi Ceramics', 'Your order has shipped · tracking inside', 10, 1] as const)
+      : (['Zawadi Ceramics', 'Loved your photos from the fair!', 10, 1] as const),
   ] as const
   return (
     <Rows>
@@ -153,12 +156,13 @@ function LiveView() {
 
 function ExploreView() {
   const tiles = [
-    ['/family-archive-2.jpg', 'Heritage archives'],
-    ['/marketplace-hero.jpg', 'Makers near you'],
+    // Tiles of modules switched off in lib/features.ts show something open instead.
+    FEATURES.familyTree ? ['/family-archive-2.jpg', 'Heritage archives'] : ['/family-archive-2.jpg', 'Faces of Kigoma'],
+    FEATURES.marketplace ? ['/marketplace-hero.jpg', 'Makers near you'] : ['/creator-studio.jpg', 'Studio picks'],
     ['/memorial-hero.jpg', 'Quiet places'],
     ['/creator-formats.jpg', 'New formats'],
     ['/ads-engine.jpg', 'City pulse'],
-    ['/family-archive-3.jpg', 'Restored memories'],
+    FEATURES.familyTree ? ['/family-archive-3.jpg', 'Restored memories'] : ['/family-archive-3.jpg', 'Throwback Thursday'],
   ]
   return (
     <Rows>

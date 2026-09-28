@@ -7,6 +7,7 @@ import PostCard from '@/components/social/PostCard'
 import { VerifiedBadge } from '@/components/ui-kit'
 import { useAppTheme } from '@/components/appdemo/theme'
 import { useAuth } from '@/hooks/useAuth'
+import { FEATURES } from '@/lib/features'
 import { announce } from '@/lib/live'
 import {
   ApiError,
@@ -169,9 +170,11 @@ export default function Profile() {
                 <li className={tok.low}>
                   {permissions.can_message ? 'Can message' : 'Cannot message yet'}
                 </li>
-                <li className={tok.low}>
-                  {permissions.can_add_family ? 'Can add to family tree' : 'Cannot add to family tree'}
-                </li>
+                {FEATURES.familyTree && (
+                  <li className={tok.low}>
+                    {permissions.can_add_family ? 'Can add to family tree' : 'Cannot add to family tree'}
+                  </li>
+                )}
               </ul>
             </RailCard>
           )}

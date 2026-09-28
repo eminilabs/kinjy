@@ -3,6 +3,7 @@ import { Check, Eye, MessageSquare, Sparkles, TreeDeciduous, UserPlus, UsersRoun
 import type { LucideIcon } from 'lucide-react'
 import { useApi } from '@/hooks/useApi'
 import { ApiError, kaluta, type ConnectionEntry } from '@/lib/api'
+import { FEATURES, type Feature } from '@/lib/features'
 import { announce, onChange } from '@/lib/live'
 import { Badge, Panel, PanelState } from './primitives'
 import { cn } from '@/lib/utils'
@@ -22,6 +23,8 @@ interface Control {
   /** Defaults to CHOICES. The family tree asks a different question. */
   choices?: ReadonlyArray<{ id: string; label: string }>
   fallback?: string
+  /** A setting about a feature that is switched off is not shown either. */
+  feature?: Feature
 }
 
 /** Who may read your family tree. "No one" is not offered here — closing the
@@ -32,7 +35,7 @@ const FAMILY_CHOICES = [
   { id: 'everyone', label: 'Anyone' },
 ] as const
 
-const CONTROLS: Control[] = [
+const ALL_CONTROLS: Control[] = [
   {
     key: 'who_can_invite',
     icon: UserPlus,
@@ -50,6 +53,7 @@ const CONTROLS: Control[] = [
     icon: TreeDeciduous,
     title: 'Add you to a family tree',
     hint: 'A relationship claim still needs your confirmation on top of this.',
+    feature: 'familyTree',
   },
   {
     key: 'who_can_add_community',
@@ -64,8 +68,11 @@ const CONTROLS: Control[] = [
     hint: 'Applied by family-service on every read — names, dates and relationships, including the dead. "Your family" means people who share the graph with you.',
     choices: FAMILY_CHOICES,
     fallback: 'family',
+    feature: 'familyTree',
   },
 ]
+
+const CONTROLS = ALL_CONTROLS.filter((control) => !control.feature || FEATURES[control.feature])
 
 /**
  * Privacy — who may reach you, and the invitations waiting on you.
@@ -179,26 +186,28 @@ export default function Privacy() {
               )
             })}
 
-            <li className="border-t border-white/8 pt-4">
-              <label className="flex items-start gap-2.5">
-                <input
-                  type="checkbox"
-                  checked={Boolean(prefs.data?.assistant_visible ?? true)}
-                  onChange={(e) => set('assistant_visible', e.target.checked)}
-                  className="mt-0.5"
-                />
-                <span>
-                  <span className="flex items-center gap-2 text-sm font-medium text-text-hi">
-                    <Sparkles size={14} className="text-gold" aria-hidden="true" />
-                    Show the Kinjy Assistant
+            {FEATURES.assistant && (
+              <li className="border-t border-white/8 pt-4">
+                <label className="flex items-start gap-2.5">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(prefs.data?.assistant_visible ?? true)}
+                    onChange={(e) => set('assistant_visible', e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    <span className="flex items-center gap-2 text-sm font-medium text-text-hi">
+                      <Sparkles size={14} className="text-gold" aria-hidden="true" />
+                      Show the Kinjy Assistant
+                    </span>
+                    <span className="caption mt-0.5 block">
+                      The floating orb. Turning it off hides it everywhere — it is always-on-top UI,
+                      so dismissing it should be a real setting, not a close button that comes back.
+                    </span>
                   </span>
-                  <span className="caption mt-0.5 block">
-                    The floating orb. Turning it off hides it everywhere — it is always-on-top UI,
-                    so dismissing it should be a real setting, not a close button that comes back.
-                  </span>
-                </span>
-              </label>
-            </li>
+                </label>
+              </li>
+            )}
 
             <li className="border-t border-white/8 pt-4">
               <label className="flex items-start gap-2.5">
@@ -221,27 +230,29 @@ export default function Privacy() {
               </label>
             </li>
 
-            <li className="border-t border-white/8 pt-4">
-              <label className="flex items-start gap-2.5">
-                <input
-                  type="checkbox"
-                  checked={Boolean(prefs.data?.family_tree_shared ?? true)}
-                  onChange={(e) => set('family_tree_shared', e.target.checked)}
-                  className="mt-0.5"
-                />
-                <span>
-                  <span className="flex items-center gap-2 text-sm font-medium text-text-hi">
-                    <TreeDeciduous size={14} className="text-gold" aria-hidden="true" />
-                    Share your family tree at all
+            {FEATURES.familyTree && (
+              <li className="border-t border-white/8 pt-4">
+                <label className="flex items-start gap-2.5">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(prefs.data?.family_tree_shared ?? true)}
+                    onChange={(e) => set('family_tree_shared', e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    <span className="flex items-center gap-2 text-sm font-medium text-text-hi">
+                      <TreeDeciduous size={14} className="text-gold" aria-hidden="true" />
+                      Share your family tree at all
+                    </span>
+                    <span className="caption mt-0.5 block">
+                      Turning this off closes the tree to everyone regardless of the audience above,
+                      without losing the choice you made there. You always keep full access to the
+                      people you added yourself.
+                    </span>
                   </span>
-                  <span className="caption mt-0.5 block">
-                    Turning this off closes the tree to everyone regardless of the audience above,
-                    without losing the choice you made there. You always keep full access to the
-                    people you added yourself.
-                  </span>
-                </span>
-              </label>
-            </li>
+                </label>
+              </li>
+            )}
           </ul>
         </PanelState>
       </Panel>
@@ -249,7 +260,7 @@ export default function Privacy() {
       <div className="space-y-5">
         <Panel
           title="Invitations"
-          subtitle="Accepting is what opens messaging, family links and community invites."
+          subtitle={`Accepting is what opens messaging, ${FEATURES.familyTree ? 'family links ' : ''}and community invites.`}
           action={incoming.length > 0 ? <Badge tone="warn">{incoming.length} waiting</Badge> : undefined}
         >
           <PanelState

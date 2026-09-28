@@ -9,6 +9,7 @@ import CloudModeLab from '@/components/platform/CloudModeLab'
 import AgentsGrid from '@/components/platform/AgentsGrid'
 import LiveIntelligence from '@/components/platform/LiveIntelligence'
 import { LINE_EASE } from '@/components/platform/shared'
+import { FEATURES } from '@/lib/features'
 
 /** Section 7 — CTA with a playful arc drawn between the two buttons. */
 function PlatformCta() {
@@ -19,31 +20,33 @@ function PlatformCta() {
         <p className="eyebrow text-gold">The Whole Map</p>
         <h2 className="h2 mt-4">See it alive.</h2>
         <div className="relative mt-10">
-          {/* Arc connector between the buttons */}
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 480 60"
-            className="pointer-events-none absolute left-1/2 top-1/2 hidden w-[480px] -translate-x-1/2 -translate-y-1/2 sm:block"
-          >
-            <defs>
-              <linearGradient id="cta-arc" x1="0" y1="0" x2="1" y2="0">
-                <stop stopColor="#F0C878" />
-                <stop offset="0.55" stopColor="#D9A648" />
-                <stop offset="1" stopColor="#8FB8E8" />
-              </linearGradient>
-            </defs>
-            <motion.path
-              d="M 40 52 Q 240 -18 440 52"
-              fill="none"
-              stroke="url(#cta-arc)"
-              strokeWidth="1.5"
-              strokeDasharray="4 5"
-              initial={reduced ? false : { pathLength: 0 }}
-              whileInView={{ pathLength: 1 }}
-              viewport={{ once: true, amount: 0.8 }}
-              transition={{ duration: 0.9, ease: LINE_EASE }}
-            />
-          </svg>
+          {/* Arc connector between the buttons — only when there are two. */}
+          {FEATURES.assistant && (
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 480 60"
+              className="pointer-events-none absolute left-1/2 top-1/2 hidden w-[480px] -translate-x-1/2 -translate-y-1/2 sm:block"
+            >
+              <defs>
+                <linearGradient id="cta-arc" x1="0" y1="0" x2="1" y2="0">
+                  <stop stopColor="#F0C878" />
+                  <stop offset="0.55" stopColor="#D9A648" />
+                  <stop offset="1" stopColor="#8FB8E8" />
+                </linearGradient>
+              </defs>
+              <motion.path
+                d="M 40 52 Q 240 -18 440 52"
+                fill="none"
+                stroke="url(#cta-arc)"
+                strokeWidth="1.5"
+                strokeDasharray="4 5"
+                initial={reduced ? false : { pathLength: 0 }}
+                whileInView={{ pathLength: 1 }}
+                viewport={{ once: true, amount: 0.8 }}
+                transition={{ duration: 0.9, ease: LINE_EASE }}
+              />
+            </svg>
+          )}
           <div className="relative flex flex-col items-center justify-center gap-4 sm:flex-row sm:gap-10">
             <Link
               to="/app"
@@ -51,12 +54,14 @@ function PlatformCta() {
             >
               Open the app demo <ArrowRight size={17} />
             </Link>
-            <Link
-              to="/assistant"
-              className="cloud-glass inline-flex items-center gap-2 rounded-full px-8 py-4 text-base font-semibold text-text-hi transition hover:border-gold/40 hover:text-gold-soft"
-            >
-              Meet Kinjy Assistant <ArrowRight size={17} />
-            </Link>
+            {FEATURES.assistant && (
+              <Link
+                to="/assistant"
+                className="cloud-glass inline-flex items-center gap-2 rounded-full px-8 py-4 text-base font-semibold text-text-hi transition hover:border-gold/40 hover:text-gold-soft"
+              >
+                Meet Kinjy Assistant <ArrowRight size={17} />
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -74,7 +79,8 @@ export default function Platform() {
       <UniversalNav />
       <CloudModeLab />
       <AgentsGrid />
-      <LiveIntelligence />
+      {/* Live rooms and their captions are the livestream feature. */}
+      {FEATURES.live && <LiveIntelligence />}
       <PlatformCta />
     </>
   )

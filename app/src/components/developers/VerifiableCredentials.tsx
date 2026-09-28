@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { BadgeCheck, Check, Fingerprint, KeyRound, Send, Store, UserCheck } from 'lucide-react'
 import { VerifiedBadge } from '@/components/ui-kit'
 import { cn } from '@/lib/utils'
+import { FEATURES } from '@/lib/features'
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 
@@ -32,7 +33,10 @@ const PHASE_META: Record<Exclude<Phase, 'idle'>, { label: string; tone: string }
 }
 
 const ECOSYSTEM_USES = [
-  { icon: Store, label: 'Marketplace', note: 'seller onboarding in one click — trust score and sales history carry over' },
+  // The marketplace use is only listed while the marketplace is open (lib/features.ts).
+  ...(FEATURES.marketplace
+    ? [{ icon: Store, label: 'Marketplace', note: 'seller onboarding in one click — trust score and sales history carry over' }]
+    : []),
   { icon: UserCheck, label: 'KYC', note: 'verification tier presented once, accepted everywhere in the ecosystem' },
   { icon: BadgeCheck, label: 'Sister platforms', note: 'expertise badges recognised on partner networks without rebuilding reputation' },
 ]
@@ -197,7 +201,7 @@ export default function VerifiableCredentials() {
                         transition={{ delay: 0.15, duration: 0.45, ease: EASE }}
                         className="mt-3 grid gap-2 sm:grid-cols-3"
                       >
-                        {['trustScore 96.4', '312 orders · 1 dispute', 'KYC tier 2'].map((c) => (
+                        {['trustScore 96.4', FEATURES.marketplace ? '312 orders · 1 dispute' : '0 strikes · 4 yrs', 'KYC tier 2'].map((c) => (
                           <span
                             key={c}
                             className="rounded-card-sm border border-success/30 bg-success/[0.07] px-3 py-2 text-center font-mono text-[0.65rem] text-success"

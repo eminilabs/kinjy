@@ -2,14 +2,16 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { motion, useReducedMotion } from 'framer-motion'
 import { UserRound, Compass, Bot, ShieldCheck, MessagesSquare, LibraryBig, Vault, Route } from 'lucide-react'
+import { FEATURES } from '@/lib/features'
 import { CLOUD_EASE, OrbDot, useActiveInView } from './shared'
 
-const AGENTS = [
+const ALL_AGENTS = [
   {
     icon: UserRound,
     name: 'Personal AI Assistant',
     body: 'One per user — knows your language, your circles, your algorithm choices. Yours alone.',
     chip: '1 : 1 with you',
+    assistant: true,
   },
   {
     icon: Compass,
@@ -17,6 +19,7 @@ const AGENTS = [
     body: 'The platform expert. Answers with written guides or video walkthroughs, in your language.',
     chip: 'Platform expert',
     link: { label: 'Meet the Assistant →', to: '/assistant' },
+    assistant: true,
   },
   {
     icon: Bot,
@@ -43,6 +46,9 @@ const AGENTS = [
     chip: 'Cited knowledge',
   },
 ]
+
+/** The assistant cards stay off the page while the assistant is switched off (lib/features.ts). */
+const AGENTS = ALL_AGENTS.filter((a) => FEATURES.assistant || !a.assistant)
 
 /** Routing animation: a pulse travels between 3 model nodes; chosen path highlights gold every 4s. */
 function GatewayRouter() {

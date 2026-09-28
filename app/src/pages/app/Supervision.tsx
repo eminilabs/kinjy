@@ -3,6 +3,7 @@ import { Clock, Eye, EyeOff, Link2, ShieldCheck, X } from 'lucide-react'
 import AppShell from '@/components/app/AppShell'
 import { useApi } from '@/hooks/useApi'
 import { ApiError, kaluta, type SupervisedView, type SupervisionState } from '@/lib/api'
+import { FEATURES } from '@/lib/features'
 import { cn } from '@/lib/utils'
 
 /**
@@ -25,6 +26,13 @@ const SETTING_LABELS: Record<string, string> = {
 
 function label(setting: string) {
   return SETTING_LABELS[setting] ?? setting.replace(/_/g, ' ')
+}
+
+/** Settings about the family tree, listed only while that feature is open. */
+const FAMILY_SETTINGS = new Set(['who_can_add_family', 'who_can_see_family', 'family_tree_shared'])
+
+function shown(setting: string) {
+  return FEATURES.familyTree || !FAMILY_SETTINGS.has(setting)
 }
 
 export default function Supervision() {
@@ -239,7 +247,7 @@ export default function Supervision() {
               <div>
                 <h3 className="mb-1.5 text-sm font-semibold">Safety settings</h3>
                 <ul className="space-y-1 text-sm opacity-90">
-                  {Object.entries(detail.settings).map(([key, value]) => (
+                  {Object.entries(detail.settings).filter(([key]) => shown(key)).map(([key, value]) => (
                     <li key={key}>
                       {label(key)}: <strong>{String(value)}</strong>
                     </li>

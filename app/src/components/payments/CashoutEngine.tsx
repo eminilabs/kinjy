@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, animate, motion } from 'framer-motion'
 import { Check, Lock, LockOpen, Play, RotateCcw, Send, ShieldCheck, Users } from 'lucide-react'
 import { ArcButton, LedgerRow } from '@/components/ui-kit'
+import { FEATURES } from '@/lib/features'
 import { cn } from '@/lib/utils'
 import { EASE, useReducedMotion } from '@/components/creators/motion-utils'
 
@@ -15,10 +16,32 @@ import { EASE, useReducedMotion } from '@/components/creators/motion-utils'
 
 const SELLER = { label: 'Seller', amount: 100, note: 'their own asking price, untouched' }
 
+/* While the marketplace is switched off (lib/features.ts) the same split is
+   shown on an ad purchase instead. An ad bought from Kinjy is its revenue in
+   full, so there is no seller row and the $20 splits directly — the rates are
+   the same, only the example changes. */
+const PURCHASE = FEATURES.marketplace
+  ? {
+      title: 'Service purchase · photography session',
+      caption: 'seller asks $100 · Kinjy adds a 20% markup · held in escrow until confirmed',
+      total: 120,
+      seller: SELLER,
+      revenue: 'the $20 markup — Kinjy’s revenue — splits three ways',
+      sponsor: 'The buyer’s sponsor',
+    }
+  : {
+      title: 'Ad purchase · local campaign',
+      caption: 'an ad bought from Kinjy is its revenue in full — there is no seller to pay',
+      total: 20,
+      seller: null,
+      revenue: 'the $20 — all of it Kinjy’s revenue — splits three ways',
+      sponsor: 'The advertiser’s sponsor',
+    }
+
 const SPLIT = [
   {
     key: 'sponsor',
-    label: 'The buyer’s sponsor',
+    label: PURCHASE.sponsor,
     pct: 20,
     amount: 4,
     note: '20% of Kinjy’s revenue — the one and only commission level',
@@ -42,7 +65,7 @@ const SPLIT = [
   },
 ]
 
-/** Left: where a $120 purchase actually goes. */
+/** Left: where a purchase actually goes. */
 function LevelSplit() {
   const reduced = useReducedMotion()
   // 0 idle · 1 seller paid · 2..4 the markup splits
@@ -77,7 +100,7 @@ function LevelSplit() {
     <div className="cloud-card p-6 sm:p-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="eyebrow text-text-low">The $120 split</p>
+          <p className="eyebrow text-text-low">The ${PURCHASE.total} split</p>
           <h3 className="h3 mt-2">One purchase. One commission.</h3>
         </div>
         <ArcButton size="sm" variant={stage >= 4 ? 'ghost' : 'gold'} onClick={run} disabled={running}>
@@ -102,36 +125,38 @@ function LevelSplit() {
           <Send size={16} className="text-ink" aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-text-hi">Service purchase · photography session</p>
-          <p className="caption">seller asks $100 · Kinjy adds a 20% markup · held in escrow until confirmed</p>
+          <p className="text-sm font-semibold text-text-hi">{PURCHASE.title}</p>
+          <p className="caption">{PURCHASE.caption}</p>
         </div>
-        <span className="mono-data text-lg font-semibold text-gold-soft">$120.00</span>
+        <span className="mono-data text-lg font-semibold text-gold-soft">${PURCHASE.total.toFixed(2)}</span>
       </div>
 
       {/* the seller is paid first, out of their own price */}
-      <motion.div
-        className={cn(
-          'mt-4 flex items-center gap-4 rounded-card-md border px-4 py-3 transition-colors duration-300',
-          stage >= 1 ? 'border-white/20 bg-white/[0.04]' : 'border-white/10 bg-white/[0.02] opacity-60',
-        )}
-        initial={false}
-        animate={stage >= 1 && !reduced ? { scale: [0.97, 1.01, 1] } : { scale: 1 }}
-        transition={{ duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
-      >
-        <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full border border-white/20 bg-ink-2">
-          <Users size={15} className="text-text-mid" aria-hidden="true" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-text-hi">{SELLER.label}</p>
-          <p className="caption">{SELLER.note}</p>
-        </div>
-        <span className="mono-data font-semibold text-text-hi">
-          {stage >= 1 ? `+$${SELLER.amount.toFixed(2)}` : `$${SELLER.amount.toFixed(2)}`}
-        </span>
-      </motion.div>
+      {PURCHASE.seller && (
+        <motion.div
+          className={cn(
+            'mt-4 flex items-center gap-4 rounded-card-md border px-4 py-3 transition-colors duration-300',
+            stage >= 1 ? 'border-white/20 bg-white/[0.04]' : 'border-white/10 bg-white/[0.02] opacity-60',
+          )}
+          initial={false}
+          animate={stage >= 1 && !reduced ? { scale: [0.97, 1.01, 1] } : { scale: 1 }}
+          transition={{ duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
+        >
+          <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full border border-white/20 bg-ink-2">
+            <Users size={15} className="text-text-mid" aria-hidden="true" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-text-hi">{PURCHASE.seller.label}</p>
+            <p className="caption">{PURCHASE.seller.note}</p>
+          </div>
+          <span className="mono-data font-semibold text-text-hi">
+            {stage >= 1 ? `+$${PURCHASE.seller.amount.toFixed(2)}` : `$${PURCHASE.seller.amount.toFixed(2)}`}
+          </span>
+        </motion.div>
+      )}
 
       <p className="mono-data mt-5 text-center text-[0.68rem] uppercase tracking-wider text-text-low">
-        the $20 markup — Kinjy’s revenue — splits three ways
+        {PURCHASE.revenue}
       </p>
 
       <ul className="mt-3 space-y-2.5">
@@ -194,7 +219,8 @@ function LevelSplit() {
       </ul>
 
       <p className="mono-data mt-4 text-xs text-text-low">
-        100 + 4 + 1 + 15 = 120 — every cent allocated in the same immutable ledger entry.
+        {PURCHASE.seller ? '100 + ' : ''}4 + 1 + 15 = {PURCHASE.total} — every cent allocated in the same
+        immutable ledger entry.
       </p>
     </div>
   )
@@ -204,7 +230,7 @@ function LevelSplit() {
 /* $1 escrow accumulator + Mass Payouts batch                          */
 /* ------------------------------------------------------------------ */
 const COMMISSION_EVENTS = [
-  { from: 0.62, to: 0.88, chip: '+$0.26 · marketplace sale' },
+  { from: 0.62, to: 0.88, chip: FEATURES.marketplace ? '+$0.26 · marketplace sale' : '+$0.26 · ad purchase' },
   { from: 0.88, to: 1.04, chip: '+$0.16 · subscription renewal' },
 ]
 

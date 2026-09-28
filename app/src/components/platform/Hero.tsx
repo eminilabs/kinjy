@@ -2,6 +2,7 @@ import { memo } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { MODULES } from './data'
 import { KineticWords, ModuleGlyph, SNAP_EASE } from './shared'
+import { spelled } from '@/lib/features'
 
 /** Faint rotating ring of the 15 module glyphs behind the hero copy (5% opacity, 30s loop). */
 const GlyphRing = memo(function GlyphRing() {
@@ -51,7 +52,7 @@ export default function PlatformHero() {
         </motion.p>
         <KineticWords
           as="h1"
-          text="Fifteen modules. One interconnected society."
+          text={`${spelled(MODULES.length)} modules. One interconnected society.`}
           className="display-lg mt-5"
           delay={0.2}
         />

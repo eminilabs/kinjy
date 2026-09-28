@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { ArrowRight, Download, ShieldCheck, Trash2, XCircle } from 'lucide-react'
 import { CloudCard } from '@/components/ui-kit'
 import { EASE, useReducedMotion } from '@/components/creators/motion-utils'
+import { FEATURES } from '@/lib/features'
 
 const CARDS = [
   {
@@ -18,12 +19,16 @@ const CARDS = [
   {
     icon: Download,
     title: 'Your data, exportable',
-    body: 'Full export of posts, messages, family tree and media — on any plan, including Free.',
+    body: FEATURES.familyTree
+      ? 'Full export of posts, messages, family tree and media — on any plan, including Free.'
+      : 'Full export of posts, messages and media — on any plan, including Free.',
   },
   {
     icon: Trash2,
     title: 'Delete forever',
-    body: 'Self-service deletion in Settings → Account, GDPR/PDPA compliant. Your graveyard and family records follow your succession settings.',
+    body: FEATURES.familyTree
+      ? 'Self-service deletion in Settings → Account, GDPR/PDPA compliant. Your graveyard and family records follow your succession settings.'
+      : 'Self-service deletion in Settings → Account, GDPR/PDPA compliant. Your graveyard records follow your succession settings.',
     link: { to: '/safety', label: 'Read the safety charter' },
   },
 ]

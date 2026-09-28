@@ -1,17 +1,20 @@
 import { motion } from 'framer-motion'
 import { Braces, Radio, KeyRound, Store } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { FEATURES } from '@/lib/features'
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 
 /** Mini-diagram 1: endpoint tree. */
 function EndpointTree() {
+  // Endpoints of a module switched off in lib/features.ts give their row to an
+  // open one, so the tree keeps its shape.
   const rows = [
     ['GET', '/v1/users/:id', 'text-sky'],
     ['POST', '/v1/posts', 'text-success'],
-    ['GET', '/v1/family-tree/:id/path', 'text-sky'],
+    FEATURES.familyTree ? ['GET', '/v1/family-tree/:id/path', 'text-sky'] : ['GET', '/v1/circles/:id/posts', 'text-sky'],
     ['POST', '/v1/memorials/:id/tributes', 'text-success'],
-    ['GET', '/v1/marketplace/orders', 'text-sky'],
+    FEATURES.marketplace ? ['GET', '/v1/marketplace/orders', 'text-sky'] : ['GET', '/v1/forums/:id/threads', 'text-sky'],
   ]
   return (
     <div className="space-y-1.5 font-mono text-[0.7rem]">
@@ -33,7 +36,7 @@ function EndpointTree() {
 
 /** Mini-diagram 2: webhook pulse lines. */
 function WebhookPulses() {
-  const events = ['follower.created', 'tribute.lit', 'order.paid', 'verification.changed']
+  const events = ['follower.created', 'tribute.lit', FEATURES.marketplace ? 'order.paid' : 'comment.created', 'verification.changed']
   return (
     <div className="space-y-2">
       {events.map((e, i) => (
@@ -56,7 +59,7 @@ function WebhookPulses() {
 function ConsentMock() {
   const scopes = [
     ['Read your profile', true],
-    ['Read family tree (L1–L2)', true],
+    FEATURES.familyTree ? (['Read family tree (L1–L2)', true] as const) : (['Read your circles', true] as const),
     ['Post on your behalf', false],
   ] as const
   return (
@@ -119,7 +122,7 @@ const CARDS = [
   {
     icon: Radio,
     title: 'Webhooks',
-    body: 'Subscribe to platform events: new follower, memorial tribute, order paid, verification state changes — signed and replayable.',
+    body: `Subscribe to platform events: new follower, memorial tribute, ${FEATURES.marketplace ? 'order paid' : 'new comment'}, verification state changes — signed and replayable.`,
     diagram: <WebhookPulses />,
   },
   {
