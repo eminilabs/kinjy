@@ -98,7 +98,7 @@ export default function Reactions({
           aria-pressed={Boolean(summary.mine)}
           aria-label={mine ? `Your reaction: ${mine.label}. Change or remove it.` : 'React'}
           className={cn(
-            'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
+            'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold',
             mine ? mine.tint : cn(tok.mid, tok.hoverBg),
           )}
         >
@@ -119,7 +119,7 @@ export default function Reactions({
                 title={reaction.label}
                 aria-label={reaction.label}
                 className={cn(
-                  'flex h-8 w-8 items-center justify-center rounded-full transition-transform hover:scale-125',
+                  'flex h-8 w-8 items-center justify-center rounded-full',
                   reaction.tint,
                   summary.mine === reaction.id && 'bg-white/10',
                 )}

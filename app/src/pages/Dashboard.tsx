@@ -56,7 +56,7 @@ function InviteCard({ code }: { code: string }) {
         <button
           type="button"
           onClick={copy}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/12 px-3.5 py-2 text-xs font-semibold text-text-mid transition-colors hover:border-gold/40 hover:text-gold-soft"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/12 px-3.5 py-2 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
         >
           {copied ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
           {copied ? 'Copied' : 'Copy'}
@@ -103,7 +103,7 @@ export default function Dashboard() {
           {(user.role === 'admin' || user.role === 'superadmin') && (
             <Link
               to="/admin"
-              className="rounded-full border border-white/12 px-4 py-2 text-sm font-semibold text-text-mid transition-colors hover:border-gold/40 hover:text-gold-soft"
+              className="rounded-full border border-white/12 px-4 py-2 text-sm font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
             >
               Admin console
             </Link>
@@ -111,7 +111,7 @@ export default function Dashboard() {
           <button
             type="button"
             onClick={() => void signOut()}
-            className="inline-flex items-center gap-2 rounded-full border border-white/12 px-4 py-2 text-sm font-semibold text-text-mid transition-colors hover:border-gold/40 hover:text-gold-soft"
+            className="inline-flex items-center gap-2 rounded-full border border-white/12 px-4 py-2 text-sm font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
           >
             <LogOut size={14} aria-hidden="true" />
             Sign out
@@ -143,7 +143,7 @@ export default function Dashboard() {
             onClick={() => setTab(t.id)}
             aria-current={tab === t.id ? 'page' : undefined}
             className={cn(
-              'relative px-4 py-3 text-sm font-medium transition-colors',
+              'relative px-4 py-3 text-sm font-medium',
               tab === t.id ? 'text-gold-soft' : 'text-text-mid hover:text-text-hi',
             )}
           >

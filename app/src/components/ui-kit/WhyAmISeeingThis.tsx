@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
 import { Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import ArcButton from './ArcButton'
@@ -33,18 +32,13 @@ export default function WhyAmISeeingThis({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={isOpen}
-        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-sky cloud-glass hover:border-sky/40 transition-colors"
+        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-sky cloud-glass hover:border-sky/40"
       >
         <Sparkles size={13} aria-hidden="true" />
         Why am I seeing this?
       </button>
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: 8, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.97 }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+      {isOpen && (
+          <div
             className="absolute z-40 mt-2 w-72 rounded-card-md cloud-glass bg-ink-2/90 p-4 shadow-cloud"
             role="dialog"
             aria-label="Why you are seeing this post"
@@ -65,9 +59,8 @@ export default function WhyAmISeeingThis({
                 Change my algorithm
               </ArcButton>
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
     </div>
   )
 }

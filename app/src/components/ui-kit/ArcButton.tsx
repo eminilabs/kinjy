@@ -1,6 +1,5 @@
 import { forwardRef } from 'react'
 import type { ButtonHTMLAttributes } from 'react'
-import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
 export interface ArcButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -22,17 +21,14 @@ const sizes = {
 }
 
 /**
- * ArcButton — Kinjy's primary button. Gold solid / ghost glass / indigo variants
- * with a 1.03 scale tap (Framer Motion whileTap).
+ * ArcButton — Kinjy's primary button. Gold solid / ghost glass / indigo variants.
  */
 const ArcButton = forwardRef<HTMLButtonElement, ArcButtonProps>(
   ({ className, variant = 'gold', size = 'md', children, ...props }, ref) => (
-    <motion.button
+    <button
       ref={ref}
-      whileTap={{ scale: 1.03 }}
-      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-full transition-colors duration-200 ease-cloud-ease select-none',
+        'inline-flex items-center justify-center gap-2 rounded-full select-none',
         variants[variant],
         sizes[size],
         className,
@@ -40,7 +36,7 @@ const ArcButton = forwardRef<HTMLButtonElement, ArcButtonProps>(
       {...(props as object)}
     >
       {children}
-    </motion.button>
+    </button>
   ),
 )
 ArcButton.displayName = 'ArcButton'

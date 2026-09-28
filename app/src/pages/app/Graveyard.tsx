@@ -145,7 +145,7 @@ export default function Graveyard() {
                   <button
                     type="button"
                     onClick={() => openMemorial(m)}
-                    className="w-full rounded-card-sm px-2 py-1.5 text-start transition-colors hover:bg-white/5"
+                    className="w-full rounded-card-sm px-2 py-1.5 text-start hover:bg-white/5"
                   >
                     <span className="block truncate text-sm text-text-hi">{m.full_name}</span>
                     <span className="caption">
@@ -201,7 +201,7 @@ export default function Graveyard() {
             <button
               type="submit"
               disabled={!code.trim()}
-              className="mt-3 w-full rounded-full border border-white/12 px-4 py-2 text-xs font-semibold text-text-mid transition-colors hover:border-gold/40 hover:text-gold-soft disabled:opacity-40"
+              className="mt-3 w-full rounded-full border border-white/12 px-4 py-2 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft disabled:opacity-40"
             >
               Open
             </button>
@@ -235,7 +235,7 @@ export default function Graveyard() {
                 <button
                   type="button"
                   onClick={() => leave('candle')}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-white/12 px-4 py-2 text-xs font-semibold text-text-mid transition-colors hover:border-gold/40 hover:text-gold-soft"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/12 px-4 py-2 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
                 >
                   <Flame size={13} aria-hidden="true" />
                   Light a candle
@@ -243,7 +243,7 @@ export default function Graveyard() {
                 <button
                   type="button"
                   onClick={() => leave('flower')}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-white/12 px-4 py-2 text-xs font-semibold text-text-mid transition-colors hover:border-gold/40 hover:text-gold-soft"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/12 px-4 py-2 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
                 >
                   <Flower2 size={13} aria-hidden="true" />
                   Leave a flower

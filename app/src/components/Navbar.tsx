@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router'
-import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronDown, Globe, Menu, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
@@ -70,7 +69,7 @@ export default function Navbar() {
     <>
       <header
         className={cn(
-          'fixed top-0 inset-x-0 z-50 h-[72px] transition-all duration-300 ease-cloud-ease',
+          'fixed top-0 inset-x-0 z-50 h-[72px]',
           scrolled ? 'cloud-glass bg-ink/60 shadow-cloud' : 'bg-transparent',
         )}
       >
@@ -89,7 +88,7 @@ export default function Navbar() {
                 to={l.to}
                 className={({ isActive }) =>
                   cn(
-                    'relative rounded-full px-3 py-2 text-sm font-medium transition-colors duration-200',
+                    'relative rounded-full px-3 py-2 text-sm font-medium',
                     isActive ? 'text-gold-soft' : 'text-text-mid hover:text-text-hi',
                   )
                 }
@@ -98,11 +97,9 @@ export default function Navbar() {
                   <>
                     {t(l.key, { defaultValue: l.fallback })}
                     {isActive && (
-                      <motion.span
-                        layoutId="nav-active-arc"
+                      <span
                         className="absolute -bottom-0.5 left-3 right-3 h-0.5 rounded-full"
                         style={{ background: 'var(--grad-arc)' }}
-                        transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
                       />
                     )}
                   </>
@@ -121,20 +118,15 @@ export default function Navbar() {
                 onClick={() => setMoreOpen((v) => !v)}
                 aria-expanded={moreOpen}
                 className={cn(
-                  'flex items-center gap-1 rounded-full px-3 py-2 text-sm font-medium transition-colors duration-200',
+                  'flex items-center gap-1 rounded-full px-3 py-2 text-sm font-medium',
                   secondaryActive ? 'text-gold-soft' : 'text-text-mid hover:text-text-hi',
                 )}
               >
                 {t('nav.more', { defaultValue: 'More' })}
-                <ChevronDown size={14} className={cn('transition-transform', moreOpen && 'rotate-180')} />
+                <ChevronDown size={14} className={cn(moreOpen && 'rotate-180')} />
               </button>
-              <AnimatePresence>
-                {moreOpen && (
-                  <motion.ul
-                    initial={{ opacity: 0, y: 6, scale: 0.97 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 6, scale: 0.97 }}
-                    transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              {moreOpen && (
+                  <ul
                     className="absolute start-0 top-11 w-48 rounded-card-md cloud-glass bg-ink-2/95 p-2 shadow-cloud"
                   >
                     {SECONDARY_LINKS.map((l) => (
@@ -143,7 +135,7 @@ export default function Navbar() {
                           to={l.to}
                           className={({ isActive }) =>
                             cn(
-                              'block rounded-card-sm px-3 py-2 text-sm transition-colors',
+                              'block rounded-card-sm px-3 py-2 text-sm',
                               isActive
                                 ? 'text-gold-soft bg-gold/10'
                                 : 'text-text-mid hover:text-text-hi hover:bg-white/5',
@@ -154,9 +146,8 @@ export default function Navbar() {
                         </NavLink>
                       </li>
                     ))}
-                  </motion.ul>
+                  </ul>
                 )}
-              </AnimatePresence>
             </div>
           </nav>
 
@@ -169,17 +160,12 @@ export default function Navbar() {
                 onClick={() => setLangOpen((v) => !v)}
                 aria-expanded={langOpen}
                 aria-label="Change language"
-                className="flex h-10 w-10 items-center justify-center rounded-full cloud-glass text-text-mid hover:text-gold-soft transition-colors"
+                className="flex h-10 w-10 items-center justify-center rounded-full cloud-glass text-text-mid hover:text-gold-soft"
               >
                 <Globe size={17} />
               </button>
-              <AnimatePresence>
-                {langOpen && (
-                  <motion.ul
-                    initial={{ opacity: 0, y: 6, scale: 0.97 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 6, scale: 0.97 }}
-                    transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              {langOpen && (
+                  <ul
                     className="absolute end-0 top-12 w-44 rounded-card-md cloud-glass bg-ink-2/95 p-2 shadow-cloud"
                   >
                     {LANGUAGES.map((l) => (
@@ -188,7 +174,7 @@ export default function Navbar() {
                           type="button"
                           onClick={() => switchLanguage(l.code, l.dir)}
                           className={cn(
-                            'w-full rounded-card-sm px-3 py-2 text-start text-sm transition-colors',
+                            'w-full rounded-card-sm px-3 py-2 text-start text-sm',
                             i18n.language === l.code ? 'text-gold-soft bg-gold/10' : 'text-text-mid hover:text-text-hi hover:bg-white/5',
                           )}
                         >
@@ -196,9 +182,8 @@ export default function Navbar() {
                         </button>
                       </li>
                     ))}
-                  </motion.ul>
+                  </ul>
                 )}
-              </AnimatePresence>
             </div>
 
             {/* The display-mode button that used to sit here had no handler —
@@ -209,13 +194,13 @@ export default function Navbar() {
               <>
               <Link
                 to="/hub"
-                className="hidden md:inline-flex items-center rounded-full px-4 py-2.5 text-sm font-semibold cloud-glass text-text-hi hover:border-gold/40 hover:text-gold-soft transition-colors"
+                className="hidden md:inline-flex items-center rounded-full px-4 py-2.5 text-sm font-semibold cloud-glass text-text-hi hover:border-gold/40 hover:text-gold-soft"
               >
                 {t('nav.hub', { defaultValue: 'Feed' })}
               </Link>
               <Link
                 to="/dashboard"
-                className="hidden md:inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold cloud-glass text-text-hi hover:border-gold/40 hover:text-gold-soft transition-colors"
+                className="hidden md:inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold cloud-glass text-text-hi hover:border-gold/40 hover:text-gold-soft"
               >
                 <MemberAvatar displayName={user.display_name} avatarUrl={me?.avatar_url} size={24} />
                 {t('nav.dashboard', { defaultValue: 'Dashboard' })}
@@ -225,13 +210,13 @@ export default function Navbar() {
               <>
                 <Link
                   to="/join?mode=signin"
-                  className="hidden md:inline-flex items-center rounded-full px-5 py-2.5 text-sm font-semibold cloud-glass text-text-hi hover:border-gold/40 hover:text-gold-soft transition-colors"
+                  className="hidden md:inline-flex items-center rounded-full px-5 py-2.5 text-sm font-semibold cloud-glass text-text-hi hover:border-gold/40 hover:text-gold-soft"
                 >
                   {t('nav.signIn', { defaultValue: 'Sign in' })}
                 </Link>
                 <Link
                   to="/join?mode=signup"
-                  className="hidden md:inline-flex items-center rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-2.5 text-sm font-bold text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] hover:brightness-110 transition"
+                  className="hidden md:inline-flex items-center rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-2.5 text-sm font-bold text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] hover:brightness-110"
                 >
                   {t('nav.join', { defaultValue: 'Join Kinjy' })}
                 </Link>
@@ -252,13 +237,8 @@ export default function Navbar() {
       </header>
 
       {/* Mobile full-screen glass drawer */}
-      <AnimatePresence>
-        {drawerOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
+      {drawerOpen && (
+          <div
             className="fixed inset-0 z-[60] cloud-glass bg-ink/85 backdrop-blur-2xl lg:hidden"
             role="dialog"
             aria-label="Menu"
@@ -281,32 +261,22 @@ export default function Navbar() {
               {[{ to: '/', label: 'Home' }, ...NAV_LINKS.map((l) => ({ to: l.to, label: t(l.key, { defaultValue: l.fallback }) })), { to: '/assistant', label: 'Kinjy Assistant' }, { to: '/admin', label: 'Admin Console' }, { to: '/app', label: 'The App' },
               user
                 ? { to: '/dashboard', label: t('nav.dashboard', { defaultValue: 'Dashboard' }) }
-                : { to: '/join?mode=signup', label: t('nav.join', { defaultValue: 'Join Kinjy' }) }].map((l, i) => (
-                <motion.div
-                  key={l.to}
-                  initial={{ opacity: 0, y: 24 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.06 * i, duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
-                >
+                : { to: '/join?mode=signup', label: t('nav.join', { defaultValue: 'Join Kinjy' }) }].map((l) => (
+                <div key={l.to}>
                   <NavLink
                     to={l.to}
                     className={({ isActive }) =>
                       cn(
-                        'block rounded-card-md px-4 py-3 font-display text-2xl transition-colors',
+                        'block rounded-card-md px-4 py-3 font-display text-2xl',
                         isActive ? 'text-gold-soft' : 'text-text-hi hover:text-gold-soft',
                       )
                     }
                   >
                     {l.label}
                   </NavLink>
-                </motion.div>
+                </div>
               ))}
-              <motion.div
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.06 * NAV_LINKS.length + 0.2, duration: 0.42 }}
-                className="mt-6 flex flex-wrap gap-2 px-4"
-              >
+              <div className="mt-6 flex flex-wrap gap-2 px-4">
                 {LANGUAGES.map((l) => (
                   <button
                     key={l.code}
@@ -320,11 +290,10 @@ export default function Navbar() {
                     {l.label}
                   </button>
                 ))}
-              </motion.div>
+              </div>
             </nav>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
     </>
   )
 }

@@ -59,7 +59,7 @@ export default function Circles() {
               type="button"
               onClick={() => setKind(k.id)}
               className={cn(
-                'rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors',
+                'rounded-full border px-3.5 py-1.5 text-xs font-semibold',
                 kind === k.id
                   ? 'border-gold/50 bg-gold/10 text-gold-soft'
                   : 'border-white/12 text-text-mid hover:text-text-hi',
@@ -120,7 +120,7 @@ export default function Circles() {
               type="button"
               onClick={() => remove(circle.id)}
               aria-label={`Delete ${circle.name}`}
-              className="ms-auto shrink-0 rounded-full p-2 text-text-low transition-colors hover:text-red-200"
+              className="ms-auto shrink-0 rounded-full p-2 text-text-low hover:text-red-200"
             >
               <Trash2 size={15} />
             </button>

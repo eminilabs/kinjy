@@ -1007,6 +1007,77 @@ export default function Messages() {
         </span>
       )}
     >
+      <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+        {/* Conversations */}
+        <div className="space-y-3">
+          {/* Your conversations come first. Starting a new one is an action, so
+              it is a button — not a form permanently occupying the top of the
+              list. The member-id field is a stand-in until people search exists. */}
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-text-hi">Conversations</h2>
+            <button
+              type="button"
+              onClick={() => setComposing((v) => !v)}
+              aria-expanded={composing}
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/12 px-3 py-1.5 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
+            >
+              <Plus size={12} aria-hidden="true" />
+              New
+            </button>
+          </div>
+
+          {composing && (
+            <div>
+              <input
+                id="peer-search"
+                value={peer}
+                onChange={(e) => setPeer(e.target.value)}
+                placeholder="Search by name or @handle…"
+                aria-label="Search for someone to message"
+                autoFocus
+                className="w-full rounded-full border border-white/10 bg-ink-2/60 px-3 py-2 text-xs text-text-hi placeholder:text-text-low focus:border-gold/40 focus:outline-none"
+              />
+
+              {peer.trim().length > 0 && peer.trim().length < 2 && (
+                <p className="caption mt-1.5">Keep typing — two characters at least.</p>
+              )}
+
+              {results.length > 0 && (
+                <ul className="mt-2 space-y-1">
+                  {results.map((person) => (
+                    <li key={person.user_id}>
+                      <button
+                        type="button"
+                        onClick={() => void startWith(person.user_id)}
+                        className="flex w-full items-center gap-2.5 rounded-card-sm px-2 py-1.5 text-start hover:bg-white/5"
+                      >
+                        <MemberAvatar
+                          handle={person.handle}
+                          displayName={person.display_name}
+                          avatarUrl={person.avatar_url}
+                          size={28}
+                        />
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm text-text-hi">{person.display_name}</span>
+                          <span className="caption block truncate">@{person.handle}</span>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {startError && (
+                <p role="alert" className="mt-2 rounded-card-sm border border-amber-300/30 bg-amber-300/10 px-2.5 py-2 text-xs text-amber-100">
+                  {startError}
+                </p>
+              )}
+
+              {searched && peer.trim().length >= 2 && results.length === 0 && (
+                <p className="caption mt-2">
+                  Nobody found. Someone who turned off discovery in their privacy
+                  settings will not appear here.
+                </p>
       <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
         <div className={cn('min-w-0 space-y-4', showThread && 'hidden lg:block')}>
           {/* Friends: every accepted connection, one tap from a conversation.
@@ -1076,6 +1147,10 @@ export default function Messages() {
                     onClick={() => setOnlineOnly((v) => !v)}
                     aria-pressed={onlineOnly}
                     className={cn(
+                      'w-full rounded-card-sm border p-3 text-start',
+                      activeId === conversation.id
+                        ? 'border-gold/40 bg-gold/5'
+                        : 'border-white/8 bg-ink-2/40 hover:border-white/15',
                       'shrink-0 rounded-full border px-2.5 py-1.5 text-xs font-semibold transition-colors',
                       onlineOnly
                         ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200'

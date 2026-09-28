@@ -88,7 +88,7 @@ export default function Earnings() {
                 </div>
                 <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/8">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-gold-soft to-gold transition-[width] duration-700"
+                    className="h-full rounded-full bg-gradient-to-r from-gold-soft to-gold"
                     style={{
                       width: `${Math.min(
                         100,

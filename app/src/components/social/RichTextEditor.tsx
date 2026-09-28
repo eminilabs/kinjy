@@ -119,7 +119,7 @@ export default function RichTextEditor({
     emit()
   }
 
-  const toolButton = cn('flex h-7 w-7 items-center justify-center rounded-card-sm transition-colors')
+  const toolButton = cn('flex h-7 w-7 items-center justify-center rounded-card-sm')
 
   return (
     <div className={cn('overflow-hidden rounded-card-sm border', tok.input)}>

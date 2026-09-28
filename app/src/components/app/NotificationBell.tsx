@@ -101,7 +101,7 @@ export default function NotificationBell({ userId }: { userId?: string }) {
         aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
         aria-expanded={open}
         className={cn(
-          'relative flex h-9 w-9 items-center justify-center rounded-full transition-colors',
+          'relative flex h-9 w-9 items-center justify-center rounded-full',
           tok.hoverBg,
           tok.mid,
         )}

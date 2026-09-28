@@ -95,7 +95,7 @@ function People() {
                 disabled={busy === person.user_id || followed.has(person.user_id)}
                 title="Follow — one-way, no permission needed"
                 className={cn(
-                  'rounded-full border px-2.5 py-1 text-[0.68rem] font-semibold transition-colors',
+                  'rounded-full border px-2.5 py-1 text-[0.68rem] font-semibold',
                   followed.has(person.user_id)
                     ? cn('border-current/20', tok.low)
                     : 'border-gold/40 text-gold-soft hover:bg-gold/10',
@@ -114,7 +114,7 @@ function People() {
                 disabled={busy === person.user_id || invited.has(person.user_id)}
                 title="Connect — they have to accept before you can message them"
                 className={cn(
-                  'rounded-full border px-2.5 py-1 text-[0.68rem] font-semibold transition-colors',
+                  'rounded-full border px-2.5 py-1 text-[0.68rem] font-semibold',
                   invited.has(person.user_id)
                     ? cn('border-current/20', tok.low)
                     : 'border-sky/40 text-sky hover:bg-sky/10',
@@ -148,7 +148,7 @@ function Places() {
   const forums = discover.data?.forums ?? []
   if (!discover.loading && communities.length === 0 && forums.length === 0) return null
 
-  const row = 'flex items-center gap-2 rounded-card-sm px-1.5 py-1.5 transition-colors'
+  const row = 'flex items-center gap-2 rounded-card-sm px-1.5 py-1.5'
 
   return (
     <RailCard title="Places to join">

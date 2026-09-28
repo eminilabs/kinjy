@@ -225,10 +225,6 @@
     border-color: rgba(169, 118, 28, 0.35);
   }
 
-  html {
-    scroll-behavior: smooth;
-  }
-
   body {
     @apply bg-ink text-text-hi font-sans antialiased;
     font-feature-settings: "ss01", "cv11";
@@ -327,13 +323,8 @@
   }
   .cloud-card {
     @apply cloud-glass rounded-card-lg shadow-cloud;
-    transition:
-      transform 420ms var(--cloud-ease),
-      box-shadow 420ms var(--cloud-ease),
-      border-color 240ms var(--cloud-ease);
   }
   .cloud-card-hover:hover {
-    transform: translateY(-6px);
     box-shadow: 0 28px 64px -16px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(217, 166, 72, 0.25);
     border-color: rgba(217, 166, 72, 0.35);
   }

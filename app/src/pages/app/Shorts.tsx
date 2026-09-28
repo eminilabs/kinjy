@@ -90,7 +90,7 @@ export default function Shorts() {
         <button
           type="button"
           onClick={() => setComposing(true)}
-          className="inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-2 text-sm font-bold text-ink transition hover:brightness-110"
+          className="inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-2 text-sm font-bold text-ink hover:brightness-110"
         >
           <Plus size={15} aria-hidden="true" />
           New short
@@ -115,7 +115,7 @@ export default function Shorts() {
           <button
             type="button"
             onClick={() => setComposing(true)}
-            className="mt-5 inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-2.5 text-sm font-bold text-ink transition hover:brightness-110"
+            className="mt-5 inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-2.5 text-sm font-bold text-ink hover:brightness-110"
           >
             <Plus size={15} aria-hidden="true" />
             Post a short

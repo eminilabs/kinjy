@@ -104,7 +104,7 @@ export default function SignIn() {
     }
   }
 
-  const field = 'w-full rounded-card-sm bg-ink-2/70 border border-white/10 px-4 py-3 text-text-hi placeholder:text-text-low focus:border-gold/50 focus:outline-none transition-colors'
+  const field = 'w-full rounded-card-sm bg-ink-2/70 border border-white/10 px-4 py-3 text-text-hi placeholder:text-text-low focus:border-gold/50 focus:outline-none'
 
   return (
     <section className="twilight-field noise-overlay flex min-h-[calc(100svh-72px)] items-center px-6 py-16">
@@ -145,7 +145,7 @@ export default function SignIn() {
                   setError(null)
                 }}
                 className={cn(
-                  'flex-1 rounded-full px-4 py-2 text-sm font-semibold transition-colors',
+                  'flex-1 rounded-full px-4 py-2 text-sm font-semibold',
                   mode === m ? 'bg-gold text-ink' : 'text-text-mid hover:text-text-hi',
                 )}
               >

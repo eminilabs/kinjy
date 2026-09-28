@@ -360,7 +360,7 @@ export default function PostCard({
             aria-label="Why am I seeing this?"
             title="Why am I seeing this?"
             className={cn(
-              'flex h-7 w-7 items-center justify-center rounded-full transition-colors',
+              'flex h-7 w-7 items-center justify-center rounded-full',
               showWhy ? 'bg-gold/15 text-gold-soft' : 'text-text-low hover:bg-white/5 hover:text-gold-soft',
             )}
           >
@@ -432,7 +432,7 @@ export default function PostCard({
                   type="button"
                   onClick={loadMedia}
                   disabled={loadingMedia}
-                  className="flex w-full flex-col items-center justify-center gap-1 bg-white/4 py-10 transition-colors hover:bg-white/8 disabled:opacity-60"
+                  className="flex w-full flex-col items-center justify-center gap-1 bg-white/4 py-10 hover:bg-white/8 disabled:opacity-60"
                 >
                   <span className="text-sm text-text-hi">
                     {loadingMedia ? 'Loading…' : `Tap to load ${item.kind}`}
@@ -465,7 +465,7 @@ export default function PostCard({
                     alt={item.alt_text ?? ''}
                     loading="lazy"
                     className={cn(
-                      'w-full cursor-zoom-in object-cover transition-opacity hover:opacity-95',
+                      'w-full cursor-zoom-in object-cover hover:opacity-95',
                       media.length === 1 ? 'max-h-[460px]' : 'h-44',
                     )}
                   />
@@ -499,7 +499,7 @@ export default function PostCard({
         <button
           type="button"
           onClick={() => setShowComments(true)}
-          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-text-mid transition-colors hover:text-text-hi"
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-text-mid hover:text-text-hi"
         >
           <MessageCircle size={13} aria-hidden="true" />
           {comments}
@@ -512,7 +512,7 @@ export default function PostCard({
           aria-pressed={reposted}
           title={reposted ? 'Undo repost' : 'Share this to your followers'}
           className={cn(
-            'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40',
+            'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-40',
             reposted ? 'text-success' : 'text-text-mid hover:text-text-hi',
           )}
         >
@@ -535,7 +535,7 @@ export default function PostCard({
             type="button"
             onClick={translate}
             disabled={translating}
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-text-mid transition-colors hover:text-sky disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-text-mid hover:text-sky disabled:opacity-40"
           >
             {translation ? <Columns2 size={13} aria-hidden="true" /> : <Languages size={13} aria-hidden="true" />}
             {translating ? 'Translating…' : translation ? (sideBySide ? 'Single column' : 'Side by side') : 'Translate'}
@@ -547,7 +547,7 @@ export default function PostCard({
             type="button"
             onClick={remove}
             disabled={busy}
-            className="ms-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-text-low transition-colors hover:text-red-200 disabled:opacity-40"
+            className="ms-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-text-low hover:text-red-200 disabled:opacity-40"
           >
             <Trash2 size={13} aria-hidden="true" />
             Delete
@@ -557,7 +557,7 @@ export default function PostCard({
             type="button"
             onClick={showLess}
             disabled={busy}
-            className="ms-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-text-low transition-colors hover:text-text-hi disabled:opacity-40"
+            className="ms-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-text-low hover:text-text-hi disabled:opacity-40"
           >
             <EyeOff size={13} aria-hidden="true" />
             Show less like this

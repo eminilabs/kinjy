@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowRight, FileText, Mic, Send, Video, X } from 'lucide-react'
 import Orb, { type OrbState } from './Orb'
 import DemoVideoPlayer from './DemoVideoPlayer'
@@ -115,7 +114,7 @@ export default function LiveAssistant() {
   const last = [...turns].reverse().find((t) => t.from === 'assistant' && t.answer)?.answer
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'auto' })
   }, [turns, open])
 
   const ask = useCallback(
@@ -190,26 +189,19 @@ export default function LiveAssistant() {
   return (
     <>
       {/* The orb — repositioned per module */}
-      <motion.button
+      <button
         type="button"
-        layout
         onClick={() => setOpen((v) => !v)}
         aria-label={open ? 'Close Kinjy Assistant' : 'Open Kinjy Assistant'}
         aria-expanded={open}
         title={hint}
-        transition={{ type: 'spring', stiffness: 210, damping: 26 }}
         className={cn('fixed z-[60]', ORB_POSITION, open && 'pointer-events-none opacity-0')}
       >
         <Orb size={56} state={orbState} />
-      </motion.button>
+      </button>
 
-      <AnimatePresence>
-        {open && (
-          <motion.aside
-            initial={{ opacity: 0, y: 20, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.97 }}
-            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+      {open && (
+          <aside
             className="fixed bottom-4 end-4 z-[75] flex max-h-[min(640px,85svh)] w-[min(420px,calc(100vw-2rem))] flex-col rounded-card-lg cloud-glass bg-ink-2/95 shadow-cloud"
             role="dialog"
             aria-label="Kinjy Assistant"
@@ -245,7 +237,7 @@ export default function LiveAssistant() {
                         <button
                           type="button"
                           onClick={() => void ask(s)}
-                          className="w-full rounded-full border border-white/10 px-3 py-2 text-start text-xs text-text-mid transition-colors hover:border-gold/40 hover:text-gold-soft"
+                          className="w-full rounded-full border border-white/10 px-3 py-2 text-start text-xs text-text-mid hover:border-gold/40 hover:text-gold-soft"
                         >
                           {s}
                         </button>
@@ -286,7 +278,7 @@ export default function LiveAssistant() {
                             type="button"
                             onClick={() => setTab(id)}
                             className={cn(
-                              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.7rem] font-semibold transition-colors',
+                              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.7rem] font-semibold',
                               tab === id ? 'bg-gold/15 text-gold-soft' : 'text-text-low hover:text-text-mid',
                             )}
                           >
@@ -368,7 +360,7 @@ export default function LiveAssistant() {
                 aria-label={listening ? 'Stop listening' : 'Ask by voice'}
                 aria-pressed={listening}
                 className={cn(
-                  'shrink-0 rounded-full p-2.5 transition-colors',
+                  'shrink-0 rounded-full p-2.5',
                   listening ? 'bg-gold/20 text-gold-soft' : 'text-text-mid hover:text-gold-soft',
                 )}
               >
@@ -390,9 +382,8 @@ export default function LiveAssistant() {
                 <Send size={15} />
               </button>
             </form>
-          </motion.aside>
+          </aside>
         )}
-      </AnimatePresence>
 
       {/* Screen-reader announcement of the latest grounded answer */}
       <p className="sr-only" role="status" aria-live="polite">

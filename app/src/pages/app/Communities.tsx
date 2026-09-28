@@ -90,7 +90,7 @@ export default function Communities() {
               type="button"
               onClick={() => setKind(k)}
               className={cn(
-                'rounded-full border px-3.5 py-1.5 text-xs font-semibold capitalize transition-colors',
+                'rounded-full border px-3.5 py-1.5 text-xs font-semibold capitalize',
                 kind === k
                   ? 'border-gold/50 bg-gold/10 text-gold-soft'
                   : 'border-white/12 text-text-mid hover:text-text-hi',
@@ -166,14 +166,14 @@ export default function Communities() {
                 <button
                   type="button"
                   onClick={() => join(community)}
-                  className="rounded-full border border-white/12 px-4 py-2 text-xs font-semibold text-text-mid transition-colors hover:border-gold/40 hover:text-gold-soft"
+                  className="rounded-full border border-white/12 px-4 py-2 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
                 >
                   {community.kind === 'private' ? 'Request to join' : community.kind === 'paid' ? 'Buy access' : 'Join'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setManaging(managing === community.id ? null : community.id)}
-                  className="rounded-full border border-white/12 px-4 py-2 text-xs font-semibold text-text-low transition-colors hover:border-sky/40 hover:text-sky"
+                  className="rounded-full border border-white/12 px-4 py-2 text-xs font-semibold text-text-low hover:border-sky/40 hover:text-sky"
                 >
                   {managing === community.id ? 'Close' : 'Manage'}
                 </button>

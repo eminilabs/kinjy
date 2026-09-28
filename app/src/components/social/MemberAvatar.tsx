@@ -87,6 +87,7 @@ export default function MemberAvatar({
       to={`/u/${handle}`}
       aria-label={`View ${name}'s profile`}
       title={name}
+      className="shrink-0 hover:opacity-85"
       className="shrink-0 rounded-full transition-opacity hover:opacity-85"
     >
       {inner}

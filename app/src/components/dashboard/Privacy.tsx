@@ -165,7 +165,7 @@ export default function Privacy() {
                         onClick={() => set(control.key, choice.id)}
                         aria-pressed={value === choice.id}
                         className={cn(
-                          'rounded-full border px-3 py-1 text-xs font-semibold transition-colors',
+                          'rounded-full border px-3 py-1 text-xs font-semibold',
                           value === choice.id
                             ? 'border-gold/50 bg-gold/10 text-gold-soft'
                             : 'border-white/12 text-text-mid hover:text-text-hi',
@@ -270,7 +270,7 @@ export default function Privacy() {
                           onClick={() => respond(entry, true)}
                           disabled={busy === entry.user_id}
                           aria-label="Accept"
-                          className="rounded-full border border-emerald-400/40 p-1.5 text-emerald-300 transition-colors hover:bg-emerald-400/10 disabled:opacity-40"
+                          className="rounded-full border border-emerald-400/40 p-1.5 text-emerald-300 hover:bg-emerald-400/10 disabled:opacity-40"
                         >
                           <Check size={13} />
                         </button>
@@ -279,7 +279,7 @@ export default function Privacy() {
                           onClick={() => respond(entry, false)}
                           disabled={busy === entry.user_id}
                           aria-label="Decline"
-                          className="rounded-full border border-white/12 p-1.5 text-text-mid transition-colors hover:border-red-400/40 hover:text-red-200 disabled:opacity-40"
+                          className="rounded-full border border-white/12 p-1.5 text-text-mid hover:border-red-400/40 hover:text-red-200 disabled:opacity-40"
                         >
                           <X size={13} />
                         </button>
