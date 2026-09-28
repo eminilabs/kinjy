@@ -51,6 +51,18 @@ class Asset(Base):
     c2pa_manifest: Mapped[str | None] = mapped_column(Text)
     derived_from: Mapped[str | None] = mapped_column(String(40), index=True)
 
+    # Where the bytes live. "local" is the media volume; "uploadcenter" holds
+    # avatars and covers, with the file's id there in external_id and its CDN
+    # address in url. Post media stays local: its signed-ticket age gate would be
+    # bypassed by a public CDN URL.
+    provider: Mapped[str] = mapped_column(String(20), default="local")
+    external_id: Mapped[str | None] = mapped_column(String(80))
+    # avatar | cover for profile images, null for everything else.
+    purpose: Mapped[str | None] = mapped_column(String(20))
+    # pending (upload URL issued) -> processing (bytes received, being checked)
+    # -> ready | failed. Only a ready asset may be put on a profile.
+    status: Mapped[str] = mapped_column(String(20), default="ready")
+
     alt_text: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
