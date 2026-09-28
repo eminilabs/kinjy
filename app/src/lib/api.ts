@@ -366,6 +366,14 @@ export interface ProfileUpdate {
   lang?: string
 }
 
+/**
+ * `GET /users/me/eligibility`: which age-gated fields the editor should offer.
+ * A readout only; `PATCH /users/me` enforces the rule itself.
+ */
+export interface ProfileEligibility {
+  neighborhood: boolean
+}
+
 export interface PostMedia {
   /** Null when data saver withheld it — the bytes were never sent. */
   url: string | null
@@ -1597,6 +1605,7 @@ export const kaluta = {
     wellbeingBeat: (minutes: number) =>
       api.post<WellbeingStatus>('/wellbeing/heartbeat', { minutes }),
     updateProfile: (patch: ProfileUpdate) => api.patch<MyProfile>('/users/me', patch),
+    profileEligibility: () => api.get<ProfileEligibility>('/users/me/eligibility'),
 
     wallet: () => api.get<Wallet>('/wallet'),
     commissions: (params: { source_kind?: string; limit?: number } = {}) => {
