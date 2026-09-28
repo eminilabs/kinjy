@@ -124,6 +124,12 @@ check("control characters in city -> 422", patch(adult, city="Paris\u0000").stat
 check("right-to-left override in the name -> 422",
       patch(adult, display_name="Amina‮troppuS yjniK").status_code == 422)
 check("zero-width space in the name -> 422", patch(adult, display_name="Kinjy​Support").status_code == 422)
+t = tag()
+r = c.post("/auth/register", json={
+    "email": f"{t}@example.com", "handle": f"pf{t}", "display_name": "Amina‮troppuS yjniK",
+    "password": "Sup3rStrong!Pass", "date_of_birth": "1990-01-15", "country": "FR",
+})
+check("the same name cannot be registered either -> 422", r.status_code == 422, r.text)
 r = patch(adult, bio="Papa de 3 \U0001F468‍\U0001F469‍\U0001F467")
 check("emoji sequences survive in a bio", r.status_code == 200 and "‍" in r.json()["bio"], r.text)
 check("zero-width characters do not hide words from the classifier",

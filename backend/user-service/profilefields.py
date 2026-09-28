@@ -7,13 +7,14 @@ Pydantic validators directly, and are pure apart from the classifier call.
 from __future__ import annotations
 
 import re
-import unicodedata
 
 from common import classifier, settings
 from common.agesafety import AgeProfile, ContentRating, engine
 from common.countries import COUNTRY_CODES
+# The Unicode rules live in common so auth-service applies the same ones to the
+# account name; re-exported here because the profile validators use them.
+from common.textclean import DISPLAY_NAME_MAX, clean_display_name, clean_text, visible  # noqa: F401
 
-DISPLAY_NAME_MAX = 120
 BIO_MAX = 2000
 STATE_MAX = 80
 CITY_MAX = 120
@@ -21,57 +22,10 @@ NEIGHBOURHOOD_MAX = 120
 MAX_LANGUAGES = 8
 
 _LANGUAGE_CODE = re.compile(r"^[a-z]{2,3}$")
-_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
-_CONTROL_EXCEPT_LINES = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
-# Direction overrides and isolates: text that renders differently from what it
-# says ("Amina‮..." can display as "Kinjy Support").
-_BIDI_CONTROLS = re.compile("[‪-‮⁦-⁩]")
-
-
-def _has_invisible(text: str) -> bool:
-    """Unicode format characters (category Cf): zero-width spaces and joiners,
-    direction marks, BOM. Invisible, so never needed on a one-line field."""
-    return any(unicodedata.category(ch) == "Cf" for ch in text)
-
-
-def _visible(text: str) -> str:
-    return "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
 
 # One message for every refusal: explaining which rule tripped explains how to
 # word around it.
 BIO_REFUSED = "This bio cannot be published. Profiles are visible to everyone, including younger members."
-
-
-def clean_text(value: str | None, max_length: int, *, multiline: bool = False) -> str | None:
-    """Trimmed text, or None when blank (which clears the field)."""
-    if value is None:
-        return None
-    text = value.replace("\r\n", "\n").strip() if multiline else value.strip()
-    if not text:
-        return None
-    pattern = _CONTROL_EXCEPT_LINES if multiline else _CONTROL
-    if pattern.search(text):
-        raise ValueError("must not contain control characters")
-    if multiline:
-        # A bio keeps the zero-width joiner (it is what makes 👨‍👩‍👧 one emoji)
-        # but never a direction override.
-        if _BIDI_CONTROLS.search(text):
-            raise ValueError("must not contain text-direction override characters")
-    elif _has_invisible(text):
-        raise ValueError("must not contain invisible formatting characters")
-    if len(text) > max_length:
-        raise ValueError(f"must be at most {max_length} characters")
-    return text
-
-
-def clean_display_name(value: str) -> str:
-    """NFKC first, so full-width and compatibility letters fold to ordinary
-    ones before any check. Homoglyphs across scripts (a Cyrillic "а" for a Latin
-    "a") are not caught here; the handle, ASCII-only, is the identity."""
-    text = clean_text(unicodedata.normalize("NFKC", value), DISPLAY_NAME_MAX)
-    if text is None or len(text) < 2:
-        raise ValueError("must be at least 2 characters")
-    return text
 
 
 def clean_country(value: str | None) -> str | None:
@@ -121,7 +75,7 @@ def bio_problem(bio: str, *, author_is_minor: bool) -> str | None:
     """
     # Read without invisible characters: "p​orn" must be read as the word
     # it displays as. The bio itself is stored as written.
-    verdict = classifier.classify(body=_visible(bio), media_kinds=[], author_is_minor=author_is_minor)
+    verdict = classifier.classify(body=visible(bio), media_kinds=[], author_is_minor=author_is_minor)
     if verdict.block_publication or verdict.age_rating != ContentRating.GENERAL.value:
         return BIO_REFUSED
     return None
