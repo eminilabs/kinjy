@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router'
-import { Check, Clock, MapPin, MessageSquare, UserPlus, Users } from 'lucide-react'
+import { Link,useNavigate, useParams } from 'react-router'
+import { Check, Clock, MapPin, MessageSquare, Pencil, UserPlus, Users } from 'lucide-react'
 import AppShell, { RailCard } from '@/components/app/AppShell'
 import MemberAvatar from '@/components/social/MemberAvatar'
 import PostCard from '@/components/social/PostCard'
@@ -15,6 +15,7 @@ import {
   type Post,
   type Profile as ProfileData,
 } from '@/lib/api'
+import { countryName, languageName, splitLanguages } from '@/lib/profileOptions'
 import { cn } from '@/lib/utils'
 
 /** Why an action is unavailable, in the member's own terms. */
@@ -27,7 +28,7 @@ export default function Profile() {
   const { handle = '' } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { tok } = useAppTheme()
+  const { tok, lang } = useAppTheme()
 
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [permissions, setPermissions] = useState<Permissions | null>(null)
@@ -134,7 +135,12 @@ export default function Profile() {
     )
   }
 
-  const place = [profile.city, profile.country].filter(Boolean).join(', ')
+  const place = [profile.city, profile.state, profile.country && countryName(profile.country, lang)]
+    .filter(Boolean)
+    .join(', ')
+  const spoken = splitLanguages(profile.languages)
+    .map((code) => languageName(code, lang))
+    .join(', ')
   const action = 'inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition-colors'
 
   return (
@@ -156,7 +162,7 @@ export default function Profile() {
               )}
               <div className="flex justify-between gap-3">
                 <dt className={tok.low}>Languages</dt>
-                <dd className={tok.mid}>{profile.languages}</dd>
+                <dd className={cn('text-end', tok.mid)}>{spoken}</dd>
               </div>
               <div className="flex justify-between gap-3">
                 <dt className={tok.low}>Handle</dt>
@@ -183,15 +189,28 @@ export default function Profile() {
     >
       {/* Header card */}
       <div className={cn('overflow-hidden rounded-card-lg', tok.card)}>
-        <div className="h-24 bg-gradient-to-r from-indigo/60 via-sky/40 to-gold/40" aria-hidden="true" />
+        {profile.cover_url ? (
+          <img src={profile.cover_url} alt="" className="h-32 w-full object-cover sm:h-40" />
+        ) : (
+          <div className="h-24 bg-gradient-to-r from-indigo/60 via-sky/40 to-gold/40" aria-hidden="true" />
+        )}
         <div className="px-5 pb-5">
-          <div className="-mt-10 mb-3">
+          <div className="-mt-10 mb-3 flex items-end justify-between gap-3">
             <MemberAvatar
               displayName={profile.display_name}
               avatarUrl={profile.avatar_url}
               size={80}
               ring
             />
+            {isSelf && (
+              <Link
+                to="/dashboard?tab=profile"
+                className={cn(action, 'border border-white/12', tok.mid, 'hover:border-gold/40 hover:text-gold-soft')}
+              >
+                <Pencil size={14} aria-hidden="true" />
+                Edit profile
+              </Link>
+            )}
           </div>
 
           <h1 className={cn('flex items-center gap-2 text-xl font-semibold', tok.text)}>

@@ -3,29 +3,50 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import httpx
 from fastapi import Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import and_, delete, func, or_, select
+from pydantic import BaseModel, Field
+from sqlalchemy import and_, case, delete, func, or_, select
 from sqlalchemy.orm import Session as OrmSession
 
-from common import notify
+from common import ageclient, notify
 from common.auth import CurrentUser, MaybeUser
 from common.database import get_db
 from common.ids import new_id
 from common.service import create_app
 
+import agediscovery
 import models
+import parental
+import profilefields
 
 AUTH_URL = "http://auth-service:8000"
+MEDIA_URL = "http://media-service:8000"
 
 log = logging.getLogger("user-service")
+
+# Columns added to Preferences after the first deploy. create_all never
+# alters an existing table, so without these the privacy work shipped a model
+# the database did not have - and /internal/permissions returned 500 for every
+# pair of members, which silently turned every permission check on the platform
+# into "could not verify".
+MIGRATIONS = [
+    f"ALTER TABLE {models.SCHEMA}.preferences "
+    "ADD COLUMN IF NOT EXISTS who_can_see_family VARCHAR(20) DEFAULT 'family'",
+    f"ALTER TABLE {models.SCHEMA}.preferences "
+    "ADD COLUMN IF NOT EXISTS family_tree_shared BOOLEAN DEFAULT TRUE",
+    f"ALTER TABLE {models.SCHEMA}.profiles ADD COLUMN IF NOT EXISTS avatar_asset_id VARCHAR(40)",
+    f"ALTER TABLE {models.SCHEMA}.profiles ADD COLUMN IF NOT EXISTS cover_asset_id VARCHAR(40)",
+]
 
 app = create_app(
     name="user-service",
     schema=models.SCHEMA,
+    migrations=MIGRATIONS,
     description="Profiles, follow graph, Circles, preferences.",
 )
 
@@ -40,6 +61,7 @@ class ProfileOut(BaseModel):
     avatar_url: str | None = None
     cover_url: str | None = None
     country: str | None = None
+    state: str | None = None
     city: str | None = None
     languages: str = "en"
     is_creator: bool = False
@@ -51,17 +73,72 @@ class ProfileOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class MyProfileOut(ProfileOut):
+    """What only the owner sees. The neighbourhood is a precise location and is
+    never shown to other members; it feeds local discovery server-side."""
+
+    neighborhood: str | None = None
+    lang: str = "en"
+
+
 class ProfileUpdate(BaseModel):
-    display_name: str | None = Field(default=None, min_length=2, max_length=120)
-    bio: str | None = Field(default=None, max_length=2000)
-    avatar_url: str | None = None
-    cover_url: str | None = None
-    country: str | None = Field(default=None, max_length=2)
+    """Every field optional. Absent = unchanged; null or blank = cleared, for the
+    fields that may be empty. Images are referenced by media-service asset id,
+    never by URL: a URL chosen by the client would let anyone embed any address
+    (a tracking pixel, for one) on a page every visitor loads."""
+
+    model_config = {"extra": "forbid"}
+
+    display_name: str | None = None
+    bio: str | None = None
+    avatar_asset_id: str | None = None
+    cover_asset_id: str | None = None
+    country: str | None = None
     state: str | None = None
     city: str | None = None
     neighborhood: str | None = None
     languages: str | None = None
     lang: str | None = None
+
+    @field_validator("display_name")
+    @classmethod
+    def _display_name(cls, value: str | None) -> str | None:
+        return None if value is None else profilefields.clean_display_name(value)
+
+    @field_validator("bio")
+    @classmethod
+    def _bio(cls, value: str | None) -> str | None:
+        return profilefields.clean_text(value, profilefields.BIO_MAX, multiline=True)
+
+    @field_validator("state")
+    @classmethod
+    def _state(cls, value: str | None) -> str | None:
+        return profilefields.clean_text(value, profilefields.STATE_MAX)
+
+    @field_validator("city")
+    @classmethod
+    def _city(cls, value: str | None) -> str | None:
+        return profilefields.clean_text(value, profilefields.CITY_MAX)
+
+    @field_validator("neighborhood")
+    @classmethod
+    def _neighborhood(cls, value: str | None) -> str | None:
+        return profilefields.clean_text(value, profilefields.NEIGHBOURHOOD_MAX)
+
+    @field_validator("country")
+    @classmethod
+    def _country(cls, value: str | None) -> str | None:
+        return profilefields.clean_country(value)
+
+    @field_validator("languages")
+    @classmethod
+    def _languages(cls, value: str | None) -> str | None:
+        return None if value is None else profilefields.clean_languages(value)
+
+    @field_validator("lang")
+    @classmethod
+    def _lang(cls, value: str | None) -> str | None:
+        return None if value is None else profilefields.clean_lang(value)
 
 
 class CircleIn(BaseModel):
@@ -143,20 +220,133 @@ def _ensure_profile(db: OrmSession, user_id: str) -> models.Profile:
 
 # --- profiles --------------------------------------------------------------
 
-@app.get("/users/me", response_model=ProfileOut, tags=["profiles"])
+@app.get("/users/me", response_model=MyProfileOut, tags=["profiles"])
 def my_profile(principal: CurrentUser, db: OrmSession = Depends(get_db)):
-    return ProfileOut.model_validate(_ensure_profile(db, principal.user_id))
+    return MyProfileOut.model_validate(_ensure_profile(db, principal.user_id))
 
 
-@app.patch("/users/me", response_model=ProfileOut, tags=["profiles"])
+@app.get("/users/me/eligibility", tags=["profiles"])
+def my_profile_eligibility(principal: CurrentUser):
+    """Which age-gated profile fields this account may fill, before it tries.
+
+    A readout for the editor, so it can leave a field out rather than refuse it
+    after the member typed it. PATCH /users/me enforces the rule on its own and
+    does not consult this. Kept off GET /users/me because that is called on
+    every page, and the age lookup is a call to auth-service. An age lookup
+    that fails reads as a minor, so the field is simply not offered.
+    """
+    who = ageclient.age_profile(principal.user_id)
+    return {"neighborhood": profilefields.may_set_neighbourhood(who)}
+
+
+# Fields that exist on every profile and cannot be emptied.
+_REQUIRED_PROFILE_FIELDS = ("display_name", "languages", "lang")
+_PROFILE_IMAGES = ("avatar", "cover")
+
+
+def _ready_image_url(asset_id: str, owner_id: str, purpose: str) -> str:
+    """The URL of an asset this member may put on their profile.
+
+    Fails closed: if media-service cannot confirm the asset, the change is
+    refused rather than applied. Not found and not yours get the same answer,
+    so asset ids cannot be probed.
+    """
+    try:
+        response = httpx.get(f"{MEDIA_URL}/internal/media/{asset_id}", timeout=5)
+    except httpx.HTTPError:
+        raise HTTPException(status_code=503, detail="Images cannot be checked right now. Please try again.")
+    if response.status_code == 404:
+        raise HTTPException(status_code=422, detail="Image not found")
+    if response.status_code != 200:
+        raise HTTPException(status_code=503, detail="Images cannot be checked right now. Please try again.")
+
+    asset = response.json()
+    if asset.get("owner_id") != owner_id:
+        raise HTTPException(status_code=422, detail="Image not found")
+    if asset.get("purpose") != purpose:
+        raise HTTPException(status_code=422, detail=f"This image was not uploaded as a {purpose}")
+    if asset.get("status") != "ready" or not asset.get("url"):
+        raise HTTPException(status_code=409, detail="This image is still being processed")
+    return asset["url"]
+
+
+def _discard_image(asset_id: str, owner_id: str) -> None:
+    """Delete a replaced image. Best effort: the profile change already stands."""
+    try:
+        httpx.post(f"{MEDIA_URL}/internal/media/{asset_id}/discard", json={"owner_id": owner_id}, timeout=10)
+    except httpx.HTTPError as exc:
+        log.warning("could not discard replaced image %s: %s", asset_id, exc)
+
+
+def _sync_identity(user_id: str, changes: dict) -> None:
+    """Keep auth-service's copy of the name and interface language in step.
+
+    Deliberately not the country: auth-service's country is the jurisdiction
+    the age rules are applied under, set at registration. A profile field that
+    moved it would let a minor pick the country with the lowest minimum age.
+
+    Called before the profile is committed and fails closed: if auth-service
+    cannot take the change, nothing changes, rather than the two copies of the
+    name silently drifting apart.
+    """
+    if not changes:
+        return
+    try:
+        response = httpx.patch(f"{AUTH_URL}/internal/users/{user_id}", json=changes, timeout=5)
+    except httpx.HTTPError as exc:
+        log.warning("could not sync identity for %s: %s", user_id, exc)
+        response = None
+    if response is None or response.status_code != 200:
+        if response is not None:
+            log.warning("identity sync for %s refused: %s %s", user_id, response.status_code, response.text[:200])
+        raise HTTPException(status_code=503, detail="Your profile could not be saved right now. Please try again.")
+
+
+@app.patch("/users/me", response_model=MyProfileOut, tags=["profiles"])
 def update_profile(payload: ProfileUpdate, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    changes = payload.model_dump(exclude_unset=True)
+    for field in _REQUIRED_PROFILE_FIELDS:
+        if field in changes and changes[field] is None:
+            raise HTTPException(status_code=422, detail=f"{field} cannot be empty")
+
+    if changes.get("neighborhood") or changes.get("bio"):
+        who = ageclient.age_profile(principal.user_id)
+        if changes.get("neighborhood") and not profilefields.may_set_neighbourhood(who):
+            raise HTTPException(status_code=403, detail="A neighbourhood cannot be added to this account.")
+        if changes.get("bio"):
+            problem = profilefields.bio_problem(changes["bio"], author_is_minor=who.is_minor)
+            if problem:
+                raise HTTPException(status_code=422, detail=problem)
+
     profile = _ensure_profile(db, principal.user_id)
-    for key, value in payload.model_dump(exclude_unset=True).items():
-        if value is not None:
-            setattr(profile, key, value.upper() if key == "country" else value)
+
+    replaced: list[str] = []
+    for purpose in _PROFILE_IMAGES:
+        key = f"{purpose}_asset_id"
+        if key not in changes:
+            continue
+        asset_id = changes.pop(key)
+        url = None if asset_id is None else _ready_image_url(asset_id, principal.user_id, purpose)
+        previous = getattr(profile, key)
+        if previous and previous != asset_id:
+            replaced.append(previous)
+        setattr(profile, key, asset_id)
+        setattr(profile, f"{purpose}_url", url)
+
+    identity = {
+        field: changes[field]
+        for field in ("display_name", "lang")
+        if field in changes and changes[field] != getattr(profile, field)
+    }
+    _sync_identity(principal.user_id, identity)
+    for field, value in changes.items():
+        setattr(profile, field, value)
     db.commit()
     db.refresh(profile)
-    return ProfileOut.model_validate(profile)
+
+    for asset_id in replaced:
+        _discard_image(asset_id, principal.user_id)
+    return MyProfileOut.model_validate(profile)
 
 
 # Declared before /users/{handle}: FastAPI matches in order, and the
@@ -168,6 +358,10 @@ def people_suggestions(principal: CurrentUser, limit: int = 5, db: OrmSession = 
     Ranked by follower count, which is the only signal available before there is
     a real graph to mine — and stated as such in the UI rather than dressed up as
     personalisation. Anyone already followed, blocked, or blocking is excluded.
+
+    Minors are not suggested to unrelated adults. Suggestion is where most
+    unwanted contact starts, so the cheapest place to stop it is before the
+    suggestion is made rather than after somebody acts on it.
     """
     following = set(
         db.scalars(select(models.Follow.followee_id).where(models.Follow.follower_id == principal.user_id)).all()
@@ -180,12 +374,15 @@ def people_suggestions(principal: CurrentUser, limit: int = 5, db: OrmSession = 
     )
     excluded = following | blocked | blocking | {principal.user_id}
 
+    # Over-fetched because minors are trimmed out below for adult viewers, and a
+    # page that comes back three-quarters empty is worse than one extra query.
     rows = db.scalars(
         select(models.Profile)
         .where(models.Profile.user_id.not_in(excluded) if excluded else True)
         .order_by(models.Profile.followers_count.desc(), models.Profile.created_at.desc())
-        .limit(min(limit, 20))
+        .limit(agediscovery.widened(min(limit, 20), 60))
     ).all()
+    rows = agediscovery.filter_profiles(principal.user_id, list(rows), min(limit, 20))
 
     return {
         "reason": "most_followed",
@@ -225,6 +422,10 @@ def search_people(
     who turned it off should not surface in a stranger's search. Blocks work in
     both directions — someone you blocked is hidden, and so is someone who
     blocked you, because appearing in their search is exactly what they refused.
+
+    And an adult searching does not find minors at all. A teenager searching
+    still finds everybody, including other teenagers: the restriction protects
+    the people being listed, not the person looking.
     """
     query = q.strip().lower()
     if len(query) < 2:
@@ -238,7 +439,26 @@ def search_people(
     )
     excluded = blocked | blocking | {principal.user_id}
 
-    like = f"%{query}%"
+    # Prefix, not substring: typing "ez" is looking for Ezekiel, and a substring
+    # match buried him under every Lopez and Mezu. Any word of the name counts,
+    # so a first name and a surname are both a way in; a handle matches at its
+    # start or after one of the separators a handle may contain.
+    #
+    # The member's text is escaped because `%` and `_` are LIKE wildcards: an
+    # unescaped "%%" listed every discoverable member on the platform.
+    term = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    name = func.lower(models.Profile.display_name)
+    handle = func.lower(models.Profile.handle)
+    starts = or_(
+        name.like(f"{term}%", escape="\\"),
+        handle.like(f"{term}%", escape="\\"),
+    )
+    word_starts = or_(
+        name.like(f"% {term}%", escape="\\"),
+        name.like(f"%-{term}%", escape="\\"),
+        handle.like(f"%.{term}%", escape="\\"),
+        handle.like(f"%\\_{term}%", escape="\\"),
+    )
     # `discoverable` lives on Preferences, not Profile, so this is an outer join:
     # a member whose preferences row was never materialised must still be
     # findable, and an inner join would silently hide them.
@@ -248,14 +468,17 @@ def search_people(
         .where(
             or_(models.Preferences.discoverable.is_(True), models.Preferences.user_id.is_(None)),
             models.Profile.user_id.not_in(excluded),
-            or_(
-                func.lower(models.Profile.handle).like(like),
-                func.lower(models.Profile.display_name).like(like),
-            ),
+            or_(starts, word_starts),
         )
-        .order_by(models.Profile.followers_count.desc())
-        .limit(min(limit, 25))
+        # Whole-name matches first: "ez" should put Ezekiel above Grace Ezeh.
+        .order_by(
+            case((starts, 0), else_=1),
+            models.Profile.followers_count.desc(),
+            name,
+        )
+        .limit(agediscovery.widened(min(limit, 25), 75))
     ).all()
+    rows = agediscovery.filter_profiles(principal.user_id, list(rows), min(limit, 25))
 
     return {
         "items": [
@@ -410,6 +633,296 @@ def delete_circle(circle_id: str, principal: CurrentUser, db: OrmSession = Depen
 
 # --- preferences -----------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Parental supervision
+# ---------------------------------------------------------------------------
+
+class SupervisionInviteIn(BaseModel):
+    """Either side may start it; the other has to agree."""
+
+    other_handle: str = Field(min_length=3, max_length=40)
+
+
+class SupervisionAnswerIn(BaseModel):
+    approve: bool
+
+
+class TimeLimitIn(BaseModel):
+    daily_limit_minutes: int | None = Field(default=None, ge=0, le=1440)
+
+
+@app.get("/supervision/disclosure", tags=["supervision"])
+def supervision_disclosure():
+    """What a parent can and cannot see, in plain words.
+
+    Public, and returned by the API rather than buried in a policy document,
+    so neither the parent nor the teenager has to take anybody's word for what
+    was agreed. Read it before inviting, read it before accepting.
+    """
+    return parental.disclosure()
+
+
+@app.get("/supervision", tags=["supervision"])
+def my_supervision(principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """Every supervision link this member is part of, from either side."""
+    links = parental.links_for(db, principal.user_id)
+    # A teenager sees their own requests and the answers, including the refusals.
+    # A setting that will not move with no record of why is how a teenager learns
+    # to look for a way round the product instead of asking.
+    requests = db.scalars(
+        select(models.SupervisionRequest)
+        .where(
+            or_(
+                models.SupervisionRequest.teen_id == principal.user_id,
+                models.SupervisionRequest.parent_id == principal.user_id,
+            )
+        )
+        .order_by(models.SupervisionRequest.created_at.desc())
+        .limit(50)
+    ).all()
+    return {
+        "items": [parental.link_out(link, principal.user_id) for link in links],
+        "requests": [
+            {
+                "id": r.id, "setting": r.setting, "requested_value": r.requested_value,
+                "status": r.status, "created_at": r.created_at, "answered_at": r.answered_at,
+                "role": "parent" if r.parent_id == principal.user_id else "teen",
+            }
+            for r in requests
+        ],
+        "disclosure": parental.disclosure(),
+    }
+
+
+@app.post("/supervision/invite", status_code=201, tags=["supervision"])
+def invite_supervision(
+    payload: SupervisionInviteIn, principal: CurrentUser, db: OrmSession = Depends(get_db)
+):
+    """Invite somebody into a supervision link.
+
+    Whoever is the minor becomes the supervised party; the ages decide the
+    roles, not whoever happened to send the invitation. A parent cannot
+    nominate themselves as the teenager, and a teenager inviting an adult is
+    asking to be supervised rather than to supervise.
+    """
+    other = db.scalar(
+        select(models.Profile).where(models.Profile.handle == payload.other_handle.strip().lower())
+    )
+    if other is None or other.user_id == principal.user_id:
+        raise HTTPException(status_code=404, detail="No such member")
+
+    me = ageclient.age_profile(principal.user_id)
+    them = ageclient.age_profile(other.user_id)
+
+    if me.is_minor and them.is_minor:
+        raise HTTPException(
+            status_code=400,
+            detail="A supervising adult has to be an adult account.",
+        )
+    if not me.is_minor and not them.is_minor:
+        raise HTTPException(
+            status_code=400,
+            detail="Supervision is for accounts under 18.",
+        )
+
+    teen_id, parent_id = (
+        (principal.user_id, other.user_id) if me.is_minor else (other.user_id, principal.user_id)
+    )
+
+    if parental.active_link(db, teen_id) is not None:
+        raise HTTPException(status_code=409, detail="This account already has a supervising adult.")
+
+    existing = db.scalar(
+        select(models.ParentalSupervision).where(
+            models.ParentalSupervision.teen_id == teen_id,
+            models.ParentalSupervision.parent_id == parent_id,
+            models.ParentalSupervision.status == "invited",
+        )
+    )
+    if existing is not None:
+        return {**parental.link_out(existing, principal.user_id), "existing": True}
+
+    link = models.ParentalSupervision(
+        id=new_id("sup"), teen_id=teen_id, parent_id=parent_id,
+        status="invited", invited_by=principal.user_id,
+    )
+    db.add(link)
+    db.commit()
+
+    other_id = teen_id if principal.user_id == parent_id else parent_id
+    notify.notify(
+        other_id, "supervision_invite",
+        "Someone invited you to a supervision link",
+        body="Read what it does and does not share before you accept.",
+        link="/settings/supervision",
+    )
+    return {**parental.link_out(link, principal.user_id), "existing": False}
+
+
+@app.post("/supervision/{link_id}/answer", tags=["supervision"])
+def answer_supervision(
+    link_id: str, payload: SupervisionAnswerIn, principal: CurrentUser,
+    db: OrmSession = Depends(get_db),
+):
+    """Accept or decline an invitation. Only the invited side may answer."""
+    link = db.get(models.ParentalSupervision, link_id)
+    if link is None or principal.user_id not in (link.teen_id, link.parent_id):
+        raise HTTPException(status_code=404, detail="Not found")
+    if principal.user_id == link.invited_by:
+        raise HTTPException(status_code=403, detail="The other person has to answer this.")
+    if link.status != "invited":
+        raise HTTPException(status_code=409, detail="This invitation has already been answered.")
+
+    link.status = "active" if payload.approve else "declined"
+    if payload.approve:
+        link.accepted_at = parental.now()
+    db.commit()
+
+    notify.notify(
+        link.invited_by, "supervision_answer",
+        "Your supervision invitation was accepted" if payload.approve
+        else "Your supervision invitation was declined",
+        link="/settings/supervision",
+    )
+    return parental.link_out(link, principal.user_id)
+
+
+@app.post("/supervision/{link_id}/end", tags=["supervision"])
+def end_supervision(link_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """End supervision. Either side may, and the other is told.
+
+    The teenager can do this themselves on purpose: supervision somebody cannot
+    leave is not supervision. What leaving does **not** do is unlock anything —
+    the account returns to the defaults for its age, so removing a parent is
+    never the way to get permissions.
+    """
+    link = db.get(models.ParentalSupervision, link_id)
+    if link is None or principal.user_id not in (link.teen_id, link.parent_id):
+        raise HTTPException(status_code=404, detail="Not found")
+    if link.status not in ("invited", "active"):
+        raise HTTPException(status_code=409, detail="This link has already ended.")
+
+    link.status = "ended"
+    link.ended_at = parental.now()
+    link.ended_by = principal.user_id
+    parental.revert_to_strictest(db, link.teen_id)
+    db.commit()
+
+    other = link.parent_id if principal.user_id == link.teen_id else link.teen_id
+    notify.notify(
+        other, "supervision_ended", "A supervision link has ended",
+        link="/settings/supervision",
+    )
+    return {
+        **parental.link_out(link, principal.user_id),
+        "note": "Settings were returned to the defaults for this account's age group.",
+    }
+
+
+@app.get("/supervision/{link_id}/view", tags=["supervision"])
+def supervised_view(link_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """What the parent is shown. Exactly the list in the disclosure.
+
+    There is no endpoint here for messages, contacts, posts or searches, and
+    that is the design rather than an omission: a teenager who believes their
+    parent can read their private messages stops using private messages for the
+    things private messages are for, including telling somebody that an adult
+    is pressuring them.
+    """
+    link = db.get(models.ParentalSupervision, link_id)
+    if link is None or link.parent_id != principal.user_id or link.status != "active":
+        raise HTTPException(status_code=404, detail="Not found")
+
+    prefs = db.get(models.Preferences, link.teen_id)
+    usage = db.scalar(
+        select(models.Usage).where(
+            models.Usage.user_id == link.teen_id,
+            models.Usage.day == date.today(),
+        )
+    )
+    pending = db.scalars(
+        select(models.SupervisionRequest).where(
+            models.SupervisionRequest.supervision_id == link.id
+        ).order_by(models.SupervisionRequest.created_at.desc()).limit(25)
+    ).all()
+
+    return {
+        "supervision": parental.link_out(link, principal.user_id),
+        "settings": {
+            "who_can_message": getattr(prefs, "who_can_message", None),
+            "who_can_invite": getattr(prefs, "who_can_invite", None),
+            "discoverable": getattr(prefs, "discoverable", None),
+            "sensitive_content": "blocked_for_this_age_group",
+        },
+        "time": {
+            "daily_limit_minutes": link.daily_limit_minutes
+            or getattr(prefs, "daily_limit_minutes", None),
+            "minutes_today": getattr(usage, "minutes", 0) if usage else 0,
+        },
+        "requests": [
+            {
+                "id": r.id, "setting": r.setting, "requested_value": r.requested_value,
+                "status": r.status, "created_at": r.created_at,
+            }
+            for r in pending
+        ],
+        "not_included": parental.CANNOT_SEE,
+    }
+
+
+@app.post("/supervision/{link_id}/time-limit", tags=["supervision"])
+def set_time_limit(
+    link_id: str, payload: TimeLimitIn, principal: CurrentUser, db: OrmSession = Depends(get_db)
+):
+    """The one setting a parent may change directly."""
+    link = db.get(models.ParentalSupervision, link_id)
+    if link is None or link.parent_id != principal.user_id or link.status != "active":
+        raise HTTPException(status_code=404, detail="Not found")
+    link.daily_limit_minutes = payload.daily_limit_minutes
+    prefs = db.get(models.Preferences, link.teen_id)
+    if prefs is not None:
+        prefs.daily_limit_minutes = payload.daily_limit_minutes
+    db.commit()
+    notify.notify(
+        link.teen_id, "supervision_time_limit",
+        "Your daily time limit was changed",
+        link="/settings/supervision",
+    )
+    return {"daily_limit_minutes": link.daily_limit_minutes}
+
+
+@app.post("/supervision/requests/{request_id}", tags=["supervision"])
+def answer_request(
+    request_id: str, payload: SupervisionAnswerIn, principal: CurrentUser,
+    db: OrmSession = Depends(get_db),
+):
+    """A parent answering a request to loosen a safety setting."""
+    request = db.get(models.SupervisionRequest, request_id)
+    if request is None or request.parent_id != principal.user_id:
+        raise HTTPException(status_code=404, detail="Not found")
+    if request.status != "pending":
+        raise HTTPException(status_code=409, detail="This has already been answered.")
+
+    request.status = "approved" if payload.approve else "declined"
+    request.answered_at = parental.now()
+
+    if payload.approve:
+        prefs = db.get(models.Preferences, request.teen_id)
+        if prefs is not None and hasattr(prefs, request.setting):
+            value = request.requested_value
+            if value in ("True", "False"):
+                value = value == "True"
+            setattr(prefs, request.setting, value)
+    db.commit()
+
+    notify.notify(
+        request.teen_id, "supervision_request_answered",
+        "Your request was approved" if payload.approve else "Your request was declined",
+        link="/settings/supervision",
+    )
+    return {"id": request.id, "status": request.status}
+
+
 @app.get("/preferences", tags=["preferences"])
 def get_preferences(principal: CurrentUser, db: OrmSession = Depends(get_db)):
     prefs = db.get(models.Preferences, principal.user_id)
@@ -434,8 +947,27 @@ def set_preferences(payload: PreferencesIn, principal: CurrentUser, db: OrmSessi
     if prefs is None:
         prefs = models.Preferences(user_id=principal.user_id)
         db.add(prefs)
+    # A supervised younger teen may always make their own account *stricter*
+    # without asking. Loosening a safety setting goes to their parent instead
+    # of being applied — and it is recorded either way, so the teenager can see
+    # what was refused rather than finding a setting that will not move.
+    held: list[dict] = []
+
     for key, value in payload.model_dump(exclude_unset=True).items():
         if value is None:
+            continue
+        refused = parental.refusal(db, principal.user_id, key, value)
+        if refused:
+            raise HTTPException(status_code=403, detail=refused)
+        if parental.needs_approval(db, principal.user_id, key, value):
+            link = parental.active_link(db, principal.user_id)
+            request = parental.open_request(db, link, key, value)
+            held.append({"setting": key, "requested_value": str(value), "request_id": request.id})
+            notify.notify(
+                link.parent_id, "supervision_request",
+                "A setting change is waiting for you",
+                link="/settings/supervision",
+            )
             continue
         if key == "interest_topics":
             # Stored as csv, normalised the same way post topics are, so a
@@ -446,7 +978,11 @@ def set_preferences(payload: PreferencesIn, principal: CurrentUser, db: OrmSessi
         setattr(prefs, key, value)
     db.commit()
     db.refresh(prefs)
-    return _prefs_out(prefs)
+    out = _prefs_out(prefs)
+    if held:
+        out["awaiting_approval"] = held
+        out["note"] = "Some changes need approval from the adult supervising this account."
+    return out
 
 
 # --- blocks ----------------------------------------------------------------

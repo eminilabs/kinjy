@@ -214,3 +214,56 @@ BUILTIN_ALGORITHMS = [
     dict(id="new_creators", name="New Creators", description="Boosts creators you have never seen.", weight_recency=0.6, weight_new_creator=1.5),
     dict(id="global_discovery", name="Global Discovery", description="Content from outside your country.", weight_recency=0.5, weight_locality=-1.0),
 ]
+
+
+class ContentSafetyClassification(Base):
+    """How suitable one post is, graded per category rather than flagged.
+
+    This replaces the single boolean that used to carry the whole decision.
+    One flag cannot tell a beach photograph from pornography, or a news report
+    of a war from gore posted for its own sake, and a platform that grades them
+    alike gets both decisions wrong - it hides journalism from adults and shows
+    children the other thing.
+
+    ``age_rating`` is the summary the fast path reads; the levels are what a
+    reviewer, an appeal and a per-tier ceiling actually work from.
+    """
+
+    __tablename__ = "content_safety"
+    __table_args__ = (
+        Index("ix_content_safety_rating", "age_rating"),
+        Index("ix_content_safety_review", "human_review_status"),
+        UniqueConstraint("content_id", name="uq_content_safety_content"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("csc"))
+    content_id: Mapped[str] = mapped_column(String(40), index=True)
+    content_kind: Mapped[str] = mapped_column(String(20), default="post")  # post|media|comment|short
+
+    # GENERAL | TEEN_13_PLUS | TEEN_16_PLUS | ADULT_18_PLUS | PROHIBITED | UNCLASSIFIED
+    age_rating: Mapped[str] = mapped_column(String(20), default="UNCLASSIFIED")
+
+    # 0 none .. 3 extreme
+    sexual_content_level: Mapped[int] = mapped_column(Integer, default=0)
+    nudity_level: Mapped[int] = mapped_column(Integer, default=0)
+    violence_level: Mapped[int] = mapped_column(Integer, default=0)
+    graphic_content_level: Mapped[int] = mapped_column(Integer, default=0)
+    drugs_level: Mapped[int] = mapped_column(Integer, default=0)
+    alcohol_level: Mapped[int] = mapped_column(Integer, default=0)
+    gambling_level: Mapped[int] = mapped_column(Integer, default=0)
+    dangerous_activity_level: Mapped[int] = mapped_column(Integer, default=0)
+    self_harm_risk: Mapped[int] = mapped_column(Integer, default=0)
+    hate_or_abuse_risk: Mapped[int] = mapped_column(Integer, default=0)
+    # Anything above 1 here stops the content reaching anybody, at any age, and
+    # routes it to the child-safety escalation rather than ordinary moderation.
+    exploitation_risk: Mapped[int] = mapped_column(Integer, default=0)
+
+    classifier_source: Mapped[str] = mapped_column(String(60), default="")
+    classifier_confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    human_review_status: Mapped[str] = mapped_column(String(20), default="none")
+    # {"DE": "ADULT_18_PLUS"} - may only ever tighten, never loosen.
+    jurisdiction_overrides: Mapped[str] = mapped_column(Text, default="{}")
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)

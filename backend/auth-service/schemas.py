@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
+
+from common.textclean import clean_display_name
 
 HANDLE_RE = re.compile(r"^[a-z0-9](?:[a-z0-9_.]{1,38}[a-z0-9])$")
 
 
 class RegisterIn(BaseModel):
     email: EmailStr
+    # Required. The tier it produces is decided by the server; the member never
+    # picks whether they are a teenager or an adult.
+    date_of_birth: date
     password: str = Field(min_length=10, max_length=128)
     display_name: str = Field(min_length=2, max_length=120)
     handle: str = Field(min_length=3, max_length=40)
@@ -32,6 +37,34 @@ class RegisterIn(BaseModel):
         if value.isdigit() or value.isalpha():
             raise ValueError("password must mix letters with digits or symbols")
         return value
+
+    @field_validator("display_name")
+    @classmethod
+    def _display_name(cls, value: str) -> str:
+        return clean_display_name(value)
+
+
+class IdentitySyncIn(BaseModel):
+    """What user-service may copy here after a profile edit.
+
+    Name and interface language only. The country on this row is the
+    jurisdiction the age rules run under, fixed at registration: a profile
+    edit that could move it would let a minor choose the country with the
+    lowest minimum age.
+
+    The name is checked again here even though user-service already did: this
+    row is the one every other service reads the name from.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    display_name: str | None = Field(default=None, min_length=2, max_length=120)
+    lang: str | None = None
+
+    @field_validator("display_name")
+    @classmethod
+    def _display_name(cls, value: str | None) -> str | None:
+        return None if value is None else clean_display_name(value)
 
 
 class LoginIn(BaseModel):
@@ -122,3 +155,25 @@ class PoolSeatIn(BaseModel):
     amount: str
     currency: str = "USD"
     payment_ref: str | None = None
+
+
+class AgeProfileOut(BaseModel):
+    """The authoritative age record, as other services receive it.
+
+    No date of birth: a service needs to know how old somebody is, not when
+    they were born.
+    """
+
+    user_id: str
+    tier: str
+    age: int
+    jurisdiction: str
+    policy_version: str
+    assurance_level: str
+    under_review: bool
+
+
+class DobCorrectionIn(BaseModel):
+    """A member correcting a birth date they entered wrongly."""
+
+    date_of_birth: date

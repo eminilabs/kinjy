@@ -1,8 +1,43 @@
-import { useState } from 'react'
-import { Link } from 'react-router'
-import { Compass, Package, Search, TreeDeciduous, UsersRound } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router'
+import { BadgeCheck, Compass, Package, Search, TreeDeciduous, UserRound, UsersRound } from 'lucide-react'
 import AppShell from '@/components/app/AppShell'
-import { kaluta, type Community, type Person, type Product } from '@/lib/api'
+import MemberAvatar from '@/components/social/MemberAvatar'
+import { kaluta, type Community, type Person, type PersonBrief, type Product } from '@/lib/api'
+import { cn } from '@/lib/utils'
+
+type Member = PersonBrief & { user_id: string }
+
+/** user-service answers nothing below two characters, so the page does not ask. */
+const MIN_QUERY = 2
+/** The most user-service returns in one answer. */
+const PEOPLE_LIMIT = 25
+
+function Section({
+  title,
+  icon: Icon,
+  empty,
+  emptyText = 'Nothing found.',
+  className,
+  children,
+}: {
+  title: string
+  icon: typeof Compass
+  empty: boolean
+  emptyText?: string
+  className?: string
+  children: React.ReactNode
+}) {
+  return (
+    <section className={cn('cloud-card p-5', className)}>
+      <h2 className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-text-hi">
+        <Icon size={15} className="text-gold" aria-hidden="true" />
+        {title}
+      </h2>
+      {empty ? <p className="text-sm text-text-low">{emptyText}</p> : children}
+    </section>
+  )
+}
 
 /**
  * Explore — one query across the services that can answer it.
@@ -12,84 +47,133 @@ import { kaluta, type Community, type Person, type Product } from '@/lib/api'
  * look like there are no communities either.
  */
 export default function Explore() {
-  const [query, setQuery] = useState('')
+  const [params] = useSearchParams()
+  const urlQuery = params.get('q') ?? ''
+  const [query, setQuery] = useState(urlQuery)
+  // The top bar's search lands here as ?q=. Used while this page is already
+  // open, the route stays mounted, so the new value is adopted during render.
+  const [adopted, setAdopted] = useState(urlQuery)
+  if (urlQuery !== adopted) {
+    setAdopted(urlQuery)
+    setQuery(urlQuery)
+  }
+
   const [busy, setBusy] = useState(false)
+  const [members, setMembers] = useState<Member[] | null>(null)
   const [communities, setCommunities] = useState<Community[] | null>(null)
   const [products, setProducts] = useState<Product[] | null>(null)
   const [people, setPeople] = useState<Person[] | null>(null)
   const [errors, setErrors] = useState<string[]>([])
+  const latest = useRef(0)
+  const pending = useRef<number | undefined>(undefined)
 
-  const run = async (event: React.FormEvent) => {
-    event.preventDefault()
-    const q = query.trim()
-    if (q.length < 2) return
+  const search = useCallback(async (q: string) => {
+    const ticket = ++latest.current
     setBusy(true)
-    setErrors([])
 
     const results = await Promise.allSettled([
+      kaluta.people.search(q, PEOPLE_LIMIT),
       kaluta.communities.list({ q }),
       kaluta.market.products({ q }),
       kaluta.family.search(q),
     ])
 
+    // Answers arrive out of order: the one for "e" can land after the one for
+    // "ez", and must not replace what the member has typed since.
+    if (ticket !== latest.current) return
+
     const failures: string[] = []
-    setCommunities(results[0].status === 'fulfilled' ? results[0].value.items : (failures.push('communities'), null))
-    setProducts(results[1].status === 'fulfilled' ? results[1].value.items : (failures.push('marketplace'), null))
-    setPeople(results[2].status === 'fulfilled' ? results[2].value.items : (failures.push('family tree'), null))
+    setMembers(results[0].status === 'fulfilled' ? results[0].value.items : (failures.push('people'), null))
+    setCommunities(results[1].status === 'fulfilled' ? results[1].value.items : (failures.push('communities'), null))
+    setProducts(results[2].status === 'fulfilled' ? results[2].value.items : (failures.push('marketplace'), null))
+    setPeople(results[3].status === 'fulfilled' ? results[3].value.items : (failures.push('family tree'), null))
     setErrors(failures)
     setBusy(false)
+  }, [])
+
+  const q = query.trim()
+  const active = q.length >= MIN_QUERY
+
+  // Results follow the typing, so "ez" already lists Ezekiel. Debounced: each
+  // search fans out to four services, and a burst of keystrokes should cost one.
+  useEffect(() => {
+    if (!active) {
+      // Whatever is still in flight answers text that is no longer there.
+      latest.current++
+      return
+    }
+    pending.current = window.setTimeout(() => void search(q), 250)
+    return () => window.clearTimeout(pending.current)
+  }, [q, active, search])
+
+  // Enter and the button still search, straight away rather than after the pause.
+  const run = (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!active) return
+    window.clearTimeout(pending.current)
+    void search(q)
   }
 
-  const Section = ({
-    title,
-    icon: Icon,
-    empty,
-    children,
-  }: {
-    title: string
-    icon: typeof Compass
-    empty: boolean
-    children: React.ReactNode
-  }) => (
-    <section className="cloud-card p-5">
-      <h2 className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-text-hi">
-        <Icon size={15} className="text-gold" aria-hidden="true" />
-        {title}
-      </h2>
-      {empty ? <p className="text-sm text-text-low">Nothing found.</p> : children}
-    </section>
-  )
+  const searching = busy && active
 
   return (
-    <AppShell title="Explore" subtitle="Search communities, the marketplace and the family graph at once.">
+    <AppShell title="Explore" subtitle="Search people, communities, the marketplace and the family graph at once.">
       <form onSubmit={run}>
         <label className="flex items-center gap-2.5 rounded-full border border-white/10 bg-ink-2/60 px-4 py-3">
           <Search size={16} className="shrink-0 text-text-low" aria-hidden="true" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search Kinjy — Kigoma, cassava, people…"
+            placeholder="Search Kinjy — a name, Kigoma, cassava…"
             aria-label="Search Kinjy"
             className="w-full bg-transparent text-sm text-text-hi placeholder:text-text-low focus:outline-none"
           />
           <button
             type="submit"
-            disabled={query.trim().length < 2 || busy}
+            disabled={!active || searching}
             className="shrink-0 rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-1.5 text-xs font-bold text-ink disabled:opacity-40"
           >
-            {busy ? 'Searching…' : 'Search'}
+            {searching ? 'Searching…' : 'Search'}
           </button>
         </label>
       </form>
 
-      {errors.length > 0 && (
+      {active && errors.length > 0 && (
         <p className="mt-3 text-sm text-amber-200">
           Could not reach: {errors.join(', ')}. The other results are complete.
         </p>
       )}
 
-      {(communities || products || people) && (
+      {active && (members || communities || products || people) && (
         <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          <Section
+            title="People"
+            icon={UserRound}
+            empty={(members ?? []).length === 0}
+            emptyText={`No member whose name starts with “${q}”.`}
+            className="lg:col-span-3"
+          >
+            <ul className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3" aria-live="polite">
+              {(members ?? []).map((m) => (
+                <li key={m.user_id} className="flex min-w-0 items-center gap-3">
+                  <MemberAvatar handle={m.handle} displayName={m.display_name} avatarUrl={m.avatar_url} size={36} />
+                  {/* The name and the handle line are one link: whichever the
+                      member clicks, they land on that person's profile. */}
+                  <Link to={`/u/${m.handle}`} className="group min-w-0 flex-1">
+                    <span className="flex items-center gap-1 text-sm font-semibold text-text-hi group-hover:text-gold-soft">
+                      <span className="truncate">{m.display_name}</span>
+                      {m.verified && <BadgeCheck size={13} className="shrink-0 text-gold" aria-label="Verified" />}
+                    </span>
+                    <span className="caption block truncate">
+                      @{m.handle}
+                      {m.city ? ` · ${m.city}` : ''}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Section>
+
           <Section title="Communities" icon={UsersRound} empty={(communities ?? []).length === 0}>
             <ul className="space-y-2">
               {(communities ?? []).map((c) => (

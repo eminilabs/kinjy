@@ -108,6 +108,13 @@ AI_DEFAULT_PROVIDER = _str("AI_DEFAULT_PROVIDER", "mock")
 # --- Media ------------------------------------------------------------------
 MEDIA_ROOT = _str("MEDIA_ROOT", "/data/media")
 MEDIA_PUBLIC_BASE = _str("MEDIA_PUBLIC_BASE", "http://localhost:8200/media")
+# Avatars and covers only. Blank key or project => local storage (mock mode).
+UPLOADCENTER_API_BASE = _str("UPLOADCENTER_API_BASE", "https://api.uploadscenter.com")
+UPLOADCENTER_API_KEY = _str("UPLOADCENTER_API_KEY")
+UPLOADCENTER_PROJECT_ID = _str("UPLOADCENTER_PROJECT_ID")
+# Hosts a stored file URL may point at (comma-separated). Anything else is
+# neither redirected to nor fetched.
+UPLOADCENTER_CDN_HOSTS = _str("UPLOADCENTER_CDN_HOSTS", "cdn.uploadscenter.com")
 
 # --- Languages (platform-wide) ---------------------------------------------
 SUPPORTED_LANGS = ["en", "sw", "fr", "ar", "zh"]

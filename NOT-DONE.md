@@ -273,3 +273,27 @@ seen running:
 - **Every screenshot-level judgement** — spacing, contrast, whether a design
   actually reads well. All visual claims in this project rest on DOM measurements,
   not on seeing the page.
+
+## Parental supervision (25/09)
+
+- **The teenager's side of the page has not been seen.** The parent's side was
+  loaded as a signed-in parent at 1280px and at 375px, with a live supervision
+  link and a pending request, and light mode measured clean (34 text/background
+  pairs, none under 4.5:1). The teen's view — the accept/decline buttons on an
+  invitation, and the wording of a request that was declined — was exercised
+  only through the API.
+- **`/earn` has the same layout bug this page shipped with.** It is not in
+  `APP_ROUTES` in `Layout.tsx`, so the marketing navbar still renders above its
+  app shell and the page scrolls with a dead band at the top. `/supervision` was
+  added to that list; `/earn` was left alone because fixing it means checking a
+  page that is not part of this change.
+- **A parent's own supervised state is not shown on the teen's side.** Either
+  party sees the link and the requests, but neither sees the other's display
+  name — only ids come back from `/supervision`. Workable, unfriendly.
+- **No email or push when an invitation arrives**, only the in-app bell. A
+  parent who is invited and does not open Kinjy never learns of it.
+- **Time limits are set but not enforced by this feature.** The number is
+  written to `preferences.daily_limit_minutes`, which the existing wellbeing
+  counter already reads; that the enforcement path honours a parent-set value
+  exactly as it honours a self-set one has not been re-verified since.
+

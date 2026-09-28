@@ -39,6 +39,7 @@ export default function SignIn() {
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [handle, setHandle] = useState('')
+  const [birthDate, setBirthDate] = useState('')
   const [handleEdited, setHandleEdited] = useState(false)
   const [referral, setReferral] = useState(params.get('ref') ?? '')
   const [submitting, setSubmitting] = useState(false)
@@ -70,7 +71,8 @@ export default function SignIn() {
     email.trim() !== '' &&
     password !== '' &&
     !submitting &&
-    (mode === 'signin' || (displayName.trim().length >= 2 && !handleError && !passwordError))
+    (mode === 'signin' ||
+      (displayName.trim().length >= 2 && !handleError && !passwordError && birthDate !== ''))
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -86,6 +88,7 @@ export default function SignIn() {
           password,
           display_name: displayName.trim(),
           handle,
+          date_of_birth: birthDate,
           referral_code: referral.trim() || undefined,
         })
       }
@@ -163,6 +166,25 @@ export default function SignIn() {
                     placeholder="Your full name"
                     autoComplete="name"
                   />
+                </label>
+                <label className="block">
+                  <span className="caption mb-1.5 block">Date of birth</span>
+                  <input
+                    type="date"
+                    className={field}
+                    value={birthDate}
+                    onChange={(e) => setBirthDate(e.target.value)}
+                    autoComplete="bday"
+                    max={new Date().toISOString().slice(0, 10)}
+                    aria-describedby="dob-why"
+                  />
+                  {/* Says what it is for, and nothing about what would qualify.
+                      Telling someone the minimum age is telling them which date
+                      to type instead. */}
+                  <span id="dob-why" className="caption mt-1.5 block">
+                    We use this to give you the right experience for your age. It is not shown on
+                    your profile.
+                  </span>
                 </label>
                 <label className="block">
                   <span className="caption mb-1.5 block">Handle</span>

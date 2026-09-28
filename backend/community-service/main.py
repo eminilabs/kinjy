@@ -21,6 +21,7 @@ from common.database import get_db
 from common.ids import new_id
 from common.service import create_app
 
+import agecommunity
 import models
 
 log = logging.getLogger("community-service")
@@ -129,6 +130,8 @@ async def create_community(payload: CommunityIn, principal: CurrentUser, db: Orm
             community_id=community.id, user_id=principal.user_id, role="owner", status="active"
         )
     )
+    db.flush()
+    agecommunity.classify_community(db, community)
     db.commit()
     await events.publish("community.created", {"community_id": community.id, "kind": community.kind})
     return {"id": community.id, "slug": community.slug, "kind": community.kind}
@@ -462,6 +465,13 @@ def suggestions(principal: MaybeUser, limit: int = 4, db: OrmSession = Depends(g
         .limit(min(limit, 10))
     ).all()
 
+    # A minor is not shown a community whose whole subject is adult. Judged on
+    # what the community says about itself, not on any one message inside it:
+    # a door is adult because of what it advertises, and one heated thread in a
+    # gardening group does not make the group adult.
+    age = agecommunity.viewer(principal.user_id if principal else None)
+    communities = [c for c in communities if agecommunity.community_is_listable(db, age, c)]
+
     return {
         "reason": "most_active",
         "communities": [
@@ -538,6 +548,22 @@ async def create_thread(
         id=new_id("thr"), forum_id=forum_id, author_id=principal.user_id, **payload.model_dump()
     )
     db.add(thread)
+    db.flush()
+
+    # Classified before it is committed. A thread that appears first and is
+    # rated a moment later was readable by everybody for that moment.
+    verdict = agecommunity.classify_and_store(
+        db, thread.id, "thread", f"{thread.title} {thread.body}", principal.user_id
+    )
+    if verdict.block_publication:
+        db.rollback()
+        if verdict.escalate_child_safety:
+            log.error("child-safety escalation on a thread by %s", principal.user_id)
+        raise HTTPException(
+            status_code=403,
+            detail="This cannot be published. If you believe this is a mistake, contact support.",
+        )
+
     forum.threads_count += 1
     db.commit()
 
@@ -550,11 +576,26 @@ async def create_thread(
 
 
 @app.get("/forums/{forum_id}/threads", tags=["forums"])
-def list_threads(forum_id: str, limit: int = 30, offset: int = 0, db: OrmSession = Depends(get_db)):
+def list_threads(
+    forum_id: str,
+    principal: MaybeUser,
+    limit: int = 30,
+    offset: int = 0,
+    db: OrmSession = Depends(get_db),
+):
+    """Threads in a forum, age-filtered before ordering and paging.
+
+    This endpoint took no viewer at all until now, which is why it needed
+    fixing: a surface with no idea who is asking cannot decide what they may
+    see, and the answer it gave was the same for a 13-year-old and an adult.
+    """
+    age = agecommunity.viewer(principal.user_id if principal else None)
+    stmt = select(models.Thread).where(
+        models.Thread.forum_id == forum_id, models.Thread.status == "open"
+    )
+    stmt = agecommunity.restrict_query(stmt, models.Thread, age)
     rows = db.scalars(
-        select(models.Thread)
-        .where(models.Thread.forum_id == forum_id, models.Thread.status == "open")
-        .order_by(models.Thread.pinned.desc(), models.Thread.last_activity_at.desc())
+        stmt.order_by(models.Thread.pinned.desc(), models.Thread.last_activity_at.desc())
         .limit(min(limit, 100))
         .offset(offset)
     ).all()
@@ -577,16 +618,30 @@ def list_threads(forum_id: str, limit: int = 30, offset: int = 0, db: OrmSession
 
 
 @app.get("/threads/{thread_id}", tags=["forums"])
-def get_thread(thread_id: str, db: OrmSession = Depends(get_db)):
+def get_thread(thread_id: str, principal: MaybeUser, db: OrmSession = Depends(get_db)):
     thread = db.get(models.Thread, thread_id)
     if thread is None:
         raise HTTPException(status_code=404, detail="Thread not found")
+
+    # A direct link bypasses the listing entirely, so the gate runs here too.
+    # 404 rather than 403: confirming a thread exists but is out of reach tells
+    # somebody which links are worth passing to a minor.
+    age = agecommunity.viewer(principal.user_id if principal else None)
+    if not agecommunity.visible(db, age, thread.id):
+        raise HTTPException(status_code=404, detail="Thread not found")
+
     thread.views_count += 1
     replies = db.scalars(
         select(models.Reply)
         .where(models.Reply.thread_id == thread_id, models.Reply.status == "published")
         .order_by(models.Reply.accepted_answer.desc(), models.Reply.created_at)
     ).all()
+    # Replies are separately rated: one unsuitable answer in an otherwise fine
+    # thread should remove that answer, not the whole discussion.
+    if age.is_minor:
+        ratings = agecommunity.classifications_for(db, [r.id for r in replies])
+        from common.agesafety import engine as _engine
+        replies = [r for r in replies if _engine.can_view_content(age, ratings.get(r.id)).allowed]
     db.commit()
     return {
         "id": thread.id,
@@ -623,6 +678,20 @@ def add_reply(thread_id: str, payload: ReplyIn, principal: CurrentUser, db: OrmS
         id=new_id("rpl"), thread_id=thread_id, author_id=principal.user_id, **payload.model_dump()
     )
     db.add(reply)
+    db.flush()
+
+    verdict = agecommunity.classify_and_store(
+        db, reply.id, "reply", reply.body, principal.user_id
+    )
+    if verdict.block_publication:
+        db.rollback()
+        if verdict.escalate_child_safety:
+            log.error("child-safety escalation on a reply by %s", principal.user_id)
+        raise HTTPException(
+            status_code=403,
+            detail="This cannot be published. If you believe this is a mistake, contact support.",
+        )
+
     thread.replies_count += 1
     thread.last_activity_at = datetime.now(timezone.utc)
     db.commit()

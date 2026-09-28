@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session as OrmSession
 
 from common import economy, events, settings
+from common import agefeatures
 from common.auth import AdminUser, CurrentUser
 from common.database import get_db
 from common.ids import new_id
@@ -79,6 +80,11 @@ def available_rails():
 
 @app.post("/payments/checkout", status_code=201, tags=["payments"])
 def checkout(payload: CheckoutIn, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    # The single door every payment goes through, which is why the gate sits
+    # here rather than only on the features that lead to it. A surface that
+    # forgot its own check still cannot take a minor's money.
+    agefeatures.require(principal.user_id, "payments")
+
     rail = rails.choose_rail(payload.rail, "USD")
     intent = models.PaymentIntent(
         id=new_id("pmt"),
@@ -280,6 +286,8 @@ def join_referral_pool(
     between the two is exactly where the last seat gets sold to somebody else,
     and a member should not discover that after paying.
     """
+    agefeatures.require(principal.user_id, "referral_pool")
+
     try:
         state = httpx.get(
             f"{AUTH_URL}/auth/referral-pool",
@@ -386,6 +394,10 @@ def list_refunds(_: AdminUser, status: str | None = None, limit: int = 100, db: 
 
 @app.post("/payments/destinations", status_code=201, tags=["payouts"])
 def add_destination(payload: DestinationIn, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    # Where money would be sent. A payout destination on a minor's account is
+    # the step before a minor being paid, so it is gated at the same age.
+    agefeatures.require(principal.user_id, "monetization")
+
     existing = db.scalar(
         select(models.PayoutDestination).where(
             models.PayoutDestination.user_id == principal.user_id,

@@ -28,6 +28,9 @@ const APP_ROUTES = [
   '/explore',
   '/live',
   '/shorts',
+  '/supervision',
+  // Covers /settings/supervision, which the notifications link to.
+  '/settings',
   '/u',
 ]
 

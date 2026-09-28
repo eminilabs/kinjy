@@ -7,6 +7,8 @@
  */
 
 const BASE = import.meta.env.VITE_API_BASE ?? '/api'
+/** For the few requests fetch() cannot make, such as uploads that report progress. */
+export const API_BASE = BASE
 
 const ACCESS_KEY = 'kaluta.access_token'
 const REFRESH_KEY = 'kaluta.refresh_token'
@@ -317,19 +319,62 @@ export interface Passkey {
   last_used_at: string | null
 }
 
+/** What anyone can see: `GET /users/{handle}`. */
 export interface Profile {
   user_id: string
   handle: string
   display_name: string
   bio: string | null
   avatar_url: string | null
+  cover_url: string | null
+  /** ISO 3166 alpha-2, upper case. */
   country: string | null
+  state: string | null
   city: string | null
+  /** ISO 639 codes the member speaks, most fluent first, e.g. "fr,ln". */
   languages: string
   is_creator: boolean
   verified: boolean
   followers_count: number
   following_count: number
+  created_at: string
+}
+
+/**
+ * What only the owner sees: `GET /users/me`. The neighbourhood is a precise
+ * location and never appears on the public profile.
+ */
+export interface MyProfile extends Profile {
+  neighborhood: string | null
+  /** Interface language: one Kinjy is translated into. */
+  lang: string
+}
+
+/**
+ * `PATCH /users/me`. Omit a field to leave it unchanged; `null` (or an empty
+ * string) clears it. Images are referenced by the asset id returned by
+ * `uploadProfileImage`, never by URL: the server refuses URLs.
+ */
+export interface ProfileUpdate {
+  display_name?: string
+  bio?: string | null
+  avatar_asset_id?: string | null
+  cover_asset_id?: string | null
+  country?: string | null
+  state?: string | null
+  city?: string | null
+  /** Adults only; refused (403) for younger members. */
+  neighborhood?: string | null
+  languages?: string
+  lang?: string
+}
+
+/**
+ * `GET /users/me/eligibility`: which age-gated fields the editor should offer.
+ * A readout only; `PATCH /users/me` enforces the rule itself.
+ */
+export interface ProfileEligibility {
+  neighborhood: boolean
 }
 
 export interface PostMedia {
@@ -474,6 +519,7 @@ export interface CommentAuthor {
   id: string
   handle: string
   display_name: string
+  avatar_url: string | null
 }
 
 export interface CommentNode {
@@ -928,6 +974,51 @@ function serializeCredential(credential: PublicKeyCredential): Record<string, un
 /** Whether this browser can do passkeys at all. */
 export const passkeysSupported = () =>
   typeof window !== 'undefined' && Boolean(window.PublicKeyCredential)
+
+export interface SupervisionDisclosure {
+  can_see: string[]
+  cannot_see: string[]
+  can_do: string[]
+  cannot_do: string[]
+  note: string
+}
+
+export interface SupervisionLink {
+  id: string
+  role: 'parent' | 'teen'
+  parent_id: string
+  teen_id: string
+  status: 'invited' | 'active' | 'declined' | 'ended'
+  invited_by: string
+  created_at: string
+  accepted_at: string | null
+  ended_at: string | null
+  ended_by: string | null
+}
+
+export interface SupervisionRequest {
+  id: string
+  setting: string
+  requested_value: string
+  status: 'pending' | 'approved' | 'declined'
+  created_at: string
+  answered_at?: string | null
+  role: 'parent' | 'teen'
+}
+
+export interface SupervisionState {
+  items: SupervisionLink[]
+  requests: SupervisionRequest[]
+  disclosure: SupervisionDisclosure
+}
+
+export interface SupervisedView {
+  supervision: SupervisionLink
+  settings: Record<string, unknown>
+  time: { daily_limit_minutes: number | null; minutes_today: number }
+  requests: Omit<SupervisionRequest, 'role'>[]
+  not_included: string[]
+}
 
 export const kaluta = {
   status: () => api.get<StackStatus>('/status', { auth: false }),
@@ -1493,6 +1584,11 @@ export const kaluta = {
       password: string
       display_name: string
       handle: string
+      /** ISO date. Required: the server derives the account's age tier from it
+          and will refuse a registration without one. The tier itself is never
+          sent by the client. */
+      date_of_birth: string
+      country?: string
       lang?: string
       referral_code?: string
     }) {
@@ -1542,9 +1638,33 @@ export const kaluta = {
     isSignedIn: () => Boolean(tokens.access),
   },
 
+  /**
+   * Parental supervision.
+   *
+   * `disclosure` is deliberately unauthenticated and fetched by both sides
+   * before either agrees: what a parent can and cannot see is part of the
+   * agreement, not a policy page somebody may or may not have read.
+   */
+  supervision: {
+    disclosure: () => api.get<SupervisionDisclosure>('/supervision/disclosure', { auth: false }),
+    mine: () => api.get<SupervisionState>('/supervision'),
+    invite: (other_handle: string) =>
+      api.post<SupervisionLink>('/supervision/invite', { other_handle }),
+    answer: (id: string, approve: boolean) =>
+      api.post<SupervisionLink>(`/supervision/${id}/answer`, { approve }),
+    end: (id: string) => api.post<SupervisionLink>(`/supervision/${id}/end`),
+    view: (id: string) => api.get<SupervisedView>(`/supervision/${id}/view`),
+    setTimeLimit: (id: string, daily_limit_minutes: number | null) =>
+      api.post<{ daily_limit_minutes: number | null }>(
+        `/supervision/${id}/time-limit`, { daily_limit_minutes },
+      ),
+    answerRequest: (id: string, approve: boolean) =>
+      api.post<{ id: string; status: string }>(`/supervision/requests/${id}`, { approve }),
+  },
+
   /** Everything behind the member dashboard. */
   account: {
-    profile: () => api.get<Profile>('/users/me'),
+    profile: () => api.get<MyProfile>('/users/me'),
     profileByHandle: (handle: string) => api.get<Profile>(`/users/${handle}`, { auth: false }),
     preferences: () => api.get<Record<string, unknown>>('/preferences'),
     setPreferences: (patch: Record<string, unknown>) => api.patch('/preferences', patch),
@@ -1557,8 +1677,8 @@ export const kaluta = {
      */
     wellbeingBeat: (minutes: number) =>
       api.post<WellbeingStatus>('/wellbeing/heartbeat', { minutes }),
-    updateProfile: (patch: Partial<Pick<Profile, 'display_name' | 'bio' | 'country' | 'city'>>) =>
-      api.patch<Profile>('/users/me', patch),
+    updateProfile: (patch: ProfileUpdate) => api.patch<MyProfile>('/users/me', patch),
+    profileEligibility: () => api.get<ProfileEligibility>('/users/me/eligibility'),
 
     wallet: () => api.get<Wallet>('/wallet'),
     commissions: (params: { source_kind?: string; limit?: number } = {}) => {

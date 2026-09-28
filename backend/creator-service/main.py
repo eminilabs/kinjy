@@ -10,7 +10,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session as OrmSession
 
-from common import events, settings
+from common import agefeatures, events, settings
+from common.agesafety import engine as age_engine
 from common.auth import CurrentUser
 from common.database import get_db
 from common.ids import new_id
@@ -79,8 +80,65 @@ def plans():
     }
 
 
+# The features whose availability depends on age. Listed once so the readout
+# below and the gates that enforce them cannot drift apart.
+AGE_GATED_FEATURES = [
+    "livestream",
+    "livestream_gifting",
+    "monetization",
+    "marketplace_sell",
+    "marketplace_buy",
+    "payments",
+    "referral_pool",
+]
+
+
+@app.get("/creators/eligibility", tags=["creators"])
+def feature_eligibility(principal: CurrentUser):
+    """What this account may and may not do, before it tries.
+
+    So a client can grey a button out and say why, rather than letting somebody
+    fill in a payment form and refusing at the end. It is a readout: the gates
+    on the endpoints themselves are what actually enforce anything, and they do
+    not consult this.
+    """
+    return agefeatures.eligibility(principal.user_id, AGE_GATED_FEATURES)
+
+
+@app.get("/live/eligibility", tags=["livestream"])
+def livestream_eligibility(principal: CurrentUser):
+    """Whether this account may start a livestream, and under what rules.
+
+    There is no streaming backend yet - no ingest, no session, no key. What
+    exists is the decision, exposed at the address a streaming stack would have
+    to ask. Building the gate first is deliberate: the alternative is shipping
+    the stack and remembering the age rule afterwards, which is how a
+    13-year-old ends up live to strangers.
+    """
+    who = agefeatures.profile(principal.user_id)
+    verdict = age_engine.can_start_livestream(who)
+    policy = age_engine.policy_for(who)
+    return {
+        "allowed": verdict.allowed,
+        "age_tier": who.tier.value,
+        "policy": {
+            "jurisdiction": policy.jurisdiction,
+            "minimum_age": age_engine.FEATURE_MINIMUM_AGES["livestream"],
+            "parental_approval_required": policy.parental_consent_required,
+            "gifting_allowed": bool(age_engine.can_use_feature(who, "livestream_gifting")),
+            "monetization_allowed": bool(age_engine.can_monetize(who)),
+            "policy_version": policy.policy_version,
+        },
+        "reason": None if verdict.allowed else agefeatures.REFUSAL,
+        "note": "Streaming infrastructure is not built. This is the age decision it must ask.",
+    }
+
+
 @app.post("/creators/enable", tags=["creators"])
 def enable_creator(principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    # Becoming a creator is opting into being paid.
+    agefeatures.require(principal.user_id, "monetization")
+
     profile = db.get(models.CreatorProfile, principal.user_id)
     if profile is None:
         profile = models.CreatorProfile(user_id=principal.user_id)
