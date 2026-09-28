@@ -514,6 +514,7 @@ export interface CommentAuthor {
   id: string
   handle: string
   display_name: string
+  avatar_url: string | null
 }
 
 export interface CommentNode {

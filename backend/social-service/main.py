@@ -1647,6 +1647,7 @@ def list_comments(
             "id": uid,
             "handle": profile["handle"] if profile else uid[:12],
             "display_name": profile["display_name"] if profile else uid[:12],
+            "avatar_url": profile.get("avatar_url") if profile else None,
         }
 
     return {
