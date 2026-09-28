@@ -993,6 +993,24 @@ export interface AppealItem {
   decided_by: string | null
 }
 
+export interface MyDecision {
+  id: string
+  content_id: string
+  content_kind: string
+  action: 'refused_publication' | 'restricted_by_rating' | 'restricted_by_reports' | 'human_review'
+  age_rating: string
+  decided_by: 'automatic' | 'a reviewer'
+  appealable: boolean
+  created_at: string
+  appeal: {
+    id: string
+    status: 'open' | 'upheld' | 'overturned'
+    created_at: string
+    answered_at: string | null
+    reviewer_note: string | null
+  } | null
+}
+
 export const kaluta = {
   status: () => api.get<StackStatus>('/status', { auth: false }),
 
@@ -1611,8 +1629,7 @@ export const kaluta = {
 
   /** What moderation did to you, and how to contest it. */
   moderation: {
-    myDecisions: () =>
-      api.get<{ items: Array<Record<string, unknown>> }>('/moderation/decisions'),
+    myDecisions: () => api.get<{ items: MyDecision[] }>('/moderation/decisions'),
     appeal: (decisionId: string, grounds: string) =>
       api.post(`/moderation/decisions/${decisionId}/appeal`, { grounds }),
     reportPost: (postId: string, reason: string, note?: string) =>

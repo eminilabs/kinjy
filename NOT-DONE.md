@@ -299,10 +299,8 @@ seen running:
 
 ## Moderation: reports, decisions, appeals (28/09)
 
-- **The member side still has no screen.** An author can fetch
-  `/moderation/decisions` and see what was restricted and how their appeal is
-  going, and nothing shows it to them. The staff console exists; the half that
-  belongs to the person who was moderated does not.
+- ~~The member side has no screen.~~ Built: `/moderation` shows what was
+  restricted, in plain words rather than column values, and takes the appeal.
 - **No refusal is appealable, and that is not a bug today.** Every
   `block_publication` in the classifier also sets `escalate_child_safety`, so
   every refusal is a child-safety escalation and correctly leaves the ordinary
@@ -359,3 +357,36 @@ seen running:
 - **The rest of `/admin` is still a mockup.** Ledger, KYC, fraud, leaders pool
   and AI watch are all static markup with invented figures, exactly as the
   moderation section was until today.
+
+## Member moderation screen and reporting (28/09)
+
+- **Reporting had no entry point at all until now.** The whole reports
+  pipeline — three-from-distinct-accounts, the author's own report not
+  counting, urgent routing for child-safety — shipped with no way for a member
+  to file one. It is on the post card now. Comments can be reported through the
+  API but have no control in the UI, so half the pipeline is still unreachable
+  by hand.
+- **A report that fails to send used to claim it had been filed.** The first
+  version set "Thanks — a reviewer will look at this" optimistically and
+  swallowed the error; the first time the local gateway was down it said
+  exactly that while the request had been refused. Somebody reporting a child
+  at risk has to be able to believe that message, so it now waits for the
+  server and offers a retry on failure. What is still withheld is the outcome —
+  whether the report moved a rating — because that is what makes reporting a
+  way to probe the threshold.
+- **No way to see or withdraw a report you filed.** Once sent it is gone from
+  the member's view entirely, and the button just reads "Reported" until the
+  page is reloaded, after which it offers to report again (the server
+  deduplicates, so nothing doubles, but the UI does not know that).
+- **The appeal box has no character counter** against its 2000-character limit,
+  and a member who writes past it gets a silently truncated field.
+- **The member page's "we could not check" state has not been seen.** The code
+  distinguishes a failed load from an empty one — showing the reassuring
+  "nothing has been restricted" when the call actually failed would be the same
+  mistake as a dashboard inventing a queue depth — but only the happy path was
+  exercised in a browser. Three attempts to force it on production failed for
+  the same reason each time: patching `fetch` in the page does not survive the
+  navigation needed to remount the route. It wants a local stack, which was
+  down (Docker Desktop's Windows service is stopped and needs elevation to
+  start), so it is a check owed rather than a check made.
+

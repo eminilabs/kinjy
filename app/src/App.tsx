@@ -34,6 +34,7 @@ const Shorts = lazy(() => import('./pages/app/Shorts'))
 const Earn = lazy(() => import('./pages/app/Earn'))
 const Supervision = lazy(() => import('./pages/app/Supervision'))
 const TrustSafety = lazy(() => import('./pages/TrustSafety'))
+const Moderation = lazy(() => import('./pages/app/Moderation'))
 const Profile = lazy(() => import('./pages/app/Profile'))
 
 function PageFallback() {
@@ -89,6 +90,8 @@ export default function App() {
           {/* Staff console. The service refuses every call behind it to
               anybody who is not staff, so the route itself is not the guard. */}
           <Route path="/trust-safety" element={<TrustSafety />} />
+          {/* Where the appeal notification sends the member. */}
+          <Route path="/moderation" element={<Moderation />} />
           {/* Every avatar in the app links here. */}
           <Route path="/u/:handle" element={<Profile />} />
           <Route path="*" element={<Home />} />
