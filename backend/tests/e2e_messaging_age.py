@@ -70,10 +70,54 @@ teen14_tok, teen14 = register(14)
 teen17_tok, teen17 = register(17)
 teen15_tok, teen15 = register(15)
 
-for tok in (adult_tok, adult2_tok, teen14_tok, teen17_tok, teen15_tok):
+def supervised_open_to_everyone(teen_tok, teen_user):
+    """Open a younger teen's messages the only way they now can: with an adult.
+
+    A 13-to-15-year-old can no longer set `who_can_message` to `everyone` by
+    themselves - the age tier refuses it, and supervision is the key. That is
+    deliberate, and it broke this test's setup rather than this test's point:
+    the scenario it needs is an account that really is open to everybody, so
+    that any refusal below must have come from the age layer rather than from a
+    privacy setting. So the account is opened legitimately, through a guardian
+    who approves the request, instead of weakening what the test proves.
+    """
+    guardian_tok, _ = register(40)
+    r = c.post("/supervision/invite", headers=auth(guardian_tok),
+               json={"other_handle": teen_user["handle"]})
+    assert r.status_code == 201, f"could not invite a guardian: {r.status_code} {r.text[:140]}"
+    link_id = r.json()["id"]
+
+    r = c.post(f"/supervision/{link_id}/answer", headers=auth(teen_tok), json={"approve": True})
+    assert r.status_code == 200, f"teen could not accept: {r.status_code} {r.text[:140]}"
+
+    r = open_to_everyone(teen_tok)
+    assert r.status_code in (200, 204), f"request refused: {r.status_code} {r.text[:140]}"
+    held = r.json().get("awaiting_approval") or []
+    assert held, f"expected the change to need approval, got {r.text[:160]}"
+
+    r = c.post(f"/supervision/requests/{held[0]['request_id']}", headers=auth(guardian_tok),
+               json={"approve": True})
+    assert r.status_code == 200, f"guardian could not approve: {r.status_code} {r.text[:140]}"
+
+    r = c.get("/preferences", headers=auth(teen_tok))
+    assert r.json().get("who_can_message") == "everyone",         f"still not open after approval: {r.text[:160]}"
+    return guardian_tok
+
+
+for tok in (adult_tok, adult2_tok, teen17_tok):
     r = open_to_everyone(tok)
     assert r.status_code in (200, 204), f"could not open messages: {r.status_code} {r.text[:120]}"
+
+# The younger two need an adult to agree; a 17-year-old does not. Without a
+# guardian on the account the change is refused outright rather than queued -
+# there is nobody to queue it for, and "ask nobody" would make removing your
+# parent the way to get the permission.
+r = open_to_everyone(teen14_tok)
+assert r.status_code == 403,     f"a 14-year-old opened their messages to everyone unaided ({r.status_code}) - the tier lock is gone"
+supervised_open_to_everyone(teen14_tok, teen14)
+supervised_open_to_everyone(teen15_tok, teen15)
 print("every test member has opened their messages to everyone")
+print("  (the 14- and 15-year-olds needed a guardian's approval to do it)")
 
 print("\n== an unknown adult reaching a minor ==")
 r = open_convo(adult_tok, teen14["id"])

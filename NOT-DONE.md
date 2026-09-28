@@ -380,13 +380,12 @@ seen running:
   deduplicates, so nothing doubles, but the UI does not know that).
 - **The appeal box has no character counter** against its 2000-character limit,
   and a member who writes past it gets a silently truncated field.
-- **The member page's "we could not check" state has not been seen.** The code
-  distinguishes a failed load from an empty one — showing the reassuring
-  "nothing has been restricted" when the call actually failed would be the same
-  mistake as a dashboard inventing a queue depth — but only the happy path was
-  exercised in a browser. Three attempts to force it on production failed for
-  the same reason each time: patching `fetch` in the page does not survive the
-  navigation needed to remount the route. It wants a local stack, which was
-  down (Docker Desktop's Windows service is stopped and needs elevation to
-  start), so it is a check owed rather than a check made.
+- ~~The member page's "we could not check" state has not been seen.~~ Checked
+  on 28/09 by stopping `social-service` so the decisions call fails while auth
+  stays up: the page shows "We could not check this right now — this is not the
+  same as nothing being restricted" with a retry, does not fall back to the
+  reassuring empty state, and recovers through the retry button once the
+  service is back. Patching `fetch` in the page never worked for this, because
+  the navigation needed to remount the route discards the patch; stopping the
+  service is both simpler and closer to the real failure.
 
