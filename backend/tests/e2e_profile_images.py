@@ -74,10 +74,8 @@ def presign(headers, purpose="avatar", mime="image/png", size=len(PNG)):
 
 
 def put_bytes(headers, grant, body, mime="image/png"):
-    upload = grant["upload"]
-    if upload["mode"] == "local":
-        return c.put(upload["path"], headers={**headers, "Content-Type": mime}, content=body)
-    return httpx.put(upload["url"], headers={"Content-Type": mime}, content=body, timeout=30)
+    """Exactly what the browser does: PUT to media-service through the gateway."""
+    return c.put(grant["upload"]["path"], headers={**headers, "Content-Type": mime}, content=body)
 
 
 print("== media-service identity")
@@ -137,22 +135,24 @@ print("== someone else's upload")
 r = c.post(f"/media/profile-images/{asset_id}/complete", headers=other)
 check("another member cannot complete it -> 404", r.status_code == 404, r.text)
 
-if grant["storage"] == "local":
-    r2 = presign(me)
-    g2 = r2.json()
-    r = put_bytes(other, g2, PNG)
-    check("another member cannot upload into it -> 404", r.status_code == 404, r.text)
+r2 = presign(me)
+g2 = r2.json()
+r = put_bytes(other, g2, PNG)
+check("another member cannot upload into it -> 404", r.status_code == 404, r.text)
 
-    print("== bytes that lie about their type (local mode)")
-    r = put_bytes(me, g2, HTML)
-    check("HTML declared as PNG refused -> 422", r.status_code == 422, r.text)
-    r = c.post(f"/media/profile-images/{g2['asset_id']}/complete", headers=me)
-    check("and it can never become ready -> 422", r.status_code == 422, r.text)
-    check("and it is not served", httpx.get(f"{MEDIA_DIRECT}/media/{g2['asset_id']}").status_code == 404)
+print("== bytes that lie about their type")
+# Refused on arrival, before anything reaches storage, in both modes.
+r = put_bytes(me, g2, HTML)
+check("HTML declared as PNG refused -> 422", r.status_code == 422, r.text)
+r = c.post(f"/media/profile-images/{g2['asset_id']}/complete", headers=me)
+check("and it can never become ready -> 422", r.status_code == 422, r.text)
+check("and it is not served", httpx.get(f"{MEDIA_DIRECT}/media/{g2['asset_id']}").status_code == 404)
 
-    g3 = presign(me, size=len(PNG)).json()
-    r = put_bytes(me, g3, PNG + b"\x00" * (6 * 1024 * 1024))  # over the 5 MB avatar ceiling
-    check("oversized body refused -> 413", r.status_code == 413, r.status_code)
+g3 = presign(me, size=len(PNG)).json()
+r = put_bytes(me, g3, PNG + b"\x00" * (6 * 1024 * 1024))  # over the 5 MB avatar ceiling
+check("oversized body refused -> 413", r.status_code == 413, r.status_code)
+r = put_bytes(me, g3, PNG)
+check("the same upload can still be sent correctly afterwards", r.status_code == 204, r.text)
 
 if grant["storage"] == "uploadcenter":
     print("== a file UploadCenter rejects (uploadcenter mode)")
@@ -165,16 +165,6 @@ if grant["storage"] == "uploadcenter":
     put_bytes(me, g4, tiny)
     r = complete_until_settled(me, g4["asset_id"])
     check("a rejected file ends in 422, not endless polling", r.status_code == 422, r.text)
-
-    print("== bytes that lie about their type (uploadcenter mode)")
-    # UploadCenter reports the type the browser declared; only the bytes read
-    # back from the CDN can tell. Pad past UploadCenter's tiny-file rejection.
-    lie = HTML + b" " * 20000
-    g5 = presign(me, size=len(lie)).json()
-    put_bytes(me, g5, lie)
-    r = complete_until_settled(me, g5["asset_id"])
-    check("HTML declared as PNG never becomes ready -> 422", r.status_code == 422, r.text)
-    check("and it is not served", httpx.get(f"{MEDIA_DIRECT}/media/{g5['asset_id']}").status_code == 404)
 
 print("== unfinished uploads are capped")
 spammer, _ = register()

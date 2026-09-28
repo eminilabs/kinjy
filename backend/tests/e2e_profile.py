@@ -66,11 +66,8 @@ def upload(headers, purpose, finish=True):
     }).json()
     if not finish:
         return grant["asset_id"]
-    target = grant["upload"]
-    if target["mode"] == "local":
-        c.put(target["path"], headers={**headers, "Content-Type": "image/png"}, content=body)
-    else:
-        httpx.put(target["url"], headers={"Content-Type": "image/png"}, content=body, timeout=60)
+    r = c.put(grant["upload"]["path"], headers={**headers, "Content-Type": "image/png"}, content=body)
+    assert r.status_code == 204, r.text
     for _ in range(30):
         r = c.post(f"/media/profile-images/{grant['asset_id']}/complete", headers=headers)
         if r.status_code != 202:

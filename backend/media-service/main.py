@@ -12,6 +12,7 @@ from fastapi import Depends, File, Form, HTTPException, UploadFile, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session as OrmSession
 
 from common import mediasign, settings
@@ -272,9 +273,12 @@ def _discard_bytes(asset: models.Asset) -> None:
 # Three steps, the same for both storages so the client has one flow:
 #   1. presign  - the member declares purpose, type and size; refused here
 #                 before anything is stored.
-#   2. PUT      - UploadCenter mode: straight to UploadCenter's one-off URL.
-#                 Local mode (no key configured): to this service.
-#   3. complete - checked again against what was actually stored, then ready.
+#   2. PUT      - the bytes come to this service, which checks them, then
+#                 stores them: on the media volume (local mode, no key) or on
+#                 UploadCenter, server to server. The browser cannot upload to
+#                 UploadCenter itself: its storage refuses CORS preflights.
+#   3. complete - 200 once the stored file is ready, 202 while UploadCenter
+#                 is still scanning it.
 # Only a ready asset can be put on a profile; user-service asks
 # /internal/media/{id} before accepting one.
 # ---------------------------------------------------------------------------
@@ -313,8 +317,8 @@ def presign_profile_image(payload: ProfileImageRequest, principal: CurrentUser, 
     if problem:
         raise HTTPException(status_code=422, detail=problem)
 
-    # Each presign creates a row and, in UploadCenter mode, a vendor call. A
-    # member changing their picture needs a handful; a script needs thousands.
+    # Each presign creates a row. A member changing their picture needs a
+    # handful; a script needs thousands.
     since = datetime.now(timezone.utc) - PENDING_WINDOW
     unfinished = db.scalar(
         select(func.count()).select_from(models.Asset).where(
@@ -341,20 +345,8 @@ def presign_profile_image(payload: ProfileImageRequest, principal: CurrentUser, 
         access="public",
         purpose=payload.purpose,
         status="pending",
+        provider="uploadcenter" if uploadcenter.enabled() else "local",
     )
-
-    if uploadcenter.enabled():
-        try:
-            signed = uploadcenter.presign(filename, payload.size_bytes, payload.mime_type, visibility="public")
-        except uploadcenter.UploadCenterError as exc:
-            raise HTTPException(status_code=502, detail=str(exc))
-        asset.provider = "uploadcenter"
-        asset.external_id = signed["file_id"]
-        upload = {"mode": "direct", "url": signed["upload_url"], "expires_in": signed.get("expires_in")}
-    else:
-        asset.provider = "local"
-        upload = {"mode": "local", "path": f"/media/profile-images/{asset.id}/content", "expires_in": None}
-
     db.add(asset)
     db.commit()
     return {
@@ -362,50 +354,65 @@ def presign_profile_image(payload: ProfileImageRequest, principal: CurrentUser, 
         "storage": asset.provider,
         "method": "PUT",
         "headers": {"Content-Type": payload.mime_type},
-        "upload": upload,
+        "upload": {"path": f"/media/profile-images/{asset.id}/content"},
     }
+
+
+async def _read_body(request: Request, limit: int) -> bytes:
+    """The request body, refused as soon as it passes the limit."""
+    data = bytearray()
+    async for chunk in request.stream():
+        data.extend(chunk)
+        if len(data) > limit:
+            raise HTTPException(status_code=413, detail=f"The image must be at most {limit // profileimages.MB} MB")
+    return bytes(data)
+
+
+def _send_to_uploadcenter(filename: str, data: bytes, mime_type: str) -> str:
+    """Presign, upload and complete on UploadCenter; returns its file id."""
+    signed = uploadcenter.presign(filename, len(data), mime_type, visibility="public")
+    uploadcenter.put_bytes(signed["upload_url"], data, mime_type)
+    uploadcenter.complete(signed["file_id"])
+    return signed["file_id"]
 
 
 @app.put("/media/profile-images/{asset_id}/content", status_code=204, tags=["profile images"])
 async def receive_profile_image(
     asset_id: str, request: Request, principal: CurrentUser, db: OrmSession = Depends(get_db),
 ):
-    """Local mode only: receives the bytes UploadCenter would otherwise receive."""
+    """Receive the bytes, check them, then store them.
+
+    At most 10 MB (a cover), so the body is held in memory: that is what lets
+    the bytes be checked before anything reaches storage.
+    """
     asset = _own_profile_image(db, asset_id, principal.user_id)
-    if asset.provider != "local" or asset.status != "pending":
+    if asset.status != "pending":
         raise HTTPException(status_code=409, detail="This upload does not accept content")
 
-    limit = profileimages.LIMITS[asset.purpose]
-    folder = ROOT / principal.user_id[:12]
-    folder.mkdir(parents=True, exist_ok=True)
-    destination = folder / asset.id
-
-    digest = hashlib.sha256()
-    head = b""
-    written = 0
-    with destination.open("wb") as out:
-        async for chunk in request.stream():
-            written += len(chunk)
-            if written > limit:
-                out.close()
-                destination.unlink(missing_ok=True)
-                raise HTTPException(status_code=413, detail=f"The image must be at most {limit // profileimages.MB} MB")
-            if len(head) < 16:
-                head += chunk[: 16 - len(head)]
-            digest.update(chunk)
-            out.write(chunk)
+    data = await _read_body(request, profileimages.LIMITS[asset.purpose])
 
     # The declared type was checked at presign; the bytes are checked here. A
     # file that is not the image it claims to be is refused, not stored.
-    if written == 0 or profileimages.sniff(head) != asset.content_type:
-        destination.unlink(missing_ok=True)
+    if not data or profileimages.sniff(data[:16]) != asset.content_type:
         asset.status = "failed"
         db.commit()
         raise HTTPException(status_code=422, detail="This file is not the image it claims to be")
 
-    asset.storage_path = str(destination)
-    asset.size_bytes = written
-    asset.sha256 = digest.hexdigest()
+    if asset.provider == "uploadcenter":
+        try:
+            asset.external_id = await run_in_threadpool(_send_to_uploadcenter, asset.filename, data, asset.content_type)
+        except uploadcenter.UploadCenterError as exc:
+            # Left pending: the member can send the same upload again.
+            raise HTTPException(status_code=502, detail=str(exc))
+    else:
+        folder = ROOT / principal.user_id[:12]
+        folder.mkdir(parents=True, exist_ok=True)
+        destination = folder / asset.id
+        destination.write_bytes(data)
+        asset.storage_path = str(destination)
+
+    asset.size_bytes = len(data)
+    asset.sha256 = hashlib.sha256(data).hexdigest()
     asset.status = "processing"
     db.commit()
 
@@ -423,26 +430,20 @@ def complete_profile_image(asset_id: str, principal: CurrentUser, db: OrmSession
     if asset.status == "failed":
         raise HTTPException(status_code=422, detail="This image was rejected. Please choose another one.")
 
+    if asset.status != "processing":
+        raise HTTPException(status_code=409, detail="The image has not been uploaded yet")
+
     if asset.provider == "local":
-        if asset.status != "processing":
-            raise HTTPException(status_code=409, detail="The image has not been uploaded yet")
         asset.url = f"{settings.MEDIA_PUBLIC_BASE}/{asset.id}"
         asset.status = "ready"
         db.commit()
         return _profile_image_out(asset)
 
     try:
-        if asset.status == "pending":
-            record = uploadcenter.complete(asset.external_id)
-        else:
-            record = uploadcenter.get_file(asset.external_id)
+        record = uploadcenter.get_file(asset.external_id)
     except uploadcenter.UploadCenterError as exc:
-        # A 4xx on complete most likely means the browser never finished the PUT.
-        if exc.status is not None and 400 <= exc.status < 500:
-            raise HTTPException(status_code=409, detail="The image has not been received yet")
         raise HTTPException(status_code=502, detail=str(exc))
 
-    asset.status = "processing"
     if profileimages.is_failed(record):
         asset.status = "failed"
         db.commit()

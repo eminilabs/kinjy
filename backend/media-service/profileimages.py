@@ -74,9 +74,8 @@ def is_failed(file_out: dict) -> bool:
 def stored_file_problem(file_out: dict, purpose: str) -> str | None:
     """Check what UploadCenter says it stored against the same rules.
 
-    The browser uploads straight to UploadCenter, so this service never sees the
-    bytes. The declared size and type at presign time are a promise; this is
-    where it is checked.
+    The bytes were checked before they were sent; this checks that what
+    UploadCenter ended up storing, and serves, still matches the same rules.
     """
     if file_out.get("visibility") != "public":
         return "The stored file is not public"

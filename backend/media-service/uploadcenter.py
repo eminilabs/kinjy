@@ -1,8 +1,8 @@
 """Thin client for UploadCenter (https://uploadscenter.com), avatars and covers only.
 
 Only the documented endpoints are used: presign, complete, get and delete a
-file. The API key never leaves this service: the browser receives a one-off
-upload URL, never the key.
+file. Everything happens server to server: the browser sends its image to
+media-service, and neither the API key nor the upload URL ever reach it.
 """
 from __future__ import annotations
 
@@ -43,12 +43,30 @@ def _cdn_http() -> httpx.Client:
     return httpx.Client(timeout=TIMEOUT_SECONDS, follow_redirects=False)
 
 
+def put_bytes(upload_url: str, data: bytes, mime_type: str) -> None:
+    """Send the file to the presigned storage URL returned by presign().
+
+    Done from this service rather than from the browser: UploadCenter's storage
+    (Cloudflare R2) answers CORS preflights with 403, so a browser cannot PUT
+    to it. The URL carries its own signature; no API key goes with it.
+    """
+    try:
+        with _cdn_http() as client:
+            response = client.put(upload_url, content=data, headers={"Content-Type": mime_type})
+    except httpx.HTTPError as exc:
+        raise UploadCenterError("The file storage service is unreachable") from exc
+    if response.status_code >= 300:
+        log.warning("uploadcenter storage PUT -> %s: %s", response.status_code, response.text[:300])
+        raise UploadCenterError(
+            f"The file storage refused the upload ({response.status_code})", status=response.status_code,
+        )
+
+
 def read_head(url: str) -> bytes:
     """The first bytes of a stored public file, to check what it really is.
 
-    The browser uploads straight to UploadCenter, so this is the only point at
-    which this service sees any of the bytes. The caller must have checked the
-    URL against cdn_hosts() first.
+    Confirms that what the CDN serves is the image that was sent. The caller
+    must have checked the URL against cdn_hosts() first.
     """
     head = b""
     try:

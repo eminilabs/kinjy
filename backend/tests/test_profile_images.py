@@ -113,8 +113,8 @@ def test_a_failed_or_trashed_file_is_final():
 
 
 def test_what_was_stored_must_still_match_the_rules():
-    """The browser uploaded straight to UploadCenter; we never saw the bytes.
-    What UploadCenter reports back is checked against the same rules."""
+    """What UploadCenter reports it stored is checked against the same rules
+    the upload request was."""
     assert profileimages.stored_file_problem(file_out(), "avatar") is None
     assert profileimages.stored_file_problem(file_out(mime_type="image/svg+xml"), "avatar")
     assert profileimages.stored_file_problem(file_out(size_bytes=6 * MB), "avatar")
@@ -218,6 +218,33 @@ def test_an_error_status_becomes_an_uploadcenter_error_without_leaking_the_key(a
         uploadcenter.presign("me.png", 1000, "image/png")
     assert caught.value.status == 402
     assert "sk_test_123" not in str(caught.value)
+
+
+def test_put_bytes_sends_the_file_without_the_api_key(monkeypatch):
+    """The upload URL is a presigned storage URL: it needs no key, and must not
+    receive one (it is a different host from the API)."""
+    seen = {}
+
+    def handler(request):
+        seen.update(auth=request.headers.get("authorization"), type=request.headers.get("content-type"),
+                    body=request.content, method=request.method)
+        return httpx.Response(200)
+
+    monkeypatch.setattr(uploadcenter.settings, "UPLOADCENTER_API_KEY", "sk_test_123")
+    monkeypatch.setattr(uploadcenter, "_cdn_http", lambda: httpx.Client(transport=httpx.MockTransport(handler)))
+    uploadcenter.put_bytes("https://bucket.r2.test/f_1?sig=x", PNG, "image/png")
+
+    assert seen == {"auth": None, "type": "image/png", "body": PNG, "method": "PUT"}
+
+
+def test_put_bytes_failure_is_an_uploadcenter_error(monkeypatch):
+    monkeypatch.setattr(
+        uploadcenter, "_cdn_http",
+        lambda: httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(403))),
+    )
+    with pytest.raises(uploadcenter.UploadCenterError) as caught:
+        uploadcenter.put_bytes("https://bucket.r2.test/f_1", PNG, "image/png")
+    assert caught.value.status == 403
 
 
 def test_read_head_asks_for_the_first_bytes_only(monkeypatch):
