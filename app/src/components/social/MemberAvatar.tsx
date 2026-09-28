@@ -1,13 +1,37 @@
+import { useState } from 'react'
 import { Link } from 'react-router'
 import { cn } from '@/lib/utils'
+
+/**
+ * The generic person shown when a member has no photo: the same neutral
+ * silhouette for everyone, as on most social networks. Initials were tried
+ * first; a letter reads as a design choice the member made, and two members
+ * called "Patrice" looked like the same person.
+ */
+function Silhouette({ size }: { size: number }) {
+  return (
+    <svg
+      viewBox="0 0 40 40"
+      width={size}
+      height={size}
+      aria-hidden="true"
+      className="block"
+      style={{ width: size, height: size }}
+    >
+      <rect width="40" height="40" fill="#C9CCD1" />
+      <circle cx="20" cy="15.5" r="7.5" fill="#F0F2F5" />
+      <path d="M5.5 40c0-8.6 6.5-14.5 14.5-14.5S34.5 31.4 34.5 40z" fill="#F0F2F5" />
+    </svg>
+  )
+}
 
 /**
  * The one avatar in the app.
  *
  * Every surface used to render its own initials block, so an avatar was
- * clickable in some places and inert in others — and the colour of "S" differed
- * between the feed and the suggestions rail. One component means one look and
- * one behaviour: an avatar always leads to that member's profile.
+ * clickable in some places and inert in others. One component means one look
+ * and one behaviour: an avatar always leads to that member's profile, and a
+ * missing or broken photo always falls back to the same silhouette.
  */
 export default function MemberAvatar({
   handle,
@@ -25,44 +49,34 @@ export default function MemberAvatar({
   ring?: boolean
   className?: string
 }) {
-  const name = displayName?.trim() || handle || '?'
-  const initials = name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase()
+  const name = displayName?.trim() || handle || 'Member'
+  // The URL that failed to load, so a new URL (a changed photo) is tried again.
+  const [brokenUrl, setBrokenUrl] = useState<string | null>(null)
+  const showPhoto = Boolean(avatarUrl) && avatarUrl !== brokenUrl
 
-  // A stable hue per member: the same person keeps the same colour everywhere,
-  // which makes a thread scannable without reading a single name.
-  const seed = (handle ?? name).split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
-  const hue = seed % 360
-
-  const inner = avatarUrl ? (
-    <img
-      src={avatarUrl}
-      alt=""
-      width={size}
-      height={size}
-      className={cn('shrink-0 rounded-full object-cover', ring && 'ring-2 ring-gold/50', className)}
-      style={{ width: size, height: size }}
-    />
-  ) : (
+  const inner = (
     <span
-      aria-hidden="true"
       className={cn(
-        'flex shrink-0 items-center justify-center rounded-full font-bold text-white',
+        'block shrink-0 overflow-hidden rounded-full',
         ring && 'ring-2 ring-gold/50',
         className,
       )}
-      style={{
-        width: size,
-        height: size,
-        fontSize: Math.max(10, size * 0.36),
-        background: `linear-gradient(135deg, hsl(${hue} 55% 45%), hsl(${(hue + 40) % 360} 60% 35%))`,
-      }}
+      style={{ width: size, height: size }}
     >
-      {initials}
+      {showPhoto ? (
+        <img
+          src={avatarUrl ?? undefined}
+          alt=""
+          width={size}
+          height={size}
+          loading="lazy"
+          decoding="async"
+          onError={() => setBrokenUrl(avatarUrl ?? null)}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <Silhouette size={size} />
+      )}
     </span>
   )
 
@@ -74,6 +88,7 @@ export default function MemberAvatar({
       aria-label={`View ${name}'s profile`}
       title={name}
       className="shrink-0 hover:opacity-85"
+      className="shrink-0 rounded-full transition-opacity hover:opacity-85"
     >
       {inner}
     </Link>

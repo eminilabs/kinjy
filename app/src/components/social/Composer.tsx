@@ -18,7 +18,9 @@ import {
 } from 'lucide-react'
 import { useApi } from '@/hooks/useApi'
 import { useAuth } from '@/hooks/useAuth'
+import { useMyProfile } from '@/hooks/useMyProfile'
 import { useAppTheme } from '@/components/appdemo/theme'
+import MemberAvatar from './MemberAvatar'
 import { ApiError, kaluta, type Post, type UploadedMedia } from '@/lib/api'
 import RichTextEditor from './RichTextEditor'
 import { htmlToText } from '@/lib/richtext'
@@ -154,7 +156,8 @@ export default function Composer({
     if (openSignal > 0) setOpen(true)
   }, [openSignal])
 
-  const initials = (user?.display_name ?? '?').slice(0, 1).toUpperCase()
+  const me = useMyProfile()
+  const myAvatar = <MemberAvatar displayName={user?.display_name} avatarUrl={me?.avatar_url} size={40} />
 
   /** Open the dialog, optionally jumping straight to a picker. */
   const start = (target: Kind) => {
@@ -309,12 +312,7 @@ export default function Composer({
       {!collapsed && !open && (
       <div className={cn('rounded-card-lg p-3', tok.card)}>
         <div className="flex items-center gap-2.5">
-          <span
-            aria-hidden="true"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gold-soft to-gold text-sm font-bold text-ink"
-          >
-            {initials}
-          </span>
+          {myAvatar}
           <button
             type="button"
             onClick={() => start('text')}
@@ -363,12 +361,7 @@ export default function Composer({
           <form onSubmit={submit}>
             {/* Who you are, and who will see it */}
             <div className="flex items-center gap-2.5">
-              <span
-                aria-hidden="true"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gold-soft to-gold text-sm font-bold text-ink"
-              >
-                {initials}
-              </span>
+              {myAvatar}
               <div className="min-w-0">
                 <p className={cn('truncate text-sm font-semibold', tok.text)}>{user?.display_name}</p>
                 <div className="mt-1 flex flex-wrap gap-1">

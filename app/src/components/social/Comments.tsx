@@ -137,6 +137,7 @@ export default function Comments({
           <MemberAvatar
             handle={node.author?.handle}
             displayName={node.author?.display_name}
+            avatarUrl={node.author?.avatar_url}
             size={28}
           />
         </span>

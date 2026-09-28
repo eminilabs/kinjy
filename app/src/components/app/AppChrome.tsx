@@ -9,7 +9,9 @@ import type { LucideIcon } from 'lucide-react'
 import { MODULE_ICONS } from '@/components/appdemo/Chrome'
 import { useAppTheme } from '@/components/appdemo/theme'
 import type { AppLang, ChromeKey, DisplayMode } from '@/components/appdemo/theme'
+import MemberAvatar from '@/components/social/MemberAvatar'
 import { useAuth } from '@/hooks/useAuth'
+import { useMyProfile } from '@/hooks/useMyProfile'
 import { kaluta } from '@/lib/api'
 import NotificationBell from './NotificationBell'
 import { cn } from '@/lib/utils'
@@ -73,7 +75,7 @@ export function AppTopBar() {
     navigate(`/explore?q=${encodeURIComponent(query.trim())}`)
   }
 
-  const initials = (user?.display_name ?? '?').slice(0, 1).toUpperCase()
+  const me = useMyProfile()
 
   return (
     <div className={cn('flex h-[64px] items-center gap-3 border-x-0 border-t-0 border-b px-4', tok.card)}>
@@ -168,17 +170,8 @@ export function AppTopBar() {
 
       <NotificationBell userId={user?.id} />
 
-      <Link
-        to="/dashboard"
-        aria-label="Your profile"
-        className="h-9 w-9 shrink-0 overflow-hidden rounded-full ring-2 ring-gold/50"
-      >
-        <span
-          aria-hidden="true"
-          className="flex h-full w-full items-center justify-center bg-gradient-to-br from-gold-soft to-gold text-xs font-bold text-ink"
-        >
-          {initials}
-        </span>
+      <Link to="/dashboard" aria-label="Your profile" className="shrink-0 rounded-full">
+        <MemberAvatar displayName={user?.display_name} avatarUrl={me?.avatar_url} size={36} ring />
       </Link>
     </div>
   )

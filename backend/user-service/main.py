@@ -7,8 +7,10 @@ from datetime import date, datetime, timezone
 
 import httpx
 from fastapi import Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import and_, delete, func, or_, select
+from pydantic import BaseModel, Field
+from sqlalchemy import and_, case, delete, func, or_, select
 from sqlalchemy.orm import Session as OrmSession
 
 from common import ageclient, notify
@@ -20,8 +22,10 @@ from common.service import create_app
 import agediscovery
 import models
 import parental
+import profilefields
 
 AUTH_URL = "http://auth-service:8000"
+MEDIA_URL = "http://media-service:8000"
 
 log = logging.getLogger("user-service")
 
@@ -35,6 +39,8 @@ MIGRATIONS = [
     "ADD COLUMN IF NOT EXISTS who_can_see_family VARCHAR(20) DEFAULT 'family'",
     f"ALTER TABLE {models.SCHEMA}.preferences "
     "ADD COLUMN IF NOT EXISTS family_tree_shared BOOLEAN DEFAULT TRUE",
+    f"ALTER TABLE {models.SCHEMA}.profiles ADD COLUMN IF NOT EXISTS avatar_asset_id VARCHAR(40)",
+    f"ALTER TABLE {models.SCHEMA}.profiles ADD COLUMN IF NOT EXISTS cover_asset_id VARCHAR(40)",
 ]
 
 app = create_app(
@@ -55,6 +61,7 @@ class ProfileOut(BaseModel):
     avatar_url: str | None = None
     cover_url: str | None = None
     country: str | None = None
+    state: str | None = None
     city: str | None = None
     languages: str = "en"
     is_creator: bool = False
@@ -66,17 +73,72 @@ class ProfileOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class MyProfileOut(ProfileOut):
+    """What only the owner sees. The neighbourhood is a precise location and is
+    never shown to other members; it feeds local discovery server-side."""
+
+    neighborhood: str | None = None
+    lang: str = "en"
+
+
 class ProfileUpdate(BaseModel):
-    display_name: str | None = Field(default=None, min_length=2, max_length=120)
-    bio: str | None = Field(default=None, max_length=2000)
-    avatar_url: str | None = None
-    cover_url: str | None = None
-    country: str | None = Field(default=None, max_length=2)
+    """Every field optional. Absent = unchanged; null or blank = cleared, for the
+    fields that may be empty. Images are referenced by media-service asset id,
+    never by URL: a URL chosen by the client would let anyone embed any address
+    (a tracking pixel, for one) on a page every visitor loads."""
+
+    model_config = {"extra": "forbid"}
+
+    display_name: str | None = None
+    bio: str | None = None
+    avatar_asset_id: str | None = None
+    cover_asset_id: str | None = None
+    country: str | None = None
     state: str | None = None
     city: str | None = None
     neighborhood: str | None = None
     languages: str | None = None
     lang: str | None = None
+
+    @field_validator("display_name")
+    @classmethod
+    def _display_name(cls, value: str | None) -> str | None:
+        return None if value is None else profilefields.clean_display_name(value)
+
+    @field_validator("bio")
+    @classmethod
+    def _bio(cls, value: str | None) -> str | None:
+        return profilefields.clean_text(value, profilefields.BIO_MAX, multiline=True)
+
+    @field_validator("state")
+    @classmethod
+    def _state(cls, value: str | None) -> str | None:
+        return profilefields.clean_text(value, profilefields.STATE_MAX)
+
+    @field_validator("city")
+    @classmethod
+    def _city(cls, value: str | None) -> str | None:
+        return profilefields.clean_text(value, profilefields.CITY_MAX)
+
+    @field_validator("neighborhood")
+    @classmethod
+    def _neighborhood(cls, value: str | None) -> str | None:
+        return profilefields.clean_text(value, profilefields.NEIGHBOURHOOD_MAX)
+
+    @field_validator("country")
+    @classmethod
+    def _country(cls, value: str | None) -> str | None:
+        return profilefields.clean_country(value)
+
+    @field_validator("languages")
+    @classmethod
+    def _languages(cls, value: str | None) -> str | None:
+        return None if value is None else profilefields.clean_languages(value)
+
+    @field_validator("lang")
+    @classmethod
+    def _lang(cls, value: str | None) -> str | None:
+        return None if value is None else profilefields.clean_lang(value)
 
 
 class CircleIn(BaseModel):
@@ -158,20 +220,133 @@ def _ensure_profile(db: OrmSession, user_id: str) -> models.Profile:
 
 # --- profiles --------------------------------------------------------------
 
-@app.get("/users/me", response_model=ProfileOut, tags=["profiles"])
+@app.get("/users/me", response_model=MyProfileOut, tags=["profiles"])
 def my_profile(principal: CurrentUser, db: OrmSession = Depends(get_db)):
-    return ProfileOut.model_validate(_ensure_profile(db, principal.user_id))
+    return MyProfileOut.model_validate(_ensure_profile(db, principal.user_id))
 
 
-@app.patch("/users/me", response_model=ProfileOut, tags=["profiles"])
+@app.get("/users/me/eligibility", tags=["profiles"])
+def my_profile_eligibility(principal: CurrentUser):
+    """Which age-gated profile fields this account may fill, before it tries.
+
+    A readout for the editor, so it can leave a field out rather than refuse it
+    after the member typed it. PATCH /users/me enforces the rule on its own and
+    does not consult this. Kept off GET /users/me because that is called on
+    every page, and the age lookup is a call to auth-service. An age lookup
+    that fails reads as a minor, so the field is simply not offered.
+    """
+    who = ageclient.age_profile(principal.user_id)
+    return {"neighborhood": profilefields.may_set_neighbourhood(who)}
+
+
+# Fields that exist on every profile and cannot be emptied.
+_REQUIRED_PROFILE_FIELDS = ("display_name", "languages", "lang")
+_PROFILE_IMAGES = ("avatar", "cover")
+
+
+def _ready_image_url(asset_id: str, owner_id: str, purpose: str) -> str:
+    """The URL of an asset this member may put on their profile.
+
+    Fails closed: if media-service cannot confirm the asset, the change is
+    refused rather than applied. Not found and not yours get the same answer,
+    so asset ids cannot be probed.
+    """
+    try:
+        response = httpx.get(f"{MEDIA_URL}/internal/media/{asset_id}", timeout=5)
+    except httpx.HTTPError:
+        raise HTTPException(status_code=503, detail="Images cannot be checked right now. Please try again.")
+    if response.status_code == 404:
+        raise HTTPException(status_code=422, detail="Image not found")
+    if response.status_code != 200:
+        raise HTTPException(status_code=503, detail="Images cannot be checked right now. Please try again.")
+
+    asset = response.json()
+    if asset.get("owner_id") != owner_id:
+        raise HTTPException(status_code=422, detail="Image not found")
+    if asset.get("purpose") != purpose:
+        raise HTTPException(status_code=422, detail=f"This image was not uploaded as a {purpose}")
+    if asset.get("status") != "ready" or not asset.get("url"):
+        raise HTTPException(status_code=409, detail="This image is still being processed")
+    return asset["url"]
+
+
+def _discard_image(asset_id: str, owner_id: str) -> None:
+    """Delete a replaced image. Best effort: the profile change already stands."""
+    try:
+        httpx.post(f"{MEDIA_URL}/internal/media/{asset_id}/discard", json={"owner_id": owner_id}, timeout=10)
+    except httpx.HTTPError as exc:
+        log.warning("could not discard replaced image %s: %s", asset_id, exc)
+
+
+def _sync_identity(user_id: str, changes: dict) -> None:
+    """Keep auth-service's copy of the name and interface language in step.
+
+    Deliberately not the country: auth-service's country is the jurisdiction
+    the age rules are applied under, set at registration. A profile field that
+    moved it would let a minor pick the country with the lowest minimum age.
+
+    Called before the profile is committed and fails closed: if auth-service
+    cannot take the change, nothing changes, rather than the two copies of the
+    name silently drifting apart.
+    """
+    if not changes:
+        return
+    try:
+        response = httpx.patch(f"{AUTH_URL}/internal/users/{user_id}", json=changes, timeout=5)
+    except httpx.HTTPError as exc:
+        log.warning("could not sync identity for %s: %s", user_id, exc)
+        response = None
+    if response is None or response.status_code != 200:
+        if response is not None:
+            log.warning("identity sync for %s refused: %s %s", user_id, response.status_code, response.text[:200])
+        raise HTTPException(status_code=503, detail="Your profile could not be saved right now. Please try again.")
+
+
+@app.patch("/users/me", response_model=MyProfileOut, tags=["profiles"])
 def update_profile(payload: ProfileUpdate, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    changes = payload.model_dump(exclude_unset=True)
+    for field in _REQUIRED_PROFILE_FIELDS:
+        if field in changes and changes[field] is None:
+            raise HTTPException(status_code=422, detail=f"{field} cannot be empty")
+
+    if changes.get("neighborhood") or changes.get("bio"):
+        who = ageclient.age_profile(principal.user_id)
+        if changes.get("neighborhood") and not profilefields.may_set_neighbourhood(who):
+            raise HTTPException(status_code=403, detail="A neighbourhood cannot be added to this account.")
+        if changes.get("bio"):
+            problem = profilefields.bio_problem(changes["bio"], author_is_minor=who.is_minor)
+            if problem:
+                raise HTTPException(status_code=422, detail=problem)
+
     profile = _ensure_profile(db, principal.user_id)
-    for key, value in payload.model_dump(exclude_unset=True).items():
-        if value is not None:
-            setattr(profile, key, value.upper() if key == "country" else value)
+
+    replaced: list[str] = []
+    for purpose in _PROFILE_IMAGES:
+        key = f"{purpose}_asset_id"
+        if key not in changes:
+            continue
+        asset_id = changes.pop(key)
+        url = None if asset_id is None else _ready_image_url(asset_id, principal.user_id, purpose)
+        previous = getattr(profile, key)
+        if previous and previous != asset_id:
+            replaced.append(previous)
+        setattr(profile, key, asset_id)
+        setattr(profile, f"{purpose}_url", url)
+
+    identity = {
+        field: changes[field]
+        for field in ("display_name", "lang")
+        if field in changes and changes[field] != getattr(profile, field)
+    }
+    _sync_identity(principal.user_id, identity)
+    for field, value in changes.items():
+        setattr(profile, field, value)
     db.commit()
     db.refresh(profile)
-    return ProfileOut.model_validate(profile)
+
+    for asset_id in replaced:
+        _discard_image(asset_id, principal.user_id)
+    return MyProfileOut.model_validate(profile)
 
 
 # Declared before /users/{handle}: FastAPI matches in order, and the
@@ -264,7 +439,26 @@ def search_people(
     )
     excluded = blocked | blocking | {principal.user_id}
 
-    like = f"%{query}%"
+    # Prefix, not substring: typing "ez" is looking for Ezekiel, and a substring
+    # match buried him under every Lopez and Mezu. Any word of the name counts,
+    # so a first name and a surname are both a way in; a handle matches at its
+    # start or after one of the separators a handle may contain.
+    #
+    # The member's text is escaped because `%` and `_` are LIKE wildcards: an
+    # unescaped "%%" listed every discoverable member on the platform.
+    term = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    name = func.lower(models.Profile.display_name)
+    handle = func.lower(models.Profile.handle)
+    starts = or_(
+        name.like(f"{term}%", escape="\\"),
+        handle.like(f"{term}%", escape="\\"),
+    )
+    word_starts = or_(
+        name.like(f"% {term}%", escape="\\"),
+        name.like(f"%-{term}%", escape="\\"),
+        handle.like(f"%.{term}%", escape="\\"),
+        handle.like(f"%\\_{term}%", escape="\\"),
+    )
     # `discoverable` lives on Preferences, not Profile, so this is an outer join:
     # a member whose preferences row was never materialised must still be
     # findable, and an inner join would silently hide them.
@@ -274,12 +468,14 @@ def search_people(
         .where(
             or_(models.Preferences.discoverable.is_(True), models.Preferences.user_id.is_(None)),
             models.Profile.user_id.not_in(excluded),
-            or_(
-                func.lower(models.Profile.handle).like(like),
-                func.lower(models.Profile.display_name).like(like),
-            ),
+            or_(starts, word_starts),
         )
-        .order_by(models.Profile.followers_count.desc())
+        # Whole-name matches first: "ez" should put Ezekiel above Grace Ezeh.
+        .order_by(
+            case((starts, 0), else_=1),
+            models.Profile.followers_count.desc(),
+            name,
+        )
         .limit(agediscovery.widened(min(limit, 25), 75))
     ).all()
     rows = agediscovery.filter_profiles(principal.user_id, list(rows), min(limit, 25))
@@ -1111,6 +1307,45 @@ def disconnect(user_id: str, principal: CurrentUser, db: OrmSession = Depends(ge
     if row is not None:
         db.delete(row)
         db.commit()
+
+
+@app.get("/internal/connections/{user_id}", tags=["internal"])
+def internal_connections(user_id: str, db: OrmSession = Depends(get_db)):
+    """Ids of everyone ``user_id`` has an accepted connection with.
+
+    messaging-service uses it to decide who is told when this member comes
+    online or goes offline — presence is shown to connections, not to anyone
+    who happens to know an id.
+    """
+    rows = db.scalars(
+        select(models.Connection).where(
+            models.Connection.status == "accepted",
+            or_(
+                models.Connection.requester_id == user_id,
+                models.Connection.addressee_id == user_id,
+            ),
+        )
+    ).all()
+    return {
+        "ids": sorted(
+            {r.addressee_id if r.requester_id == user_id else r.requester_id for r in rows}
+        )
+    }
+
+
+@app.get("/internal/blocks/{user_id}", tags=["internal"])
+def internal_blocks(user_id: str, db: OrmSession = Depends(get_db)):
+    """Everyone on either side of a block with ``user_id``.
+
+    A block is mutual in effect: neither side sees the other's presence or
+    typing, whoever pressed the button.
+    """
+    rows = db.scalars(
+        select(models.Block).where(
+            or_(models.Block.user_id == user_id, models.Block.blocked_id == user_id)
+        )
+    ).all()
+    return {"ids": sorted({r.blocked_id if r.user_id == user_id else r.user_id for r in rows})}
 
 
 @app.get("/internal/permissions/{actor_id}/{target_id}", tags=["internal"])

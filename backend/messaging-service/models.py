@@ -2,16 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import (
-    Boolean,
-    DateTime,
-    Index,
-    Integer,
-    LargeBinary,
-    String,
-    Text,
-    UniqueConstraint,
-)
+from sqlalchemy import BigInteger, Boolean, DateTime, Integer, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from common.database import Base
@@ -81,7 +72,19 @@ class Message(Base):
     body: Mapped[str | None] = mapped_column(Text)
     kind: Mapped[str] = mapped_column(String(20), default="text")  # text|media|call_event
     media_url: Mapped[str | None] = mapped_column(String(500))
+    # Attachment facts as media-service recorded them at upload — never as the
+    # sending client described them.
+    media_id: Mapped[str | None] = mapped_column(String(40))
+    media_kind: Mapped[str | None] = mapped_column(String(20))  # image|video|audio|document|file
+    media_name: Mapped[str | None] = mapped_column(String(255))
+    media_type: Mapped[str | None] = mapped_column(String(100))
+    media_size: Mapped[int | None] = mapped_column(BigInteger)
     lang: Mapped[str | None] = mapped_column(String(5))
+    # Chosen by the sending device before the request goes out. A retry after
+    # a dropped response carries the same id, so it finds the message already
+    # stored instead of sending it twice. Unique per sender (partial index in
+    # the service's migrations).
+    client_id: Mapped[str | None] = mapped_column(String(64))
     # Disappearing messages. `expires_at` is a real deletion deadline, not a
     # display rule: a message that vanishes from the screen while sitting in the
     # database has not disappeared, it has only stopped being shown — which is

@@ -12,7 +12,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session as OrmSession
 
@@ -164,7 +164,7 @@ async def register(payload: schemas.RegisterIn, request: Request, db: OrmSession
         id=new_id("usr"),
         email=email,
         handle=payload.handle,
-        display_name=payload.display_name.strip(),
+        display_name=payload.display_name,  # cleaned by RegisterIn
         password_hash=security.hash_password(payload.password),
         lang=payload.lang if payload.lang in settings.SUPPORTED_LANGS else settings.DEFAULT_LANG,
         country=(payload.country or "").upper() or None,
@@ -800,6 +800,21 @@ def internal_user(user_id: str, db: OrmSession = Depends(get_db)):
         "status": user.status,
         "invited_by": user.invited_by,
     }
+
+
+@app.patch("/internal/users/{user_id}", tags=["internal"])
+def sync_identity(user_id: str, payload: schemas.IdentitySyncIn, db: OrmSession = Depends(get_db)):
+    user = db.get(models.User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if payload.lang is not None and payload.lang not in settings.SUPPORTED_LANGS:
+        raise HTTPException(status_code=422, detail="Unsupported language")
+    if payload.display_name is not None:
+        user.display_name = payload.display_name
+    if payload.lang is not None:
+        user.lang = payload.lang
+    db.commit()
+    return {"id": user.id, "display_name": user.display_name, "lang": user.lang}
 
 
 @app.get("/internal/referral-counts", tags=["internal"])

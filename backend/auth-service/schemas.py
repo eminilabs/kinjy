@@ -5,6 +5,8 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from common.textclean import clean_display_name
+
 HANDLE_RE = re.compile(r"^[a-z0-9](?:[a-z0-9_.]{1,38}[a-z0-9])$")
 
 
@@ -35,6 +37,34 @@ class RegisterIn(BaseModel):
         if value.isdigit() or value.isalpha():
             raise ValueError("password must mix letters with digits or symbols")
         return value
+
+    @field_validator("display_name")
+    @classmethod
+    def _display_name(cls, value: str) -> str:
+        return clean_display_name(value)
+
+
+class IdentitySyncIn(BaseModel):
+    """What user-service may copy here after a profile edit.
+
+    Name and interface language only. The country on this row is the
+    jurisdiction the age rules run under, fixed at registration: a profile
+    edit that could move it would let a minor choose the country with the
+    lowest minimum age.
+
+    The name is checked again here even though user-service already did: this
+    row is the one every other service reads the name from.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    display_name: str | None = Field(default=None, min_length=2, max_length=120)
+    lang: str | None = None
+
+    @field_validator("display_name")
+    @classmethod
+    def _display_name(cls, value: str | None) -> str | None:
+        return None if value is None else clean_display_name(value)
 
 
 class LoginIn(BaseModel):

@@ -107,7 +107,7 @@ export default function Live() {
     const text = draft.trim()
     setDraft('')
     try {
-      await kaluta.messages.send(roomId, text)
+      await kaluta.messages.send(roomId, { body: text })
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not send')
       setDraft(text)
