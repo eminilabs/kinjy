@@ -233,12 +233,28 @@ def upload(token, filename, content_type, data, purpose="chat"):
         return exc.code, exc.read().decode()
 
 
-def fetch_headers(url):
-    # The asset URL is the public one (localhost:8200); from inside the network
-    # the gateway answers the same path.
+def fetch(url, headers=None):
+    """(status, headers, body) for a media URL. The stored URL is the public one
+    (localhost:8200 or /media); from inside the network the gateway answers the
+    same path."""
     path = url.split("/media/", 1)[1]
-    response = urllib.request.urlopen(f"http://gateway:8000/media/{path}")
-    return {k.lower(): v for k, v in response.headers.items()}
+    req = urllib.request.Request(f"http://gateway:8000/media/{path}", headers=headers or {})
+    try:
+        response = urllib.request.urlopen(req)
+        return response.status, {k.lower(): v for k, v in response.headers.items()}, response.read()
+    except urllib.error.HTTPError as exc:
+        return exc.code, {k.lower(): v for k, v in exc.headers.items()}, b""
+
+
+def fetch_headers(url):
+    return fetch(url)[1]
+
+
+def signed_url_for(cid, media_id, token):
+    """The link a participant is handed for an attachment: send it, read it back."""
+    send_raw(cid, {"media_id": media_id}, token)
+    items = call("GET", f"/conversations/{cid}/messages", None, token)["items"]
+    return next(m["media_url"] for m in reversed(items) if m.get("media_url") and media_id in m["media_url"])
 
 
 def send_raw(cid, body, token):
@@ -263,17 +279,30 @@ async def attachments(a_id, a_tok, b_id, b_tok, c_tok, cid):
     check("posts still refuse arbitrary types", status == 415, str(status))
 
     status, page = upload(a_tok, "evil.html", "text/html", b"<script>alert(document.cookie)</script>")
-    headers = fetch_headers(page["url"]) if status == 201 else {}
+    headers = fetch_headers(signed_url_for(cid, page["id"], a_tok)) if status == 201 else {}
     check("an HTML upload is served as a download, never rendered",
           headers.get("content-type") == "application/octet-stream"
           and headers.get("content-disposition", "").startswith("attachment"), str(headers))
     check("every served file is sandboxed and nosniff",
           "sandbox" in headers.get("content-security-policy", "")
           and headers.get("x-content-type-options") == "nosniff", str(headers))
-    img_headers = fetch_headers(image["url"])
+    image_link = signed_url_for(cid, image["id"], a_tok)
+    status, img_headers, img_body = fetch(image_link)
     check("a photo is served inline as itself",
           img_headers.get("content-type") == "image/png"
           and img_headers.get("content-disposition", "").startswith("inline"), str(img_headers))
+    check("the photo comes back byte for byte", img_body == png, f"{len(img_body)} bytes")
+
+    print("private attachments")
+    check("a chat attachment is not served on its bare URL", fetch(image["url"])[0] == 404)
+    tampered = image_link[:-3] + ("AAA" if not image_link.endswith("AAA") else "BBB")
+    check("…nor with a forged signature", fetch(tampered)[0] == 404)
+    expired = image_link.replace("exp=", "exp=1").split("&sig=")[0] + "&sig=x"
+    check("…nor with an expired one", fetch(expired)[0] == 404)
+    status, _, part = fetch(image_link, {"Range": "bytes=1-3"})
+    check("byte ranges work (video seeking)", status == 206 and part == png[1:4], f"{status} {part!r}")
+    status, post_img = upload(a_tok, "public.png", "image/png", png + b"\0", purpose="post")
+    check("a post's image stays public", fetch(post_img["url"])[0] == 200)
 
     b_ws = await open_socket(b_tok)
     status, _ = send_raw(cid, {"media_id": archive["id"], "client_id": "att-1"}, a_tok)
@@ -282,7 +311,8 @@ async def attachments(a_id, a_tok, b_id, b_tok, c_tok, cid):
     check("a file-only message is accepted", status == 201, str(status))
     check("the frame describes the attachment from media-service",
           frame.get("media_kind") == "file" and frame.get("media_name") == "notes.zip"
-          and frame.get("media_size") == 2048 and frame.get("media_url") == archive["url"], str(frame))
+          and frame.get("media_size") == 2048
+          and (frame.get("media_url") or "").startswith(archive["url"] + "?exp="), str(frame))
     await b_ws.close()
 
     status, detail = send_raw(cid, {"media_id": archive["id"]}, c_tok)
@@ -296,7 +326,10 @@ async def attachments(a_id, a_tok, b_id, b_tok, c_tok, cid):
     check("a message with neither text nor file is refused", status == 400, f"{status} {detail}")
 
     last = unread_for(b_tok, cid)["last_message"]
-    check("the list previews the last message", last and last["preview"] == "Sent a file", str(last))
+    check("the list previews the last message", last and last["preview"].startswith("Sent a"), str(last))
+
+    if os.getenv("MESSAGES_ENCRYPTION_KEY"):
+        await at_rest(a_tok, b_tok, cid, archive)
 
     print("privacy on an existing conversation")
     call("PATCH", "/preferences", {"who_can_message": "nobody"}, b_tok)
@@ -322,6 +355,52 @@ async def attachments(a_id, a_tok, b_id, b_tok, c_tok, cid):
         headers={"Authorization": "Bearer " + b_tok}))
     status, _ = send_raw(cid, {"body": "unblocked"}, a_tok)
     check("unblocking restores it", status == 201, str(status))
+
+
+async def at_rest(a_tok, b_tok, cid, archive):
+    """What a stolen database copy would show. Runs only when a key is set."""
+    from sqlalchemy import text
+    from common.database import SessionLocal
+
+    print("encryption at rest")
+    secret = f"the secret is {uuid.uuid4().hex}"
+    sent = call("POST", f"/conversations/{cid}/messages", {"body": secret}, a_tok)
+    with SessionLocal() as db:
+        row = db.execute(text("select body, sealed_with from messaging.messages where id=:i"),
+                         {"i": sent["id"]}).one()
+        name_row = db.execute(text("select media_name, sealed_with from messaging.messages "
+                                   "where media_id=:m order by created_at desc limit 1"),
+                              {"m": archive["id"]}).one()
+        asset = db.execute(text("select filename, sealed_with, private, sha256 from media.assets where id=:i"),
+                           {"i": archive["id"]}).one()
+    check("the database holds no plaintext message", secret not in (row.body or "") and row.sealed_with,
+          str(row))
+    items = call("GET", f"/conversations/{cid}/messages", None, b_tok)["items"]
+    check("…but the member reads it", any(m["body"] == secret for m in items))
+    check("attachment names are sealed too", name_row.media_name != "notes.zip" and name_row.sealed_with,
+          str(name_row))
+    check("…in media-service as well", asset.filename != "notes.zip" and asset.sealed_with and asset.private,
+          str(asset))
+    notes = [n for n in call("GET", "/notifications?unread_only=true", None, b_tok)["items"] if n["kind"] == "message"]
+    check("message notifications carry no text", all(n["body"] is None for n in notes), str(notes[:2]))
+
+    # A message written before encryption was switched on is sealed at startup.
+    legacy_id = "msg_" + uuid.uuid4().hex[:26].upper()
+    with SessionLocal() as db:
+        db.execute(text("insert into messaging.messages (id, conversation_id, sender_id, encrypted, body, kind, "
+                        "delivered, created_at) values (:i, :c, (select user_id from messaging.participants "
+                        "where conversation_id=:c limit 1), false, 'written in the clear', 'text', false, now())"),
+                   {"i": legacy_id, "c": cid})
+        db.commit()
+    import main as messaging  # the service module, for its backlog job
+    messaging._seal_backlog()
+    with SessionLocal() as db:
+        legacy = db.execute(text("select body, sealed_with from messaging.messages where id=:i"),
+                            {"i": legacy_id}).one()
+    check("old plaintext messages are sealed by the backlog job",
+          legacy.sealed_with and legacy.body != "written in the clear", str(legacy))
+    items = call("GET", f"/conversations/{cid}/messages", None, b_tok)["items"]
+    check("…and still read normally", any(m["body"] == "written in the clear" for m in items))
 
 
 asyncio.run(main())

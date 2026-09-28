@@ -71,7 +71,7 @@ class Message(Base):
     # sending client described them.
     media_id: Mapped[str | None] = mapped_column(String(40))
     media_kind: Mapped[str | None] = mapped_column(String(20))  # image|video|audio|document|file
-    media_name: Mapped[str | None] = mapped_column(String(255))
+    media_name: Mapped[str | None] = mapped_column(Text)
     media_type: Mapped[str | None] = mapped_column(String(100))
     media_size: Mapped[int | None] = mapped_column(BigInteger)
     lang: Mapped[str | None] = mapped_column(String(5))
@@ -80,6 +80,11 @@ class Message(Base):
     # stored instead of sending it twice. Unique per sender (partial index in
     # the service's migrations).
     client_id: Mapped[str | None] = mapped_column(String(64))
+    # Encryption at rest (common/crypto.py): the id of the key `body` and
+    # `media_name` are sealed with, or None when they are stored as written.
+    # Not to be confused with `encrypted`, which means end-to-end ciphertext
+    # the server cannot open at all.
+    sealed_with: Mapped[str | None] = mapped_column(String(16))
     # Disappearing messages. `expires_at` is a real deletion deadline, not a
     # display rule: a message that vanishes from the screen while sitting in the
     # database has not disappeared, it has only stopped being shown — which is

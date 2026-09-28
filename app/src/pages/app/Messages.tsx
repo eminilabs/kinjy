@@ -1322,7 +1322,7 @@ export default function Messages() {
                               </span>
                             ) : (
                               <>
-                                {conversation.encrypted ? (
+                                {conversation.encrypted || conversation.sealed_at_rest ? (
                                   <Lock size={10} aria-hidden="true" />
                                 ) : (
                                   <ShieldOff size={10} aria-hidden="true" />
@@ -1408,16 +1408,29 @@ export default function Messages() {
                     {headerSubtitle}
                   </p>
                 </div>
+                {/* Three different promises, and the label says exactly which
+                    one holds: "encrypted" alone would let storage encryption
+                    pass for end-to-end, which it is not. */}
                 <span
                   className="caption ms-auto hidden shrink-0 items-center gap-1 sm:inline-flex"
                   title={
                     active.encrypted
-                      ? 'End-to-end encrypted — the server stores ciphertext only.'
-                      : 'No key exchange is implemented yet, so this thread is readable server-side.'
+                      ? 'End-to-end encrypted — only the people in this conversation can read it.'
+                      : active.sealed_at_rest
+                        ? 'Messages and files are stored encrypted on Kinjy’s servers, so a copy of the database reveals nothing. This is not end-to-end encryption: Kinjy’s servers can read them.'
+                        : 'Stored without encryption on Kinjy’s servers.'
                   }
                 >
-                  {active.encrypted ? <Lock size={11} aria-hidden="true" /> : <ShieldOff size={11} aria-hidden="true" />}
-                  {active.encrypted ? 'Encrypted' : 'Not encrypted'}
+                  {active.encrypted || active.sealed_at_rest ? (
+                    <Lock size={11} aria-hidden="true" />
+                  ) : (
+                    <ShieldOff size={11} aria-hidden="true" />
+                  )}
+                  {active.encrypted
+                    ? 'End-to-end encrypted'
+                    : active.sealed_at_rest
+                      ? 'Encrypted on our servers'
+                      : 'Not encrypted'}
                 </span>
               </header>
 

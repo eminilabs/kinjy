@@ -434,6 +434,19 @@ On top of that socket, `/messages` has:
 - **Phones** — list and thread are two screens, driven by `?c=`; the back button
   and the back gesture both return to the list. Nothing is opened, or marked
   read, while it is not on screen.
+- **Encryption at rest** — with `MESSAGES_ENCRYPTION_KEY` set, message text,
+  attachment names and the attachment files themselves are sealed with
+  AES-256-GCM (`backend/common/crypto.py`); message notifications carry no
+  text. A copy of the database, a backup or the media volume reads as noise.
+  It is **not** end-to-end: the running server holds the key. Required in
+  production — messaging-service and media-service refuse to start without it,
+  `bootstrap.sh` generates it, `deploy.sh` checks it. Messages written before the
+  key existed are sealed in the background at startup; listing a second key
+  (`k2:…,k1:…`) rotates. **Losing the key loses the messages** — keep a copy
+  offline, never beside the backups.
+- **Private attachments** — a chat file is served only on a link messaging-service
+  signs for someone in the conversation (12 h, HMAC), never on its bare URL;
+  Range requests work on sealed files, so video seeks. Post media stays public.
 - **Dates** — day separators (Today / Yesterday / weekday / date), time only on
   bubbles, the full moment on hover, all in the app's chosen language.
 

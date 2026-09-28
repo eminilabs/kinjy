@@ -618,6 +618,8 @@ export interface Conversation {
   unread?: number
   /** Each participant's last read time — what "Seen" is drawn from. */
   read_state?: Record<string, string | null>
+  /** Stored encrypted on the server (at rest) — not end to end. */
+  sealed_at_rest?: boolean
   last_message?: {
     sender_id: string
     /** Text, or "Sent a photo: …" for an attachment. Never ciphertext. */
