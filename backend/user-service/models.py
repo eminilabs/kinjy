@@ -28,6 +28,11 @@ class Profile(Base):
     bio: Mapped[str | None] = mapped_column(Text)
     avatar_url: Mapped[str | None] = mapped_column(String(500))
     cover_url: Mapped[str | None] = mapped_column(String(500))
+    # The media-service asset behind each image. The URL is never taken from
+    # the client: it is copied from an asset this member owns and that
+    # media-service reports ready. Kept so a replaced image can be deleted.
+    avatar_asset_id: Mapped[str | None] = mapped_column(String(40))
+    cover_asset_id: Mapped[str | None] = mapped_column(String(40))
 
     # Geographic discovery ladder (blueprint module B):
     # Global > Continent > Region > Country > State > District > City > Neighborhood
