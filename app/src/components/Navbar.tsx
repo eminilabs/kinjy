@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { LANGUAGES } from '@/i18n'
 import { useAuth } from '@/hooks/useAuth'
+import { useMyProfile } from '@/hooks/useMyProfile'
+import MemberAvatar from '@/components/social/MemberAvatar'
 
 /**
  * Ten top-level links read as a site map rather than a way in. Five carry the
@@ -36,6 +38,7 @@ export const NAV_LINKS = [...PRIMARY_LINKS, ...SECONDARY_LINKS] as const
 export default function Navbar() {
   const { t, i18n } = useTranslation()
   const { user } = useAuth()
+  const me = useMyProfile()
   const [scrolled, setScrolled] = useState(false)
   const [langOpen, setLangOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
@@ -214,12 +217,7 @@ export default function Navbar() {
                 to="/dashboard"
                 className="hidden md:inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold cloud-glass text-text-hi hover:border-gold/40 hover:text-gold-soft transition-colors"
               >
-                <span
-                  aria-hidden="true"
-                  className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-gold-soft to-gold text-[0.65rem] font-bold text-ink"
-                >
-                  {user.display_name.slice(0, 1).toUpperCase()}
-                </span>
+                <MemberAvatar displayName={user.display_name} avatarUrl={me?.avatar_url} size={24} />
                 {t('nav.dashboard', { defaultValue: 'Dashboard' })}
               </Link>
               </>

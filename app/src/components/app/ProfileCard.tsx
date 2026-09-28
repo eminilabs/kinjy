@@ -1,21 +1,21 @@
 import { Link } from 'react-router'
-import { Award, Crown, Medal, Users } from 'lucide-react'
-import { LevelRing, VerifiedBadge } from '@/components/ui-kit'
+import { Award, Crown, MapPin, Medal, Users } from 'lucide-react'
+import { VerifiedBadge } from '@/components/ui-kit'
 import { MODULE_ICONS } from '@/components/appdemo/Chrome'
 import { ROUTE_FOR } from './navigation'
 import type { ChromeKey } from '@/components/appdemo/theme'
 import { useAppTheme } from '@/components/appdemo/theme'
-import { useEffect } from 'react'
+import MemberAvatar from '@/components/social/MemberAvatar'
 import { useApi } from '@/hooks/useApi'
-import { onChange } from '@/lib/live'
 import { useAuth } from '@/hooks/useAuth'
-import { kaluta, type Profile } from '@/lib/api'
+import { useMyProfile } from '@/hooks/useMyProfile'
+import { kaluta } from '@/lib/api'
 import { countryName } from '@/lib/profileOptions'
 import { cn } from '@/lib/utils'
 
 /**
  * The profile mini-card from the designed left rail: centred avatar, name with
- * its verification badge, handle and place, then the closeness ring.
+ * its verification badge, handle, and place.
  */
 /** The shortcuts /app pins. Destinations, not feed modes. */
 const PINNED: ChromeKey[] = ['home', 'create', 'familyTree', 'messages']
@@ -27,54 +27,36 @@ export default function ProfileCard() {
   // the member's own audiences, and inventing "Business" for someone who has
   // no such circle would make it a decoration.
   const circles = useApi(() => kaluta.circles.list(), [])
-  const profile = useApi<Profile>(() => kaluta.account.profile(), [])
-
-  // Following someone changes a number on this card, so listen rather than
-  // leave it stale until the next navigation.
-  useEffect(() => onChange('profile', profile.reload), [profile.reload])
-  const data = profile.data
+  // Shared with the top bar and the composer, and refreshed whenever the
+  // profile changes (an edit, or following someone changing a count here).
+  const data = useMyProfile()
 
   // The profile is what the editor changes; the account copy only stands in
   // until it has loaded.
   const displayName = data?.display_name ?? user?.display_name ?? ''
-  const initials = (displayName || '?')
-    .split(' ')
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase()
-
   const place = [data?.city, data?.country && countryName(data.country, lang)].filter(Boolean).join(', ')
 
   return (
     <div className="space-y-3">
       <div className={cn('rounded-card-lg p-4 text-center', tok.card)}>
-        {data?.avatar_url ? (
-          <img
-            src={data.avatar_url}
-            alt=""
-            className="mx-auto h-16 w-16 rounded-full object-cover ring-2 ring-gold/50"
-          />
-        ) : (
-          <span
-            aria-hidden="true"
-            className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-gold-soft to-gold text-lg font-bold text-ink ring-2 ring-gold/50"
-          >
-            {initials}
-          </span>
-        )}
+        <div className="flex justify-center">
+          <MemberAvatar handle={user?.handle} displayName={displayName} avatarUrl={data?.avatar_url} size={80} ring />
+        </div>
 
-        <p className={cn('mt-2.5 flex items-center justify-center gap-1.5 text-sm font-bold', tok.text)}>
+        <p className={cn('mt-3 flex items-center justify-center gap-1.5 text-sm font-bold', tok.text)}>
           {displayName}
           {user?.kyc_verified && <VerifiedBadge size={15} />}
         </p>
-        <p className={cn('text-xs', tok.low)}>
-          @{user?.handle}
-          {place && ` · ${place}`}
-        </p>
-
-        <div className="mt-3 flex justify-center">
-          <LevelRing level={2} max={5} size={52} label="Level 2 closeness" />
+        <div className="mt-1 flex flex-col items-center gap-1.5">
+          <span className="rounded-full bg-gold/10 px-2 py-0.5 text-xs font-medium text-gold-soft">
+            @{user?.handle}
+          </span>
+          {place && (
+            <span className={cn('flex items-center gap-1 text-[0.7rem]', tok.low)}>
+              <MapPin size={10} aria-hidden="true" />
+              {place}
+            </span>
+          )}
         </div>
 
         <dl className={cn('mt-3 flex justify-center gap-5 border-t pt-3', tok.divider, 'border-t-current/10')}>
