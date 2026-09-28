@@ -60,8 +60,11 @@ function messageFrom(status: number, body: unknown): string {
 
 let refreshing: Promise<boolean> | null = null
 
-/** Swap an expired access token for a fresh one. Concurrent 401s share one call. */
-async function refreshAccessToken(): Promise<boolean> {
+/**
+ * Swap an expired access token for a fresh one. Concurrent 401s share one call.
+ * Also used by the realtime socket when the server closes it with 4401.
+ */
+export async function refreshAccessToken(): Promise<boolean> {
   const refresh_token = tokens.refresh
   if (!refresh_token) return false
   if (refreshing) return refreshing
@@ -426,6 +429,8 @@ export interface UploadedMedia {
   id: string
   url: string
   kind: string
+  content_type?: string
+  filename?: string
   size_bytes: number
   provenance: string
   provenance_signed: boolean
@@ -611,6 +616,21 @@ export interface Conversation {
   /** Resolved by messaging-service so the list can show people, not ids. */
   profiles?: Record<string, PersonBrief>
   unread?: number
+  /** Each participant's last read time — what "Seen" is drawn from. */
+  read_state?: Record<string, string | null>
+  last_message?: {
+    sender_id: string
+    /** Text, or "Sent a photo: …" for an attachment. Never ciphertext. */
+    preview: string
+    media_kind: string | null
+    created_at: string
+  } | null
+}
+
+export interface Presence {
+  online: boolean
+  /** Unknown (null) after a server restart — never a guessed time. */
+  last_seen: string | null
 }
 
 export interface Message {
@@ -620,6 +640,12 @@ export interface Message {
   ciphertext_b64: string | null
   body: string | null
   kind: string
+  media_url?: string | null
+  /** image | video | audio | document | file — as media-service classified it. */
+  media_kind?: string | null
+  media_name?: string | null
+  media_type?: string | null
+  media_size?: number | null
   created_at: string
 }
 
@@ -1095,14 +1121,23 @@ export const kaluta = {
     uploadWithProgress(
       file: File,
       onProgress: (fraction: number) => void,
-      options: { provenance?: string; altText?: string; signal?: AbortSignal } = {},
+      options: {
+        provenance?: string
+        altText?: string
+        signal?: AbortSignal
+        /** 'chat' accepts any file type; a post only formats every browser renders. */
+        purpose?: 'post' | 'chat'
+      } = {},
     ): Promise<UploadedMedia> {
       const form = new FormData()
       form.append('file', file)
       form.append('provenance', options.provenance ?? 'original')
+      form.append('purpose', options.purpose ?? 'post')
       if (options.altText) form.append('alt_text', options.altText)
 
-      return new Promise<UploadedMedia>((resolve, reject) => {
+      // XHR bypasses request(), so it also bypasses its refresh-on-401: an
+      // upload started after the access token expired would simply fail.
+      const attempt = (retried: boolean): Promise<UploadedMedia> => new Promise<UploadedMedia>((resolve, reject) => {
         const request = new XMLHttpRequest()
         request.open('POST', `${BASE}/media/upload`)
         const token = tokens.access
@@ -1121,6 +1156,11 @@ export const kaluta = {
           if (request.status >= 200 && request.status < 300) {
             onProgress(1)
             resolve(payload as UploadedMedia)
+          } else if (request.status === 401 && !retried && tokens.refresh) {
+            onProgress(0)
+            void refreshAccessToken().then((ok) =>
+              ok ? attempt(true).then(resolve, reject) : reject(new ApiError(401, 'Your session expired — sign in again')),
+            )
           } else {
             const detail = (payload as { detail?: string } | null)?.detail
             reject(new ApiError(request.status, detail ?? `Upload failed (${request.status})`, payload))
@@ -1131,6 +1171,7 @@ export const kaluta = {
         options.signal?.addEventListener('abort', () => request.abort())
         request.send(form)
       })
+      return attempt(false)
     },
   },
 
@@ -1277,13 +1318,44 @@ export const kaluta = {
         // an encrypted conversation, and no key exchange is implemented yet.
         encrypted: false,
       }),
-    list: (conversationId: string) =>
-      api.get<{ items: Message[] }>(`/conversations/${conversationId}/messages`),
-    send: (conversationId: string, body: string) =>
-      api.post<{ id: string; created_at: string }>(`/conversations/${conversationId}/messages`, {
-        body,
-        kind: 'text',
-      }),
+    /**
+     * A page of the thread, oldest first. `after` catches up after a
+     * reconnect; `before` pages back through history.
+     */
+    list: (conversationId: string, options: { after?: string; before?: string } = {}) => {
+      const query = new URLSearchParams()
+      if (options.after) query.set('after', options.after)
+      if (options.before) query.set('before', options.before)
+      const qs = query.toString()
+      return api.get<{ items: Message[] }>(
+        `/conversations/${conversationId}/messages${qs ? `?${qs}` : ''}`,
+      )
+    },
+    /**
+     * Text, an uploaded attachment (`mediaId`), or both. `clientId` makes a
+     * retry idempotent: the same id is never stored twice.
+     */
+    send: (
+      conversationId: string,
+      message: { body?: string | null; mediaId?: string; clientId?: string },
+    ) =>
+      api.post<{ id: string; created_at: string; client_id: string | null; duplicate?: boolean }>(
+        `/conversations/${conversationId}/messages`,
+        {
+          body: message.body || null,
+          kind: message.mediaId ? 'media' : 'text',
+          media_id: message.mediaId,
+          client_id: message.clientId,
+        },
+      ),
+    /** The thread is on screen: record it as read and tell the room. */
+    markRead: (conversationId: string) =>
+      api.post<{ read_at: string }>(`/conversations/${conversationId}/read`),
+    /** Online state for connections and conversation partners; others are omitted. */
+    presence: (userIds: string[]) =>
+      api.get<{ items: Record<string, Presence> }>(
+        `/presence?ids=${encodeURIComponent(userIds.join(','))}`,
+      ),
   },
 
   family: {

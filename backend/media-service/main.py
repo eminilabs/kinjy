@@ -20,12 +20,33 @@ from common.service import create_app
 import models
 
 MAX_BYTES = 200 * 1024 * 1024  # 200 MB
+
+# What a *post* may carry: formats every browser renders, because a post is
+# something people view rather than download.
 ALLOWED = {
     "image/jpeg": "image", "image/png": "image", "image/webp": "image", "image/gif": "image",
     "video/mp4": "video", "video/webm": "video",
     "audio/mpeg": "audio", "audio/ogg": "audio", "audio/wav": "audio",
     "application/pdf": "document",
 }
+
+# A chat attachment may be any file at all — a spreadsheet, a zip, a voice
+# note. The types a browser can play or show get a player; everything else is
+# a download.
+CHAT_PLAYABLE = {
+    **ALLOWED,
+    "image/avif": "image",
+    "video/quicktime": "video", "video/ogg": "video",
+    "audio/webm": "audio", "audio/mp4": "audio", "audio/aac": "audio", "audio/x-m4a": "audio",
+    "audio/wave": "audio", "audio/x-wav": "audio", "audio/flac": "audio",
+}
+PURPOSES = ("post", "chat")
+
+# The only kinds ever served inline. Anything else — HTML, SVG, XML, scripts,
+# unknown bytes — goes out as an opaque download: this service answers on the
+# app's own origin, so a file a browser would *render* there could run script
+# with the member's session. SVG is deliberately absent from every list.
+INLINE_KINDS = {"image", "video", "audio", "document"}
 
 app = create_app(
     name="media-service",
@@ -44,6 +65,7 @@ async def upload(
     provenance: str = Form(default="original"),
     alt_text: str | None = Form(default=None),
     derived_from: str | None = Form(default=None),
+    purpose: str = Form(default="post"),
     db: OrmSession = Depends(get_db),
 ):
     if provenance not in models.Asset.PROVENANCE:
@@ -51,9 +73,15 @@ async def upload(
             status_code=400,
             detail=f"provenance must be one of: {', '.join(models.Asset.PROVENANCE)}",
         )
-    kind = ALLOWED.get(file.content_type or "")
-    if kind is None:
-        raise HTTPException(status_code=415, detail=f"Unsupported content type: {file.content_type}")
+    if purpose not in PURPOSES:
+        raise HTTPException(status_code=400, detail=f"purpose must be one of: {', '.join(PURPOSES)}")
+    content_type = (file.content_type or "application/octet-stream").split(";")[0].strip().lower()
+    if purpose == "chat":
+        kind = CHAT_PLAYABLE.get(content_type, "file")
+    else:
+        kind = ALLOWED.get(content_type)
+        if kind is None:
+            raise HTTPException(status_code=415, detail=f"Unsupported content type: {file.content_type}")
 
     asset_id = new_id("mda")
     folder = ROOT / principal.user_id[:12]
@@ -80,13 +108,13 @@ async def upload(
     )
     if existing is not None:
         destination.unlink(missing_ok=True)
-        return {"id": existing.id, "url": existing.url, "deduplicated": True}
+        return {**_describe(existing), "deduplicated": True}
 
     asset = models.Asset(
         id=asset_id,
         owner_id=principal.user_id,
         filename=file.filename or asset_id,
-        content_type=file.content_type or "application/octet-stream",
+        content_type=content_type,
         size_bytes=written,
         sha256=sha,
         storage_path=str(destination),
@@ -101,14 +129,36 @@ async def upload(
     db.commit()
 
     return {
+        **_describe(asset),
+        "note": "The provenance label is declared by the uploader. C2PA signing is not enabled yet.",
+    }
+
+
+def _describe(asset: models.Asset) -> dict:
+    return {
         "id": asset.id,
         "url": asset.url,
         "kind": asset.kind,
-        "size_bytes": written,
+        "content_type": asset.content_type,
+        "filename": asset.filename,
+        "size_bytes": asset.size_bytes,
         "provenance": asset.provenance,
-        "provenance_signed": False,
-        "note": "The provenance label is declared by the uploader. C2PA signing is not enabled yet.",
+        "provenance_signed": asset.provenance_signed,
     }
+
+
+@app.get("/internal/assets/{asset_id}", tags=["internal"])
+def internal_asset(asset_id: str, db: OrmSession = Depends(get_db)):
+    """What an asset is and who owns it — for services attaching one to something.
+
+    messaging-service stores what this says rather than what the client
+    claims, so a message cannot label a zip as a photo or attach another
+    member's upload.
+    """
+    asset = db.get(models.Asset, asset_id)
+    if asset is None:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return {**_describe(asset), "owner_id": asset.owner_id}
 
 
 @app.get("/media/{asset_id}", tags=["media"])
@@ -116,7 +166,27 @@ def serve(asset_id: str, db: OrmSession = Depends(get_db)):
     asset = db.get(models.Asset, asset_id)
     if asset is None or not os.path.exists(asset.storage_path):
         raise HTTPException(status_code=404, detail="Asset not found")
-    return FileResponse(asset.storage_path, media_type=asset.content_type, filename=asset.filename)
+    inline = asset.kind in INLINE_KINDS and not asset.content_type.startswith("image/svg")
+    return FileResponse(
+        asset.storage_path,
+        media_type=asset.content_type if inline else "application/octet-stream",
+        filename=asset.filename,
+        content_disposition_type="inline" if inline else "attachment",
+        headers=_serve_headers(asset.content_type if inline else None),
+    )
+
+
+def _serve_headers(inline_type: str | None) -> dict[str, str]:
+    # Never let a browser second-guess the type into something runnable, and
+    # even if it did, give the document no script and no origin. The one
+    # exception is PDF: Chrome refuses to open a PDF under a sandbox policy,
+    # and its viewer does not run the file's scripts in this origin anyway.
+    headers = {"X-Content-Type-Options": "nosniff"}
+    if inline_type != "application/pdf":
+        headers["Content-Security-Policy"] = (
+            "sandbox; default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'"
+        )
+    return headers
 
 
 @app.get("/media/{asset_id}/provenance", tags=["media"])

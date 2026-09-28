@@ -47,6 +47,7 @@ ROUTES: dict[str, str] = {
     "/api/memorials": "http://memorial-service:8000",
     "/api/conversations": "http://messaging-service:8000",
     "/api/notifications": "http://messaging-service:8000",
+    "/api/presence": "http://messaging-service:8000",
     "/api/creators": "http://creator-service:8000",
     "/api/subscriptions": "http://creator-service:8000",
     "/api/badges": "http://creator-service:8000",
@@ -145,8 +146,10 @@ WS_ROUTES: dict[str, str] = {
 
 
 @app.websocket("/api/ws")
-async def websocket_relay(client: WebSocket, token: str = ""):
-    upstream_url = f"{WS_ROUTES['/api/ws']}?token={token}"
+async def websocket_relay(client: WebSocket):
+    # Authentication is the first frame, which this relay passes through like
+    # any other; the token never appears in a URL, so no access log holds it.
+    upstream_url = WS_ROUTES["/api/ws"]
     await client.accept()
 
     try:
@@ -175,6 +178,17 @@ async def websocket_relay(client: WebSocket, token: str = ""):
                     task.exception(), (WebSocketDisconnect, asyncio.CancelledError)
                 ):
                     log.warning("ws relay ended: %s", task.exception())
+
+            if pump_down in done:
+                # Upstream closed first. Hand the browser the same close code:
+                # 4401 tells the client to refresh its token, and a relay that
+                # replaced it with a generic close left the client retrying
+                # with a dead token forever.
+                code = upstream.close_code or 1000
+                try:
+                    await client.close(code=code if code != 1006 else 1011)
+                except RuntimeError:
+                    pass  # the browser had already gone
     except WebSocketDisconnect:
         pass
     except Exception as exc:

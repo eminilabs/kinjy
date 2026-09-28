@@ -773,6 +773,45 @@ def disconnect(user_id: str, principal: CurrentUser, db: OrmSession = Depends(ge
         db.commit()
 
 
+@app.get("/internal/connections/{user_id}", tags=["internal"])
+def internal_connections(user_id: str, db: OrmSession = Depends(get_db)):
+    """Ids of everyone ``user_id`` has an accepted connection with.
+
+    messaging-service uses it to decide who is told when this member comes
+    online or goes offline — presence is shown to connections, not to anyone
+    who happens to know an id.
+    """
+    rows = db.scalars(
+        select(models.Connection).where(
+            models.Connection.status == "accepted",
+            or_(
+                models.Connection.requester_id == user_id,
+                models.Connection.addressee_id == user_id,
+            ),
+        )
+    ).all()
+    return {
+        "ids": sorted(
+            {r.addressee_id if r.requester_id == user_id else r.requester_id for r in rows}
+        )
+    }
+
+
+@app.get("/internal/blocks/{user_id}", tags=["internal"])
+def internal_blocks(user_id: str, db: OrmSession = Depends(get_db)):
+    """Everyone on either side of a block with ``user_id``.
+
+    A block is mutual in effect: neither side sees the other's presence or
+    typing, whoever pressed the button.
+    """
+    rows = db.scalars(
+        select(models.Block).where(
+            or_(models.Block.user_id == user_id, models.Block.blocked_id == user_id)
+        )
+    ).all()
+    return {"ids": sorted({r.blocked_id if r.user_id == user_id else r.user_id for r in rows})}
+
+
 @app.get("/internal/permissions/{actor_id}/{target_id}", tags=["internal"])
 def permissions(actor_id: str, target_id: str, db: OrmSession = Depends(get_db)):
     """What ``actor`` may do to ``target``.
