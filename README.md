@@ -405,7 +405,9 @@ On top of that socket, `/messages` has:
 
 - **Friends** — every accepted connection in a strip above the conversations,
   online first; one tap opens (or reuses) the thread. Pending invitations are
-  answered there too.
+  answered there too. **See all** opens the full list with a search (name or
+  @handle, case- and accent-insensitive: "helene" finds Hélène) and an
+  Online-only filter; it filters the already-loaded list locally.
 - **Optimistic send** — the bubble shows at once; the request carries a
   `client_id`, so a retry after a lost response never stores the message twice.
 - **Read receipts** — `POST /conversations/{id}/read`, sent only while the thread

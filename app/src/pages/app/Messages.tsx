@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import {
   AlertCircle,
   ArrowLeft,
@@ -13,10 +13,13 @@ import {
   Mic,
   Paperclip,
   Plus,
+  Search,
   Send,
   ShieldOff,
   Square,
   Trash2,
+  UserRound,
+  Users,
   Wifi,
   WifiOff,
   X,
@@ -88,6 +91,9 @@ function startOfDay(date: Date): number {
 function daysAgo(iso: string): number {
   return Math.round((startOfDay(new Date()) - startOfDay(new Date(iso))) / DAY_MS)
 }
+
+/** Lower-case without accents, for matching "helene" against "Hélène". */
+const fold = (text: string) => text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
 
 const capitalise = (text: string) => text.charAt(0).toLocaleUpperCase() + text.slice(1)
 
@@ -821,6 +827,31 @@ export default function Messages() {
     [friends, presence],
   )
 
+  // --- the full friends list ---------------------------------------------------------
+  const [showAllFriends, setShowAllFriends] = useState(false)
+  const [friendQuery, setFriendQuery] = useState('')
+  const [onlineOnly, setOnlineOnly] = useState(false)
+  const closeAllFriends = () => {
+    setShowAllFriends(false)
+    setFriendQuery('')
+    setOnlineOnly(false)
+  }
+
+  // Matched on name and handle, ignoring case and accents — "helene" finds
+  // Hélène, and "@kofi" finds kofi.test. The list is already loaded, so this
+  // filters locally rather than asking the server on every keystroke.
+  const matchingFriends = useMemo(() => {
+    const query = fold(friendQuery.trim().replace(/^@/, ''))
+    return sortedFriends.filter((friend) => {
+      if (onlineOnly && !presence[friend.user_id]?.online) return false
+      if (!query) return true
+      return (
+        fold(friend.profile?.display_name ?? '').includes(query) ||
+        fold(friend.profile?.handle ?? '').includes(query)
+      )
+    })
+  }, [sortedFriends, friendQuery, onlineOnly, presence])
+
   // --- live events ---------------------------------------------------------------
   const { connected } = useRealtime((event) => {
     switch (event.type) {
@@ -982,14 +1013,35 @@ export default function Messages() {
               A strip rather than a second list, so the conversations below
               stay in view at the same time. */}
           <section aria-labelledby="friends-heading">
-            <h2 id="friends-heading" className="mb-2 flex items-center gap-2 text-sm font-semibold text-text-hi">
-              Friends
-              <span className="caption font-normal">
-                {friends.length
-                  ? `${friends.filter((f) => presence[f.user_id]?.online).length} online · ${friends.length}`
-                  : ''}
-              </span>
-            </h2>
+            <div className="mb-2 flex items-center gap-2">
+              <h2 id="friends-heading" className="flex items-center gap-2 text-sm font-semibold text-text-hi">
+                Friends
+                <span className="caption font-normal">
+                  {friends.length
+                    ? `${friends.filter((f) => presence[f.user_id]?.online).length} online · ${friends.length}`
+                    : ''}
+                </span>
+              </h2>
+              {friends.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => (showAllFriends ? closeAllFriends() : setShowAllFriends(true))}
+                  aria-expanded={showAllFriends}
+                  aria-controls="all-friends"
+                  className="ms-auto inline-flex items-center gap-1 rounded-full border border-white/12 px-2.5 py-1 text-xs font-semibold text-text-mid transition-colors hover:border-gold/40 hover:text-gold-soft"
+                >
+                  {showAllFriends ? (
+                    <>
+                      <X size={12} aria-hidden="true" /> Close
+                    </>
+                  ) : (
+                    <>
+                      <Users size={12} aria-hidden="true" /> See all
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
 
             {connections.loading && !connections.data && <p className="caption">Loading…</p>}
             {connections.data && friends.length === 0 && (
@@ -998,7 +1050,97 @@ export default function Messages() {
               </p>
             )}
 
-            {friends.length > 0 && (
+            {/* The full list, searchable. The strip below only fits a handful;
+                with a few hundred connections, finding one person needs a
+                search box, not a horizontal scroll. */}
+            {showAllFriends && (
+              <div id="all-friends" className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <label className="relative flex min-w-0 flex-1 items-center">
+                    <Search size={13} className="pointer-events-none absolute start-3 text-text-low" aria-hidden="true" />
+                    <input
+                      type="search"
+                      value={friendQuery}
+                      onChange={(e) => setFriendQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') closeAllFriends()
+                      }}
+                      placeholder="Search your friends…"
+                      aria-label="Search your friends"
+                      autoFocus
+                      className="w-full rounded-full border border-white/10 bg-ink-2/60 py-2 pe-3 ps-8 text-xs text-text-hi placeholder:text-text-low focus:border-gold/40 focus:outline-none"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setOnlineOnly((v) => !v)}
+                    aria-pressed={onlineOnly}
+                    className={cn(
+                      'shrink-0 rounded-full border px-2.5 py-1.5 text-xs font-semibold transition-colors',
+                      onlineOnly
+                        ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200'
+                        : 'border-white/12 text-text-mid hover:text-text-hi',
+                    )}
+                  >
+                    Online
+                  </button>
+                </div>
+
+                <p className="caption" aria-live="polite">
+                  {matchingFriends.length === friends.length && !onlineOnly
+                    ? `${friends.length} friend${friends.length > 1 ? 's' : ''}`
+                    : `${matchingFriends.length} of ${friends.length}`}
+                </p>
+
+                {matchingFriends.length === 0 ? (
+                  <p className="caption py-2">
+                    {onlineOnly && !friendQuery.trim()
+                      ? 'None of your friends is online right now.'
+                      : `No friend matches “${friendQuery.trim()}”.`}
+                  </p>
+                ) : (
+                  <ul className="-mx-1 max-h-[45dvh] space-y-0.5 overflow-y-auto">
+                    {matchingFriends.map((friend) => (
+                      <li key={friend.user_id} className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            closeAllFriends()
+                            void startWith(friend.user_id)
+                          }}
+                          aria-label={`Message ${friend.profile?.display_name ?? 'this member'}`}
+                          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-card-sm px-2 py-1.5 text-start transition-colors hover:bg-white/5"
+                        >
+                          <PresenceAvatar profile={friend.profile} online={presence[friend.user_id]?.online} size={34} />
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm text-text-hi">
+                              {friend.profile?.display_name ?? 'Member'}
+                            </span>
+                            <span className="caption block truncate">
+                              {friend.profile?.handle ? `@${friend.profile.handle}` : ''}
+                              {presence[friend.user_id] ? ` · ${lastSeenLabel(presence[friend.user_id], locale)}` : ''}
+                            </span>
+                          </span>
+                          <MessageSquare size={14} className="ms-auto shrink-0 text-text-low" aria-hidden="true" />
+                        </button>
+                        {friend.profile?.handle && (
+                          <Link
+                            to={`/u/${friend.profile.handle}`}
+                            aria-label={`${friend.profile.display_name}'s profile`}
+                            title="View profile"
+                            className="shrink-0 rounded-full p-2 text-text-low transition-colors hover:text-text-hi"
+                          >
+                            <UserRound size={14} aria-hidden="true" />
+                          </Link>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            {!showAllFriends && friends.length > 0 && (
               <ul className="-mx-1 flex gap-1 overflow-x-auto pb-1">
                 {sortedFriends.map((friend) => (
                   <li key={friend.user_id} className="shrink-0">
