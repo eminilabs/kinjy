@@ -9,6 +9,8 @@ import httpx
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import and_, delete, func, or_, select
+from pydantic import BaseModel, Field
+from sqlalchemy import and_, case, delete, func, or_, select
 from sqlalchemy.orm import Session as OrmSession
 
 from common import ageclient, notify
@@ -437,7 +439,26 @@ def search_people(
     )
     excluded = blocked | blocking | {principal.user_id}
 
-    like = f"%{query}%"
+    # Prefix, not substring: typing "ez" is looking for Ezekiel, and a substring
+    # match buried him under every Lopez and Mezu. Any word of the name counts,
+    # so a first name and a surname are both a way in; a handle matches at its
+    # start or after one of the separators a handle may contain.
+    #
+    # The member's text is escaped because `%` and `_` are LIKE wildcards: an
+    # unescaped "%%" listed every discoverable member on the platform.
+    term = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    name = func.lower(models.Profile.display_name)
+    handle = func.lower(models.Profile.handle)
+    starts = or_(
+        name.like(f"{term}%", escape="\\"),
+        handle.like(f"{term}%", escape="\\"),
+    )
+    word_starts = or_(
+        name.like(f"% {term}%", escape="\\"),
+        name.like(f"%-{term}%", escape="\\"),
+        handle.like(f"%.{term}%", escape="\\"),
+        handle.like(f"%\\_{term}%", escape="\\"),
+    )
     # `discoverable` lives on Preferences, not Profile, so this is an outer join:
     # a member whose preferences row was never materialised must still be
     # findable, and an inner join would silently hide them.
@@ -447,12 +468,14 @@ def search_people(
         .where(
             or_(models.Preferences.discoverable.is_(True), models.Preferences.user_id.is_(None)),
             models.Profile.user_id.not_in(excluded),
-            or_(
-                func.lower(models.Profile.handle).like(like),
-                func.lower(models.Profile.display_name).like(like),
-            ),
+            or_(starts, word_starts),
         )
-        .order_by(models.Profile.followers_count.desc())
+        # Whole-name matches first: "ez" should put Ezekiel above Grace Ezeh.
+        .order_by(
+            case((starts, 0), else_=1),
+            models.Profile.followers_count.desc(),
+            name,
+        )
         .limit(agediscovery.widened(min(limit, 25), 75))
     ).all()
     rows = agediscovery.filter_profiles(principal.user_id, list(rows), min(limit, 25))
