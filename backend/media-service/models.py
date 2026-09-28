@@ -28,7 +28,8 @@ class Asset(Base):
 
     id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("mda"))
     owner_id: Mapped[str] = mapped_column(String(40), index=True)
-    filename: Mapped[str] = mapped_column(String(255))
+    # Text, not String(255): a sealed name is longer than the name it hides.
+    filename: Mapped[str] = mapped_column(Text)
     content_type: Mapped[str] = mapped_column(String(100))
     size_bytes: Mapped[int] = mapped_column(BigInteger, default=0)
     sha256: Mapped[str] = mapped_column(String(64), index=True)
@@ -69,6 +70,13 @@ class Asset(Base):
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     alt_text: Mapped[str | None] = mapped_column(String(500))
+
+    # A chat attachment: served only on a link signed by the service that knows
+    # who may see it, never on its bare URL.
+    private: Mapped[bool] = mapped_column(Boolean, default=False)
+    # The key id the bytes on disk (and the file name) are sealed with; None
+    # means stored as uploaded. See common/crypto.py.
+    sealed_with: Mapped[str | None] = mapped_column(String(16))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

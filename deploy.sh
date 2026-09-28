@@ -56,6 +56,19 @@ ssh "$HOST" "test -f $REMOTE_DIR/.env" || {
   exit 1
 }
 
+# Checked before building rather than discovered from a crash loop:
+# messaging-service and media-service refuse to start in production without
+# it, instead of storing members' messages in plaintext.
+ssh "$HOST" "grep -Eq '^MESSAGES_ENCRYPTION_KEY=.+' $REMOTE_DIR/.env" || {
+  echo "The server's .env has no MESSAGES_ENCRYPTION_KEY."
+  echo
+  echo "Generate one ON THE SERVER, then save the printed line in your password manager:"
+  echo "  ssh $HOST 'cd $REMOTE_DIR && k=\"k1:\$(openssl rand -base64 32 | tr +/ -_)\" && echo MESSAGES_ENCRYPTION_KEY=\$k >> .env && echo MESSAGES_ENCRYPTION_KEY=\$k'"
+  echo
+  echo "Losing it makes every message it seals unreadable. Keep it away from the backups."
+  exit 1
+}
+
 say "4/5 building and starting"
 # Caddy first, and forced.
 #
