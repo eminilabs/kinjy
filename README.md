@@ -82,6 +82,40 @@ docker compose logs -f ledger-service
 docker compose exec postgres psql -U kaluta -d kaluta -c "\dn"
 ```
 
+## Running the tests
+
+One command, and it runs everything:
+
+```bash
+python backend/tests/run_all.py
+```
+
+It discovers every suite in `backend/tests/` rather than working from a list,
+because a list maintained by whoever is running the tests is how
+`e2e_messaging_age` sat red in the tree for three days: the change that broke
+its setup was followed by a run of four suites chosen by hand, and that was not
+one of them.
+
+It also refuses to treat a silent success as a pass. The suite that was missed
+exited **0** on the run that missed it, because it died in an assertion during
+setup before printing anything, and a grep for `ALL CHECKS PASSED` found
+nothing and said nothing. A suite that exits 0 without printing its verdict is
+reported as `CRASH`.
+
+Before running anything it checks that every service is up *and answering as
+itself* - a port that answers as the wrong service makes every "this is
+refused" assertion meaningless, which is the oldest trap in this repository.
+
+Other things worth knowing:
+
+- `--list` shows what would run; `-k <text>` narrows it.
+- Suites that exit **2** are skipped on purpose - `e2e_moderation_admin.py`
+  promotes throwaway accounts to admin, so it refuses to run against anything
+  but a local stack. Skips are listed separately and never counted as passes.
+- Set `KINJY_API` to test a deployed stack. Suites with a port written into
+  them are skipped rather than run, since they would quietly test localhost and
+  report a pass for an environment they never touched.
+
 ## Try the economy without writing anything
 
 The blueprint's split formulas are implemented in `backend/common/economy.py`
