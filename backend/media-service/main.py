@@ -491,6 +491,28 @@ def complete_profile_image(asset_id: str, principal: CurrentUser, db: OrmSession
     return _profile_image_out(asset)
 
 
+class DiscardIn(BaseModel):
+    owner_id: str
+
+
+@app.post("/internal/media/{asset_id}/discard", status_code=204, tags=["internal"])
+def discard_profile_image(asset_id: str, payload: DiscardIn, db: OrmSession = Depends(get_db)):
+    """Delete a profile image its owner has replaced or removed.
+
+    Only profile images, and only for the owner named by the caller: an
+    internal caller with a wrong id cannot delete somebody's post media.
+    Unknown or already deleted is not an error - the outcome is the same.
+    """
+    asset = db.get(models.Asset, asset_id)
+    if asset is None:
+        return
+    if asset.owner_id != payload.owner_id or asset.purpose is None:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    _discard_bytes(asset)
+    db.delete(asset)
+    db.commit()
+
+
 @app.get("/internal/media/{asset_id}", tags=["internal"])
 def internal_asset(asset_id: str, db: OrmSession = Depends(get_db)):
     """What user-service needs before putting an asset on a profile."""
