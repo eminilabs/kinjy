@@ -552,9 +552,9 @@ minor→adult · locked settings · policy version on every verdict.
    tested and simply not called.
 3. **Community/search** onto `restrict_query`.
 4. **The classifier**, so `UNCLASSIFIED` stops being the common case.
-5. ~~**Parental supervision**~~ — built (`user-service/parental.py`), 64
-   checks in `backend/tests/e2e_parental.py`. **Appeals** and **the T&S
-   dashboard** remain.
+5. ~~**Parental supervision**~~ — built (`user-service/parental.py`).
+   ~~**Appeals**~~ — built (`social-service/moderation.py`), together with the
+   reporting and decision records they need. **The T&S console UI** remains.
 
 ---
 
@@ -568,7 +568,26 @@ minor→adult · locked settings · policy version on every verdict.
   Every decision it makes is stamped `classifier_source="heuristic"` so its
   work can be found and re-run when a model arrives.
 - There is no streaming backend at all; only the age decision it will need.
-- Appeals and the Trust & Safety console are designed here and not built.
+- The Trust & Safety console is designed here and not built. The appeals
+  endpoints exist and are staff-guarded; there is no screen for them, so a
+  reviewer works the queue through the API.
+- Appeals are built, and so are the two things that had to exist first.
+  **Reports**: `reclassify_on_report` had been written with the classifier and
+  never called by anything, so community reports did nothing at all. They now
+  restrict and never release — three from distinct accounts pull a permissive
+  rating back pending review, no number of them can lower one, the author's own
+  report does not count, and reports never overrule a human who has already
+  looked. **Decisions**: every restriction is now written down. Before this a
+  refused comment was rolled back entire — the comment, its classification, all
+  of it — and the author was told to contact support about something that no
+  longer existed anywhere in the system. You cannot appeal against nothing, and
+  a platform that does not keep its own refusals cannot measure how often it is
+  wrong; `/admin/moderation/appeals` now reports the overturn rate beside the
+  queue for that reason.
+- Child-safety escalations have no appeal path here, and the refusal does not
+  say why. An appeals queue is read by general staff, and that is not where
+  that material should be re-read; explaining the boundary also teaches how to
+  sit just outside it.
 - Parental supervision is built, and deliberately narrow. A parent sees that
   supervision is active, the teen's safety settings, the time limit and today's
   usage total, and the requests the teen has made. There is no endpoint — not a

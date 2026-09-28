@@ -297,3 +297,34 @@ seen running:
   counter already reads; that the enforcement path honours a parent-set value
   exactly as it honours a self-set one has not been re-verified since.
 
+## Moderation: reports, decisions, appeals (28/09)
+
+- **No screen for any of it.** The endpoints exist and are staff-guarded, but a
+  reviewer works the queue with curl. The member side is worse: an author can
+  fetch `/moderation/decisions` and see what was restricted and how their
+  appeal is going, and there is no page that shows it to them.
+- **No refusal is appealable, and that is not a bug today.** Every
+  `block_publication` in the classifier also sets `escalate_child_safety`, so
+  every refusal is a child-safety escalation and correctly leaves the ordinary
+  appeals path. It does mean the `refused_publication` appeal branch is
+  currently unreachable. `e2e_moderation.py` asserts this explicitly, so the
+  day the classifier blocks for some other reason, that check fails and says
+  so rather than the branch quietly coming alive untested.
+- **Overturning clears the graded levels wholesale.** A reviewer who thinks a
+  post was rated 18+ wrongly cannot say "it is violence 1, not sexual 2" — the
+  appeal zeroes every category. Fine for the common case, crude for a genuinely
+  borderline one.
+- **No appeal against an account-level action**, because there are no
+  account-level actions yet: no suspensions, no strikes, no rate limits imposed
+  by moderation. When those arrive they need their own decision records.
+- **Nothing expires.** Decisions and reports accumulate forever. A retention
+  policy matters here more than most tables, since `body_snapshot` holds text
+  that was refused publication.
+- **The SLA is decorative.** Appeals get a `due_at` and overdue ones sort
+  first, but nothing escalates, nobody is paged, and no appeal is ever granted
+  by default for going unanswered.
+- **`social-service/main.py:140` has an invalid escape sequence** (`\w` in a
+  non-raw string) that Python warns about on every import and will eventually
+  make an error. Pre-existing, one line, untouched here because it is in the
+  hashtag regex rather than in anything this change covers.
+
