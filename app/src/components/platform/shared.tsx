@@ -1,5 +1,4 @@
 import { memo, useRef } from 'react'
-import type { ReactNode } from 'react'
 import { motion, useInView, useReducedMotion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
@@ -94,34 +93,6 @@ export function KineticWords({ text, className, delay = 0, as: Tag = 'span' }: {
         </span>
       ))}
     </Tag>
-  )
-}
-
-/** Standard scroll reveal wrapper (slide + fade, 500ms cloud-ease). */
-export function Reveal({
-  children,
-  from = 0,
-  delay = 0,
-  className,
-  amount = 0.4,
-}: {
-  children: ReactNode
-  from?: number
-  delay?: number
-  className?: string
-  amount?: number
-}) {
-  const reduced = useReducedMotion()
-  return (
-    <motion.div
-      className={className}
-      initial={reduced ? false : { opacity: 0, x: from }}
-      whileInView={{ opacity: 1, x: 0 }}
-      viewport={{ once: true, amount }}
-      transition={{ duration: 0.5, ease: CLOUD_EASE, delay }}
-    >
-      {children}
-    </motion.div>
   )
 }
 
