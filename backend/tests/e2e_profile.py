@@ -141,6 +141,11 @@ check("explicit bio -> 422", r.status_code == 422, r.text)
 check("refusal does not name the rule", "porn" not in r.text.lower(), r.text)
 
 print("== neighbourhood is a precise location")
+check("the editor is told an adult may set it",
+      c.get("/users/me/eligibility", headers=adult).json() == {"neighborhood": True})
+check("the editor is told a minor may not",
+      c.get("/users/me/eligibility", headers=minor).json() == {"neighborhood": False})
+check("eligibility needs a session -> 401", c.get("/users/me/eligibility").status_code == 401)
 r = patch(adult, neighborhood="Gombe")
 check("adult may set it", r.status_code == 200 and r.json()["neighborhood"] == "Gombe", r.text)
 public = c.get(f"/users/{adult_user['handle']}").json()

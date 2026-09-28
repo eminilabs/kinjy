@@ -223,6 +223,20 @@ def my_profile(principal: CurrentUser, db: OrmSession = Depends(get_db)):
     return MyProfileOut.model_validate(_ensure_profile(db, principal.user_id))
 
 
+@app.get("/users/me/eligibility", tags=["profiles"])
+def my_profile_eligibility(principal: CurrentUser):
+    """Which age-gated profile fields this account may fill, before it tries.
+
+    A readout for the editor, so it can leave a field out rather than refuse it
+    after the member typed it. PATCH /users/me enforces the rule on its own and
+    does not consult this. Kept off GET /users/me because that is called on
+    every page, and the age lookup is a call to auth-service. An age lookup
+    that fails reads as a minor, so the field is simply not offered.
+    """
+    who = ageclient.age_profile(principal.user_id)
+    return {"neighborhood": profilefields.may_set_neighbourhood(who)}
+
+
 # Fields that exist on every profile and cannot be emptied.
 _REQUIRED_PROFILE_FIELDS = ("display_name", "languages", "lang")
 _PROFILE_IMAGES = ("avatar", "cover")
