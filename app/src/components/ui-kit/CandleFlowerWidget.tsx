@@ -32,7 +32,7 @@ export default function CandleFlowerWidget({
         <span className="relative flex flex-col items-center" aria-hidden="true">
           {/* flame */}
           <span
-            className="block h-5 w-2.5 origin-bottom animate-flicker rounded-[50%_50%_50%_50%/60%_60%_40%_40%]"
+            className="block h-5 w-2.5 origin-bottom rounded-[50%_50%_50%_50%/60%_60%_40%_40%]"
             style={{
               background: 'linear-gradient(to top, #E07856, #F0C878 55%, #FFF6DC)',
               boxShadow: '0 0 12px 3px rgba(240,200,120,0.55)',

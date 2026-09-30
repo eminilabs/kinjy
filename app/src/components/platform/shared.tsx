@@ -1,5 +1,4 @@
 import { memo, useRef } from 'react'
-import type { ReactNode } from 'react'
 import { motion, useInView, useReducedMotion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
@@ -74,54 +73,23 @@ export function useActiveInView<T extends HTMLElement>(amount = 0.4) {
   return { ref, active }
 }
 
-/** Word-level kinetic split for headlines (stagger up, 0.08s). */
-export function KineticWords({ text, className, delay = 0, as: Tag = 'span' }: { text: string; className?: string; delay?: number; as?: 'span' | 'h1' | 'h2' }) {
-  const reduced = useReducedMotion()
+/**
+ * Word-level split for headlines. `delay` is still accepted so callers need
+ * not change; the words no longer animate in.
+ */
+export function KineticWords({ text, className, as: Tag = 'span' }: { text: string; className?: string; delay?: number; as?: 'span' | 'h1' | 'h2' }) {
   const words = text.split(' ')
   return (
     <Tag className={className}>
       {words.map((w, i) => (
         <span key={`${w}-${i}`} className="inline-block overflow-hidden pb-[0.08em] -mb-[0.08em] align-bottom pe-[0.24em] last:pe-0">
-          <motion.span
-            className="inline-block"
-            initial={reduced ? false : { y: '110%' }}
-            animate={{ y: 0 }}
-            transition={{ duration: 0.8, ease: CLOUD_EASE, delay: delay + i * 0.08 }}
-          >
+          <span className="inline-block">
             {w}
             {i < words.length - 1 ? ' ' : ''}
-          </motion.span>
+          </span>
         </span>
       ))}
     </Tag>
-  )
-}
-
-/** Standard scroll reveal wrapper (slide + fade, 500ms cloud-ease). */
-export function Reveal({
-  children,
-  from = 0,
-  delay = 0,
-  className,
-  amount = 0.4,
-}: {
-  children: ReactNode
-  from?: number
-  delay?: number
-  className?: string
-  amount?: number
-}) {
-  const reduced = useReducedMotion()
-  return (
-    <motion.div
-      className={className}
-      initial={reduced ? false : { opacity: 0, x: from }}
-      whileInView={{ opacity: 1, x: 0 }}
-      viewport={{ once: true, amount }}
-      transition={{ duration: 0.5, ease: CLOUD_EASE, delay }}
-    >
-      {children}
-    </motion.div>
   )
 }
 

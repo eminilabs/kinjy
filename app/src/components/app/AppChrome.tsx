@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { AnimatePresence, motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import {
   ChevronDown, Clapperboard, Cloudy, Globe, Home, LayoutGrid,
@@ -10,7 +9,9 @@ import type { LucideIcon } from 'lucide-react'
 import { MODULE_ICONS } from '@/components/appdemo/Chrome'
 import { useAppTheme } from '@/components/appdemo/theme'
 import type { AppLang, ChromeKey, DisplayMode } from '@/components/appdemo/theme'
+import MemberAvatar from '@/components/social/MemberAvatar'
 import { useAuth } from '@/hooks/useAuth'
+import { useMyProfile } from '@/hooks/useMyProfile'
 import { kaluta } from '@/lib/api'
 import NotificationBell from './NotificationBell'
 import { cn } from '@/lib/utils'
@@ -74,7 +75,7 @@ export function AppTopBar() {
     navigate(`/explore?q=${encodeURIComponent(query.trim())}`)
   }
 
-  const initials = (user?.display_name ?? '?').slice(0, 1).toUpperCase()
+  const me = useMyProfile()
 
   return (
     <div className={cn('flex h-[64px] items-center gap-3 border-x-0 border-t-0 border-b px-4', tok.card)}>
@@ -110,17 +111,12 @@ export function AppTopBar() {
           onClick={() => setLangOpen((v) => !v)}
           aria-expanded={langOpen}
           aria-label="Change language"
-          className={cn('flex h-9 w-9 items-center justify-center rounded-full transition-colors', tok.hoverBg, tok.mid)}
+          className={cn('flex h-9 w-9 items-center justify-center rounded-full', tok.hoverBg, tok.mid)}
         >
           <Globe size={16} />
         </button>
-        <AnimatePresence>
-          {langOpen && (
-            <motion.ul
-              initial={{ opacity: 0, y: 6, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 6, scale: 0.97 }}
-              transition={{ duration: 0.18 }}
+        {langOpen && (
+            <ul
               className={cn('absolute end-0 top-11 z-50 w-40 rounded-card-md p-1.5 shadow-cloud', tok.cardSolid)}
             >
               {(Object.keys(LANG_LABELS) as AppLang[]).map((l) => (
@@ -132,7 +128,7 @@ export function AppTopBar() {
                       setLangOpen(false)
                     }}
                     className={cn(
-                      'w-full rounded-card-sm px-3 py-1.5 text-start text-sm transition-colors',
+                      'w-full rounded-card-sm px-3 py-1.5 text-start text-sm',
                       lang === l ? 'bg-gold/15 text-gold-soft' : cn(tok.mid, tok.hoverBg),
                     )}
                   >
@@ -140,9 +136,8 @@ export function AppTopBar() {
                   </button>
                 </li>
               ))}
-            </motion.ul>
+            </ul>
           )}
-        </AnimatePresence>
       </div>
 
       {/* display mode — the signature control */}
@@ -163,7 +158,7 @@ export function AppTopBar() {
               title={MODE_LABELS[m]}
               onClick={() => setMode(m)}
               className={cn(
-                'flex h-7 w-7 items-center justify-center rounded-full transition-all duration-200',
+                'flex h-7 w-7 items-center justify-center rounded-full',
                 active ? 'bg-gradient-to-br from-gold-soft to-gold text-ink' : cn(tok.low, tok.hoverBg),
               )}
             >
@@ -175,17 +170,8 @@ export function AppTopBar() {
 
       <NotificationBell userId={user?.id} />
 
-      <Link
-        to="/dashboard"
-        aria-label="Your profile"
-        className="h-9 w-9 shrink-0 overflow-hidden rounded-full ring-2 ring-gold/50"
-      >
-        <span
-          aria-hidden="true"
-          className="flex h-full w-full items-center justify-center bg-gradient-to-br from-gold-soft to-gold text-xs font-bold text-ink"
-        >
-          {initials}
-        </span>
+      <Link to="/dashboard" aria-label="Your profile" className="shrink-0 rounded-full">
+        <MemberAvatar displayName={user?.display_name} avatarUrl={me?.avatar_url} size={36} ring />
       </Link>
     </div>
   )
@@ -244,21 +230,15 @@ export function AppChipBar({ pathname, search }: { pathname: string; search: str
     <div className={cn('relative border-x-0 border-t-0 border-b', tok.card)}>
       <div className="flex items-center gap-1.5 px-3 py-2">
         <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <AnimatePresence initial={false}>
             {onBar.map((m) => {
               const isActive = active === m.key
               return (
-                <motion.div
-                  key={m.key}
-                  layout="position"
-                  transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                  className="shrink-0"
-                >
+                <div key={m.key} className="shrink-0">
                   <Link
                     to={m.route}
                     aria-current={isActive ? 'page' : undefined}
                     className={cn(
-                      'flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-[0.8rem] font-semibold transition-colors duration-200',
+                      'flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-[0.8rem] font-semibold',
                       isActive
                         ? 'bg-gradient-to-br from-gold-soft to-gold text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]'
                         : cn(tok.mid, tok.hoverBg, tok.subtleBg),
@@ -267,10 +247,9 @@ export function AppChipBar({ pathname, search }: { pathname: string; search: str
                     <m.Icon size={13} aria-hidden="true" />
                     {m.label}
                   </Link>
-                </motion.div>
+                </div>
               )
             })}
-          </AnimatePresence>
         </div>
 
         <button
@@ -278,26 +257,19 @@ export function AppChipBar({ pathname, search }: { pathname: string; search: str
           onClick={() => setDrawerOpen((v) => !v)}
           aria-expanded={drawerOpen}
           className={cn(
-            'flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.8rem] font-semibold transition-colors',
+            'flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.8rem] font-semibold',
             drawerOpen ? 'bg-gold/15 text-gold-soft' : cn(tok.mid, tok.hoverBg, tok.subtleBg),
           )}
         >
           <LayoutGrid size={13} aria-hidden="true" />
           <span className="hidden sm:inline">All modules</span>
-          <ChevronDown size={12} className={cn('transition-transform', drawerOpen && 'rotate-180')} />
+          <ChevronDown size={12} className={cn(drawerOpen && 'rotate-180')} />
         </button>
       </div>
 
       {/* The full set, with the pin control where pinning is actually decided. */}
-      <AnimatePresence>
-        {drawerOpen && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            className="overflow-hidden"
-          >
+      {drawerOpen && (
+          <div className="overflow-hidden">
             <div className={cn('grid gap-1 px-3 pb-3 sm:grid-cols-2 lg:grid-cols-4', tok.subtleBg)}>
               {all.map((m) => {
                 const isPinned = pinned.includes(m.key)
@@ -307,7 +279,7 @@ export function AppChipBar({ pathname, search }: { pathname: string; search: str
                       to={m.route}
                       onClick={() => setDrawerOpen(false)}
                       className={cn(
-                        'flex min-w-0 flex-1 items-center gap-2 rounded-card-sm px-2.5 py-2 text-[0.8rem] font-medium transition-colors',
+                        'flex min-w-0 flex-1 items-center gap-2 rounded-card-sm px-2.5 py-2 text-[0.8rem] font-medium',
                         active === m.key ? 'text-gold-soft' : cn(tok.mid, tok.hoverBg),
                       )}
                     >
@@ -321,7 +293,7 @@ export function AppChipBar({ pathname, search }: { pathname: string; search: str
                       aria-label={isPinned ? `Unpin ${m.label}` : `Pin ${m.label}`}
                       title={isPinned ? 'Remove from the bar' : 'Keep on the bar'}
                       className={cn(
-                        'flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors',
+                        'flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
                         isPinned ? 'text-gold' : cn(tok.low, tok.hoverBg),
                       )}
                     >
@@ -331,9 +303,8 @@ export function AppChipBar({ pathname, search }: { pathname: string; search: str
                 )
               })}
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
     </div>
   )
 }

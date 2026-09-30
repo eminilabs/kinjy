@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import {
   Clapperboard,
@@ -19,7 +18,9 @@ import {
 } from 'lucide-react'
 import { useApi } from '@/hooks/useApi'
 import { useAuth } from '@/hooks/useAuth'
+import { useMyProfile } from '@/hooks/useMyProfile'
 import { useAppTheme } from '@/components/appdemo/theme'
+import MemberAvatar from './MemberAvatar'
 import { ApiError, kaluta, type Post, type UploadedMedia } from '@/lib/api'
 import RichTextEditor from './RichTextEditor'
 import { htmlToText } from '@/lib/richtext'
@@ -155,7 +156,8 @@ export default function Composer({
     if (openSignal > 0) setOpen(true)
   }, [openSignal])
 
-  const initials = (user?.display_name ?? '?').slice(0, 1).toUpperCase()
+  const me = useMyProfile()
+  const myAvatar = <MemberAvatar displayName={user?.display_name} avatarUrl={me?.avatar_url} size={40} />
 
   /** Open the dialog, optionally jumping straight to a picker. */
   const start = (target: Kind) => {
@@ -310,17 +312,12 @@ export default function Composer({
       {!collapsed && !open && (
       <div className={cn('rounded-card-lg p-3', tok.card)}>
         <div className="flex items-center gap-2.5">
-          <span
-            aria-hidden="true"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gold-soft to-gold text-sm font-bold text-ink"
-          >
-            {initials}
-          </span>
+          {myAvatar}
           <button
             type="button"
             onClick={() => start('text')}
             className={cn(
-              'min-w-0 flex-1 rounded-full px-4 py-2.5 text-start text-sm transition-colors',
+              'min-w-0 flex-1 rounded-full px-4 py-2.5 text-start text-sm',
               tok.input,
               tok.low,
               tok.hoverBg,
@@ -337,7 +334,7 @@ export default function Composer({
               type="button"
               onClick={() => start(k.id)}
               className={cn(
-                'flex flex-1 items-center justify-center gap-1.5 rounded-card-sm px-2 py-2 text-xs font-semibold transition-colors',
+                'flex flex-1 items-center justify-center gap-1.5 rounded-card-sm px-2 py-2 text-xs font-semibold',
                 tok.mid,
                 tok.hoverBg,
               )}
@@ -359,24 +356,12 @@ export default function Composer({
       {/* The form itself — expanded in place, the way /app does it. A modal
           blanks the feed behind it, which is exactly the context you are
           writing into. */}
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-            className={cn('overflow-hidden rounded-card-lg p-3.5', tok.card)}
-          >
+      {open && (
+          <div className={cn('overflow-hidden rounded-card-lg p-3.5', tok.card)}>
           <form onSubmit={submit}>
             {/* Who you are, and who will see it */}
             <div className="flex items-center gap-2.5">
-              <span
-                aria-hidden="true"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gold-soft to-gold text-sm font-bold text-ink"
-              >
-                {initials}
-              </span>
+              {myAvatar}
               <div className="min-w-0">
                 <p className={cn('truncate text-sm font-semibold', tok.text)}>{user?.display_name}</p>
                 <div className="mt-1 flex flex-wrap gap-1">
@@ -386,7 +371,7 @@ export default function Composer({
                       type="button"
                       onClick={() => setVisibility(v.id)}
                       className={cn(
-                        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.68rem] font-semibold transition-colors',
+                        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.68rem] font-semibold',
                         visibility === v.id ? 'bg-gold/15 text-gold-soft' : cn(tok.low, tok.hoverBg),
                       )}
                     >
@@ -513,7 +498,7 @@ export default function Composer({
                   aria-label={k.label}
                   title={k.label}
                   className={cn(
-                    'rounded-full p-2 transition-colors',
+                    'rounded-full p-2',
                     kind === k.id ? 'bg-white/10' : tok.hoverBg,
                   )}
                 >
@@ -526,7 +511,7 @@ export default function Composer({
                 aria-label="Topics, place and language"
                 aria-expanded={showDetails}
                 title="Topics, place and language"
-                className={cn('rounded-full p-2 transition-colors', showDetails ? 'bg-white/10' : tok.hoverBg)}
+                className={cn('rounded-full p-2', showDetails ? 'bg-white/10' : tok.hoverBg)}
               >
                 <Tag size={17} className="text-gold" aria-hidden="true" />
               </button>
@@ -586,7 +571,7 @@ export default function Composer({
                   onClick={() => setProvenance(p.id)}
                   title={p.hint}
                   className={cn(
-                    'rounded-full border px-2.5 py-1 text-[0.7rem] font-semibold transition-colors',
+                    'rounded-full border px-2.5 py-1 text-[0.7rem] font-semibold',
                     provenance === p.id
                       ? 'border-sky/50 bg-sky/10 text-sky'
                       : cn('border-current/20', tok.low, tok.hoverBg),
@@ -630,7 +615,7 @@ export default function Composer({
                         setExtras((xs) => (on ? xs.filter((x) => x !== o.id) : [...xs, o.id]))
                       }
                       className={cn(
-                        'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
+                        'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold',
                         on
                           ? 'bg-gradient-to-br from-gold-soft to-gold text-ink'
                           : cn(tok.subtleBg, tok.mid, tok.hoverBg),
@@ -669,15 +654,14 @@ export default function Composer({
               <button
                 type="submit"
                 disabled={!canPost}
-                className="rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-2 text-xs font-bold text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] transition enabled:hover:brightness-110 disabled:opacity-40"
+                className="rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-2 text-xs font-bold text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] enabled:hover:brightness-110 disabled:opacity-40"
               >
                 {busy ? 'Posting…' : `Post to ${audienceLabel}`}
               </button>
             </div>
           </form>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
     </>
   )
 }

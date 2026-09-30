@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Globe } from 'lucide-react'
@@ -6,125 +6,7 @@ import ArcButton from './ui-kit/ArcButton'
 import { LANGUAGES } from '@/i18n'
 import { isRouteAvailable } from '@/lib/features'
 
-/** Slow-drifting arc constellation canvas (24 nodes, 12s loop). */
-function ArcConstellation() {
-  const ref = useRef<HTMLCanvasElement>(null)
-
-  useEffect(() => {
-    const canvas = ref.current
-    if (!canvas) return
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    let raf = 0
-    let w = 0
-    let h = 0
-    let onScreen = false
-    let last = 0
-    // One gradient for the whole canvas instead of one per arc per frame.
-    // At 0.35 alpha on a 1px hairline the difference is invisible, and the old
-    // version allocated ~16,000 gradient objects a second — enough to make
-    // frame times irregular, which on a cleared-and-redrawn canvas reads as a
-    // shimmer rather than as a slow drift.
-    let sheen: CanvasGradient | null = null
-    // A drifting constellation does not need 60fps, and asking for it is what
-    // made the frames uneven in the first place.
-    const FRAME_MS = 1000 / 30
-    const N = 24
-    const nodes = Array.from({ length: N }, (_, i) => ({
-      bx: (i * 0.6180339887 + 0.13) % 1,
-      by: (i * 0.7548776662 + 0.31) % 1,
-      ph: Math.random() * Math.PI * 2,
-      sp: 0.4 + Math.random() * 0.6,
-    }))
-
-    const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2)
-      w = canvas.clientWidth
-      h = canvas.clientHeight
-      canvas.width = w * dpr
-      canvas.height = h * dpr
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      sheen = ctx.createLinearGradient(0, 0, w, 0)
-      sheen.addColorStop(0, 'rgba(240,200,120,1)')
-      sheen.addColorStop(0.55, 'rgba(217,166,72,1)')
-      sheen.addColorStop(1, 'rgba(143,184,232,1)')
-    }
-    resize()
-    const ro = new ResizeObserver(resize)
-    ro.observe(canvas)
-
-    const draw = (t: number) => {
-      raf = requestAnimationFrame(draw)
-      if (t - last < FRAME_MS) return
-      last = t
-      const s = t / 1000
-      ctx.clearRect(0, 0, w, h)
-      ctx.strokeStyle = sheen ?? 'rgba(217,166,72,1)'
-      ctx.lineWidth = 1
-      const pts = nodes.map((n) => ({
-        x: n.bx * w + Math.sin(s * 0.11 * n.sp + n.ph) * 22,
-        y: n.by * h + Math.cos(s * 0.09 * n.sp + n.ph * 1.3) * 16,
-      }))
-      // arcs between neighbours
-      for (let i = 0; i < pts.length; i++) {
-        for (let j = i + 1; j < pts.length; j++) {
-          const dx = pts[i].x - pts[j].x
-          const dy = pts[i].y - pts[j].y
-          const dist = Math.hypot(dx, dy)
-          if (dist < 240) {
-            const mx = (pts[i].x + pts[j].x) / 2
-            const my = (pts[i].y + pts[j].y) / 2 - dist * 0.18
-            // Distance fade via globalAlpha rather than a bespoke gradient.
-            ctx.globalAlpha = (1 - dist / 240) * 0.35
-            ctx.beginPath()
-            ctx.moveTo(pts[i].x, pts[i].y)
-            ctx.quadraticCurveTo(mx, my, pts[j].x, pts[j].y)
-            ctx.stroke()
-          }
-        }
-      }
-      // nodes
-      ctx.globalAlpha = 0.7
-      ctx.fillStyle = 'rgba(240,200,120,1)'
-      for (const p of pts) {
-        ctx.beginPath()
-        ctx.arc(p.x, p.y, 1.6, 0, Math.PI * 2)
-        ctx.fill()
-      }
-      ctx.globalAlpha = 1
-    }
-
-    // The footer sits at the bottom of every page, so an unconditional loop
-    // animated a canvas nobody was looking at for the whole visit. It runs only
-    // while it is actually on screen.
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting === onScreen) return
-        onScreen = entry.isIntersecting
-        if (onScreen) {
-          last = 0
-          raf = requestAnimationFrame(draw)
-        } else {
-          cancelAnimationFrame(raf)
-        }
-      },
-      { threshold: 0 },
-    )
-    io.observe(canvas)
-
-    return () => {
-      cancelAnimationFrame(raf)
-      io.disconnect()
-      ro.disconnect()
-    }
-  }, [])
-
-  return <canvas ref={ref} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} aria-hidden="true" />
-}
-
-const ALL_COLUMNS: { title: string; links: { label: string; to: string }[] }[] = [
+const COLUMNS: { title: string; links: { label: string; to: string }[] }[] = [
   {
     title: 'Platform',
     links: [
@@ -165,13 +47,7 @@ const ALL_COLUMNS: { title: string; links: { label: string; to: string }[] }[] =
   },
 ]
 
-/** Links to a page whose feature is switched off in lib/features.ts are left out. */
-const COLUMNS = ALL_COLUMNS.map((col) => ({
-  ...col,
-  links: col.links.filter((l) => isRouteAvailable(l.to)),
-}))
-
-/** Footer (§7.3) — twilight field, arc constellation, CTA, link columns. */
+/** Footer (§7.3) — twilight field, CTA, link columns. */
 export default function Footer() {
   const { t, i18n } = useTranslation()
   const [email, setEmail] = useState('')
@@ -179,7 +55,6 @@ export default function Footer() {
 
   return (
     <footer className="relative overflow-hidden twilight-field noise-overlay">
-      <ArcConstellation />
       <div className="relative z-10 mx-auto max-w-container px-6 pt-24 pb-10">
         {/* CTA block */}
         <div className="mx-auto max-w-2xl text-center">
@@ -217,7 +92,7 @@ export default function Footer() {
               <ul className="mt-4 space-y-2.5">
                 {col.links.map((l) => (
                   <li key={l.label}>
-                    <Link to={l.to} className="text-sm text-text-mid transition-colors hover:text-gold-soft">
+                    <Link to={l.to} className="text-sm text-text-mid hover:text-gold-soft">
                       {l.label}
                     </Link>
                   </li>

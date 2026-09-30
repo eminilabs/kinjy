@@ -16,3 +16,6 @@ dist/
 
 # Server-side artefacts, never from a workstation.
 backups/
+
+# Local docs
+serveur.md

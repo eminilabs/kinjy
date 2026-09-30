@@ -137,6 +137,7 @@ export default function Comments({
           <MemberAvatar
             handle={node.author?.handle}
             displayName={node.author?.display_name}
+            avatarUrl={node.author?.avatar_url}
             size={28}
           />
         </span>
@@ -171,7 +172,7 @@ export default function Comments({
             <button
               type="button"
               onClick={() => startReply(node)}
-              className={cn('text-[0.68rem] font-semibold transition-colors hover:text-gold-soft', tok.low)}
+              className={cn('text-[0.68rem] font-semibold hover:text-gold-soft', tok.low)}
             >
               Reply
             </button>
@@ -238,7 +239,7 @@ export default function Comments({
             type="submit"
             disabled={!body.trim() || sending}
             aria-label="Send"
-            className={cn('shrink-0 rounded-full px-3.5 py-2 transition-colors disabled:opacity-40', tok.subtleBg, tok.mid)}
+            className={cn('shrink-0 rounded-full px-3.5 py-2 disabled:opacity-40', tok.subtleBg, tok.mid)}
           >
             {sending ? (
               <Loader2 size={14} className="animate-spin" aria-hidden="true" />

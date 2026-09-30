@@ -128,7 +128,7 @@ export default function AppShell({
                   to={item.to}
                   aria-label={item.label}
                   className={cn(
-                    'flex flex-col items-center gap-1 rounded-full px-3 py-1.5 text-[0.65rem] font-medium transition-colors',
+                    'flex flex-col items-center gap-1 rounded-full px-3 py-1.5 text-[0.65rem] font-medium',
                     'primary' in item && item.primary ? 'text-ink' : active ? 'text-gold-soft' : tok.mid,
                   )}
                 >

@@ -73,7 +73,7 @@ export default function CloseAccount() {
               setConfirming(false)
             }}
             className={cn(
-              'rounded-full border px-4 py-2 text-sm font-semibold transition-colors',
+              'rounded-full border px-4 py-2 text-sm font-semibold',
               mode === m
                 ? 'border-gold/50 bg-gold/10 text-gold-soft'
                 : 'border-white/12 text-text-mid hover:text-text-hi',
@@ -112,7 +112,7 @@ export default function CloseAccount() {
         <button
           type="button"
           onClick={() => setConfirming(true)}
-          className="mt-6 rounded-full border border-red-400/35 px-5 py-2.5 text-sm font-semibold text-red-200 transition-colors hover:bg-red-500/10"
+          className="mt-6 rounded-full border border-red-400/35 px-5 py-2.5 text-sm font-semibold text-red-200 hover:bg-red-500/10"
         >
           Continue
         </button>

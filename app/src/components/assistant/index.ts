@@ -1,4 +1,3 @@
-export { default as GlobalAssistant } from './GlobalAssistant'
 export { default as ChatPanel } from './ChatPanel'
 export { default as Orb } from './Orb'
 export { default as DemoVideoPlayer } from './DemoVideoPlayer'

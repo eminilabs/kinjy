@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
 import { Check, ChevronDown, RefreshCw } from 'lucide-react'
 import { useAppTheme } from '@/components/appdemo/theme'
 import type { FeedMode } from '@/lib/api'
@@ -54,7 +53,7 @@ export default function FeedModeMenu({
           aria-expanded={open}
           aria-haspopup="listbox"
           className={cn(
-            'flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-semibold transition-colors',
+            'flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-semibold',
             tok.subtleBg,
             tok.text,
             tok.hoverBg,
@@ -66,17 +65,12 @@ export default function FeedModeMenu({
               chronological
             </span>
           )}
-          <ChevronDown size={14} className={cn('transition-transform', open && 'rotate-180')} />
+          <ChevronDown size={14} className={cn(open && 'rotate-180')} />
         </button>
 
-        <AnimatePresence>
-          {open && (
-            <motion.ul
+        {open && (
+            <ul
               role="listbox"
-              initial={{ opacity: 0, y: 6, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 6, scale: 0.98 }}
-              transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
               className={cn(
                 'absolute start-0 top-12 z-40 max-h-[60svh] w-72 overflow-y-auto rounded-card-md p-1.5 shadow-cloud',
                 tok.cardSolid,
@@ -93,7 +87,7 @@ export default function FeedModeMenu({
                       setOpen(false)
                     }}
                     className={cn(
-                      'flex w-full gap-2 rounded-card-sm px-2.5 py-2 text-start transition-colors',
+                      'flex w-full gap-2 rounded-card-sm px-2.5 py-2 text-start',
                       m.id === active ? 'bg-gold/10' : tok.hoverBg,
                     )}
                   >
@@ -114,16 +108,15 @@ export default function FeedModeMenu({
                   </button>
                 </li>
               ))}
-            </motion.ul>
+            </ul>
           )}
-        </AnimatePresence>
       </div>
 
       <button
         type="button"
         onClick={onRefresh}
         aria-label="Refresh the feed"
-        className={cn('ms-auto rounded-full p-2 transition-colors', tok.mid, tok.hoverBg)}
+        className={cn('ms-auto rounded-full p-2', tok.mid, tok.hoverBg)}
       >
         <RefreshCw size={14} className={cn(loading && 'animate-spin')} aria-hidden="true" />
       </button>

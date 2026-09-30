@@ -123,7 +123,7 @@ export default function Experience() {
                       type="button"
                       disabled={saving === 'interest_topics'}
                       onClick={() => set('interest_topics', interests.filter((t) => t !== topic))}
-                      className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-gold/10 px-2.5 py-1 text-[0.7rem] font-semibold text-gold-soft transition-colors hover:bg-gold/20"
+                      className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-gold/10 px-2.5 py-1 text-[0.7rem] font-semibold text-gold-soft hover:bg-gold/20"
                     >
                       #{topic}
                       <X size={11} aria-hidden="true" />
@@ -155,7 +155,7 @@ export default function Experience() {
                 <button
                   type="submit"
                   disabled={!topicDraft.trim() || saving === 'interest_topics'}
-                  className="shrink-0 rounded-full border border-white/12 px-4 text-xs font-semibold text-text-mid transition-colors hover:border-gold/40 hover:text-gold-soft disabled:opacity-40"
+                  className="shrink-0 rounded-full border border-white/12 px-4 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft disabled:opacity-40"
                 >
                   Add
                 </button>
@@ -228,7 +228,7 @@ export default function Experience() {
                   disabled={saving === 'age_mode'}
                   onClick={() => set('age_mode', mode.id)}
                   className={cn(
-                    'block w-full rounded-card-sm border px-3 py-2 text-start transition-colors',
+                    'block w-full rounded-card-sm border px-3 py-2 text-start',
                     ageMode === mode.id
                       ? 'border-gold/50 bg-gold/10'
                       : 'border-white/10 hover:bg-white/5',

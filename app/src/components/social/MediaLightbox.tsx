@@ -58,7 +58,7 @@ export default function MediaLightbox({
         type="button"
         onClick={onClose}
         aria-label="Close preview"
-        className="absolute end-4 top-4 z-10 rounded-full bg-white/10 p-2.5 text-white transition-colors hover:bg-white/20"
+        className="absolute end-4 top-4 z-10 rounded-full bg-white/10 p-2.5 text-white hover:bg-white/20"
       >
         <X size={18} />
       </button>
@@ -73,7 +73,7 @@ export default function MediaLightbox({
             }}
             disabled={current === 0}
             aria-label="Previous"
-            className="absolute start-3 z-10 rounded-full bg-white/10 p-3 text-white transition-colors hover:bg-white/20 disabled:opacity-25"
+            className="absolute start-3 z-10 rounded-full bg-white/10 p-3 text-white hover:bg-white/20 disabled:opacity-25"
           >
             <ChevronLeft size={20} />
           </button>
@@ -85,7 +85,7 @@ export default function MediaLightbox({
             }}
             disabled={current === media.length - 1}
             aria-label="Next"
-            className="absolute end-3 z-10 rounded-full bg-white/10 p-3 text-white transition-colors hover:bg-white/20 disabled:opacity-25"
+            className="absolute end-3 z-10 rounded-full bg-white/10 p-3 text-white hover:bg-white/20 disabled:opacity-25"
           >
             <ChevronRight size={20} />
           </button>

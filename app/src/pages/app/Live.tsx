@@ -107,7 +107,7 @@ export default function Live() {
     const text = draft.trim()
     setDraft('')
     try {
-      await kaluta.messages.send(roomId, text)
+      await kaluta.messages.send(roomId, { body: text })
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not send')
       setDraft(text)
@@ -156,7 +156,7 @@ export default function Live() {
                     type="button"
                     onClick={() => void openRoom(room.id)}
                     className={cn(
-                      'w-full truncate rounded-card-sm px-2 py-1.5 text-start text-xs transition-colors',
+                      'w-full truncate rounded-card-sm px-2 py-1.5 text-start text-xs',
                       roomId === room.id
                         ? 'bg-gold/10 text-gold-soft'
                         : 'text-text-mid hover:bg-white/5 hover:text-text-hi',
@@ -199,7 +199,7 @@ export default function Live() {
             <button
               type="button"
               onClick={toggleCamera}
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/12 px-4 py-2 text-xs font-semibold text-text-mid transition-colors hover:border-gold/40 hover:text-gold-soft"
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/12 px-4 py-2 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
             >
               {cameraOn ? <CameraOff size={13} aria-hidden="true" /> : <Camera size={13} aria-hidden="true" />}
               {cameraOn ? 'Stop camera' : 'Start camera'}

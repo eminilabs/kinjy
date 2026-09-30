@@ -8,12 +8,14 @@ import Verification from '@/components/dashboard/Verification'
 import CloseAccount from '@/components/dashboard/CloseAccount'
 import Experience from '@/components/dashboard/Experience'
 import Privacy from '@/components/dashboard/Privacy'
+import ProfileEditor from '@/components/dashboard/ProfileEditor'
 import { Badge, Panel } from '@/components/dashboard/primitives'
 import AppShell from '@/components/app/AppShell'
 import { cn } from '@/lib/utils'
 
 const TABS = [
   { id: 'earnings', label: 'Earnings' },
+  { id: 'profile', label: 'Profile' },
   { id: 'verification', label: 'Verification' },
   { id: 'privacy', label: 'Privacy' },
   { id: 'experience', label: 'Feed & experience' },
@@ -54,7 +56,7 @@ function InviteCard({ code }: { code: string }) {
         <button
           type="button"
           onClick={copy}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/12 px-3.5 py-2 text-xs font-semibold text-text-mid transition-colors hover:border-gold/40 hover:text-gold-soft"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/12 px-3.5 py-2 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
         >
           {copied ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
           {copied ? 'Copied' : 'Copy'}
@@ -101,7 +103,7 @@ export default function Dashboard() {
           {(user.role === 'admin' || user.role === 'superadmin') && (
             <Link
               to="/admin"
-              className="rounded-full border border-white/12 px-4 py-2 text-sm font-semibold text-text-mid transition-colors hover:border-gold/40 hover:text-gold-soft"
+              className="rounded-full border border-white/12 px-4 py-2 text-sm font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
             >
               Admin console
             </Link>
@@ -109,7 +111,7 @@ export default function Dashboard() {
           <button
             type="button"
             onClick={() => void signOut()}
-            className="inline-flex items-center gap-2 rounded-full border border-white/12 px-4 py-2 text-sm font-semibold text-text-mid transition-colors hover:border-gold/40 hover:text-gold-soft"
+            className="inline-flex items-center gap-2 rounded-full border border-white/12 px-4 py-2 text-sm font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
           >
             <LogOut size={14} aria-hidden="true" />
             Sign out
@@ -141,7 +143,7 @@ export default function Dashboard() {
             onClick={() => setTab(t.id)}
             aria-current={tab === t.id ? 'page' : undefined}
             className={cn(
-              'relative px-4 py-3 text-sm font-medium transition-colors',
+              'relative px-4 py-3 text-sm font-medium',
               tab === t.id ? 'text-gold-soft' : 'text-text-mid hover:text-text-hi',
             )}
           >
@@ -164,13 +166,29 @@ export default function Dashboard() {
             <InviteCard code={user.referral_code} />
           </div>
         )}
+        {tab === 'profile' && <ProfileEditor />}
         {tab === 'verification' && <Verification />}
         {tab === 'privacy' && <Privacy />}
         {tab === 'experience' && <Experience />}
         {tab === 'security' && <Security />}
         {tab === 'account' && (
           <div className="grid gap-5 lg:grid-cols-2">
-            <Panel title="Profile" subtitle="How the rest of Kinjy sees you.">
+            <Panel
+              title="Account details"
+              subtitle={
+                <>
+                  Your name and language are edited in{' '}
+                  <button
+                    type="button"
+                    onClick={() => setTab('profile')}
+                    className="font-semibold text-gold-soft underline-offset-2 hover:underline"
+                  >
+                    Profile
+                  </button>
+                  .
+                </>
+              }
+            >
               <dl className="space-y-3 text-sm">
                 {[
                   ['Display name', user.display_name],

@@ -123,4 +123,4 @@ export function Badge({
 }
 
 export const inputClass =
-  'w-full rounded-card-sm border border-white/10 bg-ink-2/70 px-4 py-2.5 text-sm text-text-hi placeholder:text-text-low focus:border-gold/50 focus:outline-none transition-colors'
+  'w-full rounded-card-sm border border-white/10 bg-ink-2/70 px-4 py-2.5 text-sm text-text-hi placeholder:text-text-low focus:border-gold/50 focus:outline-none'

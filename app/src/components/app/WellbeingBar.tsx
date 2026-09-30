@@ -84,7 +84,7 @@ export default function WellbeingBar() {
         type="button"
         onClick={() => setDismissed(true)}
         aria-label="Dismiss for now"
-        className="ms-2 align-middle text-text-low transition-colors hover:text-text-hi"
+        className="ms-2 align-middle text-text-low hover:text-text-hi"
       >
         <X size={13} aria-hidden="true" />
       </button>

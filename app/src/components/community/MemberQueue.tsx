@@ -107,7 +107,7 @@ export default function MemberQueue({
       title={label}
       aria-label={label}
       className={cn(
-        'flex h-7 w-7 items-center justify-center rounded-full border transition-colors disabled:opacity-40',
+        'flex h-7 w-7 items-center justify-center rounded-full border disabled:opacity-40',
         tone === 'good' && 'border-success/40 text-success hover:bg-success/10',
         tone === 'bad' && 'border-warning/40 text-warning hover:bg-warning/10',
         tone === 'neutral' && cn('border-current/20', tok.low, tok.hoverBg),

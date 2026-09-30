@@ -1,4 +1,4 @@
-import { tokens } from '@/lib/api'
+import { refreshAccessToken, tokens } from '@/lib/api'
 
 export interface RealtimeEvent {
   type: string
@@ -9,6 +9,11 @@ export interface RealtimeEvent {
   sender_id?: string
   encrypted?: boolean
   body?: string | null
+  media_url?: string | null
+  media_kind?: string | null
+  media_name?: string | null
+  media_type?: string | null
+  media_size?: number | null
   created_at?: string
   /** engagement */
   post_id?: string
@@ -27,6 +32,12 @@ export interface RealtimeEvent {
   format?: string
   mature?: boolean
   kind?: string
+  /** chat: pending-bubble reconciliation, read receipts, presence */
+  client_id?: string | null
+  user_id?: string
+  read_at?: string
+  online?: boolean
+  last_seen?: string | null
   /** notifications */
   id?: number | string
   title?: string
@@ -42,11 +53,15 @@ type Listener = (event: RealtimeEvent) => void
 
 const BASE = import.meta.env.VITE_API_BASE ?? '/api'
 
-function socketUrl(token: string): string {
+/** Close code the server uses for "your access token is missing or expired". */
+const UNAUTHORIZED = 4401
+
+function socketUrl(): string {
   // VITE_API_BASE may be absolute (http://localhost:8200/api) or relative
   // (/api behind the Vite proxy); both have to become a ws:// origin.
+  // No token here: it goes in the first frame, so no access log records it.
   const httpUrl = BASE.startsWith('http') ? `${BASE}/ws` : `${window.location.origin}${BASE}/ws`
-  return `${httpUrl.replace(/^http/, 'ws')}?token=${encodeURIComponent(token)}`
+  return httpUrl.replace(/^http/, 'ws')
 }
 
 /**
@@ -89,23 +104,20 @@ class Realtime {
     if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(frame))
   }
 
+  /** Consecutive 4401 closes; a refresh that keeps failing must not spin. */
+  private authFailures = 0
+
   private connect() {
     const token = tokens.access
     if (!token || this.socket || !this.wanted) return
 
-    const socket = new WebSocket(socketUrl(token))
+    const socket = new WebSocket(socketUrl())
     this.socket = socket
 
-    socket.onopen = () => {
-      this.retry = 0
-      this.setConnected(true)
-      const topics = this.topics()
-      if (topics.length) this.send({ action: 'subscribe', topics })
-      // A periodic ping keeps intermediaries from culling an idle socket.
-      this.keepAlive = window.setInterval(() => {
-        if (socket.readyState === WebSocket.OPEN) socket.send('ping')
-      }, 25000)
-    }
+    // The token is the first frame. The socket only counts as connected once
+    // the server has accepted it and answered `ready` — an open socket that
+    // was about to be refused is not a live one.
+    socket.onopen = () => socket.send(JSON.stringify({ action: 'auth', token }))
 
     socket.onmessage = (event) => {
       let payload: RealtimeEvent
@@ -114,17 +126,44 @@ class Realtime {
       } catch {
         return // keep-alive echoes and other non-JSON frames
       }
+      if (payload.type === 'ready') {
+        this.retry = 0
+        this.authFailures = 0
+        const topics = this.topics()
+        if (topics.length) this.send({ action: 'subscribe', topics })
+        // A periodic ping keeps intermediaries from culling an idle socket.
+        this.keepAlive = window.setInterval(() => {
+          if (socket.readyState === WebSocket.OPEN) socket.send('ping')
+        }, 25000)
+        this.setConnected(true)
+        return
+      }
       this.listeners.get(payload.topic ?? '')?.forEach((fn) => fn(payload))
       // The "everything" channel still sees topic-scoped frames; chat relies on
       // it and should not have to enumerate its own conversations.
       if (payload.topic) this.listeners.get('')?.forEach((fn) => fn(payload))
     }
 
-    socket.onclose = () => {
+    socket.onclose = (event) => {
       this.socket = null
       this.setConnected(false)
       window.clearInterval(this.keepAlive)
       if (!this.wanted) return
+
+      // The access token expired (the server closes at expiry) or was never
+      // valid. Retrying with the same token would be refused forever, so get
+      // a fresh one first and come straight back — the gap is then a
+      // reconnect, which listeners catch up on, not an outage.
+      if (event.code === UNAUTHORIZED && this.authFailures < 2) {
+        this.authFailures += 1
+        void refreshAccessToken().then((ok) => {
+          // No refresh token, or it was revoked: the member is signed out and
+          // there is nothing to reconnect as.
+          if (ok) this.connect()
+        })
+        return
+      }
+
       this.retry += 1
       this.retryTimer = window.setTimeout(
         () => this.connect(),
@@ -165,6 +204,15 @@ class Realtime {
       if (topic) this.send({ action: 'unsubscribe', topics: [topic] })
       this.maybeClose()
     }
+  }
+
+  /**
+   * Send a frame to the server — ephemeral signals such as "typing" that are
+   * not worth a request. Dropped silently while disconnected: a typing hint
+   * that arrives late is worse than none.
+   */
+  emit(frame: Record<string, unknown>) {
+    this.send(frame)
   }
 
   onStatus(listener: (connected: boolean) => void): () => void {
