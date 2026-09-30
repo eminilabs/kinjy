@@ -4,12 +4,13 @@ import { CalendarCheck, Flame, MessageSquare, Play, ShoppingBag, Sparkles, Tag }
 import { cn } from '@/lib/utils'
 import { ProvenanceTag, WhyAmISeeingThis } from '@/components/ui-kit'
 import { avatarStyle, useAppTheme } from './theme'
+import { FEATURES } from '@/lib/features'
 
 export type FeedMode =
   | 'forYou' | 'latest' | 'following' | 'familyFirst' | 'local'
   | 'professional' | 'calm' | 'deepReads' | 'watch' | 'marketPicks'
 
-export const FEED_MODES: { id: FeedMode; label: string }[] = [
+const ALL_FEED_MODES: { id: FeedMode; label: string }[] = [
   { id: 'forYou', label: 'For You' },
   { id: 'latest', label: 'Latest' },
   { id: 'following', label: 'Following' },
@@ -21,6 +22,9 @@ export const FEED_MODES: { id: FeedMode; label: string }[] = [
   { id: 'watch', label: 'Watch' },
   { id: 'marketPicks', label: 'Market Picks' },
 ]
+
+/** Market Picks ranks the marketplace; it is offered only while that is open (lib/features.ts). */
+export const FEED_MODES = ALL_FEED_MODES.filter((m) => FEATURES.marketplace || m.id !== 'marketPicks')
 
 export type PostKind = 'photo' | 'video' | 'forum' | 'product' | 'memorial' | 'event' | 'user'
 
@@ -40,7 +44,7 @@ export interface Post {
   rank: Record<FeedMode, number>
 }
 
-export const SEED_POSTS: Post[] = [
+const ALL_SEED_POSTS: Post[] = [
   {
     id: 'p-photo', author: 'Amara Jelani', avatar: 1, handle: '@amara.j', time: '2h', circle: 'Family',
     kind: 'photo', recommended: true, suggestedMode: 'familyFirst',
@@ -76,6 +80,9 @@ export const SEED_POSTS: Post[] = [
     rank: { forYou: 5, latest: 5, following: 3, familyFirst: 2, local: 3, professional: 0, calm: 3, deepReads: 1, watch: 1, marketPicks: 1 },
   },
 ]
+
+/** The product post is a marketplace listing; it leaves the demo feed with the marketplace. */
+export const SEED_POSTS = ALL_SEED_POSTS.filter((p) => FEATURES.marketplace || p.kind !== 'product')
 
 /* ------------------------------- Card chrome ------------------------------- */
 

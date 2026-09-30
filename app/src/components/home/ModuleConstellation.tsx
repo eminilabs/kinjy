@@ -4,10 +4,11 @@ import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { ArrowRight } from 'lucide-react'
 import CloudCard from '@/components/ui-kit/CloudCard'
+import { FEATURES, spelled, type Feature } from '@/lib/features'
 
 gsap.registerPlugin(ScrollTrigger)
 
-const MODULES: { icon: string; name: string; desc: string }[] = [
+const ALL_MODULES: { icon: string; name: string; desc: string; feature?: Feature }[] = [
   { icon: 'mod-home', name: 'Social Hub', desc: 'Your home feed, your people, your rules.' },
   { icon: 'mod-globe-grid', name: 'Public Content', desc: 'A global square translated live into your language.' },
   { icon: 'mod-forums', name: 'Forums', desc: 'Deep threaded discussions that never get lost.' },
@@ -15,15 +16,18 @@ const MODULES: { icon: string; name: string; desc: string }[] = [
   { icon: 'mod-community', name: 'Communities', desc: 'Interest spaces with their own economies.' },
   { icon: 'mod-message', name: 'Messenger', desc: 'E2E encrypted chat, auto-translated.' },
   { icon: 'mod-creator', name: 'Creator Studio', desc: 'One-to-Many publishing with an AI copilot.' },
-  { icon: 'mod-family', name: 'Family Tree', desc: 'Verified genealogy across infinite generations.' },
+  { icon: 'mod-family', name: 'Family Tree', desc: 'Verified genealogy across infinite generations.', feature: 'familyTree' },
   { icon: 'mod-candle', name: 'Digital Graveyard', desc: 'Memorials kept with dignity, forever.' },
   { icon: 'mod-calendar', name: 'Events', desc: 'Gather your circles, online and off.' },
-  { icon: 'mod-storefront', name: 'Marketplace', desc: 'Trusted commerce on a fair 20% margin.' },
+  { icon: 'mod-storefront', name: 'Marketplace', desc: 'Trusted commerce on a fair 20% margin.', feature: 'marketplace' },
   { icon: 'mod-megaphone', name: 'Advertising', desc: 'AI-built campaigns with transparent floors.' },
   { icon: 'mod-coins', name: 'Earnings', desc: 'A ledger you can audit, down to the cent.' },
   { icon: 'mod-ai', name: 'AI Layer', desc: 'Agents that know the platform — and you.' },
   { icon: 'mod-code', name: 'Developer Platform', desc: 'APIs, webhooks and an algorithm marketplace.' },
 ]
+
+/** Modules switched off in lib/features.ts are not shown. */
+const MODULES = ALL_MODULES.filter((m) => !m.feature || FEATURES[m.feature])
 
 /** Section 3 — "Everything you love. Unified." module constellation (GSAP batch). */
 export default function ModuleConstellation() {
@@ -58,7 +62,7 @@ export default function ModuleConstellation() {
       <div className="mx-auto grid max-w-container gap-12 lg:grid-cols-[minmax(280px,380px)_1fr]">
         <div className="modules-header lg:sticky lg:top-28 lg:self-start">
           <p className="eyebrow text-gold">One Ecosystem</p>
-          <h2 className="h2 mt-4">Fifteen modules. One society.</h2>
+          <h2 className="h2 mt-4">{spelled(MODULES.length)} modules. One society.</h2>
           <p className="body-lg mt-5 text-text-mid">
             The strongest ideas of every platform you know — connected, translated and made yours.
           </p>

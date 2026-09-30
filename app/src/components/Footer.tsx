@@ -4,12 +4,13 @@ import { useTranslation } from 'react-i18next'
 import { Globe } from 'lucide-react'
 import ArcButton from './ui-kit/ArcButton'
 import { LANGUAGES } from '@/i18n'
+import { isRouteAvailable } from '@/lib/features'
 
 const COLUMNS: { title: string; links: { label: string; to: string }[] }[] = [
   {
     title: 'Platform',
     links: [
-      { label: 'All 15 modules', to: '/platform' },
+      { label: 'All modules', to: '/platform' },
       { label: 'Feeds & algorithms', to: '/feeds' },
       { label: 'Family Tree', to: '/family' },
       { label: 'Digital Graveyard', to: '/memorials' },

@@ -1003,7 +1003,7 @@ export default function Messages() {
           )}
         >
           {connected ? <Wifi size={12} aria-hidden="true" /> : <WifiOff size={12} aria-hidden="true" />}
-          {connected ? 'Live' : 'Reconnecting…'}
+          {connected ? 'Connected' : 'Reconnecting…'}
         </span>
       )}
     >

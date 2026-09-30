@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { avatarStyle, useAppTheme } from './theme'
 import { FEED_MODES, PostCard, SEED_POSTS } from './posts'
 import type { FeedMode, Post } from './posts'
+import { FEATURES } from '@/lib/features'
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 const FORMATS = [
@@ -12,7 +13,8 @@ const FORMATS = [
   { icon: Clapperboard, label: 'Video' },
   { icon: AudioLines, label: 'Audio' },
   { icon: FileText, label: 'Article' },
-  { icon: Radio, label: 'Live' },
+  // Only while live is switched on (lib/features.ts).
+  ...(FEATURES.live ? [{ icon: Radio, label: 'Live' }] : []),
 ]
 const CIRCLES = ['Close Friends', 'Family', 'Business', 'Public']
 const ONE_TO_MANY = [

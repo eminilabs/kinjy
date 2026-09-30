@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
+import { FEATURES } from '@/lib/features'
 import { cn } from '@/lib/utils'
 import AssistantOrb from './AssistantOrb'
 import type { OrbDock } from './AssistantOrb'
@@ -10,7 +11,7 @@ import Feed from './Feed'
 import GraveyardPeek from './GraveyardPeek'
 import ModulePeek from './ModulePeek'
 import { LeftRail, RightRail } from './Rails'
-import { useAppTheme } from './theme'
+import { NAV_MODULES, useAppTheme } from './theme'
 import type { ChromeKey } from './theme'
 import type { FeedMode } from './posts'
 
@@ -46,7 +47,9 @@ const FEED_MODE_FOR: Partial<Record<ChromeKey, FeedMode>> = {
 export default function AppShell() {
   const { rtl, frameStyle, resolved } = useAppTheme()
   const [module, setModule] = useState<ChromeKey>('home')
-  const [pinned, setPinned] = useState<ChromeKey[]>(['home', 'create', 'familyTree'])
+  const [pinned, setPinned] = useState<ChromeKey[]>(() =>
+    (['home', 'create', 'familyTree'] as ChromeKey[]).filter((m) => NAV_MODULES.includes(m)),
+  )
   const [feedMode, setFeedMode] = useState<FeedMode>('forYou')
 
   const select = useCallback((m: ChromeKey) => {
@@ -61,7 +64,7 @@ export default function AppShell() {
 
   const center = centerFor(module)
   const dock = dockFor(module)
-  const orb = <AssistantOrb dock={dock} />
+  const orb = FEATURES.assistant ? <AssistantOrb dock={dock} /> : null
 
   return (
     <div

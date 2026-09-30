@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import { ROUTE_FOR } from '@/components/app/navigation'
+import { FEATURES, isRouteAvailable } from '@/lib/features'
 
 export type DisplayMode = 'cloud' | 'light' | 'dark' | 'system'
 export type ResolvedMode = 'cloud' | 'light' | 'dark'
@@ -100,7 +102,10 @@ const TOKENS: Record<ResolvedMode, AppTheme['tok']> = {
 }
 
 export const CHROME_STRINGS = {
-  search: { en: 'Search people, forums, memorials, products…', sw: 'Tafuta watu, vikao, makaburi, bidhaa…', fr: 'Rechercher personnes, forums, mémoriaux, produits…', ar: 'ابحث عن أشخاص ومنتديات ونُصُب ومنتجات…', zh: '搜索用户、论坛、纪念园、商品…' },
+  // Products are the marketplace: the placeholder only offers them while it is open.
+  search: FEATURES.marketplace
+    ? { en: 'Search people, forums, memorials, products…', sw: 'Tafuta watu, vikao, makaburi, bidhaa…', fr: 'Rechercher personnes, forums, mémoriaux, produits…', ar: 'ابحث عن أشخاص ومنتديات ونُصُب ومنتجات…', zh: '搜索用户、论坛、纪念园、商品…' }
+    : { en: 'Search people, forums, memorials…', sw: 'Tafuta watu, vikao, makaburi…', fr: 'Rechercher personnes, forums, mémoriaux…', ar: 'ابحث عن أشخاص ومنتديات ونُصُب…', zh: '搜索用户、论坛、纪念园…' },
   share: { en: 'Share with your world…', sw: 'Shiriki na ulimwengu wako…', fr: 'Partagez avec votre monde…', ar: 'شارك مع عالمك…', zh: '与你的全世界分享…' },
   pinned: { en: 'Pinned modules', sw: 'Moduli zilizobandikwa', fr: 'Modules épinglés', ar: 'الوحدات المثبتة', zh: '已固定模块' },
   trending: { en: 'Trending in Nairobi', sw: 'Vinavyovuma Nairobi', fr: 'Tendances à Nairobi', ar: 'الرائج في نيروبي', zh: '内罗毕热门' },
@@ -128,10 +133,12 @@ export const CHROME_STRINGS = {
 export type ChromeKey = keyof typeof CHROME_STRINGS
 
 /** The 15 universal navigation modules, in blueprint order. */
-export const NAV_MODULES: ChromeKey[] = [
-  'home', 'following', 'forYou', 'public', 'forums', 'circles', 'communities',
-  'messages', 'live', 'familyTree', 'graveyard', 'explore', 'marketplace', 'create', 'earnings',
-]
+export const NAV_MODULES: ChromeKey[] = (
+  [
+    'home', 'following', 'forYou', 'public', 'forums', 'circles', 'communities',
+    'messages', 'live', 'familyTree', 'graveyard', 'explore', 'marketplace', 'create', 'earnings',
+  ] as ChromeKey[]
+).filter((key) => isRouteAvailable(ROUTE_FOR[key])) // the demo shows only what the app opens
 
 const AppThemeContext = createContext<AppTheme | null>(null)
 

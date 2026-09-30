@@ -4,12 +4,16 @@ import { Bitcoin, Check, Coins, CreditCard, QrCode, Receipt, RotateCcw, ShieldCh
 import { ArcButton, LedgerRow, ModeChip } from '@/components/ui-kit'
 import { cn } from '@/lib/utils'
 import { EASE, useReducedMotion } from '@/components/creators/motion-utils'
+import { FEATURES } from '@/lib/features'
 
 const PRODUCTS = [
   { id: 'premium', label: 'Premium membership', price: 9.99, unit: 'USD / month' },
   { id: 'adcredit', label: 'Ad credit top-up', price: 50, unit: 'USD wallet credit' },
   { id: 'basket', label: 'Marketplace · Woven basket', price: 24, unit: 'USD one-off' },
 ] as const
+
+/** The basket is a marketplace order; it is not offered while the marketplace is switched off. */
+const OFFERED = PRODUCTS.filter((p) => FEATURES.marketplace || p.id !== 'basket')
 
 const COINS = [
   { id: 'btc', sym: 'BTC', name: 'Bitcoin', rate: 0.00104 },
@@ -114,7 +118,7 @@ export default function CryptoCheckout() {
           <div className="cloud-card p-6 sm:p-8">
             <p className="eyebrow text-text-low">1 · Choose what you're paying for</p>
             <div className="mt-4 flex flex-wrap gap-2">
-              {PRODUCTS.map((p) => (
+              {OFFERED.map((p) => (
                 <ModeChip
                   key={p.id}
                   label={`${p.label} · $${p.price}`}

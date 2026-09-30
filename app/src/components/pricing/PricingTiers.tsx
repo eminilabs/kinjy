@@ -4,6 +4,7 @@ import { Check, Crown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { KineticWords } from '@/components/creators/Kinetic'
 import { EASE, useReducedMotion } from '@/components/creators/motion-utils'
+import { FEATURES, OPEN_MODULES } from '@/lib/features'
 
 type Feature = { label: string; tip: string; strong?: boolean }
 
@@ -25,11 +26,20 @@ const TIERS: Tier[] = [
     yearly: 0,
     cta: 'Create free account',
     features: [
-      { label: 'All 15 modules, full social graph', tip: 'Every module — feeds, forums, circles, family, marketplace and more.' },
+      {
+        label: `All ${OPEN_MODULES} modules, full social graph`,
+        tip: FEATURES.familyTree && FEATURES.marketplace
+          ? 'Every module — feeds, forums, circles, family, marketplace and more.'
+          : 'Every module — feeds, forums, circles, memorials and more.',
+      },
       { label: '10 feed modes + Chronological & community algorithms', tip: 'Switch how your feed ranks, or opt out of ranking entirely.' },
       { label: 'Standard video quality, standard translation', tip: 'Solid defaults for everyday watching and reading across languages.' },
-      { label: 'Family Tree + Digital Graveyard access', tip: 'Build your heritage graph and keep memorials, free forever.' },
-      { label: 'Messenger (E2E), Events, Marketplace buying', tip: 'Encrypted messages, event planning and buyer-side commerce.' },
+      FEATURES.familyTree
+        ? { label: 'Family Tree + Digital Graveyard access', tip: 'Build your heritage graph and keep memorials, free forever.' }
+        : { label: 'Digital Graveyard access', tip: 'Keep memorials with dignity, free forever.' },
+      FEATURES.marketplace
+        ? { label: 'Messenger (E2E), Events, Marketplace buying', tip: 'Encrypted messages, event planning and buyer-side commerce.' }
+        : { label: 'Messenger (E2E) and Events', tip: 'Encrypted messages and event planning.' },
       { label: 'Monthly AI credit allowance', tip: 'A free monthly bundle for translation, drafting and studio tasks.' },
     ],
   },
@@ -40,7 +50,11 @@ const TIERS: Tier[] = [
     yearly: 39,
     cta: 'Go Basic',
     features: [
-      { label: 'HD video uploads & playback', strong: true, tip: 'Crisp 1080p for your films, vlogs and livestreams.' },
+      {
+        label: 'HD video uploads & playback',
+        strong: true,
+        tip: FEATURES.live ? 'Crisp 1080p for your films, vlogs and livestreams.' : 'Crisp 1080p for your films, vlogs and shorts.',
+      },
       { label: 'Advanced translation', strong: true, tip: 'Side-by-side view and higher-quality translation models.' },
       { label: 'Scheduled posts', strong: true, tip: 'Write now, publish at the perfect hour in any timezone.' },
       { label: 'More AI credits (×5 Free)', strong: true, tip: 'Five times the monthly AI allowance of the Free plan.' },

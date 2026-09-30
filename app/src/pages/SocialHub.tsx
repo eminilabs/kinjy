@@ -10,6 +10,7 @@ import FeedModeMenu from '@/components/social/FeedModeMenu'
 import Suggestions from '@/components/social/Suggestions'
 import PostCard from '@/components/social/PostCard'
 import { ApiError, kaluta, type Algorithm, type FeedMode, type FeedPage, type Post } from '@/lib/api'
+import { FEATURES } from '@/lib/features'
 import { slotAboveOrb } from '@/lib/floating'
 import { useTopic } from '@/hooks/useRealtime'
 import { cn } from '@/lib/utils'
@@ -63,7 +64,7 @@ export default function SocialHub() {
   // for one screen.
   const appliedDefaults = useRef(false)
   const [defaultsReady, setDefaultsReady] = useState(false)
-  const [orbVisible, setOrbVisible] = useState(true)
+  const [orbVisible, setOrbVisible] = useState<boolean>(FEATURES.assistant)
   useEffect(() => {
     if (appliedDefaults.current) return
     appliedDefaults.current = true
@@ -74,7 +75,7 @@ export default function SocialHub() {
         if (typeof algorithm === 'string' && algorithm) setAlgorithmId(algorithm)
         // The floating composer button stacks above the orb, so it needs to
         // know whether the orb is there at all.
-        setOrbVisible(prefs.assistant_visible !== false)
+        setOrbVisible(FEATURES.assistant && prefs.assistant_visible !== false)
         // Only when the URL says nothing: a shared link or a hashtag click is
         // an explicit request and must win over the default.
         const savedMode = prefs.default_feed_mode

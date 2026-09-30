@@ -1,7 +1,9 @@
 import { Suspense, lazy } from 'react'
-import { Routes, Route } from 'react-router'
+import type { ReactNode } from 'react'
+import { Navigate, Routes, Route } from 'react-router'
 import Layout from './components/Layout'
 import Home from './pages/Home'
+import { FEATURES, type Feature } from './lib/features'
 
 // Route-level code-splitting (C5 performance budget): every sub-page ships as
 // its own chunk so the landing page no longer carries the full 1.5MB bundle.
@@ -46,6 +48,15 @@ function PageFallback() {
   )
 }
 
+/**
+ * A route whose feature is switched off (see lib/features.ts) sends the visitor
+ * somewhere real instead of rendering the page: app routes to the feed, public
+ * pages to the home page. The page's chunk is never even loaded.
+ */
+function gated(feature: Feature, page: ReactNode, fallback: string) {
+  return FEATURES[feature] ? page : <Navigate to={fallback} replace />
+}
+
 export default function App() {
   return (
     <Layout>
@@ -54,13 +65,13 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/platform" element={<Platform />} />
           <Route path="/feeds" element={<Feeds />} />
-          <Route path="/family" element={<Family />} />
+          <Route path="/family" element={gated('familyTree', <Family />, '/')} />
           <Route path="/memorials" element={<Memorials />} />
           <Route path="/creators" element={<Creators />} />
-          <Route path="/commerce" element={<Commerce />} />
+          <Route path="/commerce" element={gated('marketplace', <Commerce />, '/')} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/payments" element={<Payments />} />
-          <Route path="/assistant" element={<Assistant />} />
+          <Route path="/assistant" element={gated('assistant', <Assistant />, '/')} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/safety" element={<Safety />} />
           <Route path="/developers" element={<Developers />} />
@@ -75,11 +86,11 @@ export default function App() {
           <Route path="/communities" element={<Communities />} />
           <Route path="/forums" element={<Forums />} />
           <Route path="/messages" element={<Messages />} />
-          <Route path="/tree" element={<FamilyTreeApp />} />
+          <Route path="/tree" element={gated('familyTree', <FamilyTreeApp />, '/hub')} />
           <Route path="/graveyard" element={<Graveyard />} />
-          <Route path="/market" element={<Marketplace />} />
+          <Route path="/market" element={gated('marketplace', <Marketplace />, '/hub')} />
           <Route path="/explore" element={<Explore />} />
-          <Route path="/live" element={<Live />} />
+          <Route path="/live" element={gated('live', <Live />, '/hub')} />
           <Route path="/shorts" element={<Shorts />} />
           <Route path="/earn" element={<Earn />} />
           {/* Notifications about supervision link here, so the path is fixed. */}

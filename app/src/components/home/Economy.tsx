@@ -7,6 +7,7 @@ import { ArrowRight } from 'lucide-react'
 import { CloudCard } from '@/components/ui-kit'
 import { useApi } from '@/hooks/useApi'
 import { kaluta, type EconomyRules } from '@/lib/api'
+import { FEATURES } from '@/lib/features'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -78,10 +79,15 @@ export default function Economy() {
         title: 'The direct commission',
         body: `One level. Your sponsor earns ${model.commission}% of Kinjy's revenue on what you do — and nobody above them earns anything.`,
       },
-      {
-        title: 'Paid from our markup',
-        body: `Seller $100 + ${model.markup}% Kinjy markup = $${100 + model.markup}. The commission comes out of the $${model.markup}, never out of the seller's price.`,
-      },
+      // The markup is the marketplace's; while it is switched off the card goes.
+      ...(FEATURES.marketplace
+        ? [
+            {
+              title: 'Paid from our markup',
+              body: `Seller $100 + ${model.markup}% Kinjy markup = $${100 + model.markup}. The commission comes out of the $${model.markup}, never out of the seller's price.`,
+            },
+          ]
+        : []),
       {
         title: 'Kinjy Leaders',
         body: `${model.leadersPool}% of monthly company revenue, split between the 10,000 members who earned the most commission that month.`,
@@ -189,7 +195,7 @@ export default function Economy() {
         </div>
 
         {/* Cards */}
-        <div className="econ-cards mt-14 grid gap-4 md:grid-cols-3">
+        <div className={`econ-cards mt-14 grid gap-4 ${cards.length === 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
           {cards.map((c) => (
             <CloudCard key={c.title} hoverable className="econ-card p-6">
               <h3 className="text-lg font-semibold text-gold-soft">{c.title}</h3>

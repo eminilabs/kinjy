@@ -2,21 +2,29 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { ArrowRight } from 'lucide-react'
 import { CloudCard } from '@/components/ui-kit'
+import { FEATURES, isRouteAvailable } from '@/lib/features'
 import { cn } from '@/lib/utils'
 import { useReducedMotion } from './motion-utils'
 
+// The agency-pricing card and the markup example are the marketplace's; while
+// it is switched off (lib/features.ts) the commission is explained without them.
 const FORMULAS = [
-  {
-    title: 'Agency pricing',
-    parts: ['Seller $100 ', '+ Kinjy markup 20% ($20) ', '= Customer $120'],
-    caption:
-      'The seller receives exactly what they set. The $20 markup is Kinjy’s revenue — and the only money a commission can come from.',
-  },
+  ...(FEATURES.marketplace
+    ? [
+        {
+          title: 'Agency pricing',
+          parts: ['Seller $100 ', '+ Kinjy markup 20% ($20) ', '= Customer $120'],
+          caption:
+            'The seller receives exactly what they set. The $20 markup is Kinjy’s revenue — and the only money a commission can come from.',
+        },
+      ]
+    : []),
   {
     title: 'Direct commission',
     parts: ['Sponsor 20% ', '· Kinjy Leaders 5% ', '· Platform 75%'],
-    caption:
-      'One level. The member who sponsored the buyer is paid 20% of Kinjy’s revenue — $4 on that $20 markup. Nobody above them is paid anything.',
+    caption: FEATURES.marketplace
+      ? 'One level. The member who sponsored the buyer is paid 20% of Kinjy’s revenue — $4 on that $20 markup. Nobody above them is paid anything.'
+      : 'One level. The member who sponsored you is paid 20% of Kinjy’s revenue on what you do. Nobody above them is paid anything.',
   },
   {
     title: 'Advertising',
@@ -89,8 +97,10 @@ export default function FormulaCards() {
     <section ref={rootRef} className="noise-overlay bg-ink px-6 py-24 md:py-32">
       <div className="mx-auto max-w-container">
         <p className="eyebrow text-center text-sky">The direct programme</p>
-        <h2 className="h2 mt-4 text-center">Commerce math you can audit.</h2>
-        <div className="mt-12 grid gap-4 md:grid-cols-3">
+        <h2 className="h2 mt-4 text-center">
+          {FEATURES.marketplace ? 'Commerce math you can audit.' : 'Commission math you can audit.'}
+        </h2>
+        <div className={cn('mt-12 grid gap-4', FORMULAS.length === 3 ? 'md:grid-cols-3' : 'md:grid-cols-2')}>
           {FORMULAS.map((f) => (
             <CloudCard key={f.title} hoverable className="p-6">
               <h3 className="text-lg font-semibold text-gold-soft">{f.title}</h3>
@@ -99,11 +109,13 @@ export default function FormulaCards() {
             </CloudCard>
           ))}
         </div>
-        <div className="mt-10 text-center">
-          <Link to="/commerce" className="inline-flex items-center gap-2 font-semibold text-gold-soft transition-all hover:gap-3">
-            Full commerce details <ArrowRight size={16} aria-hidden="true" />
-          </Link>
-        </div>
+        {isRouteAvailable('/commerce') && (
+          <div className="mt-10 text-center">
+            <Link to="/commerce" className="inline-flex items-center gap-2 font-semibold text-gold-soft transition-all hover:gap-3">
+              Full commerce details <ArrowRight size={16} aria-hidden="true" />
+            </Link>
+          </div>
+        )}
       </div>
     </section>
   )

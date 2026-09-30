@@ -4,6 +4,7 @@ import { BadgeCheck, Compass, Package, Search, TreeDeciduous, UserRound, UsersRo
 import AppShell from '@/components/app/AppShell'
 import MemberAvatar from '@/components/social/MemberAvatar'
 import { kaluta, type Community, type Person, type PersonBrief, type Product } from '@/lib/api'
+import { FEATURES } from '@/lib/features'
 import { cn } from '@/lib/utils'
 
 type Member = PersonBrief & { user_id: string }
@@ -12,6 +13,23 @@ type Member = PersonBrief & { user_id: string }
 const MIN_QUERY = 2
 /** The most user-service returns in one answer. */
 const PEOPLE_LIMIT = 25
+
+/**
+ * What the page searches. A feature switched off in lib/features.ts is neither
+ * queried nor given a section, and the subtitle does not promise it.
+ */
+const SCOPE = [
+  'people',
+  'communities',
+  ...(FEATURES.marketplace ? ['the marketplace'] : []),
+  ...(FEATURES.familyTree ? ['the family graph'] : []),
+]
+const SCOPE_TEXT = `${SCOPE.slice(0, -1).join(', ')} and ${SCOPE.at(-1)}`
+
+/** Sections under People, one grid column each. Literal classes, for Tailwind. */
+const COLUMNS = SCOPE.length - 1
+const GRID_COLS = ['', '', 'lg:grid-cols-2', 'lg:grid-cols-3'][COLUMNS]
+const FULL_ROW = ['', '', 'lg:col-span-2', 'lg:col-span-3'][COLUMNS]
 
 function Section({
   title,
@@ -74,8 +92,8 @@ export default function Explore() {
     const results = await Promise.allSettled([
       kaluta.people.search(q, PEOPLE_LIMIT),
       kaluta.communities.list({ q }),
-      kaluta.market.products({ q }),
-      kaluta.family.search(q),
+      FEATURES.marketplace ? kaluta.market.products({ q }) : null,
+      FEATURES.familyTree ? kaluta.family.search(q) : null,
     ])
 
     // Answers arrive out of order: the one for "e" can land after the one for
@@ -85,8 +103,8 @@ export default function Explore() {
     const failures: string[] = []
     setMembers(results[0].status === 'fulfilled' ? results[0].value.items : (failures.push('people'), null))
     setCommunities(results[1].status === 'fulfilled' ? results[1].value.items : (failures.push('communities'), null))
-    setProducts(results[2].status === 'fulfilled' ? results[2].value.items : (failures.push('marketplace'), null))
-    setPeople(results[3].status === 'fulfilled' ? results[3].value.items : (failures.push('family tree'), null))
+    setProducts(results[2].status === 'fulfilled' ? (results[2].value?.items ?? null) : (failures.push('marketplace'), null))
+    setPeople(results[3].status === 'fulfilled' ? (results[3].value?.items ?? null) : (failures.push('family tree'), null))
     setErrors(failures)
     setBusy(false)
   }, [])
@@ -95,7 +113,7 @@ export default function Explore() {
   const active = q.length >= MIN_QUERY
 
   // Results follow the typing, so "ez" already lists Ezekiel. Debounced: each
-  // search fans out to four services, and a burst of keystrokes should cost one.
+  // search fans out to several services, and a burst of keystrokes should cost one.
   useEffect(() => {
     if (!active) {
       // Whatever is still in flight answers text that is no longer there.
@@ -117,7 +135,7 @@ export default function Explore() {
   const searching = busy && active
 
   return (
-    <AppShell title="Explore" subtitle="Search people, communities, the marketplace and the family graph at once.">
+    <AppShell title="Explore" subtitle={`Search ${SCOPE_TEXT} at once.`}>
       <form onSubmit={run}>
         <label className="flex items-center gap-2.5 rounded-full border border-white/10 bg-ink-2/60 px-4 py-3">
           <Search size={16} className="shrink-0 text-text-low" aria-hidden="true" />
@@ -145,13 +163,13 @@ export default function Explore() {
       )}
 
       {active && (members || communities || products || people) && (
-        <div className="mt-6 grid gap-4 lg:grid-cols-3">
+        <div className={cn('mt-6 grid gap-4', GRID_COLS)}>
           <Section
             title="People"
             icon={UserRound}
             empty={(members ?? []).length === 0}
             emptyText={`No member whose name starts with “${q}”.`}
-            className="lg:col-span-3"
+            className={FULL_ROW}
           >
             <ul className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3" aria-live="polite">
               {(members ?? []).map((m) => (
@@ -187,31 +205,35 @@ export default function Explore() {
             </ul>
           </Section>
 
-          <Section title="Marketplace" icon={Package} empty={(products ?? []).length === 0}>
-            <ul className="space-y-2">
-              {(products ?? []).map((p) => (
-                <li key={p.id} className="text-sm">
-                  <Link to="/market" className="text-text-hi hover:text-gold-soft">
-                    {p.title}
-                  </Link>
-                  <span className="caption block">${p.customer_price}</span>
-                </li>
-              ))}
-            </ul>
-          </Section>
+          {FEATURES.marketplace && (
+            <Section title="Marketplace" icon={Package} empty={(products ?? []).length === 0}>
+              <ul className="space-y-2">
+                {(products ?? []).map((p) => (
+                  <li key={p.id} className="text-sm">
+                    <Link to="/market" className="text-text-hi hover:text-gold-soft">
+                      {p.title}
+                    </Link>
+                    <span className="caption block">${p.customer_price}</span>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
 
-          <Section title="Family graph" icon={TreeDeciduous} empty={(people ?? []).length === 0}>
-            <ul className="space-y-2">
-              {(people ?? []).map((p) => (
-                <li key={p.id} className="text-sm">
-                  <Link to="/tree" className="text-text-hi hover:text-gold-soft">
-                    {p.given_name} {p.family_name ?? ''}
-                  </Link>
-                  <span className="caption block">{p.status ?? 'pending'}</span>
-                </li>
-              ))}
-            </ul>
-          </Section>
+          {FEATURES.familyTree && (
+            <Section title="Family graph" icon={TreeDeciduous} empty={(people ?? []).length === 0}>
+              <ul className="space-y-2">
+                {(people ?? []).map((p) => (
+                  <li key={p.id} className="text-sm">
+                    <Link to="/tree" className="text-text-hi hover:text-gold-soft">
+                      {p.given_name} {p.family_name ?? ''}
+                    </Link>
+                    <span className="caption block">{p.status ?? 'pending'}</span>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
         </div>
       )}
     </AppShell>

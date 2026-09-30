@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { FEATURES, type Feature } from '@/lib/features'
 import { pinLength } from '@/lib/pinLength'
 import { useGSAP } from '@gsap/react'
 import gsap from 'gsap'
@@ -7,14 +8,20 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 gsap.registerPlugin(ScrollTrigger)
 
 /** Five orbiting chips, not eight: they read as a hint of the module set, and
- *  every one of them costs a transform write per frame. */
-const CHIPS = [
+ *  every one of them costs a transform write per frame.
+ *
+ *  The first five *open* modules: a module switched off in lib/features.ts
+ *  gives its orbit to the next one rather than leaving a gap in the ring. */
+const CANDIDATE_CHIPS: Array<{ label: string; tip: string; feature?: Feature }> = [
   { label: 'Circles', tip: 'Circles — your people, grouped your way' },
-  { label: 'Family Tree', tip: 'Family Tree — verified genealogy across generations' },
-  { label: 'Marketplace', tip: 'Marketplace — trusted commerce with a fair margin' },
+  { label: 'Family Tree', tip: 'Family Tree — verified genealogy across generations', feature: 'familyTree' },
+  { label: 'Marketplace', tip: 'Marketplace — trusted commerce with a fair margin', feature: 'marketplace' },
   { label: 'Messages', tip: 'Messages — end-to-end encrypted, auto-translated' },
   { label: 'Memorials', tip: 'Memorials — memory, kept with dignity' },
+  { label: 'Forums', tip: 'Forums — deep threads that never get lost' },
+  { label: 'Communities', tip: 'Communities — spaces with their own rules' },
 ]
+const CHIPS = CANDIDATE_CHIPS.filter((c) => !c.feature || FEATURES[c.feature]).slice(0, 5)
 
 /** Globe dot budget. 1400 was invisible detail at this radius and cost a path
  *  operation each per frame. */

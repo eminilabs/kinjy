@@ -4,6 +4,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { Info } from 'lucide-react'
 import { CloudCard, ModeChip } from '@/components/ui-kit'
 import { cn } from '@/lib/utils'
+import { FEATURES } from '@/lib/features'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -26,17 +27,20 @@ const LEGEND = [
   { color: '#1A1F3B', text: 'Platform — the rest' },
 ]
 
-const STREAMS: { label: string; caption: string }[] = [
+const ALL_STREAMS: { label: string; caption: string; live?: boolean }[] = [
   { label: 'Advertising', caption: 'Ads: creator 40%, then the creator’s sponsor takes 20% of what Kinjy retains.' },
   { label: 'Subscriptions', caption: 'Subscriptions: creator keeps 80% of every subscriber payment.' },
   { label: 'Tips', caption: 'Tips: creator keeps 90% — a small processing share keeps the rails running.' },
   { label: 'Gifts', caption: 'Gifts: creator keeps 85% of every gift’s coin value.' },
-  { label: 'Paid livestreams', caption: 'Paid livestreams: creator keeps 80% of ticket and seat revenue.' },
+  { label: 'Paid livestreams', caption: 'Paid livestreams: creator keeps 80% of ticket and seat revenue.', live: true },
   { label: 'Ticketed events', caption: 'Ticketed events: organizer keeps 85% of every ticket sold.' },
   { label: 'Paid newsletters', caption: 'Paid newsletters: writer keeps 85% of each subscription.' },
   { label: 'Courses', caption: 'Courses: instructor keeps 80% of every enrollment.' },
   { label: 'Digital products', caption: 'Digital products: seller keeps 85% of every sale.' },
 ]
+
+/** Livestream revenue is only listed while live is switched on (lib/features.ts). */
+const STREAMS = ALL_STREAMS.filter((s) => FEATURES.live || !s.live)
 
 /** Section 4 — Monetization waterfall: the creator share, then the direct commission. */
 export default function MonetizationWaterfall() {

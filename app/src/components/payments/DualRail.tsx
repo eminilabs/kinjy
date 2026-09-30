@@ -3,6 +3,7 @@ import { ArrowDownUp, Banknote, Bitcoin, BookLock, Check, Clock, Split, UserChec
 import { LedgerRow } from '@/components/ui-kit'
 import { cn } from '@/lib/utils'
 import { EASE, useReducedMotion } from '@/components/creators/motion-utils'
+import { FEATURES } from '@/lib/features'
 
 const CRYPTO_FEATURES = [
   { icon: Bitcoin, text: '350+ coins in, deposit addresses via POST /v1/payment' },
@@ -103,7 +104,11 @@ export default function DualRail() {
                 <Clock size={12} aria-hidden="true" /> recommended
               </span>
             </div>
-            <p className="caption mt-2">Fiat escrow purpose-built for marketplaces and multi-party commission chains.</p>
+            <p className="caption mt-2">
+              {FEATURES.marketplace
+                ? 'Fiat escrow purpose-built for marketplaces and multi-party commission chains.'
+                : 'Fiat escrow purpose-built for multi-party commission chains.'}
+            </p>
             <ul className="mt-6 flex-1 space-y-4">
               {BANK_FEATURES.map((f) => (
                 <li key={f.text} className="flex items-start gap-3">

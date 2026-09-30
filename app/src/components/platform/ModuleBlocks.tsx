@@ -44,7 +44,7 @@ const VISUALS: Record<string, ComponentType> = {
 }
 
 function ModuleBlock({ mod, flip }: { mod: ModuleInfo; flip: boolean }) {
-  const Visual = VISUALS[mod.letter]
+  const Visual = VISUALS[mod.visual ?? mod.letter]
   const reduced = useReducedMotion()
   const textFrom = flip ? 48 : -48
   const visualFrom = flip ? -48 : 48

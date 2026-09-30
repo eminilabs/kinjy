@@ -6,6 +6,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ModeChip, ProvenanceTag, WhyAmISeeingThis } from '@/components/ui-kit'
 import { cn } from '@/lib/utils'
+import { FEATURES } from '@/lib/features'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -33,14 +34,20 @@ const POSTS: Record<string, Post> = {
     id: 'demo', author: 'Demo K.', avatarPos: '0% 0%', time: '2 min',
     text: 'Sunrise over Msasani Bay — the dhows were out early today.', family: false,
   },
+  // While the family tree is switched off (lib/features.ts) the sample posts
+  // talk about something else: a demo feed should not advertise a hidden module.
   juma: {
     id: 'juma', author: 'Juma M.', avatarPos: '33% 0%', time: '1 hr',
-    text: 'My grandmother just verified our family tree back to 1890. Habari ya leo?',
-    family: true, translated: true,
+    text: FEATURES.familyTree
+      ? 'My grandmother just verified our family tree back to 1890. Habari ya leo?'
+      : 'My grandmother turned 90 today — the whole street came to sing. Habari ya leo?',
+    family: FEATURES.familyTree, translated: true,
   },
   neema: {
     id: 'neema', author: 'Neema T.', avatarPos: '66% 0%', time: '3 hr',
-    text: 'New short film: how we restored my father’s 1968 wedding photo with Heritage AI.',
+    text: FEATURES.familyTree
+      ? 'New short film: how we restored my father’s 1968 wedding photo with Heritage AI.'
+      : 'New short film: three days on the dhows of Kilwa, subtitled in five languages.',
     aiAssisted: true,
   },
 }

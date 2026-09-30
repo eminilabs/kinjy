@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Globe, Lock, LockOpen, EyeOff, Coins, Sparkles, MapPin, ZoomIn } from 'lucide-react'
+import { FEATURES } from '@/lib/features'
 import { cn } from '@/lib/utils'
 import { VerifiedBadge, ProvenanceTag } from '@/components/ui-kit'
 import { Avatar, CLOUD_EASE, LINE_EASE, ModuleGlyph, SNAP_EASE, useActiveInView } from './shared'
@@ -390,7 +391,9 @@ export function MessengerVisual() {
         </svg>
         <div>
           <p className="text-xs font-bold text-success">End-to-end encrypted</p>
-          <p className="text-[0.68rem] text-text-low">Voice & video · disappearing messages</p>
+          <p className="text-[0.68rem] text-text-low">
+            {FEATURES.calls ? 'Voice & video · disappearing messages' : 'Disappearing messages'}
+          </p>
         </div>
       </div>
     </div>

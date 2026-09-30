@@ -1,4 +1,5 @@
 import type { ChromeKey } from '@/components/appdemo/theme'
+import { isRouteAvailable } from '@/lib/features'
 
 /**
  * The bridge between the designed app chrome and real routing.
@@ -42,21 +43,26 @@ export const ROUTE_FOR: Record<ChromeKey, string> = {
  * feed*, not places. They already live in the feed's own mode selector, and
  * repeating them in the global bar meant the same menu twice — with the odd
  * result that "Home" and "For You" led to the same page in different states.
+ *
+ * Modules whose feature is switched off in lib/features.ts drop out here, and
+ * with them every chip, pin and drawer entry built from this list.
  */
-export const NAV_DESTINATIONS: ChromeKey[] = [
-  'home',
-  'create',
-  'messages',
-  'forums',
-  'circles',
-  'communities',
-  'live',
-  'familyTree',
-  'graveyard',
-  'explore',
-  'marketplace',
-  'earnings',
-]
+export const NAV_DESTINATIONS: ChromeKey[] = (
+  [
+    'home',
+    'create',
+    'messages',
+    'forums',
+    'circles',
+    'communities',
+    'live',
+    'familyTree',
+    'graveyard',
+    'explore',
+    'marketplace',
+    'earnings',
+  ] as ChromeKey[]
+).filter((key) => isRouteAvailable(ROUTE_FOR[key]))
 
 /** Shorts is ours, not in the blueprint's original list — appended, not inserted. */
 export const EXTRA_NAV: Array<{ key: string; route: string; label: string }> = [

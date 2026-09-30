@@ -12,6 +12,7 @@ import SeriesRail from '@/components/appdemo/SeriesRail'
 import VaultResurfacing from '@/components/appdemo/VaultResurfacing'
 import WellbeingPanel from '@/components/appdemo/WellbeingPanel'
 import { AppThemeProvider } from '@/components/appdemo/theme'
+import { FEATURES } from '@/lib/features'
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 
@@ -49,7 +50,8 @@ export default function AppDemo() {
                 </h2>
               </div>
               <p className="caption flex items-center gap-1.5">
-                <Hand size={13} aria-hidden="true" /> Pin chips · switch feed modes · open Family Tree &amp; Graveyard
+                <Hand size={13} aria-hidden="true" /> Pin chips · switch feed modes · open{' '}
+                {FEATURES.familyTree ? 'Family Tree & Graveyard' : 'the Graveyard'}
               </p>
             </motion.div>
 
@@ -64,8 +66,9 @@ export default function AppDemo() {
           </div>
         </section>
 
-        {/* Section 3 — AI onboarding concierge (first-run interview + live build) */}
-        <ConciergeOnboarding />
+        {/* Section 3 — AI onboarding concierge (first-run interview + live build).
+            The concierge is the assistant, so it is hidden with it (lib/features.ts). */}
+        {FEATURES.assistant && <ConciergeOnboarding />}
 
         {/* Section 4 — AI memory resurfacing (Knowledge Vault card in the feed) */}
         <VaultResurfacing />

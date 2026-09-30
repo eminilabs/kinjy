@@ -8,8 +8,9 @@ import { useAppTheme } from '@/components/appdemo/theme'
 import MemberAvatar from '@/components/social/MemberAvatar'
 import { useApi } from '@/hooks/useApi'
 import { useAuth } from '@/hooks/useAuth'
+import { kaluta, type Profile } from '@/lib/api'
+import { isRouteAvailable } from '@/lib/features'
 import { useMyProfile } from '@/hooks/useMyProfile'
-import { kaluta } from '@/lib/api'
 import { countryName } from '@/lib/profileOptions'
 import { cn } from '@/lib/utils'
 
@@ -17,8 +18,10 @@ import { cn } from '@/lib/utils'
  * The profile mini-card from the designed left rail: centred avatar, name with
  * its verification badge, handle, and place.
  */
-/** The shortcuts /app pins. Destinations, not feed modes. */
-const PINNED: ChromeKey[] = ['home', 'create', 'familyTree', 'messages']
+/** The shortcuts /app pins. Destinations, not feed modes — and only open ones. */
+const PINNED: ChromeKey[] = (['home', 'create', 'familyTree', 'messages'] as ChromeKey[]).filter(
+  (key) => isRouteAvailable(ROUTE_FOR[key]),
+)
 
 export default function ProfileCard() {
   const { user } = useAuth()

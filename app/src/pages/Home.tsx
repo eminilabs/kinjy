@@ -7,6 +7,7 @@ import HeritageBand from '@/components/home/HeritageBand'
 import Economy from '@/components/home/Economy'
 import AssistantIntro from '@/components/home/AssistantIntro'
 import PricingTeaser from '@/components/home/PricingTeaser'
+import { FEATURES } from '@/lib/features'
 
 /**
  * Home — the Kinjy landing page (design/home.md).
@@ -20,9 +21,10 @@ export default function Home() {
       <ModuleConstellation />
       <FeedRulesStory />
       <CreateOnce />
-      <HeritageBand />
+      {/* Heritage is the family tree; the assistant section presents the orb. */}
+      {FEATURES.familyTree && <HeritageBand />}
       <Economy />
-      <AssistantIntro />
+      {FEATURES.assistant && <AssistantIntro />}
       <PricingTeaser />
     </>
   )

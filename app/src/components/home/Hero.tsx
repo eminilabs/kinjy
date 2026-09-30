@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { ArrowDown } from 'lucide-react'
 import ArcButton from '@/components/ui-kit/ArcButton'
 import HeroScene from './HeroScene'
+import { OPEN_MODULES, spelled } from '@/lib/features'
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 
@@ -122,7 +123,7 @@ export default function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 1.0, duration: 0.5, ease: EASE }}
           >
-            Fifteen modules, one society — in every language you speak.
+            {spelled(OPEN_MODULES)} modules, one society — in every language you speak.
           </motion.p>
           <motion.div
             className="mt-8 flex flex-wrap items-center gap-3"

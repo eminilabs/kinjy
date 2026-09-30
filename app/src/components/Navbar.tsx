@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { LANGUAGES } from '@/i18n'
 import { useAuth } from '@/hooks/useAuth'
+import { isRouteAvailable } from '@/lib/features'
 import { useMyProfile } from '@/hooks/useMyProfile'
 import MemberAvatar from '@/components/social/MemberAvatar'
 
@@ -13,25 +14,28 @@ import MemberAvatar from '@/components/social/MemberAvatar'
  * bar; the rest live under "More" — still one click away, no longer competing
  * for the same glance. The mobile drawer keeps showing everything flat, where
  * vertical space is not the constraint.
+ *
+ * A page whose feature is switched off in lib/features.ts drops out of both
+ * lists, and so out of the drawer and the "More" menu built from them.
  */
-export const PRIMARY_LINKS = [
+const PRIMARY_LINKS = [
   { to: '/platform', key: 'nav.platform', fallback: 'Platform' },
   { to: '/feeds', key: 'nav.feeds', fallback: 'Feeds' },
   { to: '/family', key: 'nav.family', fallback: 'Family' },
   { to: '/creators', key: 'nav.creators', fallback: 'Creators' },
   { to: '/pricing', key: 'nav.pricing', fallback: 'Pricing' },
-] as const
+].filter((l) => isRouteAvailable(l.to))
 
-export const SECONDARY_LINKS = [
+const SECONDARY_LINKS = [
   { to: '/memorials', key: 'nav.memorials', fallback: 'Memorials' },
   { to: '/commerce', key: 'nav.commerce', fallback: 'Commerce' },
   { to: '/payments', key: 'nav.payments', fallback: 'Payments' },
   { to: '/safety', key: 'nav.safety', fallback: 'Safety' },
   { to: '/developers', key: 'nav.developers', fallback: 'Developers' },
-] as const
+].filter((l) => isRouteAvailable(l.to))
 
 /** Every marketing route, in order — used by the mobile drawer and the footer. */
-export const NAV_LINKS = [...PRIMARY_LINKS, ...SECONDARY_LINKS] as const
+const NAV_LINKS = [...PRIMARY_LINKS, ...SECONDARY_LINKS]
 
 /** Marketing Navbar (§7.1) — fixed 72px overlay nav; transparent at top, glass after 24px scroll. */
 export default function Navbar() {

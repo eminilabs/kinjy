@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowDown, Play } from 'lucide-react'
 import { ArcButton } from '@/components/ui-kit'
+import { FEATURES } from '@/lib/features'
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 
-const QUERY = `query FamilyPath($user: ID!) {
+const FAMILY_QUERY = `query FamilyPath($user: ID!) {
   user(id: $user) {
     familyTree {
       path(to: "demo-243") { level relation }
@@ -13,7 +14,7 @@ const QUERY = `query FamilyPath($user: ID!) {
   }
 }`
 
-const RESPONSE_LINES = [
+const FAMILY_RESPONSE = [
   '{',
   '  "data": {',
   '    "user": {',
@@ -29,16 +30,45 @@ const RESPONSE_LINES = [
   '}',
 ]
 
+const CIRCLE_QUERY = `query CircleFeed($user: ID!) {
+  user(id: $user) {
+    circles {
+      posts(first: 3) { author text }
+    }
+  }
+}`
+
+const CIRCLE_RESPONSE = [
+  '{',
+  '  "data": {',
+  '    "user": {',
+  '      "circles": {',
+  '        "posts": [',
+  '          { "author": "Amina K.", "text": "Choir moved to 6pm" },',
+  '          { "author": "Juma M.", "text": "Photos from Saturday" },',
+  '          { "author": "Neema T.", "text": "Welcome, Baraka!" }',
+  '        ]',
+  '      }',
+  '    }',
+  '  }',
+  '}',
+]
+
+// While the family tree is switched off (lib/features.ts) the hero asks for a
+// member's circles instead: the showcase query should not open a hidden module.
+const QUERY = FEATURES.familyTree ? FAMILY_QUERY : CIRCLE_QUERY
+const RESPONSE_LINES = FEATURES.familyTree ? FAMILY_RESPONSE : CIRCLE_RESPONSE
+
 /** Syntax-highlight one line of the GraphQL query. */
 function QueryLine({ line }: { line: string }) {
   // keywords gold, punctuation sky-ish, strings gold-soft, identifiers text-hi
-  const parts = line.split(/(\bquery\b|\buser\b|\bfamilyTree\b|\bpath\b|\blevel\b|\brelation\b|\$user|\bID!?\b|"[^"]*")/g)
+  const parts = line.split(/(\bquery\b|\buser\b|\bfamilyTree\b|\bpath\b|\blevel\b|\brelation\b|\bcircles\b|\bposts\b|\bauthor\b|\btext\b|\$user|\bID!?\b|"[^"]*")/g)
   return (
     <>
       {parts.map((p, i) => {
         if (!p) return null
         if (/^(query)$/.test(p)) return <span key={i} className="text-gold font-semibold">{p}</span>
-        if (/^(user|familyTree|path|level|relation)$/.test(p)) return <span key={i} className="text-gold-soft">{p}</span>
+        if (/^(user|familyTree|path|level|relation|circles|posts|author|text)$/.test(p)) return <span key={i} className="text-gold-soft">{p}</span>
         if (/^\$user$/.test(p)) return <span key={i} className="text-coral">{p}</span>
         if (/^ID/.test(p)) return <span key={i} className="text-sky">{p}</span>
         if (/^"/.test(p)) return <span key={i} className="text-success">{p}</span>
