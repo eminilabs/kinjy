@@ -586,18 +586,48 @@ def classify_post(post_id: str, payload: ClassificationIn, db: OrmSession = Depe
 
     Upserted rather than appended so there is exactly one current answer per
     item, and the read path never has to decide which of several rows wins.
+
+    A rating a reviewer has settled is not overwritten from here: an automatic
+    pass must not quietly undo a human's answer, overturned appeals included
+    (moderation.file_report keeps the same rule for reports). The one thing
+    that still gets through is an exploitation signal, which withholds the
+    post whatever the rating says. Reviewers re-rate through
+    /admin/classification/{post_id}/review.
     """
     post = db.get(models.Post, post_id)
     if post is None:
         raise HTTPException(status_code=404, detail="Post not found")
 
-    row = db.scalar(
+    existing = _classification_row(db, post_id)
+    if existing is not None and existing.human_review_status == "confirmed":
+        if payload.exploitation_risk >= 2 or payload.age_rating == "PROHIBITED":
+            post.status = "removed"
+            db.commit()
+            log.error("content %s withheld pending child-safety review (rating was reviewer-confirmed)", post_id)
+            return {"content_id": post_id, "age_rating": existing.age_rating, "status": post.status}
+        log.info("classification of %s left alone: already settled by a reviewer", post_id)
+        raise HTTPException(status_code=409, detail="A reviewer has settled this rating; only a reviewer can change it.")
+
+    row = _apply_classification(db, post, payload)
+    db.commit()
+    return {"content_id": post_id, "age_rating": row.age_rating, "status": post.status}
+
+
+def _classification_row(db: OrmSession, post_id: str) -> models.ContentSafetyClassification | None:
+    return db.scalar(
         select(models.ContentSafetyClassification).where(
             models.ContentSafetyClassification.content_id == post_id
         )
     )
+
+
+def _apply_classification(
+    db: OrmSession, post: models.Post, payload: ClassificationIn
+) -> models.ContentSafetyClassification:
+    """Write a classification onto the post's one row; the caller commits."""
+    row = _classification_row(db, post.id)
     if row is None:
-        row = models.ContentSafetyClassification(id=new_id("csc"), content_id=post_id)
+        row = models.ContentSafetyClassification(id=new_id("csc"), content_id=post.id)
         db.add(row)
 
     data = payload.model_dump()
@@ -611,10 +641,8 @@ def classify_post(post_id: str, payload: ClassificationIn, db: OrmSession = Depe
     # process rather than leaving it queued behind everything else.
     if payload.exploitation_risk >= 2 or payload.age_rating == "PROHIBITED":
         post.status = "removed"
-        log.error("content %s withheld pending child-safety review", post_id)
-
-    db.commit()
-    return {"content_id": post_id, "age_rating": row.age_rating, "status": post.status}
+        log.error("content %s withheld pending child-safety review", post.id)
+    return row
 
 
 @app.get("/internal/classification/{post_id}", tags=["internal"])
@@ -996,12 +1024,14 @@ def review_classification(
     post_id: str, payload: ClassificationIn, admin: AdminUser, db: OrmSession = Depends(get_db)
 ):
     """A human settles a rating. Their answer outranks the classifier's."""
-    result = classify_post(post_id, payload, db)
-    row = db.scalar(
-        select(models.ContentSafetyClassification).where(
-            models.ContentSafetyClassification.content_id == post_id
-        )
-    )
+    post = db.get(models.Post, post_id)
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+    # Straight to the write, not through classify_post: a reviewer may re-rate
+    # a rating that is already settled, which is exactly what that endpoint
+    # refuses to an automatic caller.
+    row = _apply_classification(db, post, payload)
+    result = {"content_id": post_id, "age_rating": row.age_rating, "status": post.status}
     if row is not None:
         row.human_review_status = "confirmed"
         row.classifier_source = f"human:{admin.user_id}"
