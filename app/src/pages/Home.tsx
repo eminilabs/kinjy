@@ -14,11 +14,16 @@ import { FEATURES } from '@/lib/features'
  * It carries its own navigation and footer (Layout suppresses the marketing
  * ones on this route) and its own fixed paper-and-night palette; see
  * components/landing/landing.css. Copy lives in components/landing/data.ts.
+ *
+ * The copy is French and left-to-right whatever language the rest of the site
+ * is in, so the page says so itself: the document's lang and dir follow the
+ * site's language and are set by the marketing navbar, which is not on this
+ * route — an Arabic visitor would otherwise get this French page mirrored.
  */
 export default function Home() {
   const { theme } = useLandingTheme()
   return (
-    <div className="kl" data-kl-theme={theme}>
+    <div className="kl" data-kl-theme={theme} lang="fr" dir="ltr">
       <div className="mx-auto max-w-[1320px] px-4 pt-4">
         <div className="relative overflow-hidden rounded-2xl bg-[var(--kl-bg)]">
           <LandingNav />
