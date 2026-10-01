@@ -222,6 +222,28 @@ def is_sealed_file(path: str) -> bool:
         return handle.read(4) == MAGIC
 
 
+def reseal_file(source: str, destination: str, asset_id: str, size: int) -> str:
+    """Write ``source`` to ``destination`` sealed with the active key; returns its id.
+
+    ``source`` may be sealed with any key still in the keyring, or stored as
+    uploaded (a private file from before encryption was on). Every chunk is
+    authenticated on the way through, so a damaged source raises
+    DecryptionError instead of being re-sealed into a valid-looking file.
+    """
+    with open(destination, "wb") as out:
+        sealer = FileSealer(out, asset_id)
+        if is_sealed_file(source):
+            if size:
+                for plain in open_file_range(source, asset_id, size, 0, size - 1):
+                    sealer.write(plain)
+        else:
+            with open(source, "rb") as handle:
+                while chunk := handle.read(CHUNK):
+                    sealer.write(chunk)
+        sealer.close()
+    return sealer.key_id
+
+
 def open_file_range(path: str, asset_id: str, size: int, start: int, end: int) -> Iterator[bytes]:
     """Plaintext bytes ``start..end`` (inclusive) of a sealed file, chunk by chunk."""
     chunks = max(1, -(-size // CHUNK))

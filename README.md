@@ -441,9 +441,11 @@ On top of that socket, `/messages` has:
   It is **not** end-to-end: the running server holds the key. Required in
   production — messaging-service and media-service refuse to start without it,
   `bootstrap.sh` generates it, `deploy.sh` checks it. Messages written before the
-  key existed are sealed in the background at startup; listing a second key
-  (`k2:…,k1:…`) rotates. **Losing the key loses the messages** — keep a copy
-  offline, never beside the backups.
+  key existed are sealed in the background at startup, attachment files too;
+  listing a second key (`k2:…,k1:…`) rotates, and both services re-seal what
+  the old key sealed — remove it only once both logs say so (see
+  `.env.production.example`). **Losing the key loses the messages** — keep a
+  copy offline, never beside the backups.
 - **Private attachments** — a chat file is served only on a link messaging-service
   signs for someone in the conversation (12 h, HMAC), never on its bare URL;
   Range requests work on sealed files, so video seeks. Post media stays public.

@@ -6,6 +6,7 @@ import logging
 import math
 import os
 import shutil
+import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -14,13 +15,13 @@ from urllib.parse import quote
 from fastapi import BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, true, update
 from sqlalchemy.orm import Session as OrmSession
 from starlette.concurrency import run_in_threadpool
 
 from common import crypto, mediasign, settings
 from common.auth import CurrentUser, optional_principal
-from common.database import get_db
+from common.database import SessionLocal, get_db
 from common.ids import new_id
 from common.service import create_app
 
@@ -82,7 +83,7 @@ app = create_app(
     schema=models.SCHEMA,
     description="Uploads with content provenance labels and hash-based deduplication.",
     migrations=MIGRATIONS,
-    on_startup=[lambda: crypto.require_in_production("media-service")],
+    on_startup=[lambda: _start_resealing()],
 )
 
 ROOT = Path(settings.MEDIA_ROOT)
@@ -339,6 +340,93 @@ def _serve_sealed(asset: models.Asset, request: Request, media_type: str, inline
         media_type=media_type,
         headers=headers,
     )
+
+
+# --- encryption at rest: the attachments' backlog ---------------------------------
+#
+# messaging-service re-seals message text at startup; this is the same job for
+# the attachment files, so that rotating the key ("k2:…,k1:…") really moves
+# everything off k1 before k1 is removed. It also seals private files stored
+# in the clear before the key was set.
+
+_RESEAL_BATCH = 50
+
+
+def _start_resealing() -> None:
+    crypto.require_in_production("media-service")
+    if crypto.enabled():
+        # In the background: re-sealing a large backlog must not hold the boot.
+        threading.Thread(target=_reseal_backlog, name="reseal-attachments", daemon=True).start()
+
+
+def _reseal_backlog() -> None:
+    """Re-seal every private attachment not yet under the active key. Idempotent."""
+    active = crypto.keyring().active_id
+    resealed = failed = 0
+    skipped: set[str] = set()
+    while True:
+        leftovers: list[Path] = []
+        with SessionLocal() as db:
+            rows = db.scalars(
+                select(models.Asset)
+                .where(
+                    models.Asset.private.is_(True),
+                    or_(models.Asset.sealed_with.is_(None), models.Asset.sealed_with != active),
+                    models.Asset.id.not_in(skipped) if skipped else true(),
+                )
+                .limit(_RESEAL_BATCH)
+                .with_for_update(skip_locked=True)
+            ).all()
+            if not rows:
+                break
+            for asset in rows:
+                try:
+                    leftovers.append(_reseal_asset(asset))
+                except (crypto.DecryptionError, OSError) as exc:
+                    # Its key is gone, or the file is missing or damaged. Leave
+                    # it exactly as it is: rewriting it would destroy the only copy.
+                    log.error("attachment %s could not be re-sealed: %s", asset.id, exc)
+                    skipped.add(asset.id)
+                    failed += 1
+                    continue
+                resealed += 1
+            db.commit()
+        # Only once the rows point at the new files: until the commit, the old
+        # path is still the one a request would read.
+        for leftover in leftovers:
+            leftover.unlink(missing_ok=True)
+    if resealed or failed:
+        log.info("re-sealed %d attachments with key %s; %d could not be opened", resealed, active, failed)
+
+
+def _reseal_asset(asset: models.Asset) -> Path:
+    """Re-seal one attachment's bytes and name; returns the old file, to delete after commit.
+
+    The re-sealed copy goes to a new path named after the asset and the key
+    (sealed files keep no extension), and the row is pointed at it in the same
+    transaction that updates its key and name. Until that commit every request
+    still reads the old file, untouched; there is no moment when the row and
+    the bytes disagree.
+    """
+    source = Path(asset.storage_path)
+    if not source.exists():
+        raise OSError(f"{source} is missing")
+    name = (
+        crypto.open_text(asset.sealed_with, asset.filename, f"asset:{asset.id}:filename")
+        if asset.sealed_with
+        else asset.filename
+    )
+    destination = source.with_name(f"{asset.id}-{crypto.keyring().active_id}")
+    staging = source.with_name(f"{asset.id}.resealing")
+    try:
+        key_id = crypto.reseal_file(str(source), str(staging), asset.id, asset.size_bytes)
+        os.replace(staging, destination)
+    finally:
+        staging.unlink(missing_ok=True)
+    asset.storage_path = str(destination)
+    _, asset.filename = crypto.seal_text(name, f"asset:{asset.id}:filename")
+    asset.sealed_with = key_id
+    return source
 
 
 def _serve_headers(inline_type: str | None) -> dict[str, str]:
