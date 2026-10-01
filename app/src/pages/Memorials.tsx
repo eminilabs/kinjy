@@ -319,75 +319,134 @@ export default function Memorials() {
         {FEATURES.familyTree && <RemembranceGatherings />}
       </div>
 
-      {/* ── Section 6 — Legacy & tomorrow: a night panel, as the landing's assistant ── */}
-      <section
-        className="force-dark kl-night-section mx-[clamp(12px,2vw,24px)] mt-10 overflow-hidden rounded-[20px] px-[clamp(20px,5vw,64px)] py-[120px] text-[var(--kl-night-text)]"
-        style={{ background: 'radial-gradient(120% 120% at 20% 0%, #242142 0%, #0B0E1D 65%)' }}
-      >
-        <div className="mx-auto grid max-w-[1180px] gap-12 lg:grid-cols-2">
+      {/* ── Section 6 — Legacy & tomorrow: two rows on the landing's
+          alternating pattern, text beside a soft stage. ───────────── */}
+      <div className="mx-auto max-w-[1320px] px-4">
+        <section className="kl-split kl-pad-x gap-14 border-t border-[var(--kl-paper-2)] py-[120px]">
           <motion.div
             initial={reduced ? false : { opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true, amount: 0.5 }}
             transition={{ duration: 1, ease: cloudEase }}
           >
-            <p className="kl-mono text-xs tracking-[.14em] text-[#F0C878]">DIGITAL LEGACY CONTACTS</p>
-            <h3 className="kl-h2 mt-4 text-[var(--kl-night-text)]" style={{ fontSize: 'clamp(34px, 4vw, 52px)' }}>
-              Your wishes, honored after you.
-            </h3>
-            <p className="mt-5 max-w-[460px] text-lg leading-[1.6] text-[var(--kl-night-mid)]">
+            <div className="mb-7 grid h-[72px] w-[72px] place-items-center rounded-[10px] kl-sheen shadow-[0_14px_30px_-14px_rgba(169,118,28,.6)]" aria-hidden="true">
+              <Landmark size={28} />
+            </div>
+            <p className="kl-mono text-xs tracking-[.14em] text-[var(--kl-gold-deep)]">DIGITAL LEGACY CONTACTS</p>
+            <h2 className="kl-h3 mt-4">Your wishes, honored after you.</h2>
+            <p className="kl-lead mt-5">
               Designate who manages your account and memorial wishes after you’re gone.
               Wishes are stored and honored — including faith-style preferences, exactly
               as you documented them.
             </p>
-            <div className="kl-night-glass mt-7 flex items-center gap-3 rounded-2xl p-4">
-              <Landmark size={18} className="shrink-0 text-[#F0C878]" />
-              <p className="text-sm text-[var(--kl-night-mid)]">
-                Legacy contact: <strong className="text-[var(--kl-night-text)]">Zawadi M.</strong> · wishes
-                document on file · faith style: as documented, never inferred
-              </p>
-            </div>
           </motion.div>
+
+          {/* stage: the three facts of a legacy plan, as glass cards */}
+          <div
+            className="relative min-h-[420px] overflow-hidden rounded-[20px] p-10"
+            style={{ background: 'linear-gradient(160deg, var(--kl-stage-a), var(--kl-stage-b))' }}
+          >
+            <div aria-hidden="true" className="kl-sheen absolute -right-16 -top-16 h-[260px] w-[260px] rounded-full opacity-40 blur-[80px]" />
+            <div className="relative mx-auto flex max-w-[400px] flex-col gap-3.5">
+              {[
+                {
+                  icon: <span className="kl-serif text-lg font-semibold text-[var(--kl-on-pastel)]">ZM</span>,
+                  iconBg: '#F6EBD3',
+                  label: 'LEGACY CONTACT',
+                  value: <strong className="font-semibold text-[var(--kl-ink)]">Zawadi M.</strong>,
+                  offset: 0,
+                },
+                {
+                  icon: <Landmark size={20} className="text-[var(--kl-on-pastel)]" />,
+                  iconBg: '#E3ECF7',
+                  label: 'WISHES',
+                  value: 'Document on file',
+                  offset: 32,
+                },
+                {
+                  icon: <ShieldCheck size={20} className="text-[var(--kl-on-pastel)]" />,
+                  iconBg: '#F7E1D8',
+                  label: 'FAITH STYLE',
+                  value: 'As documented, never inferred',
+                  offset: 12,
+                },
+              ].map((row, i) => (
+                <motion.div
+                  key={row.label}
+                  initial={reduced ? false : { opacity: 0, x: 24 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true, amount: 0.6 }}
+                  transition={{ delay: 0.15 + i * 0.12, duration: 0.7, ease: cloudEase }}
+                  className="kl-glass flex items-center gap-3.5 rounded-2xl p-3.5 shadow-[0_16px_30px_-18px_var(--kl-shadow)]"
+                  style={{ marginInlineStart: row.offset }}
+                >
+                  <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[10px]" style={{ background: row.iconBg }}>
+                    {row.icon}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="kl-mono block text-[10.5px] tracking-[0.16em] text-[var(--kl-gold-deep)]">{row.label}</span>
+                    <span className="block text-[15px] text-[var(--kl-mid)]">{row.value}</span>
+                  </span>
+                  {i === 0 && (
+                    <span className="mono-data ms-auto shrink-0 rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[0.58rem] tracking-widest text-success">
+                      ON FILE
+                    </span>
+                  )}
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="kl-split kl-pad-x gap-14 pb-[120px]">
+          {/* stage: the phone at the resting place, petals drifting over it */}
+          <div
+            className="relative min-h-[420px] overflow-hidden rounded-[20px] p-10"
+            style={{ background: 'linear-gradient(200deg, var(--kl-stage-b), var(--kl-stage-a))' }}
+          >
+            <div aria-hidden="true" className="absolute -bottom-16 -left-10 h-[240px] w-[240px] rounded-full bg-[var(--kl-sky)] opacity-40 blur-[80px]" />
+            <div className="relative mx-auto mt-4 h-[300px] w-[160px]">
+              <div className="absolute inset-0 rounded-[2rem] border border-white/15 bg-[#0B0E1D] p-3 shadow-[0_30px_60px_-24px_rgba(0,0,0,0.6)]">
+                <div className="relative h-full overflow-hidden rounded-[1.4rem] bg-gradient-to-b from-[#1A1F3B] to-[#0B0E1D]">
+                  <img src="/memorial-hero.jpg" alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover opacity-60" style={{ objectPosition: '78% 50%' }} />
+                  <span className="absolute left-1/2 top-8 -translate-x-1/2 text-[#F0C878]">
+                    <Flame size={22} />
+                  </span>
+                  <span className="kl-mono absolute inset-x-0 bottom-4 text-center text-[9px] tracking-[0.18em] text-[#F0C878]">
+                    <CalendarDays size={12} className="mx-auto mb-1" aria-hidden="true" />
+                    AR · PREVIEW
+                  </span>
+                </div>
+              </div>
+              <DriftingPetals />
+            </div>
+          </div>
 
           <motion.div
             initial={reduced ? false : { opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true, amount: 0.5 }}
             transition={{ duration: 1, delay: 0.15, ease: cloudEase }}
-            className="kl-night-glass relative overflow-hidden rounded-[20px] p-8"
           >
-            <span className="mono-data inline-flex items-center gap-2 rounded-full border border-[#8FB8E8]/40 bg-[#8FB8E8]/10 px-3 py-1 text-[0.62rem] tracking-[0.2em] text-[#8FB8E8]">
+            <div className="mb-7 grid h-[72px] w-[72px] place-items-center rounded-[10px] bg-[var(--kl-sky)] text-[var(--kl-night)] shadow-[0_14px_30px_-14px_rgba(143,184,232,.8)]" aria-hidden="true">
+              <Smartphone size={28} />
+            </div>
+            <span className="mono-data inline-flex items-center gap-2 rounded-full border border-sky/40 bg-sky/10 px-3 py-1 text-[0.62rem] tracking-[0.2em] text-sky">
               <motion.span
-                className="h-1.5 w-1.5 rounded-full bg-[#8FB8E8]"
+                className="h-1.5 w-1.5 rounded-full bg-sky"
                 animate={reduced ? undefined : { opacity: [0.4, 1, 0.4] }}
                 transition={{ duration: 2.4, repeat: Infinity }}
               />
               ON THE HORIZON
             </span>
-            <h3 className="kl-serif mt-5 flex items-center gap-2 text-[28px] font-semibold">
-              <Smartphone size={20} className="text-[#F0C878]" />
-              Future: AR memorials
-            </h3>
-            <p className="mt-3 text-lg leading-[1.6] text-[var(--kl-night-mid)]">
+            <h2 className="kl-h3 mt-5">Future: AR memorials</h2>
+            <p className="kl-lead mt-5">
               Point a phone at the resting place and see flowers, candles and stories
               gathered in augmented space.
             </p>
-            {/* soft-focus phone silhouette with drifting petals */}
-            <div className="relative mx-auto mt-6 h-44 w-24">
-              <div className="absolute inset-0 rounded-[1.4rem] border border-white/15 bg-[#0B0E1D]/80 shadow-[0_20px_50px_-16px_rgba(0,0,0,0.8)]" style={{ filter: 'blur(0.6px)' }}>
-                <div className="absolute inset-3 rounded-card-sm bg-gradient-to-b from-[#1A1F3B]/60 to-transparent" />
-                <span className="absolute left-1/2 top-6 -translate-x-1/2 text-[#F0C878]/80">
-                  <Flame size={18} />
-                </span>
-                <span className="absolute bottom-4 left-1/2 -translate-x-1/2 text-[#F0C878]/60">
-                  <CalendarDays size={14} />
-                </span>
-              </div>
-              <DriftingPetals />
-            </div>
           </motion.div>
-        </div>
-      </section>
+        </section>
+      </div>
 
       {/* ── Section 7 — CTA (quiet) ───────────────────────────────────── */}
       <section className="px-6 py-[120px] text-center">
