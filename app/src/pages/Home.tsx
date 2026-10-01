@@ -1,29 +1,38 @@
-import Hero from '@/components/home/Hero'
-import TrustTicker from '@/components/home/TrustTicker'
-import ModuleConstellation from '@/components/home/ModuleConstellation'
-import FeedRulesStory from '@/components/home/FeedRulesStory'
-import CreateOnce from '@/components/home/CreateOnce'
-import HeritageBand from '@/components/home/HeritageBand'
-import Economy from '@/components/home/Economy'
-import AssistantIntro from '@/components/home/AssistantIntro'
-import PricingTeaser from '@/components/home/PricingTeaser'
+import '@/components/landing/landing.css'
+import { LandingAssistant, LandingFinalCta, LandingPricing, LandingTrust } from '@/components/landing/LandingClosing'
+import LandingFeatures from '@/components/landing/LandingFeatures'
+import LandingHero from '@/components/landing/LandingHero'
+import LandingModules from '@/components/landing/LandingModules'
+import LandingStory from '@/components/landing/LandingStory'
+import { LandingNav } from '@/components/landing/shared'
+import { useLandingTheme } from '@/components/landing/useLandingTheme'
 
 /**
- * Home — the Kinjy landing page (design/home.md).
- * Mood: awe → clarity → warmth → invitation.
+ * Home — the public landing page, after the "Kinjy Landing" design.
+ *
+ * It carries its own navigation and footer (Layout suppresses the marketing
+ * ones on this route) and its own fixed paper-and-night palette; see
+ * components/landing/landing.css. Copy lives in components/landing/data.ts.
  */
 export default function Home() {
+  const { theme } = useLandingTheme()
   return (
-    <>
-      <Hero />
-      <TrustTicker />
-      <ModuleConstellation />
-      <FeedRulesStory />
-      <CreateOnce />
-      <HeritageBand />
-      <Economy />
-      <AssistantIntro />
-      <PricingTeaser />
-    </>
+    <div className="kl" data-kl-theme={theme}>
+      <div className="mx-auto max-w-[1320px] px-4 pt-4">
+        <div className="relative overflow-hidden rounded-2xl bg-[var(--kl-bg)]">
+          <LandingNav />
+          <div>
+            <LandingHero />
+            <LandingModules />
+            <LandingFeatures />
+            <LandingStory />
+            <LandingAssistant />
+            <LandingPricing />
+          </div>
+        </div>
+      </div>
+      <LandingTrust />
+      <LandingFinalCta />
+    </div>
   )
 }
