@@ -62,16 +62,10 @@ export default function Navbar() {
     setMoreOpen(false)
   }, [location.pathname])
 
-  useEffect(() => {
-    const currentLang = LANGUAGES.find((l) => l.code === i18n.language)
-    if (currentLang) {
-      document.documentElement.dir = currentLang.dir
-      document.documentElement.lang = currentLang.code
-    }
-  }, [i18n.language])
-
-  const switchLanguage = (code: string) => {
+  const switchLanguage = (code: string, dir: 'ltr' | 'rtl') => {
     i18n.changeLanguage(code)
+    document.documentElement.dir = dir
+    document.documentElement.lang = code
     setLangOpen(false)
   }
 
@@ -182,7 +176,7 @@ export default function Navbar() {
                       <li key={l.code}>
                         <button
                           type="button"
-                          onClick={() => switchLanguage(l.code)}
+                          onClick={() => switchLanguage(l.code, l.dir)}
                           className={cn(
                             'w-full rounded-card-sm px-3 py-2 text-start text-sm',
                             i18n.language === l.code ? 'text-gold-soft bg-gold/10' : 'text-text-mid hover:text-text-hi hover:bg-white/5',

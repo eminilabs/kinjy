@@ -1078,11 +1078,7 @@ export default function Messages() {
                   Nobody found. Someone who turned off discovery in their privacy
                   settings will not appear here.
                 </p>
-              )}
-            </div>
-          )}
-        </div>
-
+      <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
         <div className={cn('min-w-0 space-y-4', showThread && 'hidden lg:block')}>
           {/* Friends: every accepted connection, one tap from a conversation.
               A strip rather than a second list, so the conversations below
