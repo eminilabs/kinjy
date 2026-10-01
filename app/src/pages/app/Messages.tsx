@@ -1007,77 +1007,6 @@ export default function Messages() {
         </span>
       )}
     >
-      <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
-        {/* Conversations */}
-        <div className="space-y-3">
-          {/* Your conversations come first. Starting a new one is an action, so
-              it is a button — not a form permanently occupying the top of the
-              list. The member-id field is a stand-in until people search exists. */}
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-text-hi">Conversations</h2>
-            <button
-              type="button"
-              onClick={() => setComposing((v) => !v)}
-              aria-expanded={composing}
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/12 px-3 py-1.5 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
-            >
-              <Plus size={12} aria-hidden="true" />
-              New
-            </button>
-          </div>
-
-          {composing && (
-            <div>
-              <input
-                id="peer-search"
-                value={peer}
-                onChange={(e) => setPeer(e.target.value)}
-                placeholder="Search by name or @handle…"
-                aria-label="Search for someone to message"
-                autoFocus
-                className="w-full rounded-full border border-white/10 bg-ink-2/60 px-3 py-2 text-xs text-text-hi placeholder:text-text-low focus:border-gold/40 focus:outline-none"
-              />
-
-              {peer.trim().length > 0 && peer.trim().length < 2 && (
-                <p className="caption mt-1.5">Keep typing — two characters at least.</p>
-              )}
-
-              {results.length > 0 && (
-                <ul className="mt-2 space-y-1">
-                  {results.map((person) => (
-                    <li key={person.user_id}>
-                      <button
-                        type="button"
-                        onClick={() => void startWith(person.user_id)}
-                        className="flex w-full items-center gap-2.5 rounded-card-sm px-2 py-1.5 text-start hover:bg-white/5"
-                      >
-                        <MemberAvatar
-                          handle={person.handle}
-                          displayName={person.display_name}
-                          avatarUrl={person.avatar_url}
-                          size={28}
-                        />
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm text-text-hi">{person.display_name}</span>
-                          <span className="caption block truncate">@{person.handle}</span>
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {startError && (
-                <p role="alert" className="mt-2 rounded-card-sm border border-amber-300/30 bg-amber-300/10 px-2.5 py-2 text-xs text-amber-100">
-                  {startError}
-                </p>
-              )}
-
-              {searched && peer.trim().length >= 2 && results.length === 0 && (
-                <p className="caption mt-2">
-                  Nobody found. Someone who turned off discovery in their privacy
-                  settings will not appear here.
-                </p>
       <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
         <div className={cn('min-w-0 space-y-4', showThread && 'hidden lg:block')}>
           {/* Friends: every accepted connection, one tap from a conversation.
@@ -1099,7 +1028,7 @@ export default function Messages() {
                   onClick={() => (showAllFriends ? closeAllFriends() : setShowAllFriends(true))}
                   aria-expanded={showAllFriends}
                   aria-controls="all-friends"
-                  className="ms-auto inline-flex items-center gap-1 rounded-full border border-white/12 px-2.5 py-1 text-xs font-semibold text-text-mid transition-colors hover:border-gold/40 hover:text-gold-soft"
+                  className="ms-auto inline-flex items-center gap-1 rounded-full border border-white/12 px-2.5 py-1 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
                 >
                   {showAllFriends ? (
                     <>
@@ -1147,11 +1076,7 @@ export default function Messages() {
                     onClick={() => setOnlineOnly((v) => !v)}
                     aria-pressed={onlineOnly}
                     className={cn(
-                      'w-full rounded-card-sm border p-3 text-start',
-                      activeId === conversation.id
-                        ? 'border-gold/40 bg-gold/5'
-                        : 'border-white/8 bg-ink-2/40 hover:border-white/15',
-                      'shrink-0 rounded-full border px-2.5 py-1.5 text-xs font-semibold transition-colors',
+                      'shrink-0 rounded-full border px-2.5 py-1.5 text-xs font-semibold',
                       onlineOnly
                         ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200'
                         : 'border-white/12 text-text-mid hover:text-text-hi',
@@ -1184,7 +1109,7 @@ export default function Messages() {
                             void startWith(friend.user_id)
                           }}
                           aria-label={`Message ${friend.profile?.display_name ?? 'this member'}`}
-                          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-card-sm px-2 py-1.5 text-start transition-colors hover:bg-white/5"
+                          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-card-sm px-2 py-1.5 text-start hover:bg-white/5"
                         >
                           <PresenceAvatar profile={friend.profile} online={presence[friend.user_id]?.online} size={34} />
                           <span className="min-w-0">
@@ -1203,7 +1128,7 @@ export default function Messages() {
                             to={`/u/${friend.profile.handle}`}
                             aria-label={`${friend.profile.display_name}'s profile`}
                             title="View profile"
-                            className="shrink-0 rounded-full p-2 text-text-low transition-colors hover:text-text-hi"
+                            className="shrink-0 rounded-full p-2 text-text-low hover:text-text-hi"
                           >
                             <UserRound size={14} aria-hidden="true" />
                           </Link>
@@ -1223,7 +1148,7 @@ export default function Messages() {
                       type="button"
                       onClick={() => void startWith(friend.user_id)}
                       title={`Message ${friend.profile?.display_name ?? 'this member'}`}
-                      className="flex w-[64px] flex-col items-center gap-1 rounded-card-sm px-1 py-1.5 transition-colors hover:bg-white/5"
+                      className="flex w-[64px] flex-col items-center gap-1 rounded-card-sm px-1 py-1.5 hover:bg-white/5"
                     >
                       <PresenceAvatar
                         profile={friend.profile}
@@ -1256,7 +1181,7 @@ export default function Messages() {
                       type="button"
                       onClick={() => void answerInvitation(invite.user_id, true)}
                       aria-label={`Accept ${invite.profile?.display_name ?? 'invitation'}`}
-                      className="rounded-full bg-gold/90 p-1.5 text-ink transition-colors hover:bg-gold"
+                      className="rounded-full bg-gold/90 p-1.5 text-ink hover:bg-gold"
                     >
                       <Check size={13} aria-hidden="true" />
                     </button>
@@ -1264,7 +1189,7 @@ export default function Messages() {
                       type="button"
                       onClick={() => void answerInvitation(invite.user_id, false)}
                       aria-label={`Decline ${invite.profile?.display_name ?? 'invitation'}`}
-                      className="rounded-full border border-white/12 p-1.5 text-text-mid transition-colors hover:text-text-hi"
+                      className="rounded-full border border-white/12 p-1.5 text-text-mid hover:text-text-hi"
                     >
                       <X size={13} aria-hidden="true" />
                     </button>
@@ -1284,7 +1209,7 @@ export default function Messages() {
                 type="button"
                 onClick={() => setComposing((v) => !v)}
                 aria-expanded={composing}
-                className="inline-flex items-center gap-1.5 rounded-full border border-white/12 px-3 py-1.5 text-xs font-semibold text-text-mid transition-colors hover:border-gold/40 hover:text-gold-soft"
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/12 px-3 py-1.5 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
               >
                 <Plus size={12} aria-hidden="true" />
                 New
@@ -1314,7 +1239,7 @@ export default function Messages() {
                         <button
                           type="button"
                           onClick={() => void startWith(person.user_id)}
-                          className="flex w-full items-center gap-2.5 rounded-card-sm px-2 py-1.5 text-start transition-colors hover:bg-white/5"
+                          className="flex w-full items-center gap-2.5 rounded-card-sm px-2 py-1.5 text-start hover:bg-white/5"
                         >
                           <PresenceAvatar profile={person} online={presence[person.user_id]?.online} size={28} />
                           <span className="min-w-0">
@@ -1361,7 +1286,7 @@ export default function Messages() {
                       type="button"
                       onClick={() => void openThread(conversation.id)}
                       className={cn(
-                        'flex w-full items-center gap-2.5 rounded-card-sm border p-2.5 text-start transition-colors',
+                        'flex w-full items-center gap-2.5 rounded-card-sm border p-2.5 text-start',
                         activeId === conversation.id
                           ? 'border-gold/40 bg-gold/5'
                           : 'border-white/8 bg-ink-2/40 hover:border-white/15',
@@ -1465,7 +1390,7 @@ export default function Messages() {
                   type="button"
                   onClick={backToList}
                   aria-label="Back to conversations"
-                  className="-ms-1 shrink-0 rounded-full p-1.5 text-text-mid transition-colors hover:text-text-hi lg:hidden"
+                  className="-ms-1 shrink-0 rounded-full p-1.5 text-text-mid hover:text-text-hi lg:hidden"
                 >
                   <ArrowLeft size={18} className="rtl:rotate-180" aria-hidden="true" />
                 </button>
@@ -1503,7 +1428,7 @@ export default function Messages() {
                       type="button"
                       onClick={() => void loadOlder()}
                       disabled={loadingOlder}
-                      className="rounded-full border border-white/12 px-3 py-1 text-xs text-text-mid transition-colors hover:text-text-hi disabled:opacity-50"
+                      className="rounded-full border border-white/12 px-3 py-1 text-xs text-text-mid hover:text-text-hi disabled:opacity-50"
                     >
                       {loadingOlder ? 'Loading…' : 'Load older messages'}
                     </button>
@@ -1558,7 +1483,7 @@ export default function Messages() {
                               {message.status === 'sending' && (
                                 <div className="absolute inset-x-2 bottom-2 h-1 overflow-hidden rounded-full bg-black/40">
                                   <div
-                                    className="h-full bg-gold transition-[width]"
+                                    className="h-full bg-gold"
                                     style={{ width: `${Math.round((message.progress ?? 0) * 100)}%` }}
                                   />
                                 </div>
@@ -1677,7 +1602,7 @@ export default function Messages() {
                       type="button"
                       onClick={() => stopRecording(true)}
                       aria-label="Discard the recording"
-                      className="shrink-0 rounded-full border border-white/12 p-2.5 text-text-mid transition-colors hover:text-red-200"
+                      className="shrink-0 rounded-full border border-white/12 p-2.5 text-text-mid hover:text-red-200"
                     >
                       <Trash2 size={15} aria-hidden="true" />
                     </button>
@@ -1701,7 +1626,7 @@ export default function Messages() {
                       onClick={() => fileInput.current?.click()}
                       aria-label="Attach files"
                       title="Photos, videos, audio, documents — any file up to 200 MB"
-                      className="shrink-0 rounded-full border border-white/12 p-2.5 text-text-mid transition-colors hover:border-gold/40 hover:text-gold-soft"
+                      className="shrink-0 rounded-full border border-white/12 p-2.5 text-text-mid hover:border-gold/40 hover:text-gold-soft"
                     >
                       <Paperclip size={15} aria-hidden="true" />
                     </button>
@@ -1732,7 +1657,7 @@ export default function Messages() {
                         type="button"
                         onClick={() => void startRecording()}
                         aria-label="Record a voice message"
-                        className="shrink-0 rounded-full border border-white/12 px-4 py-2.5 text-text-mid transition-colors hover:border-gold/40 hover:text-gold-soft"
+                        className="shrink-0 rounded-full border border-white/12 px-4 py-2.5 text-text-mid hover:border-gold/40 hover:text-gold-soft"
                       >
                         <Mic size={15} aria-hidden="true" />
                       </button>

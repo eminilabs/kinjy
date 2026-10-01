@@ -265,7 +265,7 @@ export default function Navbar() {
               {[{ to: '/', label: 'Home' }, ...NAV_LINKS.map((l) => ({ to: l.to, label: t(l.key, { defaultValue: l.fallback }) })), { to: '/assistant', label: 'Kinjy Assistant' }, { to: '/admin', label: 'Admin Console' }, { to: '/app', label: 'The App' },
               user
                 ? { to: '/dashboard', label: t('nav.dashboard', { defaultValue: 'Dashboard' }) }
-                : { to: '/join?mode=signup', label: t('nav.join', { defaultValue: 'Join Kinjy' }) }].map((l) => (
+                : { to: '/join?mode=signup', label: t('nav.join', { defaultValue: 'Join Kinjy' }) }].filter((l) => isRouteAvailable(l.to)).map((l) => (
                 <div key={l.to}>
                   <NavLink
                     to={l.to}

@@ -6,7 +6,7 @@ import ArcButton from './ui-kit/ArcButton'
 import { LANGUAGES } from '@/i18n'
 import { isRouteAvailable } from '@/lib/features'
 
-const COLUMNS: { title: string; links: { label: string; to: string }[] }[] = [
+const ALL_COLUMNS: { title: string; links: { label: string; to: string }[] }[] = [
   {
     title: 'Platform',
     links: [
@@ -46,6 +46,12 @@ const COLUMNS: { title: string; links: { label: string; to: string }[] }[] = [
     ],
   },
 ]
+
+/** Links to a page whose feature is switched off in lib/features.ts are left out. */
+const COLUMNS = ALL_COLUMNS.map((col) => ({
+  ...col,
+  links: col.links.filter((l) => isRouteAvailable(l.to)),
+}))
 
 /** Footer (§7.3) — twilight field, CTA, link columns. */
 export default function Footer() {

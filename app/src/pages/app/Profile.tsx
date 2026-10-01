@@ -136,15 +136,13 @@ export default function Profile() {
     )
   }
 
-  const place = [profile.city, profile.country].filter(Boolean).join(', ')
-  const action = 'inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold'
   const place = [profile.city, profile.state, profile.country && countryName(profile.country, lang)]
     .filter(Boolean)
     .join(', ')
   const spoken = splitLanguages(profile.languages)
     .map((code) => languageName(code, lang))
     .join(', ')
-  const action = 'inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition-colors'
+  const action = 'inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold'
 
   return (
     <AppShell
