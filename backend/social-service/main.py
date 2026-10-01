@@ -389,9 +389,13 @@ def _context(db: OrmSession, principal) -> ranking.Context:
         if response.status_code == 200:
             data = response.json()
             ctx.muted_authors = set(data.get("blocked", []))
-    except Exception:
+            ctx.following = set(data.get("following", []))
+            ctx.graph_known = True
+        else:
+            log.warning("audience lookup for %s answered %s", principal.user_id, response.status_code)
+    except Exception as exc:
         # A user-service hiccup degrades personalisation; it must not empty the feed.
-        log.warning("audience lookup failed for %s", principal.user_id)
+        log.warning("audience lookup failed for %s: %s", principal.user_id, exc)
 
     # Declared interests come from preferences, which user-service owns.
     ctx.interests = {t.lower() for t in _viewer_prefs(principal.user_id).get("interest_topics", [])}
@@ -916,24 +920,21 @@ def feed(
     # must not see should never be selected, never serialised and never sent.
     stmt = _visible_posts(principal, age)
 
-    following: set[str] = set()
-    if principal is not None:
-        try:
-            response = httpx.get(
-                f"{USER_URL}/users/me/following",
-                headers={"Authorization": f"Bearer {''}"},
-                timeout=3,
-            )
-            if response.status_code == 200:
-                following = set(response.json().get("user_ids", []))
-        except Exception:
-            pass
-    ctx.following = following
+    # Who the viewer follows came with the rest of their graph in _context().
+    # It used to be fetched here from /users/me/following with an empty bearer
+    # token, which always failed silently: the Following feed was empty for
+    # everybody and the ranker's affinity term never applied.
+    following = ctx.following
 
     if mode == "following":
+        if principal is not None and not ctx.graph_known:
+            # Saying "you follow nobody" would be a lie the member cannot see
+            # through; an error they can retry is the honest answer.
+            raise HTTPException(status_code=503, detail="Your feed could not be loaded right now. Please try again.")
         if not following:
             return {"mode": mode, "algorithm": "chronological", "items": [],
-                    "age_tier": agefilter.tier_of(age), "empty_reason": "not_following_anyone"}
+                    "age_tier": agefilter.tier_of(age), "degraded": age.degraded,
+                    "empty_reason": "not_following_anyone"}
         rows = db.scalars(
             stmt.where(models.Post.author_id.in_(following))
             .order_by(models.Post.created_at.desc())

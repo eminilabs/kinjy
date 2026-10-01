@@ -1122,11 +1122,22 @@ def wellbeing_status(principal: CurrentUser, db: OrmSession = Depends(get_db)):
 
 @app.get("/internal/audience/{user_id}", tags=["internal"])
 def audience(user_id: str, db: OrmSession = Depends(get_db)):
-    """Who this member's content may reach — used by social-service to build feeds."""
+    """This member's place in the graph — used by social-service to build feeds.
+
+    ``following`` is who they follow: the Following feed and the ranker's
+    affinity term both read it. It is served here, on the private network, so
+    social-service does not need the member's token to ask.
+    """
     followers = db.scalars(select(models.Follow.follower_id).where(models.Follow.followee_id == user_id)).all()
+    following = db.scalars(select(models.Follow.followee_id).where(models.Follow.follower_id == user_id)).all()
     circles = db.scalars(select(models.Circle.id).where(models.Circle.owner_id == user_id)).all()
     blocked = db.scalars(select(models.Block.blocked_id).where(models.Block.user_id == user_id)).all()
-    return {"followers": list(followers), "circles": list(circles), "blocked": list(blocked)}
+    return {
+        "followers": list(followers),
+        "following": list(following),
+        "circles": list(circles),
+        "blocked": list(blocked),
+    }
 
 
 # --- connections ------------------------------------------------------------
