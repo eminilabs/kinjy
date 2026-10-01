@@ -49,7 +49,11 @@ else
   if ! grep -Eq '^MESSAGES_ENCRYPTION_KEY=.+' .env.production; then
     key="k1:$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '\n')"
     if grep -q '^MESSAGES_ENCRYPTION_KEY=' .env.production; then
-      sed -i.bak "s|^MESSAGES_ENCRYPTION_KEY=.*|MESSAGES_ENCRYPTION_KEY=$key|" .env.production && rm -f .env.production.bak
+      # Through the environment, not sed's arguments: a command line is
+      # readable by every process on the machine while it runs.
+      ( umask 077 && KEY="$key" awk \
+          '/^MESSAGES_ENCRYPTION_KEY=/ { print "MESSAGES_ENCRYPTION_KEY=" ENVIRON["KEY"]; next } { print }' \
+          .env.production > .env.production.tmp ) && mv .env.production.tmp .env.production
     else
       printf '\nMESSAGES_ENCRYPTION_KEY=%s\n' "$key" >> .env.production
     fi
