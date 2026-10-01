@@ -848,7 +848,12 @@ def decide_appeal(
     db: OrmSession = Depends(get_db),
 ):
     """Uphold or overturn. Not by whoever made the decision being appealed."""
-    appeal = db.get(models.ModerationAppeal, appeal_id)
+    # Locked until the commit: two reviewers (or one double click) answering
+    # at once would otherwise both see "open", both act, and the second
+    # answer would silently replace the first in the record.
+    appeal = db.scalar(
+        select(models.ModerationAppeal).where(models.ModerationAppeal.id == appeal_id).with_for_update()
+    )
     if appeal is None:
         raise HTTPException(status_code=404, detail="Not found")
     if appeal.status != "open":
