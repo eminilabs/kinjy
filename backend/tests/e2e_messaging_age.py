@@ -47,7 +47,20 @@ def auth(t):
     return {"Authorization": f"Bearer {t}"}
 
 
-def open_to_everyone(token):
+def supervise(teen_token, guardian_token, guardian):
+    """Put a younger teen under supervision, as the product requires.
+
+    Since parental supervision, a younger teen cannot loosen a safety setting
+    on their own: the request goes to the supervising adult. The teen invites,
+    the guardian accepts - the same path a family takes in the app.
+    """
+    r = c.post("/supervision/invite", headers=auth(teen_token), json={"other_handle": guardian["handle"]})
+    assert r.status_code == 201, f"could not invite a guardian: {r.status_code} {r.text[:120]}"
+    r = c.post(f"/supervision/{r.json()['id']}/answer", headers=auth(guardian_token), json={"approve": True})
+    assert r.status_code == 200, f"guardian could not accept: {r.status_code} {r.text[:120]}"
+
+
+def open_to_everyone(token, guardian_token=None):
     """Let anyone message this member.
 
     The platform default is `connections`, which refuses strangers before the
@@ -55,8 +68,20 @@ def open_to_everyone(token):
     this one: a teenager who has opened their messages to everybody has not
     thereby agreed to unknown adults, and their own setting is not the whole
     answer.
+
+    For a supervised teen the change is held for the guardian, who approves it
+    here; the setting is then read back so the scenario starts from what is
+    actually in force, not from what was asked for.
     """
-    return c.patch("/preferences", headers=auth(token), json={"who_can_message": "everyone"})
+    r = c.patch("/preferences", headers=auth(token), json={"who_can_message": "everyone"})
+    assert r.status_code == 200, f"could not open messages: {r.status_code} {r.text[:120]}"
+    for held in r.json().get("awaiting_approval", []):
+        assert guardian_token, "a change is waiting for a guardian, but none was given"
+        a = c.post(f"/supervision/requests/{held['request_id']}", headers=auth(guardian_token),
+                   json={"approve": True})
+        assert a.status_code == 200, f"guardian could not approve: {a.status_code} {a.text[:120]}"
+    setting = c.get("/preferences", headers=auth(token)).json().get("who_can_message")
+    assert setting == "everyone", f"messages are still limited to {setting!r}"
 
 
 def open_convo(token, target_id):
@@ -69,11 +94,13 @@ adult2_tok, adult2 = register(41)
 teen14_tok, teen14 = register(14)
 teen17_tok, teen17 = register(17)
 teen15_tok, teen15 = register(15)
+guardian_tok, guardian = register(45)
 
+for tok in (teen14_tok, teen15_tok):
+    supervise(tok, guardian_tok, guardian)
 for tok in (adult_tok, adult2_tok, teen14_tok, teen17_tok, teen15_tok):
-    r = open_to_everyone(tok)
-    assert r.status_code in (200, 204), f"could not open messages: {r.status_code} {r.text[:120]}"
-print("every test member has opened their messages to everyone")
+    open_to_everyone(tok, guardian_tok)
+print("every test member has opened their messages to everyone (younger teens with their guardian's approval)")
 
 print("\n== an unknown adult reaching a minor ==")
 r = open_convo(adult_tok, teen14["id"])
