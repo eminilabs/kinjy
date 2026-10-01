@@ -185,6 +185,9 @@ def test_a_file_round_trips_at_every_chunk_boundary(keys, small_chunks, tmp_path
     assert crypto.is_sealed_file(str(path))
     if size:
         assert read_range(path, "mda_test", size, 0, size - 1) == data
+    # Only meaningful from a few bytes up: a 1-byte file's one byte turns up
+    # somewhere in its ciphertext by pure chance about one run in seven.
+    if size >= 16:
         assert data[:64] not in path.read_bytes()
 
 

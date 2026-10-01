@@ -552,9 +552,10 @@ minor→adult · locked settings · policy version on every verdict.
    tested and simply not called.
 3. **Community/search** onto `restrict_query`.
 4. **The classifier**, so `UNCLASSIFIED` stops being the common case.
-5. ~~**Parental supervision**~~ — built (`user-service/parental.py`), 64
-   checks in `backend/tests/e2e_parental.py`. **Appeals** and **the T&S
-   dashboard** remain.
+5. ~~**Parental supervision**~~ — built (`user-service/parental.py`).
+   ~~**Appeals**~~ — built (`social-service/moderation.py`), together with the
+   reporting and decision records they need. ~~**The T&S console**~~ — built
+   (`app/src/pages/TrustSafety.tsx`, `/trust-safety`).
 
 ---
 
@@ -568,7 +569,38 @@ minor→adult · locked settings · policy version on every verdict.
   Every decision it makes is stamped `classifier_source="heuristic"` so its
   work can be found and re-run when a model arrives.
 - There is no streaming backend at all; only the age decision it will need.
-- Appeals and the Trust & Safety console are designed here and not built.
+- The Trust & Safety console is built, at `/trust-safety`, and is the first
+  admin surface on this platform that reads real data — every other section of
+  `/admin` is still a static mockup. It carries both queues, shows the content
+  being judged rather than linking to it, and puts the overturn rate next to
+  the queue depth, because a reviewer seeing that a quarter of these decisions
+  get overturned is being told something about the classifier rather than about
+  the people appealing.
+- Building it meant deleting fabricated numbers from the admin page. The
+  moderation section there asserted "4.2M items screened / day", "3,180 in
+  queue" and "96 open to humans" as hard-coded strings, beside a row of green
+  dots claiming every system was healthy. On an operations page that is worse
+  than blank: an invented queue depth is indistinguishable from a real one
+  until somebody staffs against it. It now shows counted rows, and says so
+  plainly when the API cannot be reached instead of falling back to a
+  plausible figure.
+- Appeals are built, and so are the two things that had to exist first.
+  **Reports**: `reclassify_on_report` had been written with the classifier and
+  never called by anything, so community reports did nothing at all. They now
+  restrict and never release — three from distinct accounts pull a permissive
+  rating back pending review, no number of them can lower one, the author's own
+  report does not count, and reports never overrule a human who has already
+  looked. **Decisions**: every restriction is now written down. Before this a
+  refused comment was rolled back entire — the comment, its classification, all
+  of it — and the author was told to contact support about something that no
+  longer existed anywhere in the system. You cannot appeal against nothing, and
+  a platform that does not keep its own refusals cannot measure how often it is
+  wrong; `/admin/moderation/appeals` now reports the overturn rate beside the
+  queue for that reason.
+- Child-safety escalations have no appeal path here, and the refusal does not
+  say why. An appeals queue is read by general staff, and that is not where
+  that material should be re-read; explaining the boundary also teaches how to
+  sit just outside it.
 - Parental supervision is built, and deliberately narrow. A parent sees that
   supervision is active, the teen's safety settings, the time limit and today's
   usage total, and the requests the teen has made. There is no endpoint — not a

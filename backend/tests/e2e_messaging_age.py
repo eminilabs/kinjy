@@ -96,6 +96,15 @@ teen17_tok, teen17 = register(17)
 teen15_tok, teen15 = register(15)
 guardian_tok, guardian = register(45)
 
+# Without a guardian on the account, a younger teen's request is refused
+# outright rather than queued - there is nobody to queue it for, and "ask
+# nobody" would make removing your parent the way to get the permission. If
+# the tier lock ever disappears, this is where it shows.
+r = c.patch("/preferences", headers=auth(teen14_tok), json={"who_can_message": "everyone"})
+assert r.status_code == 403, (
+    f"a 14-year-old opened their messages to everyone unaided ({r.status_code}) - the tier lock is gone"
+)
+
 for tok in (teen14_tok, teen15_tok):
     supervise(tok, guardian_tok, guardian)
 for tok in (adult_tok, adult2_tok, teen14_tok, teen17_tok, teen15_tok):

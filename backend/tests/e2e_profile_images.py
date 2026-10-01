@@ -123,7 +123,7 @@ r = complete_until_settled(me, asset_id)
 check("complete -> 200 ready", r.status_code == 200 and r.json()["status"] == "ready", r.text)
 url = r.json().get("url")
 if not url:
-    print("\nSOME CHECKS FAILED (no url, cannot continue)")
+    print("\nTHERE ARE FAILURES (no url, cannot continue)")
     sys.exit(1)
 check("a url is returned", bool(url), r.text)
 r = c.post(f"/media/profile-images/{asset_id}/complete", headers=me)
@@ -194,5 +194,5 @@ check("reports owner, purpose and readiness",
       body.get("owner_id") == me_user["id"] and body.get("purpose") == "avatar" and body.get("status") == "ready",
       body)
 
-print("\nALL PASSED" if ok else "\nSOME CHECKS FAILED")
+print("\nALL CHECKS PASSED" if ok else "\nTHERE ARE FAILURES")
 sys.exit(0 if ok else 1)
