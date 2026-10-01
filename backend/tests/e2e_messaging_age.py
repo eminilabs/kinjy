@@ -58,11 +58,26 @@ def open_to_everyone(token):
     """
     return c.patch("/preferences", headers=auth(token), json={"who_can_message": "everyone"})
 
-
 def open_convo(token, target_id):
     return c.post("/conversations", headers=auth(token),
                   json={"kind": "direct", "participant_ids": [target_id], "encrypted": False})
 
+def supervise_and_approve(teen_handle, teen_tok, adult_tok):
+    # Adult invites teen
+    r = c.post("/supervision/invite", headers=auth(adult_tok), json={"other_handle": teen_handle})
+    assert r.status_code == 201, r.text
+    link_id = r.json()["id"]
+    # Teen accepts
+    r = c.post(f"/supervision/{link_id}/answer", headers=auth(teen_tok), json={"approve": True})
+    assert r.status_code == 200, r.text
+    # Teen requests opening messages
+    r = open_to_everyone(teen_tok)
+    assert r.status_code == 200, r.text
+    req_id = (r.json().get("awaiting_approval") or [{}])[0].get("request_id")
+    assert req_id is not None, "Did not get a supervision request"
+    # Adult approves
+    r = c.post(f"/supervision/requests/{req_id}", headers=auth(adult_tok), json={"approve": True})
+    assert r.status_code == 200, r.text
 
 adult_tok, adult = register(30)
 adult2_tok, adult2 = register(41)
@@ -70,9 +85,14 @@ teen14_tok, teen14 = register(14)
 teen17_tok, teen17 = register(17)
 teen15_tok, teen15 = register(15)
 
-for tok in (adult_tok, adult2_tok, teen14_tok, teen17_tok, teen15_tok):
+for tok in (adult_tok, adult2_tok, teen17_tok):
     r = open_to_everyone(tok)
     assert r.status_code in (200, 204), f"could not open messages: {r.status_code} {r.text[:120]}"
+
+# 14 and 15 year olds need parental consent
+supervise_and_approve(teen14["handle"], teen14_tok, adult_tok)
+supervise_and_approve(teen15["handle"], teen15_tok, adult_tok)
+
 print("every test member has opened their messages to everyone")
 
 print("\n== an unknown adult reaching a minor ==")

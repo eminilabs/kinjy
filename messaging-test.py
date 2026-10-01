@@ -50,7 +50,8 @@ def check(label, ok, detail=""):
 def register(tag):
     suffix = uuid.uuid4().hex[:8]
     out = call("POST", "/auth/register", {"email": f"msgtest-{tag}-{suffix}@example.com",
-        "password": PASSWORD, "display_name": f"Msgtest {tag}", "handle": f"msgtest.{tag}.{suffix}"})
+        "password": PASSWORD, "display_name": f"Msgtest {tag}", "handle": f"msgtest.{tag}.{suffix}",
+        "date_of_birth": "1995-06-15"})
     return out["user"]["id"], out["tokens"]["access_token"]
 
 
