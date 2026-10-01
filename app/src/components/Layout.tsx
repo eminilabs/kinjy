@@ -47,6 +47,10 @@ export function isAppRoute(pathname: string): boolean {
 export default function Layout({ children }: { children: ReactNode }) {
   const location = useLocation()
   const inApp = isAppRoute(location.pathname)
+  // The landing page brings its own navigation, footer and paper palette (the
+  // "Kinjy Landing" design); the dark marketing chrome around it would frame
+  // a light page in a second, different header.
+  const ownChrome = inApp || location.pathname === '/'
 
   // Scroll behavior on route change: honor hash deep links (e.g.
   // /family#reunion-planner) after the lazy page mounts; otherwise scroll to top.
@@ -77,11 +81,12 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-[100dvh] bg-ink text-text-hi">
-      {!inApp && <Navbar />}
-      <main className={inApp ? undefined : 'pt-[72px]'}>{children}</main>
-      {!inApp && <Footer />}
+      {!ownChrome && <Navbar />}
+      <main className={ownChrome ? undefined : 'pt-[72px]'}>{children}</main>
+      {!ownChrome && <Footer />}
       {showAssistant && <LiveAssistant />}
-      <div className="global-grain" aria-hidden="true" />
+      {/* Film grain belongs to the dark surfaces; on white paper it reads as dirt. */}
+      {location.pathname !== '/' && <div className="global-grain" aria-hidden="true" />}
     </div>
   )
 }
