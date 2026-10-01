@@ -42,6 +42,28 @@ if ssh "$HOST" "test -f $REMOTE_DIR/.env"; then
   echo "  $REMOTE_DIR/.env already exists — left untouched"
 else
   [ -f .env.production ] || { echo "No local .env.production to install."; exit 1; }
+
+  # The encryption key for messages is generated here, once, if it is not set.
+  # It is written into the local .env.production too, so the copy you keep is
+  # the one the server uses.
+  if ! grep -Eq '^MESSAGES_ENCRYPTION_KEY=.+' .env.production; then
+    key="k1:$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '\n')"
+    if grep -q '^MESSAGES_ENCRYPTION_KEY=' .env.production; then
+      # Through the environment, not sed's arguments: a command line is
+      # readable by every process on the machine while it runs.
+      ( umask 077 && KEY="$key" awk \
+          '/^MESSAGES_ENCRYPTION_KEY=/ { print "MESSAGES_ENCRYPTION_KEY=" ENVIRON["KEY"]; next } { print }' \
+          .env.production > .env.production.tmp ) && mv .env.production.tmp .env.production
+    else
+      printf '\nMESSAGES_ENCRYPTION_KEY=%s\n' "$key" >> .env.production
+    fi
+    printf '\n\033[1;33m%s\033[0m\n' "  !! A message encryption key was generated and saved in .env.production."
+    echo   "  !! Copy that line into your password manager NOW. If it is lost, every"
+    echo   "  !! message and attachment on Kinjy becomes unreadable, permanently."
+    echo   "  !! Never store it next to the database backups."
+    read -r -p "  Press Enter once the key is saved somewhere safe… " _
+  fi
+
   ssh "$HOST" "mkdir -p $REMOTE_DIR"
   # Sent over the encrypted session and locked down immediately: it holds the
   # JWT secret, so anything that can read it can mint a session for any member.

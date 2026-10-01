@@ -12,11 +12,13 @@ import logging
 import httpx
 from fastapi import Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, true
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as OrmSession
 
-from common import permissions
+import threading
+
+from common import crypto, permissions
 from common.auth import AdminUser, CurrentUser
 from common.database import SessionLocal, get_db
 from common.ids import new_id
@@ -76,8 +78,12 @@ MIGRATIONS = [
             "media_name VARCHAR(255)",
             "media_type VARCHAR(100)",
             "media_size BIGINT",
+            # Which key sealed the row's text and file name; NULL is plaintext.
+            "sealed_with VARCHAR(16)",
         )
     ),
+    # A sealed name is longer than the name it hides.
+    f"ALTER TABLE {models.SCHEMA}.messages ALTER COLUMN media_name TYPE TEXT",
 ]
 
 app = create_app(
@@ -85,6 +91,7 @@ app = create_app(
     schema=models.SCHEMA,
     migrations=MIGRATIONS,
     description="End-to-end encrypted direct messages, group conversations, notifications.",
+    on_startup=[lambda: _start_sealing()],
 )
 
 # --- the realtime hub ------------------------------------------------------
@@ -626,6 +633,10 @@ def list_conversations(principal: CurrentUser, db: OrmSession = Depends(get_db))
                 "unread": unread.get(r.id, 0),
                 # How far each participant has read — what "Seen" is drawn from.
                 "read_state": read_state.get(r.id, {}),
+                # Encryption at rest is on: stored sealed, but readable by the
+                # server. Distinct from `encrypted` (end to end) — the UI must
+                # never let one pass for the other.
+                "sealed_at_rest": crypto.enabled(),
                 "last_message": (
                     {
                         "sender_id": latest[r.id].sender_id,
@@ -660,12 +671,126 @@ async def _attachment(media_id: str, sender_id: str) -> dict:
     return asset
 
 
+# --- encryption at rest ---------------------------------------------------------
+#
+# The text of a message and the name of its attachment are sealed on the way
+# into the database and opened on the way out; nothing else in this service
+# handles ciphertext. See common/crypto.py for what this does and does not
+# protect against.
+
+def _seal(message: models.Message, body: str | None, name: str | None) -> None:
+    """Set body and attachment name — sealed when a key is configured."""
+    if not crypto.enabled() or (body is None and name is None):
+        message.body, message.media_name, message.sealed_with = body, name, None
+        return
+    key_id = None
+    message.body = message.media_name = None
+    if body is not None:
+        key_id, message.body = crypto.seal_text(body, f"msg:{message.id}:body")
+    if name is not None:
+        key_id, message.media_name = crypto.seal_text(name, f"msg:{message.id}:name")
+    message.sealed_with = key_id
+
+
+def _plain(message: models.Message, strict: bool = False) -> tuple[str | None, str | None]:
+    """(body, attachment name) in the clear.
+
+    A value that cannot be opened — its key was removed from the keyring —
+    comes back as None rather than as ciphertext, and is logged; ``strict``
+    raises instead, for callers that would otherwise overwrite it.
+    """
+    if not message.sealed_with:
+        return message.body, message.media_name
+    try:
+        body = (
+            crypto.open_text(message.sealed_with, message.body, f"msg:{message.id}:body")
+            if message.body is not None
+            else None
+        )
+        name = (
+            crypto.open_text(message.sealed_with, message.media_name, f"msg:{message.id}:name")
+            if message.media_name is not None
+            else None
+        )
+        return body, name
+    except crypto.DecryptionError as exc:
+        if strict:
+            raise
+        log.error("message %s could not be decrypted: %s", message.id, exc)
+        return None, None
+
+
+def _start_sealing() -> None:
+    crypto.require_in_production("messaging-service")
+    if crypto.enabled():
+        # In the background: a large backlog must not hold the service's boot.
+        threading.Thread(target=_seal_backlog, name="seal-backlog", daemon=True).start()
+
+
+def _seal_backlog() -> None:
+    """Seal what was written before encryption was on, and re-seal what an older
+    key sealed, in batches. Idempotent: every boot runs it, and a finished
+    backlog costs one empty query."""
+    active = crypto.keyring().active_id
+    sealed = failed_total = 0
+    unreadable: set[str] = set()
+    while True:
+        with SessionLocal() as db:
+            rows = db.scalars(
+                select(models.Message)
+                .where(
+                    models.Message.encrypted.is_(False),
+                    models.Message.id.not_in(unreadable) if unreadable else true(),
+                    or_(
+                        (models.Message.sealed_with.is_(None))
+                        & (models.Message.body.is_not(None) | models.Message.media_name.is_not(None)),
+                        models.Message.sealed_with != active,
+                    ),
+                )
+                .limit(500)
+                .with_for_update(skip_locked=True)
+            ).all()
+            if not rows:
+                break
+            for message in rows:
+                try:
+                    body, name = _plain(message, strict=True)
+                except crypto.DecryptionError:
+                    # Its key is gone. Leave it exactly as it is — re-sealing
+                    # "nothing" over it would destroy the only copy.
+                    unreadable.add(message.id)
+                    failed_total += 1
+                    continue
+                _seal(message, body, name)
+                sealed += 1
+            db.commit()
+
+    # Notification previews used to carry message text in the clear.
+    with SessionLocal() as db:
+        db.execute(
+            models.Notification.__table__.update()
+            .where(models.Notification.kind == "message", models.Notification.body.is_not(None))
+            .values(body=None)
+        )
+        db.commit()
+    if sealed or failed_total:
+        log.info("sealed %d existing messages with key %s; %d could not be opened", sealed, active, failed_total)
+
+
 def _media_fields(message: models.Message) -> dict:
-    """The attachment as every response and frame describes it."""
+    """The attachment as every response and frame describes it.
+
+    The link is signed: attachments are private, and only someone who can read
+    this message is ever handed one (common/crypto.py, signed media links).
+    """
     return {
-        "media_url": message.media_url,
+        "media_url": (
+            crypto.sign_media_url(message.media_url, message.media_id)
+            if message.media_url and message.media_id
+            else message.media_url
+        ),
         "media_kind": message.media_kind,
-        "media_name": message.media_name,
+        "media_name": _plain(message)[1],
         "media_type": message.media_type,
         "media_size": message.media_size,
     }
@@ -679,7 +804,7 @@ def _preview(message: models.Message) -> str:
     """One line for a notification or the conversation list — never ciphertext."""
     if message.encrypted:
         return "Encrypted message"
-    text = (message.body or "").strip()
+    text = (_plain(message)[0] or "").strip()
     if message.media_kind:
         label = MEDIA_LABELS.get(message.media_kind, "a file")
         return f"Sent {label}" + (f": {text}" if text else "")
@@ -770,12 +895,10 @@ async def send_message(
         sender_id=principal.user_id,
         encrypted=conversation.encrypted,
         ciphertext=base64.b64decode(payload.ciphertext_b64) if payload.ciphertext_b64 else None,
-        body=None if conversation.encrypted else payload.body,
         kind="media" if attachment else payload.kind,
         media_url=attachment["url"] if attachment else None,
         media_id=attachment["id"] if attachment else None,
         media_kind=attachment["kind"] if attachment else None,
-        media_name=attachment["filename"] if attachment else None,
         media_type=attachment["content_type"] if attachment else None,
         media_size=attachment["size_bytes"] if attachment else None,
         lang=payload.lang,
@@ -788,6 +911,11 @@ async def send_message(
             if conversation.disappear_after_seconds
             else None
         ),
+    )
+    _seal(
+        message,
+        None if conversation.encrypted else payload.body,
+        attachment["filename"] if attachment else None,
     )
     db.add(message)
     now = datetime.now(timezone.utc)
@@ -829,7 +957,7 @@ async def send_message(
             # The body travels only for conversations that are not
             # end-to-end encrypted; for E2E ones the server has no
             # plaintext to send and the client fetches the ciphertext.
-            "body": None if message.encrypted else message.body,
+            "body": None if message.encrypted else _plain(message)[0],
             "kind": message.kind,
             **_media_fields(message),
             "created_at": message.created_at.isoformat(),
@@ -857,7 +985,10 @@ async def send_message(
                     kind="message",
                     title=f"New message from @{principal.handle}" if principal.handle else "New message",
                     # Never the text of an encrypted message: the server has none.
-                    body=None if message.encrypted else _preview(message)[:140],
+                    # Nor any text at all while encryption at rest is on: the
+                    # notification table would be a plaintext copy of the
+                    # messages the key is protecting.
+                    body=None if message.encrypted or crypto.enabled() else _preview(message)[:140],
                     link=link,
                 )
             )
@@ -945,7 +1076,7 @@ def list_messages(
                 "encrypted": r.encrypted,
                 # The server hands back what it stored; only the client can decrypt.
                 "ciphertext_b64": base64.b64encode(r.ciphertext).decode() if r.ciphertext else None,
-                "body": r.body,
+                "body": _plain(r)[0],
                 "kind": r.kind,
                 **_media_fields(r),
                 "created_at": r.created_at,
