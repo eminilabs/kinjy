@@ -128,7 +128,7 @@ HASHTAG_RE = re.compile(r"#([\wÀ-ɏ؀-ۿ一-鿿][\wÀ-ɏ؀-ۿ一-鿿-]{1,49})")
 
 
 def extract_hashtags(body: str) -> list[str]:
-    """Pull #tags out of a body.
+    r"""Pull #tags out of a body.
 
     Hashtags and the composer's topic field are the same thing to the ranker, so
     they are merged rather than tracked separately — a member who writes
