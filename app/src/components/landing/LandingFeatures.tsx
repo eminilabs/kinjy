@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { FEATURES } from '@/lib/features'
 import { CHAT, COMMUNITIES, COMPOSER_TOOLS } from './data'
 
 function FeatureText({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
@@ -23,6 +24,11 @@ function Stage({ gradient, glow, children }: { gradient: string; glow: ReactNode
 }
 
 const iconBox = 'mb-7 grid h-[72px] w-[72px] place-items-center rounded-[10px]'
+
+/** Calls are named only while they are switched on (lib/features.ts). */
+const TALK_CHANNELS = FEATURES.calls
+  ? 'Messages privés en temps réel, salons en direct et appels en tête-à-tête.'
+  : 'Messages privés et salons en direct, en temps réel.'
 
 export default function LandingFeatures() {
   return (
@@ -127,8 +133,7 @@ export default function LandingFeatures() {
             </div>
           }
         >
-          Messages privés en temps réel, salons en direct et appels en tête-à-tête. Organisez la prochaine sortie sans
-          quitter votre communauté.
+          {TALK_CHANNELS} Organisez la prochaine sortie sans quitter votre communauté.
         </FeatureText>
         <Stage
           gradient="linear-gradient(150deg, var(--kl-stage-a), var(--kl-stage-b))"

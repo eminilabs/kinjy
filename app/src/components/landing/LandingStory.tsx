@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { FEATURES } from '@/lib/features'
 import { ALGORITHMS, ECONOMY_STEPS, FAMILY_TREE, FORMATS } from './data'
 
 function FeedChooser() {
@@ -186,7 +187,8 @@ export default function LandingStory() {
     <>
       <FeedChooser />
       <CreateOnce />
-      <Heritage />
+      {/* The family tree is its subject; it goes with it, as HeritageBand did. */}
+      {FEATURES.familyTree && <Heritage />}
       <Economy />
     </>
   )

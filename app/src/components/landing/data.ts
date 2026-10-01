@@ -6,7 +6,22 @@
  * original design promised more than the product delivers, the wording was
  * brought back to the truth rather than left for a visitor to discover:
  * see the notes on TRUST, FORMATS, ECONOMY_STEPS, PLANS and TESTIMONIALS.
+ *
+ * Features switched off in lib/features.ts are left out here, as they are
+ * everywhere else on the site: their modules, links and copy are filtered at
+ * the source, so no section can mention one by accident.
  */
+import { FEATURES, isRouteAvailable, type Feature } from '@/lib/features'
+
+/** A link that is only listed while its page is open. */
+interface PageLink {
+  to: string
+  label: string
+}
+
+function openLinks<T extends PageLink>(links: T[]): T[] {
+  return links.filter((l) => isRouteAvailable(l.to))
+}
 
 /** App store links. Empty until the native apps exist; the page then offers the web version alone. */
 export const STORE_LINKS = {
@@ -20,10 +35,12 @@ export interface LandingModule {
   a: string
   b: string
   who: string
+  /** Shown only while this feature is switched on. */
+  feature?: Feature
 }
 
-/** The fifteen modules of the orbit. The sample people are illustrations. */
-export const MODULES: LandingModule[] = [
+/** The modules of the orbit, fifteen when all are open. The sample people are illustrations. */
+const ALL_MODULES: LandingModule[] = [
   { name: 'Fil', desc: 'Ce que publient vos proches et vos communautés, dans l’ordre que vous choisissez.', a: 'LM', b: 'SK', who: 'Léa et Samir l’ouvrent chaque matin' },
   { name: 'Messages', desc: 'Discussions privées en temps réel, avec photos, fichiers et messages vocaux.', a: 'JN', b: 'TB', who: 'Jade écrit à Théo tous les jours' },
   { name: 'Commu’s', desc: 'Des groupes autour d’une passion, d’un quartier ou d’un projet.', a: 'SK', b: 'AO', who: 'Samir anime Running Paris' },
@@ -33,15 +50,25 @@ export const MODULES: LandingModule[] = [
   { name: 'Audio', desc: 'Notes vocales et contenus audio à partager.', a: 'AO', b: 'VS', who: 'Awa enregistre ses recettes à voix haute' },
   { name: 'Articles', desc: 'Des textes longs, mis en page sans effort.', a: 'JN', b: 'MA', who: 'Jade tient son carnet de potager' },
   { name: 'Événements', desc: 'Sorties, ateliers et anniversaires, avec invitations et réponses.', a: 'TB', b: 'SK', who: 'Théo organise son anniversaire' },
-  { name: 'Marché', desc: 'Achetez et vendez entre membres, l’argent bloqué jusqu’à la réception.', a: 'VS', b: 'LM', who: 'Les vinyles de Vinyles & soul' },
-  { name: 'Arbre familial', desc: 'Votre famille sur plusieurs générations, construite et vérifiée à plusieurs.', a: 'MA', b: 'EM', who: 'Maman et Esi complètent l’arbre' },
+  { name: 'Marché', desc: 'Achetez et vendez entre membres, l’argent bloqué jusqu’à la réception.', a: 'VS', b: 'LM', who: 'Les vinyles de Vinyles & soul', feature: 'marketplace' },
+  { name: 'Arbre familial', desc: 'Votre famille sur plusieurs générations, construite et vérifiée à plusieurs.', a: 'MA', b: 'EM', who: 'Maman et Esi complètent l’arbre', feature: 'familyTree' },
   { name: 'Mémoriaux', desc: 'Un lieu pour se souvenir de ceux qui sont partis.', a: 'MA', b: 'YM', who: '142 souvenirs pour Rose' },
   { name: 'Traduction', desc: 'Chaque publication traduisible dans la langue de celui qui la lit.', a: 'LC', b: 'JN', who: 'Lucía et Jade se comprennent' },
-  { name: 'Assistant', desc: 'Il répond à vos questions sur Kinjy, dans votre langue.', a: 'DS', b: 'LM', who: 'Dev du soir prépare ses ateliers' },
+  { name: 'Assistant', desc: 'Il répond à vos questions sur Kinjy, dans votre langue.', a: 'DS', b: 'LM', who: 'Dev du soir prépare ses ateliers', feature: 'assistant' },
   { name: 'Gains', desc: '20 % de ce que Kinjy gagne sur l’activité de vos filleuls.', a: 'AO', b: 'SK', who: 'Awa a parrainé 12 membres' },
   // The design said "seul ou en groupe": group calls need a media server Kinjy does not run.
-  { name: 'Appels', desc: 'Appels audio et vidéo en tête-à-tête.', a: 'YM', b: 'KO', who: 'Yaw appelle Kwame le dimanche' },
+  { name: 'Appels', desc: 'Appels audio et vidéo en tête-à-tête.', a: 'YM', b: 'KO', who: 'Yaw appelle Kwame le dimanche', feature: 'calls' },
 ]
+
+export const MODULES = ALL_MODULES.filter((m) => !m.feature || FEATURES[m.feature])
+
+const COUNT_WORDS = [
+  'Zéro', 'Un', 'Deux', 'Trois', 'Quatre', 'Cinq', 'Six', 'Sept', 'Huit', 'Neuf', 'Dix',
+  'Onze', 'Douze', 'Treize', 'Quatorze', 'Quinze',
+]
+
+/** "Onze": the number of open modules, spelled out for the headline. */
+export const MODULE_COUNT_WORD = COUNT_WORDS[MODULES.length] ?? String(MODULES.length)
 
 export const COMMUNITIES = [
   { i: 'E', name: 'Escalade Lyon', meta: '2 340 membres · 18 en ligne', bg: '#D9A648', offset: 0, dur: '6s' },
@@ -88,7 +115,11 @@ export const ALGORITHMS = [
     name: 'Famille d’abord', mark: 'FAMILLE · AMIS',
     desc: 'Votre famille et vos proches passent avant le reste.',
     posts: [
-      { i: 'MA', who: 'Maman', what: 'a ajouté une photo à l’arbre familial', tag: 'FAMILLE', bg: '#F6EBD3' },
+      {
+        i: 'MA', who: 'Maman',
+        what: FEATURES.familyTree ? 'a ajouté une photo à l’arbre familial' : 'a partagé les photos du baptême',
+        tag: 'FAMILLE', bg: '#F6EBD3',
+      },
       { i: 'TB', who: 'Théo B.', what: 'vous a invité à son anniversaire', tag: 'AMI', bg: '#E3ECF7' },
       { i: 'LM', who: 'Léa M.', what: 'a publié 6 photos de la falaise', tag: 'AMIE', bg: '#F7E1D8' },
     ],
@@ -131,8 +162,14 @@ export const FAMILY_TREE = [
  */
 export const ECONOMY_STEPS = [
   { n: '01', t: 'Invitez vos proches', d: 'Partagez votre lien de parrainage. Chaque inscription faite avec lui vous est rattachée.' },
-  { n: '02', t: 'Ils utilisent Kinjy', d: 'Achats sur le Marché, publicités, abonnements : ce que Kinjy gagne sur leur activité est suivi dans votre tableau de bord.' },
-  { n: '03', t: 'Vous percevez 20 %', d: 'Exemple : votre filleule achète un objet à 100 $. Kinjy ajoute 20 $ au prix du vendeur, et vous en recevez 4 $.' },
+  FEATURES.marketplace
+    ? { n: '02', t: 'Ils utilisent Kinjy', d: 'Achats sur le Marché, publicités, abonnements : ce que Kinjy gagne sur leur activité est suivi dans votre tableau de bord.' }
+    : { n: '02', t: 'Ils utilisent Kinjy', d: 'Publicités, abonnements : ce que Kinjy gagne sur leur activité est suivi dans votre tableau de bord.' },
+  // The worked example is a marketplace sale; without the marketplace the
+  // step states the rate alone rather than invent another example.
+  FEATURES.marketplace
+    ? { n: '03', t: 'Vous percevez 20 %', d: 'Exemple : votre filleule achète un objet à 100 $. Kinjy ajoute 20 $ au prix du vendeur, et vous en recevez 4 $.' }
+    : { n: '03', t: 'Vous percevez 20 %', d: 'Sur chaque dollar que Kinjy gagne grâce à leur activité, 20 cents vous reviennent.' },
 ]
 
 export const ASSISTANT_SKILLS = [
@@ -149,7 +186,7 @@ export const ASSISTANT_SKILLS = [
 export const PLANS = [
   {
     name: 'Gratuit', price: '0 $', cta: 'S’inscrire', tone: 'plain' as const,
-    features: ['Les 15 modules', 'Un algorithme de fil', 'Avec publicité'],
+    features: ['Tous les modules', 'Un algorithme de fil', 'Avec publicité'],
   },
   {
     name: 'Basic', price: '3,99 $', cta: 'Choisir Basic', tone: 'paper' as const,
@@ -157,7 +194,8 @@ export const PLANS = [
   },
   {
     name: 'Premium', price: '9,99 $', cta: 'Choisir Premium', tone: 'night' as const,
-    features: ['Tout le Basic', 'Les 15 algorithmes', 'Heritage AI', 'Creator Studio Pro'],
+    // Heritage AI belongs to the family tree; the same swap as PricingTeaser.
+    features: ['Tout le Basic', 'Les 15 algorithmes', FEATURES.familyTree ? 'Heritage AI' : 'Vidéo 4K', 'Creator Studio Pro'],
   },
 ]
 
@@ -197,15 +235,15 @@ export interface Testimonial {
 export const TESTIMONIALS: Testimonial[] = []
 
 /** The site's pages, as the previous marketing navigation listed them. */
-export const NAV_PRIMARY = [
+export const NAV_PRIMARY = openLinks([
   { to: '/platform', label: 'Plateforme' },
   { to: '/feeds', label: 'Fils' },
   { to: '/family', label: 'Famille' },
   { to: '/creators', label: 'Créateurs' },
   { to: '/pricing', label: 'Tarifs' },
-]
+])
 
-export const NAV_MORE = [
+export const NAV_MORE = openLinks([
   { to: '/memorials', label: 'Mémoriaux' },
   { to: '/commerce', label: 'Commerce' },
   { to: '/payments', label: 'Paiements' },
@@ -213,13 +251,13 @@ export const NAV_MORE = [
   { to: '/developers', label: 'Développeurs' },
   { to: '/assistant', label: 'Assistant Kinjy' },
   { to: '/app', label: 'L’application' },
-]
+])
 
-export const FOOTER_COLUMNS = [
+const ALL_FOOTER_COLUMNS: { title: string; links: PageLink[] }[] = [
   {
     title: 'Plateforme',
     links: [
-      { to: '/platform', label: 'Les 15 modules' },
+      { to: '/platform', label: 'Tous les modules' },
       { to: '/feeds', label: 'Fils et algorithmes' },
       { to: '/family', label: 'Arbre familial' },
       { to: '/memorials', label: 'Cimetière numérique' },
@@ -255,3 +293,8 @@ export const FOOTER_COLUMNS = [
     ],
   },
 ]
+
+/** A column whose every page is closed goes too, rather than stand empty. */
+export const FOOTER_COLUMNS = ALL_FOOTER_COLUMNS
+  .map((col) => ({ ...col, links: openLinks(col.links) }))
+  .filter((col) => col.links.length > 0)

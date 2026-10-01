@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { MODULES } from './data'
+import { FEATURES } from '@/lib/features'
+import { MODULES, MODULE_COUNT_WORD } from './data'
 
 const PALETTES = [
   ['#8A6414', '#F6EBD3'],
@@ -9,11 +10,17 @@ const PALETTES = [
 ]
 const TILTS = [-3, 2, -1.5, 3, -2]
 
-/** Where module `i` sits on the two rings, in % of the orbit box. */
-function orbitPoint(i: number) {
-  const inner = i < 5
-  const k = inner ? i : i - 5
-  const n = inner ? 5 : 10
+const INNER_RING = 5
+
+/**
+ * Where module `i` of `total` sits on the two rings, in % of the orbit box.
+ * Five on the inner ring, the rest spread evenly on the outer one: fifteen
+ * when every module is open, fewer while some are switched off.
+ */
+function orbitPoint(i: number, total: number) {
+  const inner = i < INNER_RING
+  const k = inner ? i : i - INNER_RING
+  const n = inner ? INNER_RING : Math.max(total - INNER_RING, 1)
   const r = inner ? 24 : 40
   const angle = (k / n) * Math.PI * 2 - Math.PI / 2 + (inner ? 0 : Math.PI / 10)
   return { x: 50 + r * Math.cos(angle), y: 50 + r * Math.sin(angle) }
@@ -39,17 +46,17 @@ export default function LandingModules() {
     setActive((i + MODULES.length) % MODULES.length)
   }
 
-  const points = useMemo(() => MODULES.map((_, i) => orbitPoint(i)), [])
+  const points = useMemo(() => MODULES.map((_, i) => orbitPoint(i, MODULES.length)), [])
   const focus = MODULES[active]
   const line = points[active]
 
   return (
     <section id="modules" className="kl-split kl-pad-x gap-[72px] pb-[100px] pt-16">
       <div>
-        <h2 className="kl-h2 mb-6 mt-4">Quinze usages, un seul compte.</h2>
+        <h2 className="kl-h2 mb-6 mt-4">{MODULE_COUNT_WORD} usages, un seul compte.</h2>
         <p className="kl-lead">
-          Publier, discuter, apprendre, vendre, transmettre. Kinjy rassemble ce qui était éparpillé entre dix
-          applications.
+          {FEATURES.marketplace ? 'Publier, discuter, apprendre, vendre, transmettre.' : 'Publier, discuter, apprendre, transmettre.'}{' '}
+          Kinjy rassemble ce qui était éparpillé entre dix applications.
         </p>
 
         <div
@@ -58,7 +65,7 @@ export default function LandingModules() {
         >
           <div className="mb-3.5 flex items-center justify-between gap-3">
             <span className="kl-mono text-xs tracking-[.08em] text-[var(--kl-gold-soft)]">
-              {String(active + 1).padStart(2, '0')} / 15
+              {String(active + 1).padStart(2, '0')} / {MODULES.length}
             </span>
             <div className="flex gap-1.5">
               {[
@@ -135,7 +142,7 @@ export default function LandingModules() {
           </div>
         ))}
 
-        <ul aria-label="Les quinze modules">
+        <ul aria-label={`Les ${MODULE_COUNT_WORD.toLowerCase()} modules`}>
           {MODULES.map((m, i) => {
             const on = i === active
             const [fg, bg] = PALETTES[i % 4]

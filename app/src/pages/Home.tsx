@@ -6,6 +6,7 @@ import LandingModules from '@/components/landing/LandingModules'
 import LandingStory from '@/components/landing/LandingStory'
 import { LandingNav } from '@/components/landing/shared'
 import { useLandingTheme } from '@/components/landing/useLandingTheme'
+import { FEATURES } from '@/lib/features'
 
 /**
  * Home — the public landing page, after the "Kinjy Landing" design.
@@ -26,7 +27,7 @@ export default function Home() {
             <LandingModules />
             <LandingFeatures />
             <LandingStory />
-            <LandingAssistant />
+            {FEATURES.assistant && <LandingAssistant />}
             <LandingPricing />
           </div>
         </div>
