@@ -227,35 +227,22 @@ def serve(
             log.info("media %s refused: %s", asset_id, reason)
             raise HTTPException(status_code=404, detail="Asset not found")
 
-    response = FileResponse(
-        asset.storage_path, media_type=asset.content_type, filename=asset.filename
-    )
-    if asset.access == "restricted":
-        # Never let a shared cache hold a restricted byte range: a CDN that
-        # caches one viewer's authorised response serves it to the next.
-        response.headers["Cache-Control"] = "private, no-store"
-    return response
-
-
-@app.post("/internal/media/{asset_id}/restrict", tags=["internal"])
-def restrict_asset(asset_id: str, db: OrmSession = Depends(get_db)):
-    """Mark an asset as needing a ticket.
-
-    Called when the asset is attached to a post. Idempotent, and one-way on
-    purpose: there is no internal route back to public, because the only reason
-    to want one would be to clear a restriction somebody else applied.
-    """
-    asset = db.get(models.Asset, asset_id)
-    if asset is None:
-        raise HTTPException(status_code=404, detail="Asset not found")
+    # Only what a browser can show safely is served inline; anything else
+    # (HTML, SVG, archives...) is a download, so an upload can never run as a
+    # page on this origin.
     inline = asset.kind in INLINE_KINDS and not asset.content_type.startswith("image/svg")
-    return FileResponse(
+    response = FileResponse(
         asset.storage_path,
         media_type=asset.content_type if inline else "application/octet-stream",
         filename=asset.filename,
         content_disposition_type="inline" if inline else "attachment",
         headers=_serve_headers(asset.content_type if inline else None),
     )
+    if asset.access == "restricted":
+        # Never let a shared cache hold a restricted byte range: a CDN that
+        # caches one viewer's authorised response serves it to the next.
+        response.headers["Cache-Control"] = "private, no-store"
+    return response
 
 
 def _serve_headers(inline_type: str | None) -> dict[str, str]:
@@ -269,6 +256,19 @@ def _serve_headers(inline_type: str | None) -> dict[str, str]:
             "sandbox; default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'"
         )
     return headers
+
+
+@app.post("/internal/media/{asset_id}/restrict", tags=["internal"])
+def restrict_asset(asset_id: str, db: OrmSession = Depends(get_db)):
+    """Mark an asset as needing a ticket.
+
+    Called when the asset is attached to a post. Idempotent, and one-way on
+    purpose: there is no internal route back to public, because the only reason
+    to want one would be to clear a restriction somebody else applied.
+    """
+    asset = db.get(models.Asset, asset_id)
+    if asset is None:
+        raise HTTPException(status_code=404, detail="Asset not found")
     asset.access = "restricted"
     db.commit()
     return {"id": asset.id, "access": asset.access}
@@ -676,7 +676,7 @@ def discard_profile_image(asset_id: str, payload: DiscardIn, db: OrmSession = De
 
 
 @app.get("/internal/media/{asset_id}", tags=["internal"])
-def internal_asset(asset_id: str, db: OrmSession = Depends(get_db)):
+def internal_profile_image(asset_id: str, db: OrmSession = Depends(get_db)):
     """What user-service needs before putting an asset on a profile."""
     asset = db.get(models.Asset, asset_id)
     if asset is None:
