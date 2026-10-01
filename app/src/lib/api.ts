@@ -453,6 +453,11 @@ export interface FeedPage {
   ranked: boolean
   total_candidates?: number
   empty_reason?: string
+  /**
+   * The member's age could not be confirmed, so this feed was filtered as for
+   * a minor and may be missing posts. Temporary; worth saying so on screen.
+   */
+  degraded?: boolean
   items: Post[]
 }
 
@@ -1134,14 +1139,17 @@ export const kaluta = {
     modes: () => api.get<{ modes: FeedMode[] }>('/feed/modes', { auth: false }),
     algorithms: () => api.get<{ items: Algorithm[] }>('/algorithms', { auth: false }),
 
-    page: (params: { mode: string; algorithm_id?: string; city?: string; country?: string; topic?: string; limit?: number }) => {
+    page: (
+      params: { mode: string; algorithm_id?: string; city?: string; country?: string; topic?: string; limit?: number },
+      options: { signal?: AbortSignal } = {},
+    ) => {
       const query = new URLSearchParams({ mode: params.mode })
       if (params.algorithm_id) query.set('algorithm_id', params.algorithm_id)
       if (params.city) query.set('city', params.city)
       if (params.country) query.set('country', params.country)
       if (params.topic) query.set('topic', params.topic)
       query.set('limit', String(params.limit ?? 20))
-      return api.get<FeedPage>(`/feed?${query}`)
+      return api.get<FeedPage>(`/feed?${query}`, { signal: options.signal })
     },
 
     /** The score breakdown for one post, for this viewer, under this algorithm. */

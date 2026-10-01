@@ -19,6 +19,9 @@ class Context:
 
     user_id: str | None = None
     following: set[str] = field(default_factory=set)
+    # False when user-service could not be asked: an empty `following` then
+    # means "unknown", not "follows nobody", and must not be reported as such.
+    graph_known: bool = False
     family: set[str] = field(default_factory=set)
     country: str | None = None
     city: str | None = None
