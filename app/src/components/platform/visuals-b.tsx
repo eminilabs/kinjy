@@ -308,7 +308,7 @@ export function AILayerVisual() {
             <foreignObject x={l.x - 10} y={l.y - 10} width={20} height={20} className="pointer-events-none">
               <ModuleGlyph id={l.glyph} size={20} />
             </foreignObject>
-            <text x={l.x} y={l.y + 34} textAnchor="middle" fill="#A7ACBF" fontSize="10" fontWeight="600" fontFamily="Manrope, sans-serif">
+            <text x={l.x} y={l.y + 34} textAnchor="middle" fill="#A7ACBF" fontSize="10" fontWeight="600" fontFamily="Hanken Grotesk, sans-serif">
               {l.label}
             </text>
           </g>

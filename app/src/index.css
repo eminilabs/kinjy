@@ -3,6 +3,32 @@
 @tailwind utilities;
 
 @layer base {
+  /* Brand primitives — the "Kinjy Landing" palette, defined once.
+   *
+   * Constants, not theme tokens: they mean the same in every theme. The theme
+   * blocks below and the landing page (components/landing/landing.css) both
+   * build from them, so the public site and the app cannot drift apart. */
+  :root {
+    --k-night: #0B0E1D;
+    --k-night-2: #12162B;
+    --k-night-3: #1A1F3B;
+    --k-indigo: #4A52E0;
+    --k-indigo-deep: #242142;
+    --k-gold: #D9A648;
+    --k-gold-soft: #F0C878;
+    --k-gold-deep: #8A6414;
+    --k-sky: #8FB8E8;
+    --k-coral: #E07856;
+    --k-white: #FFFFFF;
+    --k-paper: #F6F1E7;
+    --k-paper-2: #EDE4D3;
+    --k-paper-ink: #241F16;
+    --k-paper-mid: #5C5344;
+    --k-paper-low: #6E6555;
+    --k-night-text: #F4F2EE;
+    --k-night-mid: #A7ACBF;
+  }
+
   /* The dark palette is the default, and it is also the palette that any
      always-dark surface must carry with it.
      
@@ -146,17 +172,19 @@
    * shadcn bridge below. */
   :root[data-theme='light'],
   .force-light {
-    --ink: #F6F1E7;
-    --ink-2: #FFFFFF;
-    --ink-3: #EDE4D3;
+    /* The landing design's light: a white page, paper for soft panels and
+       hairlines, white cards set off by a border rather than by tint. */
+    --ink: var(--k-white);
+    --ink-2: var(--k-white);
+    --ink-3: var(--k-paper);
     /* Ink, not paper: these three carry every piece of text on a card. */
     --text-hi: #241F16;
     --text-mid: #5C5344;
     --text-low: #6E6555;
     /* An opaque card on paper. The translucent white of the dark theme has
        nothing to sit against here and simply disappears. */
-    --cloud: rgba(255, 255, 255, 0.92);
-    --cloud-border: rgba(36, 31, 22, 0.12);
+    --cloud: var(--k-white);
+    --cloud-border: var(--k-paper-2);
     /* The gold that reads on dark is far too pale on paper. */
     --gold: #A9761C;
     --gold-soft: #8A6414;
@@ -167,9 +195,9 @@
     --danger: #B23B3B;
     --info: #2E5FB8;
 
-    --ink-rgb: 246 241 231;
+    --ink-rgb: 255 255 255;
     --ink-2-rgb: 255 255 255;
-    --ink-3-rgb: 237 228 211;
+    --ink-3-rgb: 246 241 231;
     --gold-rgb: 169 118 28;
     /* Darkened until the hashtag chips and secondary counters clear WCAG AA
        (4.5:1) on the card, measured rather than eyeballed. The dark theme's
@@ -185,10 +213,10 @@
     --danger-rgb: 178 59 59;
     --info-rgb: 46 95 184;
 
-    --grad-twilight: linear-gradient(160deg, #F6F1E7 0%, #EDE4D3 100%);
+    --grad-twilight: linear-gradient(160deg, #FFFFFF 0%, #F6F1E7 100%);
     --grad-gold-sheen: linear-gradient(135deg, #C08F2C, #A9761C);
 
-    --background: 40 46% 94%;
+    --background: 0 0% 100%;
     --foreground: 40 22% 12%;
     --card: 0 0% 100%;
     --card-foreground: 40 22% 12%;
@@ -196,22 +224,44 @@
     --popover-foreground: 40 22% 12%;
     --primary: 38 72% 39%;
     --primary-foreground: 40 46% 97%;
-    --secondary: 40 38% 88%;
+    --secondary: 40 46% 94%;
     --secondary-foreground: 40 22% 12%;
-    --muted: 40 38% 88%;
+    --muted: 40 46% 94%;
     --muted-foreground: 38 14% 38%;
-    --accent: 40 38% 88%;
+    --accent: 40 46% 94%;
     --accent-foreground: 40 22% 12%;
-    --border: 40 18% 82%;
-    --input: 40 18% 82%;
+    --border: 39 41% 88%;
+    --input: 39 41% 88%;
     --ring: 38 72% 39%;
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 40 22% 12%;
     --sidebar-accent: 40 38% 88%;
     --sidebar-accent-foreground: 40 22% 12%;
     --sidebar-border: 40 18% 82%;
-    --shadow-cloud: 0 10px 26px -14px rgba(36, 31, 22, 0.28);
-    --shadow-cloud-hover: 0 18px 40px -16px rgba(36, 31, 22, 0.34);
+    /* The design's long, soft drop: a card lifts off white paper without a
+       dark rim around it. */
+    --shadow-cloud: 0 24px 48px -30px rgba(36, 31, 22, 0.32), 0 1px 3px rgba(36, 31, 22, 0.05);
+    --shadow-cloud-hover: 0 32px 60px -30px rgba(36, 31, 22, 0.4), 0 1px 3px rgba(36, 31, 22, 0.06);
+  }
+
+  /* Hairlines written for the dark theme.
+   *
+   * Hundreds of dividers and input outlines are `border-white/5…/20`: a
+   * faint light line on night. On white paper the same class draws white on
+   * white, so in light mode every one of those borders simply vanished —
+   * inputs had no outline and list rows no separation. They become the paper
+   * hairline here, in light mode only; the dark themes keep them as written. */
+  /* Sections that stay night in every theme (.twilight-field, .force-dark)
+     keep their light hairlines: there the white line is the right one. */
+  :root[data-theme='light'] :is(
+    .border-white\/5, .border-white\/8, .border-white\/10, .border-white\/12,
+    .border-white\/14, .border-white\/15, .border-white\/20,
+    .border-t-white\/10, .border-b-white\/10
+  ):not(:is(.twilight-field, .force-dark) *, .twilight-field, .force-dark) {
+    border-color: var(--k-paper-2);
+  }
+  :root[data-theme='light'] :is(.divide-white\/5, .divide-white\/8, .divide-white\/10):not(:is(.twilight-field, .force-dark) *) > * + * {
+    border-color: var(--k-paper-2);
   }
 
   /* On paper the card is opaque, so blurring what is behind it costs a
@@ -227,7 +277,8 @@
 
   body {
     @apply bg-ink text-text-hi font-sans antialiased;
-    font-feature-settings: "ss01", "cv11";
+    /* Hanken Grotesk's defaults are the design; the old ss01/cv11 switched
+       Manrope's alternate glyphs and mean something else in this face. */
   }
 
   ::selection {
@@ -252,7 +303,7 @@
      collision. */
   .display-xl {
     font-family: "Fraunces", serif;
-    font-weight: 500;
+    font-weight: 600;
     font-size: clamp(3.25rem, 7.5vw, 6.5rem);
     line-height: 1.16;
     letter-spacing: -0.03em;
@@ -260,7 +311,7 @@
   }
   .display-lg {
     font-family: "Fraunces", serif;
-    font-weight: 500;
+    font-weight: 600;
     font-size: clamp(2.5rem, 5vw, 4.25rem);
     line-height: 1.15;
     letter-spacing: -0.025em;
@@ -268,14 +319,14 @@
   }
   .h1 {
     font-family: "Fraunces", serif;
-    font-weight: 500;
+    font-weight: 600;
     font-size: clamp(2rem, 4vw, 3.25rem);
     line-height: 1.18;
     letter-spacing: -0.02em;
   }
   .h2 {
     font-family: "Fraunces", serif;
-    font-weight: 500;
+    font-weight: 600;
     font-size: clamp(1.6rem, 3vw, 2.4rem);
     line-height: 1.2;
     letter-spacing: -0.015em;

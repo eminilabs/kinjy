@@ -150,7 +150,7 @@ export default function Constellation() {
                         fill={hot ? '#F0C878' : '#A7ACBF'}
                         fontSize="12.5"
                         fontWeight="600"
-                        fontFamily="Manrope, sans-serif"
+                        fontFamily="Hanken Grotesk, sans-serif"
                       >
                         {m.name}
                       </text>
@@ -172,7 +172,7 @@ export default function Constellation() {
                 <foreignObject x={CX - 32} y={CY - 32} width={64} height={64} className="pointer-events-none">
                   <Avatar index={4} size={64} name="You" />
                 </foreignObject>
-                <text x={CX} y={CY + 82} textAnchor="middle" fill="#F4F2EE" fontSize="14" fontWeight="700" fontFamily="Manrope, sans-serif">
+                <text x={CX} y={CY + 82} textAnchor="middle" fill="#F4F2EE" fontSize="14" fontWeight="700" fontFamily="Hanken Grotesk, sans-serif">
                   You
                 </text>
               </motion.g>
