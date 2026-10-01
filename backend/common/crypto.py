@@ -222,6 +222,21 @@ def is_sealed_file(path: str) -> bool:
         return handle.read(4) == MAGIC
 
 
+def file_key_available(path: str) -> bool:
+    """Whether a sealed file's key is in the keyring — asked before a response starts.
+
+    The key id is read from the file's own header rather than the database
+    row: during a re-seal the two can briefly disagree, and the header is the
+    one that decides whether the bytes open.
+    """
+    try:
+        with open(path, "rb") as handle:
+            _read_header(handle)
+        return True
+    except (DecryptionError, OSError, IndexError):
+        return False
+
+
 def reseal_file(source: str, destination: str, asset_id: str, size: int) -> str:
     """Write ``source`` to ``destination`` sealed with the active key; returns its id.
 

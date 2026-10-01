@@ -309,6 +309,11 @@ def _serve_sealed(asset: models.Asset, request: Request, media_type: str, inline
     Range is not optional: Safari will not play a video whose server cannot
     answer a byte range, and seeking anywhere in a clip needs it everywhere.
     """
+    # Checked before the first byte goes out: once a streaming response has
+    # started, a missing key can only cut the download short.
+    if not crypto.file_key_available(asset.storage_path):
+        log.error("attachment %s cannot be opened: its key is not in the keyring", asset.id)
+        raise HTTPException(status_code=404, detail="Asset not found")
     size = asset.size_bytes
     disposition = "inline" if inline else "attachment"
     headers = {
@@ -335,11 +340,24 @@ def _serve_sealed(asset: models.Asset, request: Request, media_type: str, inline
             headers["Content-Range"] = f"bytes {start}-{end}/{size}"
     headers["Content-Length"] = str(end - start + 1 if size else 0)
     return StreamingResponse(
-        crypto.open_file_range(asset.storage_path, asset.id, size, start, end) if size else iter(()),
+        _stream_sealed(asset, size, start, end) if size else iter(()),
         status_code=status,
         media_type=media_type,
         headers=headers,
     )
+
+
+def _stream_sealed(asset: models.Asset, size: int, start: int, end: int):
+    """The decrypted range, stopping cleanly if a chunk fails to open.
+
+    By then the status and headers are already sent, so the client sees a
+    short body either way; this keeps it a logged event rather than an
+    unhandled exception in the server.
+    """
+    try:
+        yield from crypto.open_file_range(asset.storage_path, asset.id, size, start, end)
+    except crypto.DecryptionError as exc:
+        log.error("attachment %s stopped mid-stream: %s", asset.id, exc)
 
 
 # --- encryption at rest: the attachments' backlog ---------------------------------
