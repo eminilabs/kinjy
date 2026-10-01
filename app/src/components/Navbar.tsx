@@ -56,16 +56,26 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  useEffect(() => {
+  // Every menu closes when the page changes. Done during render, not in an
+  // effect: an effect would paint the new page with the menu still open first.
+  const [menusPath, setMenusPath] = useState(location.pathname)
+  if (menusPath !== location.pathname) {
+    setMenusPath(location.pathname)
     setDrawerOpen(false)
     setLangOpen(false)
     setMoreOpen(false)
-  }, [location.pathname])
+  }
 
-  const switchLanguage = (code: string, dir: 'ltr' | 'rtl') => {
-    i18n.changeLanguage(code)
-    document.documentElement.dir = dir
+  // The page's language and direction follow i18n, however the language was
+  // changed (this menu, the footer, the app's own switcher), not only here.
+  useEffect(() => {
+    const code = i18n.language.slice(0, 2)
     document.documentElement.lang = code
+    document.documentElement.dir = LANGUAGES.find((l) => l.code === code)?.dir ?? 'ltr'
+  }, [i18n.language])
+
+  const switchLanguage = (code: string) => {
+    void i18n.changeLanguage(code)
     setLangOpen(false)
   }
 
@@ -176,7 +186,7 @@ export default function Navbar() {
                       <li key={l.code}>
                         <button
                           type="button"
-                          onClick={() => switchLanguage(l.code, l.dir)}
+                          onClick={() => switchLanguage(l.code)}
                           className={cn(
                             'w-full rounded-card-sm px-3 py-2 text-start text-sm',
                             i18n.language === l.code ? 'text-gold-soft bg-gold/10' : 'text-text-mid hover:text-text-hi hover:bg-white/5',
@@ -285,7 +295,7 @@ export default function Navbar() {
                   <button
                     key={l.code}
                     type="button"
-                    onClick={() => switchLanguage(l.code, l.dir)}
+                    onClick={() => switchLanguage(l.code)}
                     className={cn(
                       'rounded-full px-3 py-1.5 text-sm cloud-glass',
                       i18n.language === l.code ? 'text-gold-soft border-gold/40' : 'text-text-mid',
