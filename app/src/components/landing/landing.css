@@ -1,0 +1,186 @@
+/*
+ * The public landing page ("Kinjy Landing" design), in two themes.
+ *
+ * Which one is decided by Home and stamped as data-kl-theme on the root:
+ * the member's own display choice when they have made one, otherwise the
+ * visitor's system setting. The colours live here as tokens rather than in
+ * the app's theme variables, whose "cloud" default would otherwise paint
+ * every first-time visitor's landing page dark.
+ */
+.kl {
+  /* Surfaces */
+  --kl-bg: #ffffff;              /* page and frame */
+  --kl-surface: #ffffff;         /* cards sitting on the page */
+  --kl-paper: #f6f1e7;           /* soft panels, hover */
+  --kl-paper-2: #ede4d3;         /* hairlines, skeleton bars */
+  --kl-stage-a: #f6f1e7;         /* feature stages, gradient ends */
+  --kl-stage-b: #ede4d3;
+  --kl-dash: #d9c9a8;            /* dashed rings, "coming soon" outlines */
+  --kl-cutout: #ffffff;          /* the ring that separates an avatar from what is behind it */
+  --kl-glass-bg: rgba(255, 255, 255, 0.66);
+  --kl-glass-border: rgba(255, 255, 255, 0.95);
+  --kl-bubble: rgba(255, 255, 255, 0.85);
+  /* The inverted element: active chips, the module card, the premium plan. */
+  --kl-invert: #0b0e1d;
+  --kl-invert-ink: #f4f2ee;
+  --kl-invert-border: #0b0e1d;
+  --kl-section-edge: transparent; /* night sections need an edge only on a night page */
+  --kl-shadow: rgba(36, 31, 22, 0.35);
+
+  /* Text */
+  --kl-ink: #241f16;
+  --kl-mid: #5c5344;
+  --kl-low: #6e6555;
+  --kl-gold-deep: #8a6414;       /* gold that reads as text on this background */
+  --kl-on-pastel: #241f16;       /* initials on pastel avatars, in both themes */
+
+  /* Fixed brand colours, identical in both themes */
+  --kl-gold: #d9a648;
+  --kl-gold-soft: #f0c878;
+  --kl-night: #0b0e1d;
+  --kl-night-2: #1a1f3b;
+  --kl-night-text: #f4f2ee;
+  --kl-night-mid: #a7acbf;
+  --kl-sky: #8fb8e8;
+  --kl-coral: #e07856;
+  --kl-indigo: #4a52e0;
+  --kl-gold-sheen: linear-gradient(135deg, #f0c878, #d9a648);
+  --kl-orb: conic-gradient(#4a52e0, #8fb8e8, #f0c878, #4a52e0);
+
+  color-scheme: light;
+  background: var(--kl-bg);
+  color: var(--kl-ink);
+  font-family: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Night: the Cloud palette the app already uses, so the landing page and the
+   app it leads into look like one product. */
+.kl[data-kl-theme='dark'] {
+  --kl-bg: #0b0e1d;
+  --kl-surface: #12162b;
+  --kl-paper: #151935;
+  --kl-paper-2: #262b4a;
+  --kl-stage-a: #141833;
+  --kl-stage-b: #1c2144;
+  --kl-dash: #3a4068;
+  --kl-cutout: #0b0e1d;
+  --kl-glass-bg: rgba(255, 255, 255, 0.06);
+  --kl-glass-border: rgba(255, 255, 255, 0.12);
+  --kl-bubble: rgba(255, 255, 255, 0.09);
+  --kl-invert: #1f2550;
+  --kl-invert-ink: #f4f2ee;
+  --kl-invert-border: rgba(240, 200, 120, 0.45);
+  --kl-section-edge: rgba(255, 255, 255, 0.08);
+  --kl-shadow: rgba(0, 0, 0, 0.6);
+
+  --kl-ink: #f4f2ee;
+  --kl-mid: #b3b8cb;
+  --kl-low: #8f95ab;
+  --kl-gold-deep: #f0c878;
+
+  color-scheme: dark;
+}
+
+.kl a { color: inherit; text-decoration: none; }
+.kl a:focus-visible,
+.kl button:focus-visible {
+  outline: 2px solid var(--kl-gold-deep);
+  outline-offset: 3px;
+}
+
+.kl-serif { font-family: 'Fraunces', Georgia, 'Times New Roman', serif; }
+.kl-mono { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; }
+
+.kl-h2 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 600;
+  font-size: clamp(40px, 5.2vw, 68px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.kl-h3 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 600;
+  font-size: clamp(36px, 4.4vw, 56px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.kl-lead {
+  font-size: 18px;
+  line-height: 1.6;
+  color: var(--kl-mid);
+  max-width: 460px;
+  text-wrap: pretty;
+}
+.kl-pad-x { padding-inline: clamp(20px, 5vw, 64px); }
+
+/* Two columns that stack below ~880px, as in the design's auto-fit grids. */
+.kl-split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
+  align-items: center;
+}
+
+/* Gold carries dark text in both themes: light ink on gold is unreadable. */
+.kl-sheen { background: var(--kl-gold-sheen); color: var(--kl-night); }
+.kl-orb-ring { background: var(--kl-orb); }
+
+.kl-glass {
+  background: var(--kl-glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--kl-glass-border);
+}
+.kl-night-glass {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.kl-card-shadow {
+  box-shadow: 0 30px 60px -30px var(--kl-shadow), 0 2px 6px rgba(15, 17, 13, 0.06);
+}
+/* Night sections (assistant, final call): on a night page they keep an edge. */
+.kl-night-section { box-shadow: inset 0 0 0 1px var(--kl-section-edge); }
+.kl-star { clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); }
+
+/* Motion */
+@keyframes kl-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+@keyframes kl-floatb {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50% { transform: translateY(10px) rotate(3deg); }
+}
+@keyframes kl-spin { to { transform: rotate(360deg); } }
+@keyframes kl-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.7); } }
+@keyframes kl-rise { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+@keyframes kl-typing {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+@keyframes kl-grow { 0%, 100% { width: 38%; } 50% { width: 86%; } }
+
+.kl-float { animation: kl-float var(--kl-dur, 7s) ease-in-out infinite; }
+.kl-floatb { animation: kl-floatb var(--kl-dur, 5.5s) ease-in-out infinite; }
+.kl-spin { animation: kl-spin var(--kl-dur, 40s) linear infinite; }
+.kl-pulse { animation: kl-pulse 1.8s infinite; }
+.kl-rise { animation: kl-rise 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: var(--kl-delay, 0s); }
+.kl-typing { animation: kl-typing 1.2s infinite; animation-delay: var(--kl-delay, 0s); }
+.kl-grow { animation: kl-grow var(--kl-dur, 6s) ease-in-out infinite; }
+
+/* The orbit's slowly turning arc: a conic stroke masked to a ring. */
+.kl-arc {
+  padding: 1.5px;
+  background: conic-gradient(from 200deg, transparent 0 62%, #f0c878 72%, #d9a648 80%, #8fb8e8 88%, transparent 92%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+/* Everything rests in place for visitors who asked for less motion. The page
+   is complete without any of it. */
+@media (prefers-reduced-motion: reduce) {
+  .kl *, .kl *::before, .kl *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
