@@ -222,12 +222,7 @@ export default function Memorials() {
 
         {/* ── Section 2 — A memorial, complete ──────────────────────────── */}
         <section className="kl-pad-x border-t border-[var(--kl-paper-2)] py-[120px]">
-          <Heading
-            center
-            eyebrow="Anatomy"
-            title="A memorial, complete."
-            lead="Every memorial is a whole life, carefully kept. Hover each element to see where it lives."
-          />
+          {/* The heading lives inside: it sits above the part selector. */}
           <MemorialAnatomy />
         </section>
       </div>
