@@ -3,7 +3,6 @@ import { Navigate, Link, useSearchParams } from 'react-router'
 import { Loader2, PenLine, Sparkles, TrendingUp } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import AppShell, { RailCard } from '@/components/app/AppShell'
-import { useApi } from '@/hooks/useApi'
 import { useViewTracking } from '@/hooks/useViewTracking'
 import Composer from '@/components/social/Composer'
 import FeedModeMenu from '@/components/social/FeedModeMenu'
@@ -65,28 +64,62 @@ export default function SocialHub() {
   const appliedDefaults = useRef(false)
   const [defaultsReady, setDefaultsReady] = useState(false)
   const [orbVisible, setOrbVisible] = useState<boolean>(FEATURES.assistant)
+  // The modes and algorithms on offer, fetched with the preferences so a saved
+  // choice can be checked against them before it is applied.
+  const [catalog, setCatalog] = useState<{ modes: FeedMode[]; algorithms: Algorithm[] }>({
+    modes: [],
+    algorithms: [],
+  })
+  // Whether the page is still here when the defaults arrive: a late setParams
+  // would otherwise rewrite the URL of whatever page the member moved on to.
+  // A ref set by its own effect, not a cleanup flag in the loader: StrictMode
+  // runs effects twice, and the loader below only ever starts once.
+  const mounted = useRef(false)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
   useEffect(() => {
     if (appliedDefaults.current) return
     appliedDefaults.current = true
-    void kaluta.account
-      .preferences()
-      .then((prefs) => {
+    void Promise.allSettled([kaluta.account.preferences(), kaluta.feeds.modes(), kaluta.feeds.algorithms()])
+      .then(([prefsResult, modesResult, algorithmsResult]) => {
+        if (!mounted.current) return
+        const modes = modesResult.status === 'fulfilled' ? modesResult.value.modes : []
+        const algorithms = algorithmsResult.status === 'fulfilled' ? algorithmsResult.value.items : []
+        setCatalog({ modes, algorithms })
+        // A preferences outage must not leave the feed empty — it falls back
+        // to the built-in defaults and loads anyway.
+        if (prefsResult.status !== 'fulfilled') return
+        const prefs = prefsResult.value
+
+        // A saved choice is applied only if it still exists. A removed
+        // algorithm or mode used to fail every page open with an error until
+        // the member found the setting and changed it.
         const algorithm = prefs.algorithm_id
-        if (typeof algorithm === 'string' && algorithm) setAlgorithmId(algorithm)
+        if (typeof algorithm === 'string' && algorithms.some((a) => a.id === algorithm)) {
+          setAlgorithmId(algorithm)
+        }
         // The floating composer button stacks above the orb, so it needs to
         // know whether the orb is there at all.
         setOrbVisible(FEATURES.assistant && prefs.assistant_visible !== false)
         // Only when the URL says nothing: a shared link or a hashtag click is
         // an explicit request and must win over the default.
         const savedMode = prefs.default_feed_mode
-        if (!params.get('mode') && typeof savedMode === 'string' && savedMode && savedMode !== 'new') {
+        if (
+          !params.get('mode') &&
+          typeof savedMode === 'string' &&
+          savedMode !== 'new' &&
+          modes.some((m) => m.id === savedMode)
+        ) {
           setParams(new URLSearchParams({ mode: savedMode }), { replace: true })
         }
       })
-      // A preferences outage must not leave the feed empty — it falls back to
-      // the built-in defaults and loads anyway.
-      .catch(() => undefined)
-      .finally(() => setDefaultsReady(true))
+      .finally(() => {
+        if (mounted.current) setDefaultsReady(true)
+      })
     // Runs once; params/setParams are read at call time, not tracked.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -131,32 +164,40 @@ export default function SocialHub() {
     setParams(next, { replace: true })
   }, [params, setParams])
 
-  const modes = useApi<{ modes: FeedMode[] }>(() => kaluta.feeds.modes(), [])
-  const algorithms = useApi<{ items: Algorithm[] }>(() => kaluta.feeds.algorithms(), [])
-
+  // Only the most recent request may fill the feed. Switching mode or
+  // algorithm while a feed is loading used to let the older answer arrive last
+  // and overwrite the screen with the wrong feed, often an empty one.
+  const inFlight = useRef<AbortController | null>(null)
   const load = useCallback(async () => {
+    inFlight.current?.abort()
+    const controller = new AbortController()
+    inFlight.current = controller
     setLoading(true)
     setError(null)
     try {
-      setFeed(
-        await kaluta.feeds.page({
+      const page = await kaluta.feeds.page(
+        {
           mode,
           algorithm_id: algorithmId,
           city: mode === 'local' ? city || undefined : undefined,
           country: mode === 'country' ? country || undefined : undefined,
           topic: mode === 'topics' ? topic || undefined : undefined,
-        }),
+        },
+        { signal: controller.signal },
       )
+      if (!controller.signal.aborted) setFeed(page)
     } catch (err) {
+      if (controller.signal.aborted) return
       setError(err instanceof ApiError ? err.message : 'Could not load the feed')
     } finally {
-      setLoading(false)
+      if (inFlight.current === controller) setLoading(false)
     }
   }, [mode, algorithmId, city, country, topic])
 
   useEffect(() => {
     if (user && defaultsReady) void load()
   }, [user, defaultsReady, load])
+  useEffect(() => () => inFlight.current?.abort(), [])
 
   if (authLoading) {
     return (
@@ -250,7 +291,7 @@ export default function SocialHub() {
           className="w-full rounded-card-sm border border-white/10 bg-ink-2/70 px-3 py-2 text-sm text-text-hi focus:border-gold/40 focus:outline-none"
           aria-label="Ranking algorithm"
         >
-          {(algorithms.data?.items ?? []).map((a) => (
+          {catalog.algorithms.map((a) => (
             <option key={a.id} value={a.id}>
               {a.name}
               {a.builtin ? '' : ' · community'}
@@ -288,7 +329,7 @@ export default function SocialHub() {
     <AppShell aside={rail}>
       <div className="min-w-0">
           <FeedModeMenu
-            modes={modes.data?.modes ?? []}
+            modes={catalog.modes}
             active={mode}
             onSelect={setMode}
             onRefresh={() => void load()}
