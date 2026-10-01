@@ -948,6 +948,7 @@ def feed(
             "algorithm": "chronological",
             "ranked": False,
             "age_tier": agefilter.tier_of(age),
+            "degraded": age.degraded,
             "items": [_apply_prefs(_post_out(p, db, viewer=viewer, authors=authors, reposted=reposted), prefs) for p in rows],
         }
 
@@ -960,6 +961,7 @@ def feed(
             "algorithm": "chronological",
             "ranked": False,
             "age_tier": agefilter.tier_of(age),
+            "degraded": age.degraded,
             "items": [_apply_prefs(_post_out(p, db, viewer=viewer, authors=authors, reposted=reposted), prefs) for p in rows],
         }
 
@@ -1001,6 +1003,9 @@ def feed(
         "algorithm_name": algorithm.name,
         "ranked": True,
         "total_candidates": len(scored),
+        # Top level, as in every mode: the age lookup failed, so this feed was
+        # filtered as for a minor and may be missing posts the member can see.
+        "degraded": age.degraded,
         "applied_settings": {
             "age_tier": agefilter.tier_of(age),
             "data_saver": bool(prefs.get("data_saver")),

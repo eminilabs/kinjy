@@ -363,6 +363,24 @@ export default function SocialHub() {
               </div>
             )}
 
+            {/* The age lookup failed, so the feed was filtered as for a minor.
+                Said out loud: a thinner feed with no reason given looks like
+                the app losing posts. */}
+            {!loading && !error && feed?.degraded && (
+              <div className="flex items-center justify-between gap-3 rounded-card-sm border border-sky/25 bg-sky/10 px-4 py-3 text-sm text-sky">
+                <span role="status">
+                  Some posts may be missing for a moment. Refresh in a little while to see everything.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void load()}
+                  className="shrink-0 rounded-full border border-sky/40 px-3 py-1 text-xs font-semibold hover:bg-sky/10"
+                >
+                  Refresh
+                </button>
+              </div>
+            )}
+
             {!loading && !error && feed?.items.length === 0 && (
               <div className="cloud-card p-8 text-center">
                 <Sparkles size={20} className="mx-auto text-gold" aria-hidden="true" />

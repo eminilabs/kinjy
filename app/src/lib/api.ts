@@ -453,6 +453,11 @@ export interface FeedPage {
   ranked: boolean
   total_candidates?: number
   empty_reason?: string
+  /**
+   * The member's age could not be confirmed, so this feed was filtered as for
+   * a minor and may be missing posts. Temporary; worth saying so on screen.
+   */
+  degraded?: boolean
   items: Post[]
 }
 
