@@ -64,6 +64,20 @@ MIGRATIONS = [
     # live threads would silently block attachments between people who have
     # been talking for months.
     f"UPDATE {models.SCHEMA}.participants SET accepted_at = joined_at WHERE accepted_at IS NULL",
+    # Idempotent sends (a retried message is not delivered twice) and attachments.
+    f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS client_id VARCHAR(64)",
+    f"CREATE UNIQUE INDEX IF NOT EXISTS uq_message_sender_client_id "
+    f"ON {models.SCHEMA}.messages (sender_id, client_id) WHERE client_id IS NOT NULL",
+    *(
+        f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS {column}"
+        for column in (
+            "media_id VARCHAR(40)",
+            "media_kind VARCHAR(20)",
+            "media_name VARCHAR(255)",
+            "media_type VARCHAR(100)",
+            "media_size BIGINT",
+        )
+    ),
 ]
 
 app = create_app(
@@ -71,21 +85,6 @@ app = create_app(
     schema=models.SCHEMA,
     migrations=MIGRATIONS,
     description="End-to-end encrypted direct messages, group conversations, notifications.",
-    migrations=[
-        f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS client_id VARCHAR(64)",
-        f"CREATE UNIQUE INDEX IF NOT EXISTS uq_message_sender_client_id "
-        f"ON {models.SCHEMA}.messages (sender_id, client_id) WHERE client_id IS NOT NULL",
-        *(
-            f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS {column}"
-            for column in (
-                "media_id VARCHAR(40)",
-                "media_kind VARCHAR(20)",
-                "media_name VARCHAR(255)",
-                "media_type VARCHAR(100)",
-                "media_size BIGINT",
-            )
-        ),
-    ],
 )
 
 # --- the realtime hub ------------------------------------------------------
@@ -756,7 +755,7 @@ async def send_message(
 
     # Text first. An attachment sent before the other side accepted has already
     # been seen by the time anybody can report it.
-    if payload.media_url or payload.kind not in ("text", ""):
+    if payload.media_id or payload.kind not in ("text", ""):
         media_ok, media_reason = agecheck.may_send_media(db, principal.user_id, conversation_id)
         if not media_ok:
             raise HTTPException(status_code=403, detail=media_reason)

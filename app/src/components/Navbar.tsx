@@ -56,22 +56,26 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  useEffect(() => {
+  // Every menu closes when the page changes. Done during render, not in an
+  // effect: an effect would paint the new page with the menu still open first.
+  const [menusPath, setMenusPath] = useState(location.pathname)
+  if (menusPath !== location.pathname) {
+    setMenusPath(location.pathname)
     setDrawerOpen(false)
     setLangOpen(false)
     setMoreOpen(false)
-  }, [location.pathname])
+  }
 
+  // The page's language and direction follow i18n, however the language was
+  // changed (this menu, the footer, the app's own switcher), not only here.
   useEffect(() => {
-    const currentLang = LANGUAGES.find((l) => l.code === i18n.language)
-    if (currentLang) {
-      document.documentElement.dir = currentLang.dir
-      document.documentElement.lang = currentLang.code
-    }
+    const code = i18n.language.slice(0, 2)
+    document.documentElement.lang = code
+    document.documentElement.dir = LANGUAGES.find((l) => l.code === code)?.dir ?? 'ltr'
   }, [i18n.language])
 
   const switchLanguage = (code: string) => {
-    i18n.changeLanguage(code)
+    void i18n.changeLanguage(code)
     setLangOpen(false)
   }
 
@@ -271,7 +275,7 @@ export default function Navbar() {
               {[{ to: '/', label: 'Home' }, ...NAV_LINKS.map((l) => ({ to: l.to, label: t(l.key, { defaultValue: l.fallback }) })), { to: '/assistant', label: 'Kinjy Assistant' }, { to: '/admin', label: 'Admin Console' }, { to: '/app', label: 'The App' },
               user
                 ? { to: '/dashboard', label: t('nav.dashboard', { defaultValue: 'Dashboard' }) }
-                : { to: '/join?mode=signup', label: t('nav.join', { defaultValue: 'Join Kinjy' }) }].map((l) => (
+                : { to: '/join?mode=signup', label: t('nav.join', { defaultValue: 'Join Kinjy' }) }].filter((l) => isRouteAvailable(l.to)).map((l) => (
                 <div key={l.to}>
                   <NavLink
                     to={l.to}
@@ -291,7 +295,7 @@ export default function Navbar() {
                   <button
                     key={l.code}
                     type="button"
-                    onClick={() => switchLanguage(l.code, l.dir)}
+                    onClick={() => switchLanguage(l.code)}
                     className={cn(
                       'rounded-full px-3 py-1.5 text-sm cloud-glass',
                       i18n.language === l.code ? 'text-gold-soft border-gold/40' : 'text-text-mid',

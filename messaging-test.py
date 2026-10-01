@@ -12,7 +12,10 @@ relay. Asserts the things that silently lose messages when they break:
 Run it inside messaging-service (it mints a short-lived token, which needs the
 shared secret):
 
-    docker compose exec -T messaging-service python /dev/stdin < messaging-test.py
+    docker compose exec -T messaging-service python - < messaging-test.py
+
+(`python -`, not `python /dev/stdin`: only the former puts the working
+directory, /app, on sys.path, which is where `common` lives.)
 
 Leaves two `msgtest-*@example.com` members behind, like smoke-test.sh.
 """
@@ -49,9 +52,11 @@ def check(label, ok, detail=""):
 
 def register(tag):
     suffix = uuid.uuid4().hex[:8]
+    # Registration requires a date of birth (it decides the age tier); an adult
+    # here, so the age rules on messaging do not get in the way of this check.
     out = call("POST", "/auth/register", {"email": f"msgtest-{tag}-{suffix}@example.com",
         "password": PASSWORD, "display_name": f"Msgtest {tag}", "handle": f"msgtest.{tag}.{suffix}",
-        "date_of_birth": "1995-06-15"})
+        "date_of_birth": "1990-01-15", "country": "FR"})
     return out["user"]["id"], out["tokens"]["access_token"]
 
 
