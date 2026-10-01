@@ -71,11 +71,11 @@ export default function LightCandleModal({
             animate={{ opacity: 1, y: 0 }}
             exit={reduced ? { opacity: 0 } : { opacity: 0, y: 24 }}
             transition={{ duration: 0.5, ease: cloudEase }}
-            className="w-full max-w-md rounded-card-xl border border-gold/25 bg-[#0E1226] p-8 shadow-[0_40px_90px_-20px_rgba(0,0,0,0.9)]"
+            className="w-full max-w-md rounded-[20px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] p-8 shadow-[0_40px_90px_-30px_rgba(0,0,0,0.6)]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between">
-              <h3 className="font-display text-2xl text-text-hi">Light a candle</h3>
+              <h3 className="kl-serif text-[28px] font-semibold">Light a candle</h3>
               <button
                 type="button"
                 onClick={handleClose}
@@ -98,12 +98,12 @@ export default function LightCandleModal({
                 onKeyDown={(e) => e.key === 'Enter' && light()}
                 placeholder="Their name…"
                 maxLength={60}
-                className="mt-2 w-full rounded-card-sm border border-white/15 bg-white/[0.05] px-4 py-3 text-text-hi placeholder:text-text-low focus:border-gold/50 focus:outline-none"
+                className="mt-2 w-full rounded-[10px] border border-[var(--kl-paper-2)] bg-[var(--kl-paper)] px-4 py-3 text-text-hi placeholder:text-text-low focus:border-[var(--kl-gold)] focus:outline-none"
               />
             </label>
 
             <div className="mt-6 flex items-center justify-between gap-4">
-              <ArcButton onClick={light} disabled={!name.trim() || justLit}>
+              <ArcButton onClick={light} disabled={!name.trim() || justLit} className="kl-sheen !text-[var(--kl-night)]">
                 <Flame size={16} />
                 {justLit ? 'Candle lit' : 'Light it gently'}
               </ArcButton>
@@ -126,7 +126,7 @@ export default function LightCandleModal({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.4, duration: 0.8 }}
-                className="mt-4 text-center font-display text-sm italic text-[#D8D3C8]"
+                className="mt-4 text-center font-display text-sm italic text-[var(--kl-mid)]"
               >
                 A flame now burns for {name.trim()}.
               </motion.p>
@@ -134,7 +134,7 @@ export default function LightCandleModal({
 
             {/* recently lit candles */}
             {lit.length > 0 && (
-              <div className="mt-6 border-t border-white/10 pt-4">
+              <div className="mt-6 border-t border-[var(--kl-paper-2)] pt-4">
                 <p className="mono-data text-[0.62rem] tracking-[0.18em] text-text-low">RECENTLY LIT</p>
                 <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
                   {lit.slice(-6).map((c) => (

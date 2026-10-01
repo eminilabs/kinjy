@@ -24,7 +24,7 @@ export default function VerificationPipeline() {
     <div>
       {/* track */}
       <div className="relative hidden md:block">
-        <div className="absolute left-[12.5%] right-[12.5%] top-5 h-px bg-white/12" aria-hidden="true" />
+        <div className="absolute left-[12.5%] right-[12.5%] top-5 h-px bg-[var(--kl-dash)]" aria-hidden="true" />
         {!reduced && (
           <motion.span
             aria-hidden="true"
@@ -39,7 +39,7 @@ export default function VerificationPipeline() {
           {STEPS.map((s, i) => (
             <li key={s.id} className="flex flex-col items-center text-center">
               <motion.span
-                className={cn('flex h-10 w-10 items-center justify-center rounded-full border-2 bg-[#0E1226]', s.dot)}
+                className={cn('flex h-10 w-10 items-center justify-center rounded-full border-2 bg-[var(--kl-surface)]', s.dot)}
                 initial={{ boxShadow: '0 0 0px rgba(240,200,120,0)' }}
                 whileInView={
                   reduced
@@ -56,7 +56,7 @@ export default function VerificationPipeline() {
                 )}
               </motion.span>
               <p className={cn('mono-data mt-3 text-[0.7rem] font-semibold tracking-[0.18em]', s.text)}>{s.label}</p>
-              <p className="caption mt-1 max-w-[15rem] !text-text-mid">{s.body}</p>
+              <p className="caption mt-1 max-w-[15rem] !text-[var(--kl-mid)]">{s.body}</p>
             </li>
           ))}
         </ol>
@@ -65,17 +65,17 @@ export default function VerificationPipeline() {
       {/* stacked fallback on small screens */}
       <ol className="space-y-4 md:hidden">
         {STEPS.map((s) => (
-          <li key={s.id} className="flex items-start gap-3 rounded-card-md border border-white/10 bg-white/[0.04] p-4">
+          <li key={s.id} className="flex items-start gap-3 rounded-card-md border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] p-4">
             <span className={cn('mt-1 h-3 w-3 shrink-0 rounded-full border-2', s.dot)} />
             <div>
               <p className={cn('mono-data text-[0.7rem] font-semibold tracking-[0.18em]', s.text)}>{s.label}</p>
-              <p className="caption mt-1 !text-text-mid">{s.body}</p>
+              <p className="caption mt-1 !text-[var(--kl-mid)]">{s.body}</p>
             </div>
           </li>
         ))}
       </ol>
 
-      <p className="mx-auto mt-10 max-w-2xl text-center font-display text-lg italic leading-relaxed text-[#D8D3C8]">
+      <p className="mx-auto mt-12 max-w-2xl text-center font-display text-xl italic leading-relaxed text-[var(--kl-mid)]">
         “Passing is confirmed through documentation and family corroboration before a
         memorial is marked verified. Nothing is automated that grief cannot undo.”
       </p>

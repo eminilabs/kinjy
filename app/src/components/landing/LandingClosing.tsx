@@ -189,34 +189,41 @@ export function LandingFinalCta() {
           </div>
         </div>
       </div>
-      <footer className="px-2 pb-7 pt-14 text-sm text-[var(--kl-mid)]">
-        <div className="grid gap-10" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))' }}>
-          <div className="flex flex-col gap-3">
-            <Brand size={39} text={20} />
-            <p className="max-w-[220px] leading-[1.5]">Un seul compte pour vos proches, vos communautés et votre famille.</p>
-          </div>
-          {FOOTER_COLUMNS.map((col) => (
-            <nav key={col.title} aria-label={col.title}>
-              <h3 className="mb-3 text-[13px] font-semibold uppercase tracking-[.08em] text-[var(--kl-ink)]">{col.title}</h3>
-              <ul className="flex flex-col gap-2">
-                {col.links.map((l) => (
-                  <li key={l.label}>
-                    <Link to={l.to} className="hover:text-[var(--kl-gold-deep)]">
-                      {l.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </nav>
-          ))}
-        </div>
-        <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-[var(--kl-paper-2)] pt-6">
-          <span>© {new Date().getFullYear()} Kinjy</span>
-          <Link to="/join?mode=signup" className="font-semibold text-[var(--kl-gold-deep)] hover:underline">
-            Rejoindre Kinjy →
-          </Link>
-        </div>
-      </footer>
+      <LandingFooter />
     </section>
+  )
+}
+
+/** The site footer: every public page, in four columns. */
+export function LandingFooter() {
+  return (
+  <footer className="px-2 pb-7 pt-14 text-sm text-[var(--kl-mid)]">
+    <div className="grid gap-10" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))' }}>
+      <div className="flex flex-col gap-3">
+        <Brand size={39} text={20} />
+        <p className="max-w-[220px] leading-[1.5]">Un seul compte pour vos proches, vos communautés et votre famille.</p>
+      </div>
+      {FOOTER_COLUMNS.map((col) => (
+        <nav key={col.title} aria-label={col.title}>
+          <h3 className="mb-3 text-[13px] font-semibold uppercase tracking-[.08em] text-[var(--kl-ink)]">{col.title}</h3>
+          <ul className="flex flex-col gap-2">
+            {col.links.map((l) => (
+              <li key={l.label}>
+                <Link to={l.to} className="hover:text-[var(--kl-gold-deep)]">
+                  {l.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      ))}
+    </div>
+    <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-[var(--kl-paper-2)] pt-6">
+      <span>© {new Date().getFullYear()} Kinjy</span>
+      <Link to="/join?mode=signup" className="font-semibold text-[var(--kl-gold-deep)] hover:underline">
+        Rejoindre Kinjy →
+      </Link>
+    </div>
+  </footer>
   )
 }

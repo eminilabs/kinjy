@@ -45,7 +45,7 @@ function CalloutChip({
       transition={{ delay: index * 0.15, duration: 0.5, ease: cloudEase }}
       className={cn(
         'group relative flex items-start gap-3 rounded-card-md border p-3.5 text-left transition-colors duration-300',
-        active ? 'border-gold/60 bg-gold/10' : 'border-white/10 bg-white/[0.04] hover:border-gold/30',
+        active ? 'border-[var(--kl-gold)] bg-[#D9A648]/10' : 'border-[var(--kl-paper-2)] bg-[var(--kl-surface)] hover:border-[var(--kl-gold)]',
       )}
       aria-label={`${callout.title}: ${callout.body}`}
     >
@@ -58,14 +58,14 @@ function CalloutChip({
           'origin-left scale-x-0 transition-transform duration-500 ease-line-ease group-hover:scale-x-100',
         )}
       />
-      <span className={cn('mt-0.5 shrink-0 transition-colors', active ? 'text-gold-soft' : 'text-gold/70')}>
+      <span className={cn('mt-0.5 shrink-0 transition-colors', active ? 'text-[var(--kl-gold-deep)]' : 'text-[var(--kl-gold)]')}>
         <Icon size={17} />
       </span>
       <span>
-        <span className={cn('block text-sm font-bold transition-colors', active ? 'text-gold-soft' : 'text-text-hi')}>
+        <span className={cn('block text-sm font-bold transition-colors', active ? 'text-[var(--kl-gold-deep)]' : 'text-[var(--kl-ink)]')}>
           {callout.title}
         </span>
-        <span className="caption mt-0.5 block !text-text-mid">{callout.body}</span>
+        <span className="caption mt-0.5 block !text-[var(--kl-mid)]">{callout.body}</span>
       </span>
     </motion.button>
   )
@@ -104,7 +104,7 @@ export default function MemorialAnatomy() {
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, amount: 0.65 }}
         transition={{ duration: 0.9, ease: cloudEase }}
-        className="relative order-1 w-full max-w-lg overflow-hidden rounded-card-xl border border-gold/25 bg-[#141830] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.8)] lg:order-2"
+        className="force-dark relative order-1 w-full max-w-lg overflow-hidden rounded-card-xl border border-gold/25 bg-[#141830] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.55)] lg:order-2"
       >
         {/* dark stone texture at 8% */}
         <div

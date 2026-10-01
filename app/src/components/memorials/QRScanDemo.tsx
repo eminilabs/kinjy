@@ -41,7 +41,7 @@ export default function QRScanDemo() {
         whileInView={{ opacity: 1, rotate: -2, y: 0 }}
         viewport={{ once: true, amount: 0.5 }}
         transition={{ duration: 0.8, ease: cloudEase }}
-        className="w-56 shrink-0 overflow-hidden rounded-card-lg border border-gold/30 shadow-[0_30px_60px_-20px_rgba(0,0,0,0.75)] sm:w-64"
+        className="kl-card-shadow w-56 shrink-0 overflow-hidden rounded-card-lg border border-gold/30 sm:w-64"
       >
         <img
           src="/memorial-qr.jpg"
@@ -58,7 +58,7 @@ export default function QRScanDemo() {
         viewport={{ once: true, amount: 0.5 }}
         transition={{ duration: 0.7, ease: cloudEase, delay: 0.15 }}
         style={{ perspective: 800 }}
-        className="relative -ml-10 mb-6 w-36 shrink-0 sm:w-44"
+        className="force-dark relative -ml-10 mb-6 w-36 shrink-0 sm:w-44"
       >
         <div className="overflow-hidden rounded-[1.6rem] border border-white/20 bg-[#0B0E1D] shadow-[0_30px_60px_-18px_rgba(0,0,0,0.85)] ring-4 ring-[#1A1F3B]">
           <div className="relative aspect-[9/16]">
@@ -124,7 +124,7 @@ export default function QRScanDemo() {
       <button
         type="button"
         onClick={scan}
-        className="absolute -bottom-3 right-0 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-[#0E1226]/80 px-3 py-1.5 text-[0.7rem] font-semibold text-text-mid backdrop-blur-sm transition-colors hover:border-gold/40 hover:text-gold-soft"
+        className="absolute -bottom-3 right-0 inline-flex items-center gap-1.5 rounded-full border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] px-3 py-1.5 text-[0.7rem] font-semibold text-[var(--kl-mid)] transition-colors hover:border-[var(--kl-gold)] hover:text-[var(--kl-gold-deep)]"
       >
         <RotateCcw size={12} /> Replay scan
       </button>
