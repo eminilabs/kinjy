@@ -11,19 +11,23 @@ import {
   Layers,
   Activity,
 } from 'lucide-react'
+import { FEATURES } from '@/lib/features'
 import { cn } from '@/lib/utils'
 
-const RAIL = [
+const ALL_RAIL = [
   { icon: LayoutDashboard, label: 'Dashboard', active: true },
   { icon: Users, label: 'Members', active: false },
   { icon: ScrollText, label: 'Ledger', active: false },
   { icon: ShieldCheck, label: 'KYC', active: false },
   { icon: Radar, label: 'Fraud', active: false },
   { icon: Trophy, label: 'Kinjy Leaders', active: false },
-  { icon: Zap, label: 'AI Watch', active: false, badge: true },
+  { icon: Zap, label: 'AI Watch', active: false, badge: true, assistant: true },
   { icon: Layers, label: 'Moderation', active: false },
   { icon: Activity, label: 'System', active: false },
 ]
+
+/** AI Watch is the assistant's section, so its entry goes with it (lib/features.ts). */
+const RAIL = ALL_RAIL.filter((item) => FEATURES.assistant || !item.assistant)
 
 /**
  * ConsoleFrame — the admin page presented as a "product screenshot brought to life":
