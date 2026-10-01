@@ -267,3 +267,100 @@ class ContentSafetyClassification(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
+
+
+class ContentReport(Base):
+    """One member telling us something is wrong with a piece of content.
+
+    A report is evidence, never a verdict. Three of them pull a permissive
+    rating back behind an age wall pending review (``reclassify_on_report``);
+    none of them can ever release content, because a report that could lower a
+    rating would make brigading the way to un-rate adult material.
+
+    One row per reporter per item, enforced in the database rather than in the
+    handler: refreshing the page is not a second opinion.
+    """
+
+    __tablename__ = "content_reports"
+    __table_args__ = (
+        UniqueConstraint("content_id", "reporter_id", name="uq_report_once"),
+        Index("ix_report_content", "content_id"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("rpt"))
+    content_id: Mapped[str] = mapped_column(String(40), index=True)
+    content_kind: Mapped[str] = mapped_column(String(20), default="post")
+    reporter_id: Mapped[str] = mapped_column(String(40), index=True)
+    # sexual | violence | hate | self_harm | child_safety | spam | other
+    reason: Mapped[str] = mapped_column(String(30), default="other")
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class ModerationDecision(Base):
+    """A record of every decision that restricted somebody.
+
+    This table exists because an appeal against nothing is not an appeal. Until
+    now a refused comment was rolled back whole — the comment, its
+    classification, all of it — and the author was told to contact support
+    about a thing that no longer existed anywhere in the system. A decision
+    nobody wrote down cannot be reviewed, cannot be measured, and cannot be
+    shown to have been wrong.
+
+    ``body_snapshot`` is kept for exactly that reason, and deliberately not kept
+    when the decision was a child-safety escalation: that material does not
+    belong in a table that ordinary reviewers read, and it has no appeal path
+    here anyway.
+    """
+
+    __tablename__ = "moderation_decisions"
+    __table_args__ = (
+        Index("ix_decision_subject", "subject_id", "created_at"),
+        Index("ix_decision_content", "content_id"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("mdc"))
+    # Whose content it was — the person entitled to appeal.
+    subject_id: Mapped[str] = mapped_column(String(40), index=True)
+    content_id: Mapped[str] = mapped_column(String(40), index=True)
+    content_kind: Mapped[str] = mapped_column(String(20), default="post")
+    # refused_publication | restricted_by_rating | restricted_by_reports | human_review
+    action: Mapped[str] = mapped_column(String(30))
+    # The rating that caused it, for the member to see and a reviewer to judge.
+    age_rating: Mapped[str] = mapped_column(String(20), default="UNCLASSIFIED")
+    # "automatic" or a user id. An appeal may not be decided by whoever made it.
+    decided_by: Mapped[str] = mapped_column(String(40), default="automatic")
+    body_snapshot: Mapped[str | None] = mapped_column(Text)
+    appealable: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class ModerationAppeal(Base):
+    """Somebody saying the decision was wrong, and what came of it.
+
+    Kept after it is answered, upheld ones included. An appeals process that
+    only remembers its successes cannot be audited, and "how often are we
+    wrong" is the only number that tells you whether the classifier is working.
+    """
+
+    __tablename__ = "moderation_appeals"
+    __table_args__ = (
+        UniqueConstraint("decision_id", name="uq_appeal_per_decision"),
+        Index("ix_appeal_state", "status", "due_at"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("apl"))
+    decision_id: Mapped[str] = mapped_column(String(40), index=True)
+    appellant_id: Mapped[str] = mapped_column(String(40), index=True)
+    grounds: Mapped[str | None] = mapped_column(Text)
+    # open | upheld | overturned
+    status: Mapped[str] = mapped_column(String(20), default="open")
+    reviewer_id: Mapped[str | None] = mapped_column(String(40))
+    reviewer_note: Mapped[str | None] = mapped_column(Text)
+    # An appeal with no deadline is a refusal that stuck quietly.
+    due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+    answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

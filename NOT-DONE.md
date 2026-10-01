@@ -297,3 +297,95 @@ seen running:
   counter already reads; that the enforcement path honours a parent-set value
   exactly as it honours a self-set one has not been re-verified since.
 
+## Moderation: reports, decisions, appeals (28/09)
+
+- ~~The member side has no screen.~~ Built: `/moderation` shows what was
+  restricted, in plain words rather than column values, and takes the appeal.
+- **No refusal is appealable, and that is not a bug today.** Every
+  `block_publication` in the classifier also sets `escalate_child_safety`, so
+  every refusal is a child-safety escalation and correctly leaves the ordinary
+  appeals path. It does mean the `refused_publication` appeal branch is
+  currently unreachable. `e2e_moderation.py` asserts this explicitly, so the
+  day the classifier blocks for some other reason, that check fails and says
+  so rather than the branch quietly coming alive untested.
+- **Overturning clears the graded levels wholesale.** A reviewer who thinks a
+  post was rated 18+ wrongly cannot say "it is violence 1, not sexual 2" — the
+  appeal zeroes every category. Fine for the common case, crude for a genuinely
+  borderline one.
+- **No appeal against an account-level action**, because there are no
+  account-level actions yet: no suspensions, no strikes, no rate limits imposed
+  by moderation. When those arrive they need their own decision records.
+- **Nothing expires.** Decisions and reports accumulate forever. A retention
+  policy matters here more than most tables, since `body_snapshot` holds text
+  that was refused publication.
+- **The SLA is decorative.** Appeals get a `due_at` and overdue ones sort
+  first, but nothing escalates, nobody is paged, and no appeal is ever granted
+  by default for going unanswered.
+- **`social-service/main.py:140` has an invalid escape sequence** (`\w` in a
+  non-raw string) that Python warns about on every import and will eventually
+  make an error. Pre-existing, one line, untouched here because it is in the
+  hashtag regex rather than in anything this change covers.
+
+## Trust & Safety console (28/09)
+
+- **Seen at 1280px and 375px in both themes, with live queues.** The console's
+  own text passes WCAG AA in light and dark (570 elements, size-aware
+  thresholds). Overturning an appeal from the page was exercised end to end and
+  the counters moved (review queue 131 → 130, appeals 5 → 4).
+- **Three app-chrome contrast failures are pre-existing and untouched**: the
+  avatar initial (1.12:1), the mobile bottom-nav labels in light mode (2.25:1),
+  and `AppShell`'s subtitle in dark (3.96:1). Confirmed by running the same
+  audit on `/circles`, which fails on exactly the same elements. They belong to
+  components every app page shares, so they are not this change's to fix.
+- **My first two contrast audits were wrong and would have sent me fixing
+  nothing.** The first compared against a non-composited ancestor background,
+  so a 10%-alpha overlay read as opaque near-white and a dark-mode button came
+  back at 1.0:1. The second applied 4.5:1 to every element, including 24px
+  semibold numerals whose AA threshold is 3:1. Only the third measurement —
+  alpha-composited, size-aware — is the one quoted above.
+- **No pagination.** The queue shows the first 50 of however many; with 131
+  pending there is no way to reach the rest from the page.
+- **No filtering or sorting**, so a reviewer cannot say "media only" or "most
+  reported first", which is how this queue will actually want to be worked.
+- **Rating is one-click and total.** The buttons set `age_rating` only; the
+  graded category levels are shown but cannot be edited, so a reviewer cannot
+  record "violence 1, not sexual 2" — the same bluntness the appeal overturn
+  has.
+- **Nothing refreshes on its own** and there is no optimistic update: every
+  action refetches all three queries, which is fine at this size and will not
+  be at ten times it.
+- **The rest of `/admin` is still a mockup.** Ledger, KYC, fraud, leaders pool
+  and AI watch are all static markup with invented figures, exactly as the
+  moderation section was until today.
+
+## Member moderation screen and reporting (28/09)
+
+- **Reporting had no entry point at all until now.** The whole reports
+  pipeline — three-from-distinct-accounts, the author's own report not
+  counting, urgent routing for child-safety — shipped with no way for a member
+  to file one. It is on the post card now. Comments can be reported through the
+  API but have no control in the UI, so half the pipeline is still unreachable
+  by hand.
+- **A report that fails to send used to claim it had been filed.** The first
+  version set "Thanks — a reviewer will look at this" optimistically and
+  swallowed the error; the first time the local gateway was down it said
+  exactly that while the request had been refused. Somebody reporting a child
+  at risk has to be able to believe that message, so it now waits for the
+  server and offers a retry on failure. What is still withheld is the outcome —
+  whether the report moved a rating — because that is what makes reporting a
+  way to probe the threshold.
+- **No way to see or withdraw a report you filed.** Once sent it is gone from
+  the member's view entirely, and the button just reads "Reported" until the
+  page is reloaded, after which it offers to report again (the server
+  deduplicates, so nothing doubles, but the UI does not know that).
+- **The appeal box has no character counter** against its 2000-character limit,
+  and a member who writes past it gets a silently truncated field.
+- ~~The member page's "we could not check" state has not been seen.~~ Checked
+  on 28/09 by stopping `social-service` so the decisions call fails while auth
+  stays up: the page shows "We could not check this right now — this is not the
+  same as nothing being restricted" with a retry, does not fall back to the
+  reassuring empty state, and recovers through the retry button once the
+  service is back. Patching `fetch` in the page never worked for this, because
+  the navigation needed to remount the route discards the patch; stopping the
+  service is both simpler and closer to the real failure.
+
