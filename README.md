@@ -448,7 +448,8 @@ On top of that socket, `/messages` has:
   copy offline, never beside the backups.
 - **Private attachments** — a chat file is served only on a link messaging-service
   signs for someone in the conversation (12 h, HMAC), never on its bare URL;
-  Range requests work on sealed files, so video seeks. Post media stays public.
+  Range requests work on sealed files, so video seeks. Post media keeps its own
+  short-lived, age-checked tickets (`backend/common/mediasign.py`).
 - **Dates** — day separators (Today / Yesterday / weekday / date), time only on
   bubbles, the full moment on hover, all in the app's chosen language.
 
