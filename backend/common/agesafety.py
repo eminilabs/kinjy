@@ -308,6 +308,19 @@ def _rating_strictness(rating: ContentRating) -> int:
     return _RATING_ORDER.get(rating, 5)
 
 
+def rating_strictness(rating: str) -> int:
+    """How restrictive a stored rating is, for comparing two of them.
+
+    A value that is not a known rating counts as the strictest: a comparison
+    that guesses "lenient" about something it cannot read is how a typo in a
+    stored row would become content shown to children.
+    """
+    try:
+        return _rating_strictness(ContentRating(rating))
+    except ValueError:
+        return _RATING_ORDER[ContentRating.PROHIBITED]
+
+
 # The minimum age each rating requires. UNCLASSIFIED sits with adult content on
 # purpose: until something has been looked at, it is not shown to children.
 _MINIMUM_AGE_FOR_RATING = {

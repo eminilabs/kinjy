@@ -26,6 +26,7 @@ from common.agesafety import (  # noqa: E402
     age_on,
     may_change_setting,
     privacy_defaults_for,
+    rating_strictness,
     resolve_policy,
 )
 
@@ -360,3 +361,16 @@ def test_every_verdict_names_the_policy_that_produced_it():
     deny = engine.can_view_content(profile(15, "GB"), rated(ContentRating.ADULT_18_PLUS))
     assert allow.policy_version == "gb-v1"
     assert deny.policy_version == "gb-v1"
+
+
+# --- comparing stored ratings ---------------------------------------------------
+
+def test_rating_strictness_orders_ratings_from_general_to_prohibited():
+    order = ["GENERAL", "TEEN_13_PLUS", "TEEN_16_PLUS", "UNCLASSIFIED", "ADULT_18_PLUS", "PROHIBITED"]
+    assert [rating_strictness(r) for r in order] == sorted(rating_strictness(r) for r in order)
+    assert len({rating_strictness(r) for r in order}) == len(order)
+
+
+def test_an_unknown_rating_counts_as_the_strictest():
+    assert rating_strictness("SOMETHING_ELSE") == rating_strictness("PROHIBITED")
+    assert rating_strictness("") == rating_strictness("PROHIBITED")

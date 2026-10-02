@@ -215,5 +215,20 @@ check("and the overturn rate is a real number", isinstance(stats.get("overturn_r
       stats)
 
 print()
+print("== a reviewer's rating does not vouch for a later edit ==")
+r = c.post("/posts", headers=auth(author_tok), json={"body": "Sunday hike by the lake", "visibility": "public"})
+edited = r.json().get("id") if r.status_code in (200, 201) else None
+time.sleep(0.4)
+r = c.post(f"/admin/classification/{edited}/review", headers=auth(admin_a), json={"age_rating": "GENERAL"})
+check("a reviewer confirms a harmless post as GENERAL", r.status_code == 200, r.text[:160])
+r = c.patch(f"/posts/{edited}", headers=auth(author_tok),
+            json={"body": "Explicit sex and full nudes, link in bio", "visibility": "public"})
+check("the author then edits it into adult content", r.status_code == 200, r.text[:160])
+r = c.get(f"/posts/{edited}", headers=auth(teen_tok))
+check("the 14-year-old can no longer open it, confirmed rating or not", r.status_code == 404, f"{r.status_code}")
+r = httpx.get(f"{SOCIAL}/internal/classification/{edited}", timeout=10)
+check("and it is back in front of a reviewer", r.json().get("human_review_status") == "pending", r.text[:200])
+
+print()
 print("ALL CHECKS PASSED" if ok else "THERE ARE FAILURES ABOVE")
 sys.exit(0 if ok else 1)
