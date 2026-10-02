@@ -33,6 +33,8 @@ import {
   ReactionList,
   StickerPicker,
 } from '@/components/social/MessageReactions'
+import { StickerButton } from '@/components/social/StickerPanel'
+import { stickerUrl } from '@/lib/stickers'
 import {
   ReplyBanner,
   ReplyButton,
@@ -560,6 +562,7 @@ export default function Messages() {
       body: string | null,
       file?: File,
       replyToId?: string | null,
+      stickerId?: string | null,
     ) => {
       try {
         let mediaId: string | undefined
@@ -574,7 +577,7 @@ export default function Messages() {
           )
           mediaId = asset.id
         }
-        const created = await kaluta.messages.send(conversationId, { body, mediaId, clientId, replyToId })
+        const created = await kaluta.messages.send(conversationId, { body, mediaId, clientId, replyToId, stickerId })
         filesRef.current.delete(clientId)
         if (activeIdRef.current !== conversationId) return
         // Usually the socket frame has already brought the full message; this
@@ -589,7 +592,8 @@ export default function Messages() {
               encrypted: false,
               ciphertext_b64: null,
               body,
-              kind: file ? 'media' : 'text',
+              kind: stickerId ? 'sticker' : file ? 'media' : 'text',
+              sticker_id: stickerId ?? null,
               reply_to_id: replyToId ?? null,
               created_at: created.created_at,
             },
@@ -704,7 +708,7 @@ export default function Messages() {
     const conversationId = activeIdRef.current
     if (!conversationId || !message.client_id) return
     const entry = filesRef.current.get(message.client_id)
-    if (!entry && !message.body) return
+    if (!entry && !message.body && !message.sticker_id) return
     setError(null)
     setMessages((current) =>
       current.map((m) => (m.client_id === message.client_id ? { ...m, status: 'sending', progress: 0 } : m)),
@@ -715,7 +719,36 @@ export default function Messages() {
       entry ? entry.body : message.body,
       entry?.file,
       message.reply_to_id,
+      message.sticker_id,
     )
+  }
+
+  /** A sticker from the panel, sent as a message of its own (answering the message being replied to, if any). */
+  const sendSticker = (stickerId: string) => {
+    const conversationId = activeIdRef.current
+    if (!conversationId || !user) return
+    const replyToId = replyTo?.id ?? null
+    setReplyTo(null)
+    setError(null)
+    const clientId = crypto.randomUUID()
+    scrollMode.current = 'bottom'
+    setMessages((current) => [
+      ...current,
+      {
+        id: `local_${clientId}`,
+        client_id: clientId,
+        status: 'sending',
+        sender_id: user.id,
+        encrypted: false,
+        ciphertext_b64: null,
+        body: null,
+        kind: 'sticker',
+        sticker_id: stickerId,
+        reply_to_id: replyToId,
+        created_at: new Date().toISOString(),
+      },
+    ])
+    void deliver(conversationId, clientId, null, undefined, replyToId, stickerId)
   }
 
   // --- voice messages ------------------------------------------------------------
@@ -936,6 +969,7 @@ export default function Messages() {
                 ciphertext_b64: null,
                 body: event.body ?? null,
                 kind: event.kind ?? 'text',
+                sticker_id: event.kind === 'sticker' ? (event.sticker_id ?? null) : null,
                 reply_to_id: event.reply_to_id ?? null,
                 media_url: event.media_url ?? null,
                 media_kind: event.media_kind ?? null,
@@ -1568,6 +1602,13 @@ export default function Messages() {
                     new Date(message.created_at).getTime() - new Date(previous.created_at).getTime() < BURST_MS
                   const hasText = !message.encrypted && Boolean(message.body?.trim())
                   const mediaOnly = Boolean(message.media_kind) && !hasText
+                  // A sticker stands on its own, without a bubble, unless it answers a message
+                  // (then the quote needs one to sit in).
+                  const isSticker = message.kind === 'sticker' && Boolean(message.sticker_id)
+                  const bareSticker = isSticker && !message.reply_to_id
+                  const stickerSrc = isSticker ? stickerUrl(message.sticker_id!) : null
+                  const stickerName =
+                    catalogue.data?.items.find((s) => s.id === message.sticker_id)?.name ?? 'Sticker'
                   return (
                     <div key={message.client_id ?? message.id}>
                       {newDay && (
@@ -1616,8 +1657,12 @@ export default function Messages() {
                         <div
                           className={cn(
                             'min-w-0 rounded-card-md',
-                            mediaOnly ? 'p-1.5' : 'px-3.5 py-2',
-                            mine ? 'bg-gold/15 text-text-hi' : 'border border-white/8 bg-white/[0.08] text-text-hi',
+                            bareSticker ? 'p-0' : mediaOnly ? 'p-1.5' : 'px-3.5 py-2',
+                            bareSticker
+                              ? 'text-text-hi'
+                              : mine
+                                ? 'bg-gold/15 text-text-hi'
+                                : 'border border-white/8 bg-white/[0.08] text-text-hi',
                             message.status === 'sending' && 'opacity-80',
                             message.status === 'failed' && 'border border-red-400/40',
                           )}
@@ -1627,6 +1672,16 @@ export default function Messages() {
                               target={quoteOf(message)!}
                               mine={mine}
                               onJump={() => message.reply_to_id && jumpTo(message.reply_to_id)}
+                            />
+                          )}
+                          {isSticker && stickerSrc && (
+                            <img
+                              src={stickerSrc}
+                              alt={stickerName}
+                              width={128}
+                              height={128}
+                              draggable={false}
+                              className="h-32 w-32 max-w-full object-contain"
                             />
                           )}
                           {message.media_kind && (
@@ -1642,7 +1697,7 @@ export default function Messages() {
                               )}
                             </div>
                           )}
-                          {(hasText || message.encrypted) && (
+                          {(hasText || (message.encrypted && !isSticker)) && (
                             <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
                               {message.encrypted ? (
                                 <span className="italic text-text-low">
@@ -1654,7 +1709,7 @@ export default function Messages() {
                             </p>
                           )}
                           <p
-                            className={cn('text-right text-[0.68rem] text-text-low', mediaOnly ? 'px-1.5 pt-1' : 'mt-0.5')}
+                            className={cn('text-right text-[0.68rem] text-text-low', mediaOnly || bareSticker ? 'px-1.5 pt-1' : 'mt-0.5')}
                             title={fullStamp(message.created_at, locale)}
                           >
                             {message.status === 'sending'
@@ -1776,6 +1831,7 @@ export default function Messages() {
                 ) : (
                   <>
                     <AttachmentMenu onFiles={stage} />
+                    <StickerButton catalogue={catalogue.data} onSend={sendSticker} />
                     <input
                       ref={inputRef}
                       value={draft}
@@ -1829,11 +1885,11 @@ export default function Messages() {
       </div>
       {picker && (() => {
         const target = messages.find((m) => m.id === picker.id)
-        if (!target) return null
+        if (!target || !catalogue.data) return null
         return (
           <StickerPicker
             anchor={picker.rect}
-            stickers={catalogue.data?.items ?? []}
+            catalogue={catalogue.data}
             current={target.reactions?.find((r) => r.user_id === user?.id)?.sticker_id}
             onPick={(stickerId) => toggleReaction(target, stickerId)}
             onReply={picker.withReply ? () => startReply(target) : undefined}

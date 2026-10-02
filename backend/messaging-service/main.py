@@ -87,6 +87,8 @@ MIGRATIONS = [
     f"ALTER TABLE {models.SCHEMA}.messages ALTER COLUMN media_name TYPE TEXT",
     # Replies: the id of the message being answered. Not a foreign key, see the model.
     f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS reply_to_id VARCHAR(40)",
+    # Standalone stickers: the catalogue id, nothing else.
+    f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS sticker_id VARCHAR(64)",
 ]
 
 app = create_app(
@@ -268,7 +270,7 @@ class ConversationIn(BaseModel):
 class MessageIn(BaseModel):
     ciphertext_b64: str | None = None
     body: str | None = Field(default=None, max_length=10_000)
-    kind: str = Field(default="text", pattern="^(text|media|call_event)$")
+    kind: str = Field(default="text", pattern="^(text|media|sticker|call_event)$")
     # An uploaded asset's id. Its URL, type, name and size are looked up from
     # media-service, which is why no client-supplied URL is accepted: a message
     # must not be able to embed an arbitrary address as a "photo".
@@ -278,6 +280,8 @@ class MessageIn(BaseModel):
     client_id: str | None = Field(default=None, max_length=64)
     # The message this one answers; must belong to the same conversation.
     reply_to_id: str | None = Field(default=None, max_length=40)
+    # For kind "sticker" only: an id from the catalogue (stickers.py).
+    sticker_id: str | None = Field(default=None, max_length=64)
 
 
 def _purge_expired(db: OrmSession, conversation_id: str | None = None) -> int:
@@ -814,6 +818,9 @@ MEDIA_LABELS = {"image": "a photo", "video": "a video", "audio": "a voice or aud
 
 def _preview(message: models.Message) -> str:
     """One line for a notification or the conversation list — never ciphertext."""
+    if message.kind == "sticker":
+        # A public catalogue id: nothing to hide, in encrypted rooms either.
+        return "Sent a sticker"
     if message.encrypted:
         return "Encrypted message"
     text = (_plain(message)[0] or "").strip()
@@ -867,7 +874,18 @@ async def send_message(
                 "duplicate": True,
             }
 
-    if conversation.encrypted:
+    if payload.kind == "sticker":
+        # A sticker message is a catalogue id and nothing else: no text, no
+        # ciphertext, no attachment, no URL. That is what lets it be sent in an
+        # end-to-end encrypted room too - there is nothing private in it to
+        # protect, and nothing the client chose that the server has not checked.
+        if not stickers.is_valid(payload.sticker_id):
+            raise HTTPException(status_code=400, detail="Unknown sticker")
+        if payload.body or payload.ciphertext_b64 or payload.media_id:
+            raise HTTPException(status_code=400, detail="A sticker message carries only a sticker id")
+    elif payload.sticker_id:
+        raise HTTPException(status_code=400, detail="sticker_id is only for sticker messages")
+    elif conversation.encrypted:
         if payload.media_id:
             # The file would sit on the server in the clear, which is exactly
             # what an encrypted room promises will not happen.
@@ -906,7 +924,9 @@ async def send_message(
 
     # Text first. An attachment sent before the other side accepted has already
     # been seen by the time anybody can report it.
-    if payload.media_id or payload.kind not in ("text", ""):
+    # A sticker is our own catalogue artwork, not a file the member supplied, so
+    # it is not held back like an attachment.
+    if payload.media_id or payload.kind not in ("text", "", "sticker"):
         media_ok, media_reason = agecheck.may_send_media(db, principal.user_id, conversation_id)
         if not media_ok:
             raise HTTPException(status_code=403, detail=media_reason)
@@ -930,6 +950,7 @@ async def send_message(
         lang=payload.lang,
         client_id=payload.client_id,
         reply_to_id=payload.reply_to_id,
+        sticker_id=payload.sticker_id,
         # The deadline is computed from the room's setting, not sent by the
         # client: letting the sender choose would let them set a shorter timer
         # than the room agreed to, or none at all.
@@ -989,6 +1010,7 @@ async def send_message(
             # The id only. Whoever receives this already holds the original
             # (or shows "older message"); the server never echoes its text.
             "reply_to_id": message.reply_to_id,
+            "sticker_id": message.sticker_id,
             **_media_fields(message),
             "created_at": message.created_at.isoformat(),
         },
@@ -1259,6 +1281,7 @@ def list_messages(
                 "body": _plain(r)[0],
                 "kind": r.kind,
                 "reply_to_id": r.reply_to_id,
+                "sticker_id": r.sticker_id,
                 # Whether the original is gone (expired). Never its content.
                 "reply_to_deleted": bool(r.reply_to_id) and r.reply_to_id not in alive,
                 "reactions": reactions.get(r.id, []),
