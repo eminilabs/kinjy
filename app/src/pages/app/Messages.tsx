@@ -28,6 +28,12 @@ import { useAppTheme } from '@/components/appdemo/theme'
 import AttachmentMenu from '@/components/social/AttachmentMenu'
 import MediaLightbox from '@/components/social/MediaLightbox'
 import {
+  ReactButton,
+  ReactionChips,
+  ReactionList,
+  StickerPicker,
+} from '@/components/social/MessageReactions'
+import {
   ReplyBanner,
   ReplyButton,
   ReplyQuote,
@@ -372,6 +378,10 @@ export default function Messages() {
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
   const [highlightId, setHighlightId] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  // The sticker picker and the "who reacted" list, each anchored to a bubble.
+  const [picker, setPicker] = useState<{ id: string; rect: DOMRect; withReply: boolean } | null>(null)
+  const [reactionList, setReactionList] = useState<{ id: string; rect: DOMRect } | null>(null)
+  const catalogue = useApi(() => kaluta.messages.stickers(), [])
   const [peer, setPeer] = useState('')
   const [composing, setComposing] = useState(false)
   const [results, setResults] = useState<Array<PersonBrief & { user_id: string }>>([])
@@ -883,6 +893,34 @@ export default function Messages() {
     })
   }, [sortedFriends, friendQuery, onlineOnly, presence])
 
+  // --- reactions -------------------------------------------------------------------
+  /** One reaction per member: replace theirs, or remove it when `stickerId` is null. */
+  const setReaction = useCallback((messageId: string, userId: string, stickerId: string | null) => {
+    setMessages((current) =>
+      current.map((m) => {
+        if (m.id !== messageId) return m
+        const others = (m.reactions ?? []).filter((r) => r.user_id !== userId)
+        return { ...m, reactions: stickerId ? [...others, { user_id: userId, sticker_id: stickerId }] : others }
+      }),
+    )
+  }, [])
+
+  /** Choosing your current sticker again takes it back; another one replaces it. */
+  const toggleReaction = (message: ChatMessage, stickerId: string) => {
+    const conversationId = activeIdRef.current
+    if (!conversationId || !user || message.status || message.id.startsWith('local_')) return
+    const previous = message.reactions?.find((r) => r.user_id === user.id)?.sticker_id ?? null
+    const next = previous === stickerId ? null : stickerId
+    setReaction(message.id, user.id, next)
+    const call = next
+      ? kaluta.messages.react(conversationId, message.id, next)
+      : kaluta.messages.unreact(conversationId, message.id)
+    call.catch((err) => {
+      setReaction(message.id, user.id, previous)
+      setError(err instanceof ApiError ? err.message : 'Could not react — check your connection.')
+    })
+  }
+
   // --- live events ---------------------------------------------------------------
   const { connected } = useRealtime((event) => {
     switch (event.type) {
@@ -921,6 +959,12 @@ export default function Messages() {
           })
         }
         conversations.reload()
+        break
+      }
+      case 'reaction': {
+        if (event.conversation_id === activeIdRef.current && event.message_id && event.user_id) {
+          setReaction(event.message_id, event.user_id, event.sticker_id ?? null)
+        }
         break
       }
       case 'read': {
@@ -1547,12 +1591,28 @@ export default function Messages() {
                         {!mine && active.kind === 'group' && !burst && (
                           <span className="caption mb-0.5 ms-1">{sender?.display_name ?? 'Member'}</span>
                         )}
-                        <div className={cn('group/bubble flex max-w-[75%] items-stretch gap-1', mine && 'flex-row-reverse')}>
-                        <ReplyButton
-                          onClick={() => startReply(message)}
-                          label={`Reply to ${nameOf(message)}`}
-                        />
-                        <SwipeToReply onReply={() => startReply(message)} disabled={Boolean(message.status)}>
+                        <div className="group/bubble relative flex max-w-[75%] items-stretch">
+                        {/* Beside the bubble, out of the flow: they must not widen it or push the reactions off its edge. */}
+                        <div className={cn('absolute inset-y-0 flex items-center', mine ? 'end-full' : 'start-full')}>
+                          <ReplyButton
+                            onClick={() => startReply(message)}
+                            label={`Reply to ${nameOf(message)}`}
+                          />
+                          {!message.status && !message.id.startsWith('local_') && (
+                            <ReactButton
+                              label={`React to ${nameOf(message)}`}
+                              onOpen={(rect) => setPicker({ id: message.id, rect, withReply: false })}
+                            />
+                          )}
+                        </div>
+                        <SwipeToReply
+                          onReply={() => startReply(message)}
+                          onLongPress={() => {
+                            const rect = document.getElementById(`msg-${message.id}`)?.getBoundingClientRect()
+                            if (rect) setPicker({ id: message.id, rect, withReply: true })
+                          }}
+                          disabled={Boolean(message.status)}
+                        >
                         <div
                           className={cn(
                             'min-w-0 rounded-card-md',
@@ -1606,6 +1666,12 @@ export default function Messages() {
                         </div>
                         </SwipeToReply>
                         </div>
+                        <ReactionChips
+                          reactions={message.reactions ?? []}
+                          myId={user?.id}
+                          catalogue={catalogue.data?.items ?? []}
+                          onOpen={(rect) => setReactionList({ id: message.id, rect })}
+                        />
                         {message.status === 'failed' && (
                           <button
                             type="button"
@@ -1761,6 +1827,38 @@ export default function Messages() {
           )}
         </div>
       </div>
+      {picker && (() => {
+        const target = messages.find((m) => m.id === picker.id)
+        if (!target) return null
+        return (
+          <StickerPicker
+            anchor={picker.rect}
+            stickers={catalogue.data?.items ?? []}
+            current={target.reactions?.find((r) => r.user_id === user?.id)?.sticker_id}
+            onPick={(stickerId) => toggleReaction(target, stickerId)}
+            onReply={picker.withReply ? () => startReply(target) : undefined}
+            onClose={() => setPicker(null)}
+          />
+        )
+      })()}
+      {reactionList && (() => {
+        const target = messages.find((m) => m.id === reactionList.id)
+        if (!target?.reactions?.length) return null
+        return (
+          <ReactionList
+            anchor={reactionList.rect}
+            reactions={target.reactions}
+            catalogue={catalogue.data?.items ?? []}
+            nameOf={(id) => (id === user?.id ? 'You' : (active?.profiles?.[id]?.display_name ?? 'Member'))}
+            myId={user?.id}
+            onRemove={() => {
+              const mine = target.reactions?.find((r) => r.user_id === user?.id)
+              if (mine) toggleReaction(target, mine.sticker_id)
+            }}
+            onClose={() => setReactionList(null)}
+          />
+        )
+      })()}
       {lightbox && (
         <MediaLightbox
           media={[{ url: lightbox, kind: 'image', alt_text: null }]}

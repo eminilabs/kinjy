@@ -28,6 +28,7 @@ from common.service import create_app
 import agecheck
 import agenotify
 import models
+import stickers
 
 log = logging.getLogger("messaging-service")
 USER_URL = "http://user-service:8000"
@@ -288,12 +289,19 @@ def _purge_expired(db: OrmSession, conversation_id: str | None = None) -> int:
     returned by the API. Deleting on the path that would otherwise serve it
     closes that window.
     """
+    expired = select(models.Message.id).where(
+        models.Message.expires_at.is_not(None),
+        models.Message.expires_at <= datetime.now(timezone.utc),
+    )
     stmt = delete(models.Message).where(
         models.Message.expires_at.is_not(None),
         models.Message.expires_at <= datetime.now(timezone.utc),
     )
     if conversation_id:
+        expired = expired.where(models.Message.conversation_id == conversation_id)
         stmt = stmt.where(models.Message.conversation_id == conversation_id)
+    # A reaction must not outlive the message it is under.
+    db.execute(delete(models.MessageReaction).where(models.MessageReaction.message_id.in_(expired)))
     removed = db.execute(stmt).rowcount or 0
     if removed:
         db.commit()
@@ -1020,6 +1028,131 @@ async def send_message(
     return {"id": message.id, "created_at": message.created_at, "client_id": message.client_id}
 
 
+# --- reactions -----------------------------------------------------------------
+#
+# One sticker per member per message, picked from the catalogue in stickers.py.
+# Members of the conversation only, for reading and for writing: a reaction is
+# a small piece of information about who is in the room and how they took a
+# message, so it is held to the same rule as the message itself.
+
+class ReactionIn(BaseModel):
+    sticker_id: str = Field(max_length=64)
+
+
+@app.get("/stickers", tags=["messages"])
+def sticker_catalogue(principal: CurrentUser):
+    return stickers.listing()
+
+
+async def _react_guard(
+    db: OrmSession, conversation_id: str, message_id: str, principal
+) -> models.Message:
+    """Membership, then that the message is in this room, then who may talk to whom."""
+    _member(db, conversation_id, principal.user_id)
+    conversation = db.get(models.Conversation, conversation_id)
+    _purge_expired(db, conversation_id)
+    message = db.scalar(
+        select(models.Message).where(
+            models.Message.id == message_id,
+            models.Message.conversation_id == conversation_id,
+        )
+    )
+    if message is None:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if conversation.kind == "direct":
+        # The same standing check as sending: a block, or "nobody can message
+        # me", ends reactions as much as it ends messages. Fails closed.
+        other = next(
+            (uid for uid in _participant_ids(db, conversation_id) if uid != principal.user_id), None
+        )
+        if other:
+            allowed, reason = await asyncio.to_thread(
+                permissions.check, principal.user_id, other, "can_message", "message this member"
+            )
+            if not allowed:
+                raise HTTPException(status_code=403, detail=reason)
+    return message
+
+
+async def _announce_reaction(
+    db: OrmSession, conversation_id: str, message_id: str, user_id: str, sticker_id: str | None
+) -> None:
+    await _publish_to_users(
+        _participant_ids(db, conversation_id),
+        {
+            "type": "reaction",
+            "conversation_id": conversation_id,
+            "message_id": message_id,
+            "user_id": user_id,
+            # None means this member took their reaction back.
+            "sticker_id": sticker_id,
+        },
+    )
+
+
+@app.put("/conversations/{conversation_id}/messages/{message_id}/reaction", tags=["messages"])
+async def react(
+    conversation_id: str,
+    message_id: str,
+    payload: ReactionIn,
+    principal: CurrentUser,
+    db: OrmSession = Depends(get_db),
+):
+    """Put a sticker under a message, replacing this member's previous one."""
+    await _react_guard(db, conversation_id, message_id, principal)
+    if not stickers.is_valid(payload.sticker_id):
+        # Anything that is not a catalogue id - a URL, a name, an image - ends here.
+        raise HTTPException(status_code=400, detail="Unknown sticker")
+    row = db.scalar(
+        select(models.MessageReaction).where(
+            models.MessageReaction.message_id == message_id,
+            models.MessageReaction.user_id == principal.user_id,
+        )
+    )
+    if row is None:
+        db.add(models.MessageReaction(
+            message_id=message_id, user_id=principal.user_id, sticker_id=payload.sticker_id
+        ))
+    else:
+        row.sticker_id = payload.sticker_id
+    try:
+        db.commit()
+    except IntegrityError:
+        # Two taps raced past the lookup; the unique constraint kept one row.
+        db.rollback()
+        row = db.scalar(
+            select(models.MessageReaction).where(
+                models.MessageReaction.message_id == message_id,
+                models.MessageReaction.user_id == principal.user_id,
+            )
+        )
+        row.sticker_id = payload.sticker_id
+        db.commit()
+    await _announce_reaction(db, conversation_id, message_id, principal.user_id, payload.sticker_id)
+    return {"message_id": message_id, "sticker_id": payload.sticker_id}
+
+
+@app.delete("/conversations/{conversation_id}/messages/{message_id}/reaction", tags=["messages"])
+async def unreact(
+    conversation_id: str,
+    message_id: str,
+    principal: CurrentUser,
+    db: OrmSession = Depends(get_db),
+):
+    """Take this member's reaction back. Idempotent."""
+    await _react_guard(db, conversation_id, message_id, principal)
+    removed = db.execute(
+        delete(models.MessageReaction).where(
+            models.MessageReaction.message_id == message_id,
+            models.MessageReaction.user_id == principal.user_id,
+        )
+    ).rowcount
+    db.commit()
+    if removed:
+        await _announce_reaction(db, conversation_id, message_id, principal.user_id, None)
+    return {"message_id": message_id, "sticker_id": None}
+
+
 @app.post("/conversations/{conversation_id}/read", tags=["messages"])
 async def mark_conversation_read(
     conversation_id: str,
@@ -1100,6 +1233,18 @@ def list_messages(
         else set()
     )
 
+    # Who put which sticker under which message of this page, in one query.
+    reactions: dict[str, list[dict]] = {}
+    if rows:
+        for rx in db.scalars(
+            select(models.MessageReaction)
+            .where(models.MessageReaction.message_id.in_([r.id for r in rows]))
+            .order_by(models.MessageReaction.created_at)
+        ).all():
+            reactions.setdefault(rx.message_id, []).append(
+                {"user_id": rx.user_id, "sticker_id": rx.sticker_id}
+            )
+
     # Fetching is not reading. A catch-up in a background tab, or a page of
     # history, must not tell the other side "Seen": the client posts /read
     # when the thread is actually on screen.
@@ -1116,6 +1261,7 @@ def list_messages(
                 "reply_to_id": r.reply_to_id,
                 # Whether the original is gone (expired). Never its content.
                 "reply_to_deleted": bool(r.reply_to_id) and r.reply_to_id not in alive,
+                "reactions": reactions.get(r.id, []),
                 **_media_fields(r),
                 "created_at": r.created_at,
             }

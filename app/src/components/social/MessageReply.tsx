@@ -142,7 +142,7 @@ const SWIPE_MAX_PX = 72
 const LONG_PRESS_MS = 500
 
 /**
- * Swipe a bubble towards the middle of the screen to reply, or hold it. The
+ * Swipe a bubble towards the middle of the screen to reply, or hold it for its actions. The
  * bubble follows the finger directly (no easing: it is feedback, not
  * decoration), a reply arrow appears behind it, and a short buzz marks the
  * moment it will commit. Vertical movement is left to the list so scrolling
@@ -150,10 +150,13 @@ const LONG_PRESS_MS = 500
  */
 export function SwipeToReply({
   onReply,
+  onLongPress,
   disabled,
   children,
 }: {
   onReply: () => void
+  /** What a held press does. Defaults to replying. */
+  onLongPress?: () => void
   disabled?: boolean
   children: ReactNode
 }) {
@@ -184,7 +187,7 @@ export function SwipeToReply({
           hold.current = undefined
           start.current = null
           buzz()
-          onReply()
+          ;(onLongPress ?? onReply)()
         }, LONG_PRESS_MS)
       }}
       onPointerMove={(e) => {
