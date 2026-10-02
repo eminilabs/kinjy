@@ -10,16 +10,25 @@ import AgentsGrid from '@/components/platform/AgentsGrid'
 import LiveIntelligence from '@/components/platform/LiveIntelligence'
 import { LINE_EASE } from '@/components/platform/shared'
 import { FEATURES } from '@/lib/features'
+import PublicShell from '@/components/landing/PublicShell'
 
-/** Section 7 — CTA with a playful arc drawn between the two buttons. */
+/** Section 7 — CTA: the landing's closing night panel, with the arc drawn between the two buttons. */
 function PlatformCta() {
   const reduced = useReducedMotion()
   return (
-    <section className="twilight-field noise-overlay relative overflow-hidden px-6 py-24 md:py-32" aria-label="Call to action">
-      <div className="relative mx-auto max-w-2xl text-center">
-        <p className="eyebrow text-gold">The Whole Map</p>
-        <h2 className="h2 mt-4">See it alive.</h2>
-        <div className="relative mt-10">
+    <section className="mx-auto max-w-[1320px] px-4 pt-[120px]" aria-label="Call to action">
+      <div
+        className="kl-night-section force-dark relative overflow-hidden rounded-[20px] px-[clamp(24px,6vw,80px)] py-[clamp(100px,10vw,130px)] text-center"
+        style={{ background: 'radial-gradient(120% 140% at 50% 0%, #242142 0%, #0B0E1D 70%)' }}
+      >
+        <p className="kl-mono text-xs tracking-[.14em] text-[#F0C878]">THE WHOLE MAP</p>
+        <h2
+          className="kl-serif mx-auto mt-5 max-w-[900px] font-semibold text-[var(--kl-night-text)]"
+          style={{ fontSize: 'clamp(48px, 8vw, 112px)', lineHeight: 0.92, letterSpacing: '-.02em' }}
+        >
+          See it alive.
+        </h2>
+        <div className="relative mt-12">
           {/* Arc connector between the buttons — only when there are two. */}
           {FEATURES.assistant && (
             <svg
@@ -50,14 +59,14 @@ function PlatformCta() {
           <div className="relative flex flex-col items-center justify-center gap-4 sm:flex-row sm:gap-10">
             <Link
               to="/app"
-              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-gold-soft to-gold px-8 py-4 text-base font-bold text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] transition hover:brightness-110"
+              className="kl-sheen inline-flex items-center gap-2 rounded-[20px] px-8 py-4 text-[17px] font-bold shadow-[0_14px_30px_-12px_rgba(169,118,28,.55)] transition-transform hover:-translate-y-0.5"
             >
               Open the app demo <ArrowRight size={17} />
             </Link>
             {FEATURES.assistant && (
               <Link
                 to="/assistant"
-                className="cloud-glass inline-flex items-center gap-2 rounded-full px-8 py-4 text-base font-semibold text-text-hi transition hover:border-gold/40 hover:text-gold-soft"
+                className="kl-night-glass inline-flex items-center gap-2 rounded-[20px] px-8 py-4 text-[17px] font-semibold text-[var(--kl-night-text)] transition hover:border-[#D9A648]"
               >
                 Meet Kinjy Assistant <ArrowRight size={17} />
               </Link>
@@ -72,16 +81,20 @@ function PlatformCta() {
 /** Route /platform — The 15 Modules: constellation, detail blocks, universal nav, Cloud mode, AI agents. */
 export default function Platform() {
   return (
-    <>
-      <PlatformHero />
-      <Constellation />
-      <ModuleBlocks />
+    <PublicShell>
+      <div className="mx-auto max-w-[1320px] px-4">
+        <PlatformHero />
+        <Constellation />
+        <ModuleBlocks />
+      </div>
       <UniversalNav />
       <CloudModeLab />
-      <AgentsGrid />
-      {/* Live rooms and their captions are the livestream feature. */}
-      {FEATURES.live && <LiveIntelligence />}
+      <div className="mx-auto max-w-[1320px] px-4">
+        <AgentsGrid />
+        {/* Live rooms and their captions are the livestream feature. */}
+        {FEATURES.live && <LiveIntelligence />}
+      </div>
       <PlatformCta />
-    </>
+    </PublicShell>
   )
 }

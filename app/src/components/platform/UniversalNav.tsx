@@ -153,39 +153,43 @@ function PhoneFrame() {
 export default function UniversalNav() {
   const reduced = useReducedMotion()
   return (
-    <section className="px-6 py-24 md:py-32" aria-label="Universal navigation">
-      <div className="mx-auto max-w-container">
+    <section className="mx-[clamp(12px,2vw,24px)] rounded-[20px] bg-[var(--kl-paper)] px-[clamp(20px,5vw,64px)] py-[120px]" aria-label="Universal navigation">
+      <div className="mx-auto max-w-[1180px]">
         <div className="mx-auto max-w-2xl text-center">
-          <p className="eyebrow text-gold">Universal Navigation</p>
-          <h2 className="h2 mt-4">One navigation. Everywhere.</h2>
-          <p className="body-lg mt-4 text-text-mid">
+          <p className="kl-mono text-xs tracking-[.14em] text-[var(--kl-gold-deep)]">UNIVERSAL NAVIGATION</p>
+          <h2 className="kl-h2 mt-4">One navigation. Everywhere.</h2>
+          <p className="kl-lead mx-auto mt-5">
             {spelled(DESTINATIONS.length)} destinations, one scrollable bar — identical on web, PWA and native. Pin what
             you love; everything else waits politely in “More”.
           </p>
         </div>
 
-        <div className="mt-14 grid items-center gap-12 lg:grid-cols-12">
+        {/* minmax(0,1fr): the chip bar scrolls sideways; without a sized track it
+            would widen the column — and the page — to its full length on phones. */}
+        <div className="mt-14 grid grid-cols-[minmax(0,1fr)] items-center gap-12 lg:grid-cols-12">
           {/* Desktop bar replica */}
           <motion.div
-            className="lg:col-span-7"
+            className="min-w-0 lg:col-span-7"
             initial={reduced ? false : { opacity: 0, y: -40 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.65 }}
             transition={{ duration: 0.6, ease: CLOUD_EASE }}
           >
-            <AppShellBar />
-            <ul className="mt-8 grid gap-4 sm:grid-cols-2">
+            <div className="force-dark rounded-[20px] bg-[#0B0E1D] p-1 shadow-[0_30px_60px_-30px_rgba(11,14,29,.6)]">
+              <AppShellBar />
+            </div>
+            <ul className="mt-6 grid gap-3 sm:grid-cols-2">
               {BULLETS.map((b, i) => (
                 <motion.li
                   key={b.title}
-                  className="cloud-glass rounded-card-md p-4"
+                  className="rounded-2xl border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] p-5"
                   initial={reduced ? false : { opacity: 0, y: 16 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true, amount: 0.6 }}
                   transition={{ duration: 0.45, ease: CLOUD_EASE, delay: 0.15 + i * 0.08 }}
                 >
-                  <p className="text-sm font-bold text-text-hi">{b.title}</p>
-                  <p className="caption mt-1">{b.body}</p>
+                  <p className="kl-serif text-lg font-semibold">{b.title}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-[var(--kl-mid)]">{b.body}</p>
                 </motion.li>
               ))}
             </ul>
@@ -193,15 +197,17 @@ export default function UniversalNav() {
 
           {/* Phone frame */}
           <motion.div
-            className="lg:col-span-5"
+            className="min-w-0 lg:col-span-5"
             initial={reduced ? false : { opacity: 0, rotateY: 12 }}
             whileInView={{ opacity: 1, rotateY: 0 }}
             viewport={{ once: true, amount: 0.4 }}
             transition={{ duration: 0.6, ease: CLOUD_EASE }}
             style={{ transformPerspective: 900 }}
           >
-            <PhoneFrame />
-            <p className="caption mt-6 text-center">Mobile bottom bar · raised gold Create, center-docked</p>
+            <div className="force-dark">
+              <PhoneFrame />
+            </div>
+            <p className="mt-6 text-center text-sm text-[var(--kl-low)]">Mobile bottom bar · raised gold Create, center-docked</p>
           </motion.div>
         </div>
       </div>

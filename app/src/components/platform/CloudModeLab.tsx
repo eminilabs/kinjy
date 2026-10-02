@@ -142,18 +142,18 @@ export default function CloudModeLab() {
       // force-dark: this section paints its own background (every ambient is a
       // dark gradient) in both themes, so it has to carry the dark text tokens
       // with it. Without it, light mode put near-black ink on near-black.
-      className="noise-overlay force-dark relative px-6 py-24 md:py-32"
+      className="noise-overlay force-dark kl-night-section relative mx-[clamp(12px,2vw,24px)] mt-[120px] overflow-hidden rounded-[20px] px-[clamp(20px,5vw,64px)] py-[120px]"
       aria-label="Cloud display mode"
       animate={{ background: bandBg }}
       transition={{ duration: reduced ? 0 : 1 }}
       style={{ background: AMBIENTS[0].bg }}
     >
-      <div className="mx-auto grid max-w-container items-center gap-12 lg:grid-cols-2">
+      <div className="mx-auto grid max-w-[1180px] grid-cols-[minmax(0,1fr)] items-center gap-12 lg:grid-cols-2">
         {/* Copy */}
         <div>
-          <p className="eyebrow text-gold">Signature</p>
-          <h2 className="h2 mt-4">Cloud mode. Our visual soul.</h2>
-          <p className="body-lg mt-5 max-w-lg text-text-mid">
+          <p className="kl-mono text-xs tracking-[.14em] text-[#F0C878]">SIGNATURE</p>
+          <h2 className="kl-h2 mt-4 text-[var(--kl-night-text)]">Cloud mode. Our visual soul.</h2>
+          <p className="mt-5 max-w-lg text-lg leading-[1.6] text-[var(--kl-night-mid)]">
             Soft translucent panels. Floating cards. Subtle depth. Low clutter. Configure your
             ambient sky — Twilight, Dawn, Savanna, Ocean — or switch to Light, Dark, or System
             anytime.
@@ -186,7 +186,7 @@ export default function CloudModeLab() {
                 aria-checked={mode === m.key}
                 onClick={() => setMode(m.key)}
                 className={cn(
-                  'flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition-colors duration-300',
+                  'flex items-center gap-1.5 rounded-full px-2.5 py-2 text-xs font-semibold transition-colors duration-300 sm:px-4 sm:text-sm',
                   mode === m.key ? 'bg-gradient-to-br from-gold-soft to-gold text-ink' : 'text-text-mid hover:text-text-hi',
                 )}
               >
