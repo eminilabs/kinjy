@@ -2,6 +2,9 @@ import { motion } from 'framer-motion'
 import { MessageSquarePlus, Sparkles } from 'lucide-react'
 import { ProvenanceTag } from '@/components/ui-kit'
 import type { ProvenanceKind } from '@/components/ui-kit'
+import { Eyebrow } from '@/components/landing/PageKit'
+import { KL_CARD } from '@/components/landing/kl-classes'
+import { cn } from '@/lib/utils'
 
 const TAGS: { kind: ProvenanceKind; rotate: number; y: number }[] = [
   { kind: 'original', rotate: -16, y: 6 },
@@ -17,10 +20,10 @@ const TAGS: { kind: ProvenanceKind; rotate: number; y: number }[] = [
  */
 export default function HonestContent() {
   return (
-    <section aria-labelledby="honest-heading" className="py-24">
-      <div className="mx-auto max-w-container px-6">
-        <p className="eyebrow text-gold">Honest content</p>
-        <h2 id="honest-heading" className="h2 mt-3 max-w-2xl">
+    <section aria-labelledby="honest-heading" className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]">
+      <div>
+        <Eyebrow>Honest content</Eyebrow>
+        <h2 id="honest-heading" className="kl-h2 mt-5 max-w-[900px]">
           Labels that tell the truth. Notes written by people.
         </h2>
 
@@ -32,7 +35,7 @@ export default function HonestContent() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, amount: 0.5 }}
               transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-              className="cloud-card overflow-hidden"
+              className={cn(KL_CARD, 'overflow-hidden')}
             >
               <div className="relative h-44 overflow-hidden">
                 <img src="/avatars-set.jpg" alt="Community media collage" className="h-full w-full object-cover" />
@@ -77,7 +80,7 @@ export default function HonestContent() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, amount: 0.5 }}
               transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-              className="cloud-card p-5"
+              className={cn(KL_CARD, 'p-5')}
             >
               <div className="flex items-center gap-2.5">
                 <span className="h-9 w-9 rounded-full bg-gradient-to-br from-coral to-gold/70" />
@@ -117,7 +120,7 @@ export default function HonestContent() {
                 </div>
               </motion.div>
             </motion.div>
-            <p className="body-lg mx-auto mt-6 max-w-md text-center font-display italic text-gold-soft">
+            <p className="mx-auto mt-8 max-w-md text-center text-[20px] font-semibold text-[var(--kl-gold-deep)]">
               "AI suggests context to note-writers. It never auto-declares truth. People, aided by
               AI, keep each other honest."
             </p>

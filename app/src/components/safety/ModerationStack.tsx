@@ -4,6 +4,9 @@ import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useGSAP } from '@gsap/react'
 import { Bot, Users, ShieldCheck, MessagesSquare, FileText } from 'lucide-react'
+import { Eyebrow } from '@/components/landing/PageKit'
+import { KL_CARD } from '@/components/landing/kl-classes'
+import { cn } from '@/lib/utils'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -121,11 +124,11 @@ export default function ModerationStack() {
   )
 
   return (
-    <section ref={scope} aria-labelledby="layers-heading" className="relative overflow-hidden py-24">
-      <div className="mx-auto max-w-container px-6">
+    <section ref={scope} aria-labelledby="layers-heading" className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)] relative overflow-hidden">
+      <div>
         <div className="text-center">
-          <p className="eyebrow text-gold">Refinement #17 · Layered moderation</p>
-          <h2 id="layers-heading" className="h2 mt-3">
+          <Eyebrow>Layered moderation</Eyebrow>
+          <h2 id="layers-heading" className="kl-h2 mx-auto mt-5 max-w-[900px]">
             Five layers between harm and you.
           </h2>
         </div>
@@ -135,7 +138,7 @@ export default function ModerationStack() {
             <div
               key={layer.name}
               data-layer
-              className="cloud-card flex items-center gap-4 px-5 py-4 md:px-7"
+              className={cn(KL_CARD, 'flex items-center gap-4 px-5 py-4 md:px-7')}
               style={{ width: layer.width }}
             >
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-gold/30 bg-gold/10 text-gold-soft">
@@ -157,7 +160,7 @@ export default function ModerationStack() {
         </div>
 
         {/* Appeals disclosure example */}
-        <div className="mx-auto mt-10 max-w-3xl rounded-card-md border border-white/10 bg-ink-2/80 p-5">
+        <div className="mx-auto mt-10 max-w-3xl rounded-card-md border border-white/10 bg-[var(--kl-paper)] p-5">
           <p className="caption font-bold uppercase tracking-[0.14em] text-gold-soft">
             What you see when a decision affects you
           </p>

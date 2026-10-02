@@ -1,6 +1,8 @@
 import { motion } from 'framer-motion'
 import { ScanSearch, Languages, Captions, AudioLines, Smile, Check, Shuffle, Smartphone } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Eyebrow } from '@/components/landing/PageKit'
+import { KL_CARD } from '@/components/landing/kl-classes'
 
 const PIPELINE = [
   { icon: ScanSearch, label: 'detect' },
@@ -19,10 +21,10 @@ const PROVIDERS = ['Provider A', 'Provider B', 'On-device']
  */
 export default function TranslationPrivacy() {
   return (
-    <section aria-labelledby="translation-heading" className="py-24">
-      <div className="mx-auto grid max-w-container items-center gap-12 px-6 lg:grid-cols-[6fr_5fr]">
+    <section aria-labelledby="translation-heading" className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-center gap-12 lg:grid-cols-[6fr_5fr]">
         {/* Pipeline visual */}
-        <div className="cloud-card p-6 md:p-8">
+        <div className={cn(KL_CARD, 'p-6 md:p-8')}>
           <p className="caption font-bold uppercase tracking-[0.14em] text-text-low">
             Language gateway · provider-independent
           </p>
@@ -43,7 +45,7 @@ export default function TranslationPrivacy() {
                     whileInView={{ borderColor: 'rgba(217,166,72,0.55)', color: '#F0C878' }}
                     viewport={{ once: true, amount: 0.6 }}
                     transition={{ duration: 0.4, delay: i * 0.22 }}
-                    className="flex h-12 w-12 items-center justify-center rounded-full border bg-ink-3"
+                    className="flex h-12 w-12 items-center justify-center rounded-full border bg-[var(--kl-paper)]"
                   >
                     <p.icon size={19} strokeWidth={1.8} />
                   </motion.span>
@@ -64,7 +66,7 @@ export default function TranslationPrivacy() {
           </div>
 
           {/* model routing node */}
-          <div className="mt-8 rounded-card-md border border-white/10 bg-ink-2/80 p-4">
+          <div className="mt-8 rounded-card-md border border-white/10 bg-[var(--kl-paper)] p-4">
             <p className="mono-data flex items-center gap-2 text-[0.72rem] text-sky">
               <Shuffle size={13} aria-hidden="true" /> model routing — language · quality · price ·
               latency · <span className="text-gold-soft">privacy</span>
@@ -109,8 +111,8 @@ export default function TranslationPrivacy() {
 
         {/* Copy */}
         <div>
-          <p className="eyebrow text-gold">Refinement #14 · Translation privacy</p>
-          <h2 id="translation-heading" className="h2 mt-3">
+          <Eyebrow>Translation privacy</Eyebrow>
+          <h2 id="translation-heading" className="kl-h2 mt-5 max-w-[900px]">
             Every language welcome. No conversation mined.
           </h2>
           <ul className="mt-6 space-y-3.5 text-sm text-text-mid">
