@@ -17,7 +17,7 @@ import { useLandingTheme } from './useLandingTheme'
 export default function PublicShell({ children }: { children: ReactNode }) {
   const { theme } = useLandingTheme()
   return (
-    <div className={`kl ${theme === 'dark' ? 'force-dark' : 'force-light'}`} data-kl-theme={theme}>
+    <div className={`kl kl-plain ${theme === 'dark' ? 'force-dark' : 'force-light'}`} data-kl-theme={theme}>
       <div className="mx-auto max-w-[1320px] px-4 pt-4">
         <LandingNav />
       </div>

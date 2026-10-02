@@ -8,7 +8,7 @@ import { useLandingTheme } from './useLandingTheme'
 
 export function Brand({ size = 52, text = 24 }: { size?: number; text?: number }) {
   return (
-    <span className="kl-serif flex items-center gap-2.5 font-semibold" style={{ fontSize: text, letterSpacing: '-.02em' }}>
+    <span className="kl-serif kl-brand flex items-center gap-2.5 font-semibold" style={{ fontSize: text, letterSpacing: '-.02em' }}>
       <img src="/logo.svg" alt="" width={size} height={size} className="block" />
       Kinjy
     </span>

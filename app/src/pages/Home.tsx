@@ -23,7 +23,7 @@ import { FEATURES } from '@/lib/features'
 export default function Home() {
   const { theme } = useLandingTheme()
   return (
-    <div className="kl" data-kl-theme={theme} lang="fr" dir="ltr">
+    <div className="kl kl-plain" data-kl-theme={theme} lang="fr" dir="ltr">
       <div className="mx-auto max-w-[1320px] px-4 pt-4">
         <div className="relative overflow-hidden rounded-2xl bg-[var(--kl-bg)]">
           <LandingNav />

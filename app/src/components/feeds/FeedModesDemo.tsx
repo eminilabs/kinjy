@@ -267,7 +267,7 @@ export default function FeedModesDemo({
                     {String(i + 1).padStart(2, '0')}
                   </span>
                   <span className="lg:flex-1">
-                    <span className="lg:font-['Fraunces',Georgia,serif] lg:text-[22px] lg:font-semibold">{m.label}</span>
+                    <span className="lg:text-[20px] lg:font-bold lg:tracking-[-0.02em]">{m.label}</span>
                     {on && (
                       <motion.span
                         initial={reduced ? false : { opacity: 0, height: 0 }}
