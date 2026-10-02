@@ -26,6 +26,7 @@ const APP_ROUTES = [
   '/graveyard',
   '/market',
   '/explore',
+  '/earn',
   '/live',
   '/shorts',
   '/supervision',
