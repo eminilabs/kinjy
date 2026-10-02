@@ -1,11 +1,5 @@
-import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import type { ProvenanceKind } from '@/components/ui-kit'
-
-/** The landing's mono eyebrow. */
-export function Eyebrow({ children, className }: { children: ReactNode; className?: string }) {
-  return <p className={cn('kl-mono text-xs uppercase tracking-[.14em] text-[var(--kl-gold-deep)]', className)}>{children}</p>
-}
 
 const PROVENANCE: Record<ProvenanceKind, { label: string; icon: string; tone: string }> = {
   original: { label: 'Original', icon: 'prov-original', tone: 'text-[#241F16]' },
@@ -51,27 +45,5 @@ export function Seal({ size = 15 }: { size?: number }) {
         <path d="M4.5 10.5l3.4 3.4L15.5 6" stroke="#0B0E1D" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     </span>
-  )
-}
-
-/** A soft stage panel with two glows, as on the landing's feature rows. */
-export function Stage({
-  children,
-  className,
-  glows = ['var(--kl-sky)', '#D9A648'],
-}: {
-  children: ReactNode
-  className?: string
-  glows?: [string, string]
-}) {
-  return (
-    <div
-      className={cn('relative overflow-hidden rounded-[20px]', className)}
-      style={{ background: 'linear-gradient(160deg, var(--kl-stage-a), var(--kl-stage-b))' }}
-    >
-      <div aria-hidden="true" className="absolute -right-16 -top-20 h-[280px] w-[280px] rounded-full opacity-35 blur-[90px]" style={{ background: glows[0] }} />
-      <div aria-hidden="true" className="absolute -bottom-24 -left-16 h-[260px] w-[260px] rounded-full opacity-30 blur-[90px]" style={{ background: glows[1] }} />
-      <div className="relative">{children}</div>
-    </div>
   )
 }

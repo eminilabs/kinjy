@@ -1,7 +1,7 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { DoorOpen, FileSearch, Gavel } from 'lucide-react'
 import { CLOUD_EASE } from '@/components/platform/shared'
-import { Eyebrow } from './kit'
+import { Eyebrow } from '@/components/landing/PageKit'
 
 const CARDS = [
   {

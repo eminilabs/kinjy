@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { motion, useInView, useReducedMotion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 import { CLOUD_EASE } from '@/components/platform/shared'
-import { Eyebrow, Stage } from './kit'
+import { Eyebrow, Stage } from '@/components/landing/PageKit'
 
 const MANIFEST: Array<Array<[string, string]>> = [
   [['{', 'text-gold']],

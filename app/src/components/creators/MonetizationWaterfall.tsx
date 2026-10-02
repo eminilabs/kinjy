@@ -2,13 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { Info } from 'lucide-react'
-import { CloudCard, ModeChip } from '@/components/ui-kit'
+import { Eyebrow, Stage } from '@/components/landing/PageKit'
 import { cn } from '@/lib/utils'
 import { FEATURES } from '@/lib/features'
 
 gsap.registerPlugin(ScrollTrigger)
 
-type Segment = { label: string; pct: number; color: string; textDark?: boolean }
+type Segment = { label: string; pct: number; color: string; textDark?: boolean; ink?: string }
 
 // The creator is paid first, out of the gross. What Kinjy retains is then
 // Kinjy's revenue, and the direct commission is computed on that — which is why
@@ -17,14 +17,15 @@ const SEGMENTS: Segment[] = [
   { label: 'Creator', pct: 40, color: '#D9A648', textDark: true },
   { label: 'Sponsor', pct: 12, color: '#8FB8E8', textDark: true },
   { label: 'Leaders', pct: 3, color: '#4A52E0' },
-  { label: 'Platform', pct: 45, color: '#1A1F3B' },
+  // Platform follows the page theme, so its label does too.
+  { label: 'Platform', pct: 45, color: 'var(--kl-paper-2)', ink: 'var(--kl-ink)' },
 ]
 
 const LEGEND = [
   { color: '#D9A648', text: 'Creator — 40% of the ad revenue' },
   { color: '#8FB8E8', text: 'Their sponsor — 20% of what Kinjy retains' },
   { color: '#4A52E0', text: 'Kinjy Leaders pool — 5% of what Kinjy retains' },
-  { color: '#1A1F3B', text: 'Platform — the rest' },
+  { color: 'var(--kl-paper-2)', text: 'Platform — the rest' },
 ]
 
 const ALL_STREAMS: { label: string; caption: string; live?: boolean }[] = [
@@ -101,95 +102,107 @@ export default function MonetizationWaterfall() {
   }, [])
 
   return (
-    <section ref={rootRef} id="splits" className="noise-overlay bg-ink px-6 py-24 md:py-32">
-      <div className="mx-auto max-w-container">
-        <p className="eyebrow text-center text-gold">The split, in full</p>
-        <h2 className="h2 mt-4 text-center">Where every advertising dollar goes.</h2>
-        <p className="body-lg mx-auto mt-4 max-w-2xl text-center text-text-mid">
+    <section ref={rootRef} id="splits" className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]">
+      <div className="max-w-[760px]">
+        <Eyebrow>The split, in full</Eyebrow>
+        <h2 className="kl-h2 mt-5">Where every advertising dollar goes.</h2>
+        <p className="kl-lead mt-5 !max-w-[580px]">
           One immutable formula, visible to everyone. The creator always takes the largest single share.
         </p>
+      </div>
 
-        {/* Stacked waterfall bar — 12 labeled segments */}
-        <div className="mt-14">
-          <div className="wf-bar flex h-20 w-full overflow-hidden rounded-card-md border border-white/10">
-            {SEGMENTS.map((s, i) => (
-              <div
-                key={`${s.label}-${i}`}
-                className="wf-seg relative flex items-center justify-center overflow-hidden border-e border-ink/40"
-                data-pct={s.pct}
-                style={{ width: `${s.pct}%`, background: s.color }}
-                title={`${s.label} — ${s.pct}%`}
-              >
-                {s.pct >= 5 && (
-                  <span className={cn('mono-data text-xs', s.textDark ? 'text-ink font-semibold' : 'text-text-hi')}>
+      {/* Stacked bar */}
+      <div className="mt-14">
+        <div className="wf-bar flex h-24 w-full gap-1 overflow-hidden rounded-[20px] bg-[var(--kl-paper)] p-1">
+          {SEGMENTS.map((s, i) => (
+            <div
+              key={`${s.label}-${i}`}
+              className="wf-seg relative flex flex-col items-start justify-end overflow-hidden rounded-[16px] px-3 pb-2.5"
+              data-pct={s.pct}
+              style={{ width: `${s.pct}%`, background: s.color }}
+              title={`${s.label} — ${s.pct}%`}
+            >
+              {s.pct >= 5 && (
+                <>
+                  <span className={cn('kl-serif text-2xl font-semibold leading-none', s.textDark ? 'text-[#241F16]' : 'text-white')} style={s.ink ? { color: s.ink } : undefined}>
                     {s.pct}%
                   </span>
-                )}
-                {s.pct === 1 && (
-                  <span className="wf-tick mono-data text-[0.55rem] text-text-hi/80">1%</span>
-                )}
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 flex flex-wrap justify-center gap-x-8 gap-y-2">
-            {LEGEND.map((l) => (
-              <span key={l.text} className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full border border-white/20" style={{ background: l.color }} aria-hidden="true" />
-                <span className="mono-data text-text-mid">{l.text}</span>
-              </span>
-            ))}
-          </div>
-          {/* count-up readout */}
-          <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[
-              { v: 40, l: 'to the creator', unit: '%' },
-              { v: 20, l: 'of Kinjy’s share to their sponsor', unit: '%' },
-              { v: 5, l: 'of Kinjy’s share to Kinjy Leaders', unit: '%' },
-              // Not a percentage. Rendering "1%" here read as a rate rather
-              // than as the count it is, which is the whole claim.
-              { v: 1, l: 'commission level — there is no second', unit: '' },
-            ].map((r) => (
-              <div key={r.l} className="cloud-card p-4 text-center">
-                <p
-                  className="wf-num font-mono text-2xl font-semibold text-gold-soft"
-                  data-value={r.v}
-                  data-unit={r.unit}
-                >
-                  {r.v}
-                  {r.unit}
-                </p>
-                <p className="caption mt-1">{r.l}</p>
-              </div>
-            ))}
-          </div>
+                  <span
+                    className={cn('kl-mono mt-1 hidden text-[10px] uppercase tracking-[.12em] opacity-75 sm:block', s.textDark ? 'text-[#241F16]' : 'text-white')}
+                    style={s.ink ? { color: s.ink } : undefined}
+                  >
+                    {s.label}
+                  </span>
+                </>
+              )}
+              {s.pct === 1 && <span className="wf-tick kl-mono text-[9px] text-white/80">1%</span>}
+            </div>
+          ))}
+        </div>
+        <div className="mt-5 flex flex-wrap gap-x-8 gap-y-2">
+          {LEGEND.map((l) => (
+            <span key={l.text} className="flex items-center gap-2 text-sm text-[var(--kl-mid)]">
+              <span className="h-2.5 w-2.5 rounded-full ring-1 ring-[var(--kl-paper-2)]" style={{ background: l.color }} aria-hidden="true" />
+              {l.text}
+            </span>
+          ))}
         </div>
 
-        {/* Other streams */}
-        <div className="mt-12 text-center">
-          <p className="caption mb-4">Every stream, one honest split — tap to see:</p>
-          <div className="flex flex-wrap justify-center gap-2">
-            {STREAMS.map((s, i) => (
-              <ModeChip key={s.label} label={s.label} active={stream === i} onClick={() => setStream(i)} />
-            ))}
-          </div>
-          <p className="mono-data mx-auto mt-5 max-w-xl text-sky" aria-live="polite">
-            {STREAMS[stream].caption}
-          </p>
+        {/* count-up readout, as an editorial row */}
+        <div className="mt-14 grid grid-cols-2 gap-x-6 gap-y-10 border-t border-[var(--kl-paper-2)] pt-10 lg:grid-cols-4">
+          {[
+            { v: 40, l: 'to the creator', unit: '%' },
+            { v: 20, l: 'of Kinjy’s share to their sponsor', unit: '%' },
+            { v: 5, l: 'of Kinjy’s share to Kinjy Leaders', unit: '%' },
+            // Not a percentage. Rendering "1%" here read as a rate rather
+            // than as the count it is, which is the whole claim.
+            { v: 1, l: 'commission level — there is no second', unit: '' },
+          ].map((r) => (
+            <div key={r.l}>
+              <p className="wf-num kl-serif text-[clamp(44px,5vw,64px)] font-semibold leading-none text-[var(--kl-gold-deep)]" data-value={r.v} data-unit={r.unit}>
+                {r.v}
+                {r.unit}
+              </p>
+              <p className="mt-3 max-w-[220px] text-[15px] leading-snug text-[var(--kl-mid)]">{r.l}</p>
+            </div>
+          ))}
         </div>
+      </div>
 
-        {/* Gold footnote — one level, and what that rules out */}
-        <CloudCard gold className="mx-auto mt-12 max-w-3xl border-gold/30 bg-gold/[0.06] p-6">
-          <div className="flex items-start gap-3">
-            <Info size={18} className="mt-0.5 shrink-0 text-gold" aria-hidden="true" />
-            <p className="text-sm leading-relaxed text-text-mid">
-              <span className="font-semibold text-gold-soft">One level, deliberately:</span> only the member who
-              sponsored you earns on what you do. There is no chain above them, so nobody is paid for a recruit they
-              have never met, and no commission is split so thin it stops being worth the introduction. An advertising
-              dollar is counted once: the creator is paid out of it, and the commission comes from what Kinjy keeps —
-              never from both.
-            </p>
-          </div>
-        </CloudCard>
+      {/* Other streams */}
+      <Stage className="mt-16 p-[clamp(20px,4vw,48px)]" glows={['var(--kl-sky)', 'var(--kl-coral)']}>
+        <p className="kl-mono text-[11px] uppercase tracking-[.14em] text-[var(--kl-low)]">Every stream, one honest split — tap to see</p>
+        <div className="mt-5 flex flex-wrap gap-2" role="group" aria-label="Revenue streams">
+          {STREAMS.map((st, i) => (
+            <button
+              key={st.label}
+              type="button"
+              aria-pressed={stream === i}
+              onClick={() => setStream(i)}
+              className={cn(
+                'whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-colors',
+                stream === i ? 'kl-sheen' : 'bg-[var(--kl-surface)] text-[var(--kl-mid)] hover:text-[var(--kl-ink)]',
+              )}
+            >
+              {st.label}
+            </button>
+          ))}
+        </div>
+        <p className="kl-serif mt-8 max-w-[760px] text-[clamp(22px,2.6vw,32px)] leading-snug" aria-live="polite">
+          {STREAMS[stream].caption}
+        </p>
+      </Stage>
+
+      {/* One level, and what that rules out */}
+      <div className="mt-10 flex max-w-[860px] items-start gap-4 border-s-2 border-[var(--kl-gold)] ps-6">
+        <Info size={18} className="mt-1 shrink-0 text-[var(--kl-gold-deep)]" aria-hidden="true" />
+        <p className="text-[15px] leading-relaxed text-[var(--kl-mid)]">
+          <span className="font-semibold text-[var(--kl-ink)]">One level, deliberately:</span> only the member who
+          sponsored you earns on what you do. There is no chain above them, so nobody is paid for a recruit they
+          have never met, and no commission is split so thin it stops being worth the introduction. An advertising
+          dollar is counted once: the creator is paid out of it, and the commission comes from what Kinjy keeps —
+          never from both.
+        </p>
       </div>
     </section>
   )

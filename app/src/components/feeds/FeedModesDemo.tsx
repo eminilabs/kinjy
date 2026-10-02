@@ -6,7 +6,8 @@ import { Avatar, CLOUD_EASE, ModuleGlyph } from '@/components/platform/shared'
 import { FEED_MODES, POST_BY_ID } from './data'
 import type { Algorithm, FeedModeKey, FeedPost } from './data'
 import { useToasts } from './Toast'
-import { Eyebrow, Provenance, Seal, Stage } from './kit'
+import { Provenance, Seal } from './kit'
+import { Eyebrow, Stage } from '@/components/landing/PageKit'
 
 const GEO_CRUMB: Partial<Record<FeedModeKey, string>> = {
   local: 'Dar es Salaam · 20 km',

@@ -5,7 +5,8 @@ import { cn } from '@/lib/utils'
 import { Avatar, CLOUD_EASE, LINE_EASE } from '@/components/platform/shared'
 import { POSTS } from './data'
 import { useToasts } from './Toast'
-import { Eyebrow, Provenance, Seal, Stage } from './kit'
+import { Provenance, Seal } from './kit'
+import { Eyebrow, Stage } from '@/components/landing/PageKit'
 
 /** Gold callout numeral with a circle that draws in (SVG stroke, 600ms). */
 function Callout({ n, delay = 0 }: { n: number; delay?: number }) {

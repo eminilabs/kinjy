@@ -4,7 +4,8 @@ import { Heart, MessageCircle, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar, KineticWords } from '@/components/platform/shared'
 import { ALGORITHMS, FEED_MODES, POSTS } from './data'
-import { Eyebrow, Provenance, Seal } from './kit'
+import { Provenance, Seal } from './kit'
+import { Eyebrow } from '@/components/landing/PageKit'
 
 /** A phone on the stage, its feed scrolling on a 12s loop that pauses on touch. */
 const PhoneFeed = memo(function PhoneFeed() {
