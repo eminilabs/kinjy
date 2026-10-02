@@ -19,7 +19,7 @@ from common.ids import new_id
 from common.service import create_app
 
 from common import ageclient, classifier, mediasign
-from common.agesafety import engine as age_engine
+from common.agesafety import engine as age_engine, rating_strictness
 
 import agefilter
 import moderation
@@ -201,6 +201,95 @@ def _classify_and_store(
         # surfaces in alerting rather than waiting to be noticed in a backlog.
         log.error(
             "child-safety escalation on %s by %s (risk %s)",
+            post.id, post.author_id, result.exploitation_risk,
+        )
+    return result
+
+
+def _reclassify_after_edit(
+    db: OrmSession, post: models.Post, author_is_minor: bool
+) -> classifier.Classification:
+    """Classify an edited post again. The result can tighten what is in force, never loosen it.
+
+    Classification used to run at creation only, so a post published as
+    something harmless and then edited into adult or exploitative text kept its
+    first rating and went on reaching minors. The edit is now judged like a new
+    post, with one difference: the rating, every per-category level and the
+    exploitation risk only ever go up. Loosening is a reviewer's or an
+    appeal's to decide, for the reason reports and the author's own "mature"
+    flag only tighten too: otherwise wording a post blandly for the classifier
+    and then back again would be a way around any rating, a human one included.
+
+    Anything tightened goes back to "pending": whatever a reviewer confirmed,
+    it was not the text that is there now. A refusal withholds the post and is
+    recorded, exactly as at creation; a withheld post is never released by an
+    edit. The caller commits.
+    """
+    media_kinds = list(
+        db.scalars(select(models.PostMedia.kind).where(models.PostMedia.post_id == post.id)).all()
+    )
+    # Locked until the commit, and read fresh: the comparison below must be
+    # against the rating in force, not a copy from before a reviewer's answer
+    # landed. Unlocked, an edit racing a review would write its older rating
+    # over the reviewer's stricter one.
+    row = db.scalar(
+        select(models.ContentSafetyClassification)
+        .where(models.ContentSafetyClassification.content_id == post.id)
+        .with_for_update()
+    )
+    if row is None:
+        # Never classified (a post from before classification existed): it is
+        # in effect a new post, and is judged as one.
+        return _classify_and_store(db, post, media_kinds, author_is_minor)
+
+    result = classifier.classify(
+        body=post.body or "",
+        media_kinds=media_kinds,
+        author_is_minor=author_is_minor,
+        declared_mature=bool(post.mature),
+    )
+
+    tightened = rating_raised = False
+    if rating_strictness(result.age_rating) > rating_strictness(row.age_rating):
+        row.age_rating = result.age_rating
+        tightened = rating_raised = True
+    for field_name, level in result.levels.items():
+        if level > (getattr(row, field_name) or 0):
+            setattr(row, field_name, level)
+            tightened = True
+    if result.exploitation_risk > (row.exploitation_risk or 0):
+        row.exploitation_risk = result.exploitation_risk
+        tightened = True
+    if tightened:
+        row.human_review_status = "pending"
+        row.classifier_source = f"edit:{result.classifier_source}"
+        row.classifier_confidence = result.classifier_confidence
+
+    # A decision is recorded when something the author can see changes - the
+    # post is taken down, or its rating goes up - not on every edit that nudges
+    # a category: each decision can be appealed once, and re-minting one per
+    # edit would turn "once" into "as often as you like".
+    if result.block_publication:
+        newly_withheld = post.status not in ("withheld", "removed")
+        if post.status != "removed":
+            post.status = "withheld"
+        if newly_withheld or result.escalate_child_safety:
+            moderation.record_decision(
+                db, subject_id=post.author_id, content_id=post.id, content_kind="post",
+                action="refused_publication", age_rating=result.age_rating,
+                # The text as it was judged: the author may edit it again, and
+                # the reviewer needs what was refused, not what replaced it.
+                body_snapshot=post.body, appealable=not result.escalate_child_safety,
+            )
+    elif rating_raised and row.age_rating not in ("GENERAL", "TEEN_13_PLUS"):
+        moderation.record_decision(
+            db, subject_id=post.author_id, content_id=post.id, content_kind="post",
+            action="restricted_by_rating", age_rating=row.age_rating,
+            appealable=not result.escalate_child_safety,
+        )
+    if result.escalate_child_safety:
+        log.error(
+            "child-safety escalation on edited %s by %s (risk %s)",
             post.id, post.author_id, result.exploitation_risk,
         )
     return result
@@ -1184,7 +1273,17 @@ def edit_post(post_id: str, payload: PostIn, principal: CurrentUser, db: OrmSess
     # An edit of original content becomes "edited" — provenance must stay honest.
     if post.provenance == "original":
         post.provenance = "edited"
+    # Judged again before the commit, like a new post: the age filter reads the
+    # classification row, so an edit must never be served under the rating of
+    # the text it replaced.
+    verdict = _reclassify_after_edit(db, post, _viewer_age(principal.user_id).is_minor)
     db.commit()
+    if verdict.block_publication:
+        # The same deliberately vague refusal as create_post.
+        raise HTTPException(
+            status_code=403,
+            detail="This post cannot be published. If you believe this is a mistake, contact support.",
+        )
     return _post_out(post, db)
 
 
