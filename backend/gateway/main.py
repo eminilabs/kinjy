@@ -235,6 +235,14 @@ BODY_LIMIT_MEDIA = 201 * 1024 * 1024
 BODY_IDLE_SECONDS = 20
 BODY_DEADLINE = 60
 BODY_DEADLINE_MEDIA = 900
+# How long the gateway waits for media-service to answer an upload once it has sent
+# the whole body. With post media at UploadCenter, media-service stages the file,
+# sends it on (up to PUT_MAX_SECONDS in uploadcenter.py) and waits for their scan
+# (up to READY_MAX_SECONDS), and measured on the real service that is anywhere from
+# 12 to 134 seconds for the same size of file. A shorter wait here showed the member
+# a 504 for an upload that went on to succeed, and left the file behind. It must not
+# be shorter than media-service's own worst case; test_gateway_timeouts.py checks that.
+UPLOAD_READ_SECONDS = 1200
 
 
 class BodyRejected(Exception):
@@ -333,6 +341,12 @@ async def proxy(full_path: str, request: Request):
             content=guarded_body(request, limit, BODY_DEADLINE_MEDIA if large else BODY_DEADLINE) if has_body else None,
             headers=headers,
             params=request.query_params,
+            # Only an upload waits this long; every other call keeps the client's 30 s.
+            timeout=(
+                httpx.Timeout(30.0, connect=5.0, read=UPLOAD_READ_SECONDS)
+                if large and request.method in ("POST", "PUT")
+                else httpx.USE_CLIENT_DEFAULT
+            ),
         )
         response = await _client.send(upstream_request, stream=True)
     except httpx.LocalProtocolError as exc:

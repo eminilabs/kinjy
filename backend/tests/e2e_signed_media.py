@@ -53,11 +53,26 @@ def auth(t):
     return {"Authorization": f"Bearer {t}"}
 
 
-PNG = bytes.fromhex(
-    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4"
-    "890000000a49444154789c6360000002000100ffff03000006000557bfabd400"
-    "00000049454e44ae426082"
-)
+
+
+def _png(width: int = 64, height: int = 64) -> bytes:
+    """A real, plain PNG. Not 1x1: UploadCenter refuses an image that small, and
+    this test must hold whichever storage media-service is using."""
+    import struct
+    import zlib
+
+    raw = b"".join(bytes([0]) + bytes([200, 30, 30]) * width for _ in range(height))
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        body = struct.pack(">I", len(data)) + kind + data
+        return body + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+
+    return (bytes([0x89]) + b"PNG" + bytes([13, 10, 26, 10])
+            + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+
+PNG = _png()
 
 probe = httpx.get(f"{MEDIA_DIRECT}/health", timeout=10).json()
 assert probe.get("service") == "media-service", f"wrong port: {probe}"
@@ -76,9 +91,17 @@ asset = r.json() if r.status_code in (200, 201) else {}
 asset_id, asset_url = asset.get("id"), asset.get("url")
 print(f"   asset: {asset_id}  url: {asset_url}")
 
-check("an unattached asset is still public",
-      httpx.get(f"{MEDIA_DIRECT}/media/{asset_id}", timeout=10).status_code == 200,
-      "before attaching, it is an avatar-class asset")
+storage = httpx.get(f"{MEDIA_DIRECT}/internal/media/{asset_id}", timeout=10).json().get("storage")
+if storage == "uploadcenter":
+    # Post media at UploadCenter has no public address to fall back on, so it is
+    # restricted from the first byte rather than once a post uses it.
+    check("an unattached asset at UploadCenter is already refused without a ticket",
+          httpx.get(f"{MEDIA_DIRECT}/media/{asset_id}", timeout=10).status_code == 404)
+else:
+    check("an unattached asset is still public",
+          httpx.get(f"{MEDIA_DIRECT}/media/{asset_id}", timeout=10).status_code == 200,
+          "before attaching, it is an avatar-class asset")
+print(f"   storage: {storage}")
 
 r = c.post("/posts", headers=auth(adult_tok), json={
     "body": "A post with an image.", "visibility": "public", "format": "image",

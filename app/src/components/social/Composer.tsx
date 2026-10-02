@@ -113,7 +113,10 @@ export default function Composer({
   const [kind, setKind] = useState<Kind>('text')
   const [body, setBody] = useState('')
   const [headline, setHeadline] = useState('')
-  const [media, setMedia] = useState<UploadedMedia[]>([])
+  // previewUrl is local, made from the file the member picked. The server's own
+  // address cannot be the preview: an upload nobody has attached to a post yet is
+  // served only against a ticket, so it would show as a broken image until posted.
+  const [media, setMedia] = useState<Array<UploadedMedia & { previewUrl?: string }>>([])
   const [uploading, setUploading] = useState(false)
   const [visibility, setVisibility] = useState<string>('public')
   const [circleId, setCircleId] = useState('')
@@ -185,9 +188,9 @@ export default function Composer({
     setUploading(true)
     setError(null)
     try {
-      const uploaded: UploadedMedia[] = []
+      const uploaded: Array<UploadedMedia & { previewUrl?: string }> = []
       for (const file of Array.from(files).slice(0, 4)) {
-        uploaded.push(await kaluta.media.upload(file, provenance))
+        uploaded.push({ ...(await kaluta.media.upload(file, provenance)), previewUrl: URL.createObjectURL(file) })
       }
       setMedia((current) => [...current, ...uploaded].slice(0, 4))
     } catch (err) {
@@ -201,6 +204,7 @@ export default function Composer({
   const reset = () => {
     setBody('')
     setHeadline('')
+    for (const item of media) if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
     setMedia([])
     setTopics('')
     setCity('')
@@ -476,13 +480,16 @@ export default function Composer({
                 {media.map((item) => (
                   <li key={item.id} className="relative overflow-hidden rounded-card-sm border border-white/10">
                     {item.kind === 'video' ? (
-                      <video src={item.url} className="h-36 w-full object-cover" muted playsInline />
+                      <video src={item.previewUrl ?? item.url} className="h-36 w-full object-cover" muted playsInline />
                     ) : (
-                      <img src={item.url} alt="" className="h-36 w-full object-cover" />
+                      <img src={item.previewUrl ?? item.url} alt="" className="h-36 w-full object-cover" />
                     )}
                     <button
                       type="button"
-                      onClick={() => setMedia((c) => c.filter((m) => m.id !== item.id))}
+                      onClick={() => {
+                        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
+                        setMedia((c) => c.filter((m) => m.id !== item.id))
+                      }}
                       aria-label="Remove"
                       className="absolute end-1.5 top-1.5 rounded-full bg-ink/80 p-1 text-text-hi"
                     >
