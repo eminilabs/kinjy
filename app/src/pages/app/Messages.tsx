@@ -39,6 +39,7 @@ import {
   type PersonBrief,
   type Presence,
 } from '@/lib/api'
+import { FEATURES } from '@/lib/features'
 import { realtime } from '@/lib/realtime'
 import { cn } from '@/lib/utils'
 
@@ -1597,8 +1598,9 @@ export default function Messages() {
 
               {/* The end padding keeps Send clear of the assistant orb, which
                   rests in the bottom-end corner (lib/floating.ts, slot 0) —
-                  exactly where a full-height thread puts its composer. */}
-              <form onSubmit={send} className="mt-3 flex items-center gap-2 border-t border-white/8 pe-14 pt-3 lg:pe-12">
+                  exactly where a full-height thread puts its composer. No
+                  orb, no gap: Send keeps the full width. */}
+              <form onSubmit={send} className={cn('mt-3 flex items-center gap-2 border-t border-white/8 pt-3', FEATURES.assistant && 'pe-14 lg:pe-12')}>
                 <input
                   ref={fileInput}
                   type="file"

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Flag, Power, ScrollText } from 'lucide-react'
 import { Chip, SubSection } from './primitives'
+import { FEATURES as SWITCHES, type Feature as Switch } from '@/lib/features'
 import { cn } from '@/lib/utils'
 
 type Stage = 1 | 10 | 100
@@ -11,13 +12,35 @@ interface Feature {
   name: string
   stage: Stage
   note: string
+  /** Shown only while this product feature is switched on (lib/features.ts). */
+  feature?: Switch
 }
 
-const FEATURES: Feature[] = [
-  { key: 'assistant-video-replies', name: 'Assistant video-clip replies', stage: 100, note: 'GA — all locales' },
-  { key: 'edge-translation-drafts', name: 'On-device translation drafts', stage: 10, note: 'cohort: E2E chat users' },
-  { key: 'family-heritage-restore-v2', name: 'Heritage photo restore v2', stage: 1, note: 'cohort: internal + 1%' },
+/**
+ * The demo board. Each card that belongs to a switched-off feature gives its
+ * slot to the stand-in after it, so the board keeps three cards and never
+ * advertises the assistant or the family tree while they are hidden.
+ */
+const CARDS: ReadonlyArray<{ card: Feature; standIn?: Feature }> = [
+  {
+    card: { key: 'assistant-video-replies', name: 'Assistant video-clip replies', stage: 100, note: 'GA — all locales', feature: 'assistant' },
+    standIn: { key: 'feed-why-this-post', name: '"Why this post" explanations', stage: 100, note: 'GA — all locales' },
+  },
+  {
+    card: { key: 'edge-translation-drafts', name: 'On-device translation drafts', stage: 10, note: 'cohort: E2E chat users' },
+  },
+  {
+    card: { key: 'family-heritage-restore-v2', name: 'Heritage photo restore v2', stage: 1, note: 'cohort: internal + 1%', feature: 'familyTree' },
+    standIn: { key: 'profile-cover-images', name: 'Profile cover images', stage: 1, note: 'cohort: internal + 1%' },
+  },
 ]
+
+const FEATURES: Feature[] = CARDS.flatMap(({ card, standIn }) =>
+  !card.feature || SWITCHES[card.feature] ? [card] : standIn ? [standIn] : [],
+)
+
+/** Where flag changes are written: the assistant's knowledge, or a plain changelog while it is hidden. */
+const CHANGELOG = SWITCHES.assistant ? 'Assistant knowledge changelog' : 'Release changelog'
 
 const STAGES: Stage[] = [1, 10, 100]
 
@@ -29,7 +52,7 @@ const STAGES: Stage[] = [1, 10, 100]
 export default function FeatureFlags() {
   const [killed, setKilled] = useState<string[]>([])
   const [log, setLog] = useState<string[]>([
-    '09:12:44 assistant-video-replies → 100% · changelog #4,819 appended',
+    `09:12:44 ${FEATURES[0].key} → ${FEATURES[0].stage}% · changelog #4,819 appended`,
   ])
 
   const toggle = (f: Feature) => {
@@ -54,7 +77,7 @@ export default function FeatureFlags() {
           Ship to 1%. Prove it. Then 10%. Then everyone.
         </>
       }
-      blurb="Every feature ships behind a flag with staged cohorts and an instant kill switch. Flag state is live configuration — changing it updates the Assistant's knowledge changelog within the same deploy tick."
+      blurb={`Every feature ships behind a flag with staged cohorts and an instant kill switch. Flag state is live configuration — changing it updates the ${CHANGELOG.toLowerCase()} within the same deploy tick.`}
     >
       <div className="grid gap-4 md:grid-cols-3">
         {FEATURES.map((f) => {
@@ -137,10 +160,10 @@ export default function FeatureFlags() {
         })}
       </div>
 
-      {/* Assistant knowledge changelog */}
+      {/* The changelog flag changes are written to */}
       <div className="mt-4 rounded-card-md border border-sky/25 bg-sky/[0.05] p-4">
         <p className="caption flex items-center gap-2 font-bold uppercase tracking-[0.14em] text-sky">
-          <ScrollText size={13} aria-hidden="true" /> Assistant knowledge changelog · live
+          <ScrollText size={13} aria-hidden="true" /> {CHANGELOG} · live
         </p>
         <div className="mono-data mt-2 space-y-1.5 text-[0.72rem] text-text-mid" aria-live="polite">
           <AnimatePresence initial={false}>
@@ -158,7 +181,9 @@ export default function FeatureFlags() {
           </AnimatePresence>
         </div>
         <p className="mt-2 text-[0.72rem] text-text-low">
-          Flip a kill switch above — the Assistant's "what's new" answers update in the same tick.
+          {SWITCHES.assistant
+            ? `Flip a kill switch above — the Assistant's "what's new" answers update in the same tick.`
+            : 'Flip a kill switch above — the changelog records it in the same tick.'}
         </p>
       </div>
     </SubSection>

@@ -381,14 +381,17 @@ export default function Memorials() {
         </motion.h2>
 
         <div className="relative mx-auto mt-10 flex w-fit flex-wrap items-center justify-center gap-4">
-          {/* Assistant orb docked beside the memorial action bar (64px offset left) */}
-          <div className="absolute -left-16 top-1/2 hidden -translate-y-1/2 items-center gap-2 md:flex" style={{ width: 0 }}>
-            <span
-              aria-hidden="true"
-              className="block h-12 w-12 shrink-0 rounded-full animate-orb-breathe"
-              style={{ background: 'var(--grad-orb)', animationDuration: '6s', filter: 'blur(0.5px)' }}
-            />
-          </div>
+          {/* Assistant orb docked beside the memorial action bar (64px offset left).
+              It is the assistant's motif, so it goes with it (lib/features.ts). */}
+          {FEATURES.assistant && (
+            <div className="absolute -left-16 top-1/2 hidden -translate-y-1/2 items-center gap-2 md:flex" style={{ width: 0 }}>
+              <span
+                aria-hidden="true"
+                className="block h-12 w-12 shrink-0 rounded-full animate-orb-breathe"
+                style={{ background: 'var(--grad-orb)', animationDuration: '6s', filter: 'blur(0.5px)' }}
+              />
+            </div>
+          )}
           <ArcButton size="lg" className="hover:brightness-105">
             Create a memorial
           </ArcButton>

@@ -8,6 +8,7 @@ import LeadersPoolSection from '@/components/admin/LeadersPoolSection'
 import AiWatchSection from '@/components/admin/AiWatchSection'
 import ModerationSection from '@/components/admin/ModerationSection'
 import PlatformQualitySection from '@/components/admin/PlatformQualitySection'
+import { FEATURES } from '@/lib/features'
 
 /**
  * Admin Console — /admin (role-gated demo view).
@@ -51,7 +52,9 @@ export default function Admin() {
             <KycSection />
             <FraudSection />
             <LeadersPoolSection />
-            <AiWatchSection />
+            {/* "Kinjy Assistant · Admin operations": the assistant's own inbox,
+                hidden with it (lib/features.ts). */}
+            {FEATURES.assistant && <AiWatchSection />}
             <ModerationSection />
             <PlatformQualitySection />
           </ConsoleFrame>
