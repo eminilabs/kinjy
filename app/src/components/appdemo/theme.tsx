@@ -191,11 +191,14 @@ function useStored<T extends string>(
 export function AppThemeProvider({
   children,
   persist = false,
+  initialMode = 'cloud',
 }: {
   children: ReactNode
   persist?: boolean
+  /** The mode the window opens in (a remembered choice still wins when `persist` is on). */
+  initialMode?: DisplayMode
 }) {
-  const [mode, setMode] = useStored<DisplayMode>('kaluta.display_mode', 'cloud', persist, DISPLAY_MODES)
+  const [mode, setMode] = useStored<DisplayMode>('kaluta.display_mode', initialMode, persist, DISPLAY_MODES)
   const [ambient, setAmbient] = useStored<Ambient>('kaluta.ambient', 'twilight', persist, AMBIENT_KEYS)
   const [lang, setLang] = useStored<AppLang>('kaluta.app_lang', 'en', persist, APP_LANGS)
   const systemDark = useSystemDark()

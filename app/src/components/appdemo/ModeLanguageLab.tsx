@@ -3,6 +3,7 @@ import { Cloudy, Languages, MonitorSmartphone, Moon, Share2, Sun } from 'lucide-
 import { cn } from '@/lib/utils'
 import { AMBIENTS, useAppTheme } from './theme'
 import type { Ambient, AppLang, DisplayMode } from './theme'
+import { Eyebrow } from '@/components/landing/PageKit'
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 
@@ -26,8 +27,8 @@ export default function ModeLanguageLab() {
   const { mode, setMode, resolved, ambient, setAmbient, lang, setLang } = useAppTheme()
 
   return (
-    <section className="noise-overlay relative bg-ink-2/30 px-6 py-24 md:py-28">
-      <div className="mx-auto grid max-w-container gap-12 lg:grid-cols-2">
+    <section className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-12 lg:grid-cols-2">
         {/* Mode lab */}
         <motion.div
           initial={{ opacity: 0, y: 32 }}
@@ -35,11 +36,11 @@ export default function ModeLanguageLab() {
           viewport={{ once: true, margin: '-15%' }}
           transition={{ duration: 0.6, ease: EASE }}
         >
-          <p className="eyebrow text-gold">Display modes</p>
-          <h3 className="h3 mt-3 font-display text-3xl font-medium">
-            Four modes. <span className="text-gold-grad">One tap.</span>
-          </h3>
-          <p className="mt-3 max-w-md text-sm leading-relaxed text-text-mid">
+          <Eyebrow>Display modes</Eyebrow>
+          <h2 className="kl-h2 mt-5 max-w-[900px]">
+            Four modes. <span className="text-[var(--kl-gold-deep)]">One tap.</span>
+          </h2>
+          <p className="kl-lead mt-6 !max-w-[560px]">
             Switch and watch the app frame above restyle itself live — surfaces, shadows, sky and all.
           </p>
 
@@ -102,11 +103,11 @@ export default function ModeLanguageLab() {
           viewport={{ once: true, margin: '-15%' }}
           transition={{ delay: 0.1, duration: 0.6, ease: EASE }}
         >
-          <p className="eyebrow text-sky">Language lab</p>
-          <h3 className="h3 mt-3 font-display text-3xl font-medium">
-            The whole shell, <span className="text-arc-grad">re-labeled live.</span>
-          </h3>
-          <p className="mt-3 max-w-md text-sm leading-relaxed text-text-mid">
+          <Eyebrow>Language lab</Eyebrow>
+          <h2 className="kl-h2 mt-5 max-w-[900px]">
+            The whole shell, <span className="text-[var(--kl-gold-deep)]">re-labeled live.</span>
+          </h2>
+          <p className="kl-lead mt-6 !max-w-[560px]">
             Pick a language — the app chrome above switches instantly. العربية flips the entire shell to RTL:
             nav order reverses, the feed mirrors, arcs change direction.
           </p>
