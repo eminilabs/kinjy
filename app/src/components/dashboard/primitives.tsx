@@ -19,7 +19,7 @@ export function Panel({
     <section className={cn('cloud-card p-6', className)}>
       <header className="mb-5 flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-text-hi">{title}</h2>
+          <h2 className="text-[19px] font-bold tracking-[-0.02em] text-text-hi">{title}</h2>
           {subtitle && <p className="caption mt-1">{subtitle}</p>}
         </div>
         {action}
@@ -45,7 +45,7 @@ export function Stat({
       <p className="caption">{label}</p>
       <p
         className={cn(
-          'mono-data mt-1 text-2xl',
+          'mt-1 text-[28px] font-bold leading-tight tracking-[-0.03em] tabular-nums',
           tone === 'gold' && 'text-gold-soft',
           tone === 'muted' && 'text-text-mid',
           tone === 'default' && 'text-text-hi',
@@ -111,7 +111,7 @@ export function Badge({
         // label. shrink-0 keeps it from being squeezed into wrapping by a
         // flex row that is short on width.
         'inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold',
-        tone === 'neutral' && 'bg-white/8 text-text-mid',
+        tone === 'neutral' && 'bg-text-hi/[0.07] text-text-mid',
         tone === 'good' && 'bg-emerald-400/15 text-emerald-200',
         tone === 'warn' && 'bg-amber-400/15 text-amber-200',
         tone === 'bad' && 'bg-red-400/15 text-red-200',
@@ -123,4 +123,4 @@ export function Badge({
 }
 
 export const inputClass =
-  'w-full rounded-card-sm border border-white/10 bg-ink-2/70 px-4 py-2.5 text-sm text-text-hi placeholder:text-text-low focus:border-gold/50 focus:outline-none'
+  'w-full rounded-[12px] border border-white/10 bg-ink-2/70 px-4 py-2.5 text-sm text-text-hi placeholder:text-text-low focus:border-gold/60 focus:outline-none focus:ring-2 focus:ring-gold/20'
