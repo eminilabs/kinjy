@@ -456,7 +456,18 @@ export default function Memorials() {
           “To be remembered is to remain.”
         </motion.h2>
 
-        <div className="mx-auto mt-10 flex w-fit flex-wrap items-center justify-center gap-4">
+        <div className="relative mx-auto mt-10 flex w-fit flex-wrap items-center justify-center gap-4">
+          {/* Assistant orb docked beside the memorial action bar (64px offset left).
+              It is the assistant's motif, so it goes with it (lib/features.ts). */}
+          {FEATURES.assistant && (
+            <div className="absolute -left-16 top-1/2 hidden -translate-y-1/2 items-center gap-2 md:flex" style={{ width: 0 }}>
+              <span
+                aria-hidden="true"
+                className="block h-12 w-12 shrink-0 rounded-full animate-orb-breathe"
+                style={{ background: 'var(--grad-orb)', animationDuration: '6s', filter: 'blur(0.5px)' }}
+              />
+            </div>
+          )}
           <button
             type="button"
             className="kl-sheen rounded-[20px] px-8 py-4 text-[17px] font-semibold shadow-[0_14px_30px_-12px_rgba(169,118,28,.55)] transition-transform hover:-translate-y-0.5"

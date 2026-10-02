@@ -81,5 +81,5 @@ c.delete(f"/users/{author_user['id']}/follow", headers=reader)
 r = feed(reader, "following")
 check("empty again, with the reason", r.json().get("empty_reason") == "not_following_anyone", r.json())
 
-print("\nALL PASSED" if ok else "\nSOME CHECKS FAILED")
+print("\nALL CHECKS PASSED" if ok else "\nTHERE ARE FAILURES")
 sys.exit(0 if ok else 1)

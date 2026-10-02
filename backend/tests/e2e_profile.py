@@ -187,5 +187,5 @@ check("the replaced image is deleted", gone == 404, gone)
 r = patch(adult, avatar_asset_id=None)
 check("avatar removed", r.status_code == 200 and r.json()["avatar_url"] is None, r.text)
 
-print("\nALL PASSED" if ok else "\nSOME CHECKS FAILED")
+print("\nALL CHECKS PASSED" if ok else "\nTHERE ARE FAILURES")
 sys.exit(0 if ok else 1)

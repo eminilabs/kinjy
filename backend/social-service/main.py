@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import Depends, HTTPException, Query
@@ -22,6 +22,7 @@ from common import ageclient, classifier, mediasign
 from common.agesafety import engine as age_engine
 
 import agefilter
+import moderation
 import models
 import ranking
 
@@ -174,6 +175,27 @@ def _classify_and_store(
         # Never published, not published-and-then-hidden. The difference is
         # whether anybody saw it.
         post.status = "withheld"
+        # Written down so the author can see what happened and contest it. A
+        # refusal nobody recorded cannot be appealed and cannot be counted.
+        moderation.record_decision(
+            db, subject_id=post.author_id, content_id=post.id, content_kind="post",
+            action="refused_publication", age_rating=result.age_rating,
+            # Withheld posts do survive in the posts table, but the snapshot is
+            # kept anyway: "withheld" is the one state an author may later edit
+            # their way out of, and a reviewer needs the text as it was judged.
+            body_snapshot=post.body, appealable=not result.escalate_child_safety,
+        )
+    elif result.age_rating not in ("GENERAL", "TEEN_13_PLUS"):
+        # Not a punishment — the post is published and adults see it normally.
+        # Recorded anyway, because "why does nobody see my posts" is otherwise
+        # unanswerable, and a rating is the thing most often gotten wrong.
+        # No snapshot: the post exists and a reviewer can read it from the
+        # posts table. A snapshot is for content that was never stored.
+        moderation.record_decision(
+            db, subject_id=post.author_id, content_id=post.id, content_kind="post",
+            action="restricted_by_rating", age_rating=result.age_rating,
+            appealable=not result.escalate_child_safety,
+        )
     if result.escalate_child_safety:
         # Out of the ordinary queue entirely. Logged at error level so it
         # surfaces in alerting rather than waiting to be noticed in a backlog.
@@ -564,18 +586,48 @@ def classify_post(post_id: str, payload: ClassificationIn, db: OrmSession = Depe
 
     Upserted rather than appended so there is exactly one current answer per
     item, and the read path never has to decide which of several rows wins.
+
+    A rating a reviewer has settled is not overwritten from here: an automatic
+    pass must not quietly undo a human's answer, overturned appeals included
+    (moderation.file_report keeps the same rule for reports). The one thing
+    that still gets through is an exploitation signal, which withholds the
+    post whatever the rating says. Reviewers re-rate through
+    /admin/classification/{post_id}/review.
     """
     post = db.get(models.Post, post_id)
     if post is None:
         raise HTTPException(status_code=404, detail="Post not found")
 
-    row = db.scalar(
+    existing = _classification_row(db, post_id)
+    if existing is not None and existing.human_review_status == "confirmed":
+        if payload.exploitation_risk >= 2 or payload.age_rating == "PROHIBITED":
+            post.status = "removed"
+            db.commit()
+            log.error("content %s withheld pending child-safety review (rating was reviewer-confirmed)", post_id)
+            return {"content_id": post_id, "age_rating": existing.age_rating, "status": post.status}
+        log.info("classification of %s left alone: already settled by a reviewer", post_id)
+        raise HTTPException(status_code=409, detail="A reviewer has settled this rating; only a reviewer can change it.")
+
+    row = _apply_classification(db, post, payload)
+    db.commit()
+    return {"content_id": post_id, "age_rating": row.age_rating, "status": post.status}
+
+
+def _classification_row(db: OrmSession, post_id: str) -> models.ContentSafetyClassification | None:
+    return db.scalar(
         select(models.ContentSafetyClassification).where(
             models.ContentSafetyClassification.content_id == post_id
         )
     )
+
+
+def _apply_classification(
+    db: OrmSession, post: models.Post, payload: ClassificationIn
+) -> models.ContentSafetyClassification:
+    """Write a classification onto the post's one row; the caller commits."""
+    row = _classification_row(db, post.id)
     if row is None:
-        row = models.ContentSafetyClassification(id=new_id("csc"), content_id=post_id)
+        row = models.ContentSafetyClassification(id=new_id("csc"), content_id=post.id)
         db.add(row)
 
     data = payload.model_dump()
@@ -589,10 +641,8 @@ def classify_post(post_id: str, payload: ClassificationIn, db: OrmSession = Depe
     # process rather than leaving it queued behind everything else.
     if payload.exploitation_risk >= 2 or payload.age_rating == "PROHIBITED":
         post.status = "removed"
-        log.error("content %s withheld pending child-safety review", post_id)
-
-    db.commit()
-    return {"content_id": post_id, "age_rating": row.age_rating, "status": post.status}
+        log.error("content %s withheld pending child-safety review", post.id)
+    return row
 
 
 @app.get("/internal/classification/{post_id}", tags=["internal"])
@@ -616,6 +666,232 @@ def read_classification(post_id: str, db: OrmSession = Depends(get_db)):
     }
 
 
+# ---------------------------------------------------------------------------
+# Reports, decisions and appeals
+# ---------------------------------------------------------------------------
+
+class ReportIn(BaseModel):
+    reason: str = Field(default="other", max_length=30)
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class AppealIn(BaseModel):
+    grounds: str | None = Field(default=None, max_length=2000)
+
+
+class AppealVerdictIn(BaseModel):
+    overturn: bool
+    note: str | None = Field(default=None, max_length=2000)
+
+
+def _report(
+    content_id: str, content_kind: str, payload: ReportIn,
+    principal: CurrentUser, db: OrmSession,
+):
+    """Shared by posts and comments: the handling is identical."""
+    author_id = None
+    if content_kind == "post":
+        post = db.get(models.Post, content_id)
+        if post is None:
+            raise HTTPException(status_code=404, detail="Not found")
+        author_id = post.author_id
+    else:
+        comment = db.get(models.Comment, content_id)
+        if comment is None:
+            raise HTTPException(status_code=404, detail="Not found")
+        author_id = comment.author_id
+
+    moderation.file_report(
+        db, content_id=content_id, content_kind=content_kind,
+        reporter_id=principal.user_id, author_id=author_id,
+        reason=payload.reason, note=payload.note,
+    )
+    # Deliberately the same answer every time. Telling a reporter whether their
+    # report moved a rating turns reporting into a probe for the threshold.
+    return {"status": "received"}
+
+
+@app.post("/posts/{post_id}/report", status_code=201, tags=["moderation"])
+def report_post(
+    post_id: str, payload: ReportIn, principal: CurrentUser, db: OrmSession = Depends(get_db)
+):
+    """Report a post. Reporting twice is the same as reporting once."""
+    return _report(post_id, "post", payload, principal, db)
+
+
+@app.post("/comments/{comment_id}/report", status_code=201, tags=["moderation"])
+def report_comment(
+    comment_id: str, payload: ReportIn, principal: CurrentUser, db: OrmSession = Depends(get_db)
+):
+    return _report(comment_id, "comment", payload, principal, db)
+
+
+@app.get("/moderation/decisions", tags=["moderation"])
+def my_decisions(principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """What has been restricted on this account, and where each appeal stands.
+
+    A member who cannot see this has to infer moderation from their reach, which
+    is how people conclude they are shadowbanned when they are not - and how
+    they miss it when they are.
+    """
+    decisions = moderation.decisions_for(db, principal.user_id)
+    appeals = {
+        a.decision_id: a
+        for a in db.scalars(
+            select(models.ModerationAppeal).where(
+                models.ModerationAppeal.decision_id.in_([d.id for d in decisions] or [""])
+            )
+        ).all()
+    }
+    return {
+        "items": [moderation.decision_out(d, appeals.get(d.id)) for d in decisions],
+    }
+
+
+@app.post("/moderation/decisions/{decision_id}/appeal", status_code=201, tags=["moderation"])
+def appeal_decision(
+    decision_id: str, payload: AppealIn, principal: CurrentUser,
+    db: OrmSession = Depends(get_db),
+):
+    """Contest a decision. Once, by the person it was made about."""
+    decision = db.get(models.ModerationDecision, decision_id)
+    if decision is None or decision.subject_id != principal.user_id:
+        raise HTTPException(status_code=404, detail="Not found")
+    if not decision.appealable:
+        # No detail about why. This path is reached by child-safety
+        # escalations, and explaining the boundary explains how to sit outside
+        # it next time.
+        raise HTTPException(
+            status_code=403,
+            detail="This decision cannot be reviewed here. Contact support.",
+        )
+    if moderation.appeal_for(db, decision.id) is not None:
+        raise HTTPException(status_code=409, detail="This has already been appealed.")
+
+    appeal = moderation.open_appeal(db, decision, principal.user_id, payload.grounds)
+    db.commit()
+    return {
+        "id": appeal.id,
+        "status": appeal.status,
+        "due_at": appeal.due_at,
+        "note": "Someone will look at this again. You will be told either way.",
+    }
+
+
+@app.get("/admin/moderation/appeals", tags=["admin"])
+def appeal_queue(_: AdminUser, limit: int = 50, db: OrmSession = Depends(get_db)):
+    """Open appeals, the late ones first, with the overturn rate beside them.
+
+    The rate is here rather than on a separate dashboard on purpose: a reviewer
+    who can see that a third of these decisions are being overturned is being
+    told something about the classifier, not about the appellants.
+    """
+    appeals = moderation.queue(db, limit)
+    decisions = {
+        d.id: d
+        for d in db.scalars(
+            select(models.ModerationDecision).where(
+                models.ModerationDecision.id.in_([a.decision_id for a in appeals] or [""])
+            )
+        ).all()
+    }
+    # The live text, for the decisions that restricted content rather than
+    # refusing it. Those have no snapshot - the post still exists, so copying
+    # it would be duplicating data - but "open pst_01M3... to read it" is not a
+    # workable instruction, and a reviewer who cannot see the content will
+    # either guess or skip.
+    content_ids = [d.content_id for d in decisions.values()]
+    live_bodies = {
+        p.id: p.body
+        for p in db.scalars(
+            select(models.Post).where(models.Post.id.in_(content_ids or [""]))
+        ).all()
+    }
+    live_bodies.update({
+        cm.id: cm.body
+        for cm in db.scalars(
+            select(models.Comment).where(models.Comment.id.in_(content_ids or [""]))
+        ).all()
+    })
+
+    now = moderation.now()
+    return {
+        "stats": moderation.stats(db),
+        "items": [
+            {
+                "id": a.id,
+                "decision_id": a.decision_id,
+                "appellant_id": a.appellant_id,
+                "grounds": a.grounds,
+                "due_at": a.due_at,
+                "overdue": a.due_at < now,
+                "content_id": getattr(decisions.get(a.decision_id), "content_id", None),
+                "content_kind": getattr(decisions.get(a.decision_id), "content_kind", None),
+                "action": getattr(decisions.get(a.decision_id), "action", None),
+                "age_rating": getattr(decisions.get(a.decision_id), "age_rating", None),
+                "body_snapshot": (
+                    getattr(decisions.get(a.decision_id), "body_snapshot", None)
+                    or live_bodies.get(
+                        getattr(decisions.get(a.decision_id), "content_id", None)
+                    )
+                ),
+                "decided_by": getattr(decisions.get(a.decision_id), "decided_by", None),
+            }
+            for a in appeals
+        ],
+    }
+
+
+@app.post("/admin/moderation/appeals/{appeal_id}", tags=["admin"])
+def decide_appeal(
+    appeal_id: str, payload: AppealVerdictIn, admin: AdminUser,
+    db: OrmSession = Depends(get_db),
+):
+    """Uphold or overturn. Not by whoever made the decision being appealed."""
+    # Locked until the commit: two reviewers (or one double click) answering
+    # at once would otherwise both see "open", both act, and the second
+    # answer would silently replace the first in the record.
+    appeal = db.scalar(
+        select(models.ModerationAppeal).where(models.ModerationAppeal.id == appeal_id).with_for_update()
+    )
+    if appeal is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    if appeal.status != "open":
+        raise HTTPException(status_code=409, detail="This appeal has already been answered.")
+
+    decision = db.get(models.ModerationDecision, appeal.decision_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    blocked = moderation.may_review(decision, admin.user_id)
+    if blocked:
+        raise HTTPException(status_code=403, detail=blocked)
+
+    appeal.status = "overturned" if payload.overturn else "upheld"
+    appeal.reviewer_id = admin.user_id
+    appeal.reviewer_note = payload.note
+    appeal.answered_at = moderation.now()
+
+    if payload.overturn:
+        moderation.overturn(db, decision, admin.user_id)
+    else:
+        # Recorded as a human decision so a second appeal, if the product ever
+        # allows one, cannot be answered by this same reviewer.
+        decision.decided_by = admin.user_id
+
+    db.commit()
+    notify.notify(
+        appeal.appellant_id,
+        "moderation_appeal",
+        "Your appeal was reviewed"
+        if not payload.overturn
+        else "Your appeal was upheld and the restriction removed",
+        body=payload.note or None,
+        link="/moderation",
+    )
+    return {"id": appeal.id, "status": appeal.status}
+
+
 @app.get("/admin/classification-queue", tags=["admin"])
 def classification_queue(_: AdminUser, limit: int = 50, db: OrmSession = Depends(get_db)):
     """Content the classifier would not settle on its own.
@@ -630,19 +906,121 @@ def classification_queue(_: AdminUser, limit: int = 50, db: OrmSession = Depends
         .order_by(models.ContentSafetyClassification.created_at)
         .limit(min(limit, 200))
     ).all()
+
+    # The body, because a reviewer cannot review what they cannot see. The
+    # queue used to return ids and a rating, which meant the only way to work
+    # it was to look every item up by hand somewhere else - and a queue that is
+    # tedious to work is a queue that does not get worked, which shows up as
+    # teenagers seeing nothing rather than as a backlog anybody notices.
+    posts = {
+        p.id: p
+        for p in db.scalars(
+            select(models.Post).where(models.Post.id.in_([r.content_id for r in rows] or [""]))
+        ).all()
+    }
+    comments = {
+        c.id: c
+        for c in db.scalars(
+            select(models.Comment).where(
+                models.Comment.id.in_([r.content_id for r in rows] or [""])
+            )
+        ).all()
+    }
+    total_pending = db.scalar(
+        select(func.count()).select_from(models.ContentSafetyClassification).where(
+            models.ContentSafetyClassification.human_review_status == "pending"
+        )
+    ) or 0
+
+    # Media lives in its own table, so it is counted in one query rather than
+    # read off the post. An earlier version of this guessed at a `media_ids`
+    # column that does not exist and reported zero attachments on everything -
+    # in a queue that exists *because* nothing can see into pictures, "0 media"
+    # on every row is the most misleading value it could have shown.
+    media_counts = dict(
+        db.execute(
+            select(models.PostMedia.post_id, func.count())
+            .where(models.PostMedia.post_id.in_([r.content_id for r in rows] or [""]))
+            .group_by(models.PostMedia.post_id)
+        ).all()
+    )
+
+    def _content(r):
+        item = posts.get(r.content_id) or comments.get(r.content_id)
+        if item is None:
+            return None, None
+        return item.body, item.author_id
+
+    items = []
+    for r in rows:
+        body, author_id = _content(r)
+        items.append({
+            "content_id": r.content_id,
+            "content_kind": r.content_kind,
+            "age_rating": r.age_rating,
+            "classifier_source": r.classifier_source,
+            "confidence": r.classifier_confidence,
+            "exploitation_risk": r.exploitation_risk,
+            "levels": {
+                "sexual": r.sexual_content_level, "nudity": r.nudity_level,
+                "violence": r.violence_level, "graphic": r.graphic_content_level,
+                "drugs": r.drugs_level, "alcohol": r.alcohol_level,
+                "gambling": r.gambling_level, "dangerous": r.dangerous_activity_level,
+                "self_harm": r.self_harm_risk, "hate": r.hate_or_abuse_risk,
+            },
+            "body": body,
+            "author_id": author_id,
+            "media_count": media_counts.get(r.content_id, 0),
+            "reports": db.scalar(
+                select(func.count()).select_from(models.ContentReport).where(
+                    models.ContentReport.content_id == r.content_id
+                )
+            ) or 0,
+            "created_at": r.created_at,
+        })
+
+    return {"pending": total_pending, "shown": len(rows), "items": items}
+
+
+@app.get("/admin/moderation/overview", tags=["admin"])
+def moderation_overview(_: AdminUser, db: OrmSession = Depends(get_db)):
+    """The real numbers, for a console that used to show invented ones.
+
+    Every figure here is a count of rows. That sounds too obvious to say, but
+    the admin page it replaces carried "4.2M items screened / day" and "96 open
+    to humans" as hard-coded strings, which is worse than showing nothing: a
+    fabricated queue depth is indistinguishable from an empty one right up
+    until somebody trusts it.
+    """
+    since = datetime.now(timezone.utc) - timedelta(days=1)
+    pending = db.scalar(
+        select(func.count()).select_from(models.ContentSafetyClassification).where(
+            models.ContentSafetyClassification.human_review_status == "pending"
+        )
+    ) or 0
+    escalations = db.scalar(
+        select(func.count()).select_from(models.ContentSafetyClassification).where(
+            models.ContentSafetyClassification.exploitation_risk > 1
+        )
+    ) or 0
+    classified = db.scalar(
+        select(func.count()).select_from(models.ContentSafetyClassification)
+    ) or 0
+    reports_day = db.scalar(
+        select(func.count()).select_from(models.ContentReport).where(
+            models.ContentReport.created_at >= since
+        )
+    ) or 0
+    reports_total = db.scalar(
+        select(func.count()).select_from(models.ContentReport)
+    ) or 0
     return {
-        "pending": len(rows),
-        "items": [
-            {
-                "content_id": r.content_id,
-                "age_rating": r.age_rating,
-                "classifier_source": r.classifier_source,
-                "confidence": r.classifier_confidence,
-                "exploitation_risk": r.exploitation_risk,
-                "created_at": r.created_at,
-            }
-            for r in rows
-        ],
+        "classified_total": classified,
+        "pending_review": pending,
+        "child_safety_escalations": escalations,
+        "reports_24h": reports_day,
+        "reports_total": reports_total,
+        "appeals": moderation.stats(db),
     }
 
 
@@ -651,16 +1029,31 @@ def review_classification(
     post_id: str, payload: ClassificationIn, admin: AdminUser, db: OrmSession = Depends(get_db)
 ):
     """A human settles a rating. Their answer outranks the classifier's."""
-    result = classify_post(post_id, payload, db)
-    row = db.scalar(
-        select(models.ContentSafetyClassification).where(
-            models.ContentSafetyClassification.content_id == post_id
-        )
-    )
+    post = db.get(models.Post, post_id)
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+    # Straight to the write, not through classify_post: a reviewer may re-rate
+    # a rating that is already settled, which is exactly what that endpoint
+    # refuses to an automatic caller.
+    row = _apply_classification(db, post, payload)
+    result = {"content_id": post_id, "age_rating": row.age_rating, "status": post.status}
     if row is not None:
         row.human_review_status = "confirmed"
         row.classifier_source = f"human:{admin.user_id}"
         row.classifier_confidence = 1.0
+        post = db.get(models.Post, post_id)
+        if post is not None and row.age_rating not in ("GENERAL", "TEEN_13_PLUS"):
+            # A human restricting something is a decision like any other, and
+            # recording it is what makes "an appeal is not decided by whoever
+            # made the decision" mean anything: without this the rule guards a
+            # path that cannot be reached, because every decision in the table
+            # would be automatic.
+            moderation.record_decision(
+                db, subject_id=post.author_id, content_id=post_id, content_kind="post",
+                action="human_review", age_rating=row.age_rating,
+                decided_by=admin.user_id,
+                appealable=row.exploitation_risk <= 1,
+            )
         db.commit()
     return result
 
@@ -1565,12 +1958,47 @@ def add_comment(post_id: str, payload: CommentIn, principal: CurrentUser, db: Or
     db.add(row)
 
     if verdict.block_publication:
+        # The rollback throws away the comment and its classification, which is
+        # right - it was never published - but it used to throw away every trace
+        # of the refusal with them. The author was told to contact support about
+        # something that no longer existed anywhere. So the decision is written
+        # after the rollback, in its own transaction, carrying the text the
+        # reviewer will need because the comment itself is gone.
+        # Both read before the rollback: it expires every instance in the
+        # session, so touching comment.id afterwards would go looking for a row
+        # that the rollback just removed.
+        refused_body = payload.body or ""
+        refused_id = comment.id
         db.rollback()
         if verdict.escalate_child_safety:
             log.error("child-safety escalation on a comment by %s", principal.user_id)
+        decision = moderation.record_decision(
+            db, subject_id=principal.user_id, content_id=refused_id, content_kind="comment",
+            action="refused_publication", age_rating=verdict.age_rating,
+            body_snapshot=refused_body,
+            appealable=not verdict.escalate_child_safety,
+        )
+        db.commit()
         raise HTTPException(
             status_code=403,
-            detail="This cannot be published. If you believe this is a mistake, contact support.",
+            detail=(
+                "This cannot be published. If you think that is wrong you can ask for "
+                "it to be looked at again."
+                if decision.appealable
+                else "This cannot be published."
+            ),
+            headers={"X-Moderation-Decision": decision.id},
+        )
+
+    if verdict.age_rating not in ("GENERAL", "TEEN_13_PLUS"):
+        # Posts already recorded this; comments did not, which meant an adult
+        # whose comment was rated out of every minor's view was told nothing at
+        # all about it. Same content, same consequence, same record.
+        moderation.record_decision(
+            db, subject_id=principal.user_id, content_id=comment.id,
+            content_kind="comment", action="restricted_by_rating",
+            age_rating=verdict.age_rating,
+            appealable=not verdict.escalate_child_safety,
         )
 
     post.comments_count += 1

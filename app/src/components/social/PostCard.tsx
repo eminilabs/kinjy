@@ -4,6 +4,7 @@ import {
   Columns2,
   Eye,
   EyeOff,
+  Flag,
   HelpCircle,
   Languages,
   MapPin,
@@ -144,6 +145,20 @@ function WhyPanel({ why, onChangeAlgorithm }: { why: WhyData; onChangeAlgorithm:
   )
 }
 
+// The reasons a member can pick. Deliberately short and in plain words: a
+// long taxonomy makes people give up or pick at random, and the reason is only
+// a routing hint - the classification is decided by a reviewer, not by whoever
+// reported it.
+const REPORT_REASONS = [
+  { id: 'sexual', label: 'Sexual content' },
+  { id: 'violence', label: 'Violence' },
+  { id: 'hate', label: 'Hate or abuse' },
+  { id: 'self_harm', label: 'Self-harm' },
+  { id: 'child_safety', label: 'A child is at risk' },
+  { id: 'spam', label: 'Spam or a scam' },
+  { id: 'other', label: 'Something else' },
+] as const
+
 export default function PostCard({
   post,
   algorithmId,
@@ -168,6 +183,12 @@ export default function PostCard({
   const [comments, setComments] = useState(target.comments_count)
   const [showComments, setShowComments] = useState(false)
   const [preview, setPreview] = useState<number | null>(null)
+  // Reporting. Held open as a small inline panel rather than a modal: a report
+  // is a judgement about the thing you are looking at, and a dialog that
+  // covers the post asks you to make it from memory.
+  const [reporting, setReporting] = useState(false)
+  const [reported, setReported] = useState(false)
+  const [reportFailed, setReportFailed] = useState(false)
   // Starts as whatever the server judged safe to send. Data saver strips heavy
   // URLs, so this list is what actually exists client-side until asked otherwise.
   const [media, setMedia] = useState(target.media)
@@ -542,6 +563,19 @@ export default function PostCard({
           </button>
         )}
 
+        {!isOwn && (
+          <button
+            type="button"
+            onClick={() => setReporting((open) => !open)}
+            aria-expanded={reporting}
+            disabled={reported}
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-text-low transition-colors hover:text-text-hi disabled:opacity-40"
+          >
+            <Flag size={13} aria-hidden="true" />
+            {reported ? 'Reported' : 'Report'}
+          </button>
+        )}
+
         {isOwn ? (
           <button
             type="button"
@@ -564,6 +598,69 @@ export default function PostCard({
           </button>
         )}
       </footer>
+
+      {reporting && !reported && (
+        <div className="mt-2 rounded-xl border border-text-low/25 p-3">
+          <p className="text-xs font-semibold text-text-hi">What is wrong with this?</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {REPORT_REASONS.map((reason) => (
+              <button
+                key={reason.id}
+                type="button"
+                onClick={async () => {
+                  // Not optimistic. An earlier version of this showed "thanks,
+                  // a reviewer will look at this" the moment you clicked and
+                  // swallowed any failure — which, the first time the gateway
+                  // was down, told somebody their report was filed when nothing
+                  // had been recorded anywhere. Somebody reporting a child at
+                  // risk has to be able to believe that message.
+                  //
+                  // What is still withheld is the *outcome*: whether the report
+                  // moved a rating. That is what would turn reporting into a
+                  // way to probe the threshold. Whether we received it is a
+                  // different question, and the member is owed the truth.
+                  setReportFailed(false)
+                  setReporting(false)
+                  try {
+                    await kaluta.moderation.reportPost(target.id, reason.id)
+                    setReported(true)
+                  } catch {
+                    setReportFailed(true)
+                  }
+                }}
+                className="rounded-full border border-text-low/30 px-3 py-1.5 text-xs text-text-mid transition-colors hover:text-text-hi"
+              >
+                {reason.label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-[0.7rem] text-text-low">
+            Reports go to a reviewer. They are not shared with whoever posted this.
+          </p>
+        </div>
+      )}
+
+      {reported && (
+        <p className="mt-2 text-xs text-text-mid">
+          Thanks — a reviewer will look at this. You will not hear back about it.
+        </p>
+      )}
+
+      {reportFailed && (
+        <p role="alert" className="mt-2 text-xs text-danger">
+          That did not send, so nothing has been reported.{' '}
+          <button
+            type="button"
+            onClick={() => {
+              setReportFailed(false)
+              setReporting(true)
+            }}
+            className="underline"
+          >
+            Try again
+          </button>
+        </p>
+      )}
 
 
       {/* Inline, the way LinkedIn does it: the thread belongs to the post, and
