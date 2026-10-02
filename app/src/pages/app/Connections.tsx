@@ -128,15 +128,21 @@ export default function Connections() {
   const current = TABS.find((t) => t.id === tab)!
   const rows = connections.data?.[tab] ?? []
 
+  // Hoisted into a local: TypeScript drops the `connections.data &&`
+  // narrowing inside the map callback, because nothing guarantees the field
+  // is still set by the time the callback runs. The binding is what is
+  // actually constant here, so it is the thing to check.
+  const groups = connections.data
+
   return (
     <AppShell
       title="Connections"
       subtitle="People you are connected to. A connection is mutual, and it is what opens messaging between you."
     >
-      {connections.data && (
+      {groups && (
         <div role="group" aria-label="Show" className="flex flex-wrap gap-2">
           {TABS.map((t) => {
-            const count = connections.data[t.id].length
+            const count = groups[t.id].length
             return (
               <button
                 key={t.id}
