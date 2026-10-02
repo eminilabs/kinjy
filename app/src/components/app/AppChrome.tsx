@@ -14,6 +14,8 @@ import { useAuth } from '@/hooks/useAuth'
 import { useMyProfile } from '@/hooks/useMyProfile'
 import { kaluta } from '@/lib/api'
 import NotificationBell from './NotificationBell'
+import UnreadBadge from './UnreadBadge'
+import { useUnreadMessages } from '@/hooks/useUnreadMessages'
 import { cn } from '@/lib/utils'
 import { EXTRA_NAV, NAV_DESTINATIONS, ROUTE_FOR, activeKeyFor } from './navigation'
 
@@ -212,6 +214,9 @@ export function AppChipBar({ pathname, search }: { pathname: string; search: str
   }
 
   const active = activeKeyFor(pathname, search)
+  const unread = useUnreadMessages()
+  const unreadLabel = (key: string, label: string) =>
+    key === 'messages' && unread > 0 ? `${label}, ${unread} unread` : undefined
   const all: Array<{ key: string; route: string; label: string; Icon: LucideIcon }> = [
     ...NAV_DESTINATIONS.map((key) => ({
       key,
@@ -237,6 +242,7 @@ export function AppChipBar({ pathname, search }: { pathname: string; search: str
                   <Link
                     to={m.route}
                     aria-current={isActive ? 'page' : undefined}
+                    aria-label={unreadLabel(m.key, m.label)}
                     className={cn(
                       'flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-[0.8rem] font-semibold',
                       isActive
@@ -246,6 +252,7 @@ export function AppChipBar({ pathname, search }: { pathname: string; search: str
                   >
                     <m.Icon size={13} aria-hidden="true" />
                     {m.label}
+                    {m.key === 'messages' && <UnreadBadge count={unread} />}
                   </Link>
                 </div>
               )
@@ -278,6 +285,7 @@ export function AppChipBar({ pathname, search }: { pathname: string; search: str
                     <Link
                       to={m.route}
                       onClick={() => setDrawerOpen(false)}
+                      aria-label={unreadLabel(m.key, m.label)}
                       className={cn(
                         'flex min-w-0 flex-1 items-center gap-2 rounded-card-sm px-2.5 py-2 text-[0.8rem] font-medium',
                         active === m.key ? 'text-gold-soft' : cn(tok.mid, tok.hoverBg),
@@ -285,6 +293,7 @@ export function AppChipBar({ pathname, search }: { pathname: string; search: str
                     >
                       <m.Icon size={14} className="shrink-0" aria-hidden="true" />
                       <span className="truncate">{m.label}</span>
+                      {m.key === 'messages' && <UnreadBadge count={unread} className="ms-auto" />}
                     </Link>
                     <button
                       type="button"

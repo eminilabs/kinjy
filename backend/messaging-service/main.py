@@ -551,6 +551,57 @@ async def set_disappearing(
     return {"seconds": payload.seconds}
 
 
+def _unread_by_conversation(db: OrmSession, user_id: str, ids) -> dict[str, int]:
+    """Unread messages per conversation, for one member.
+
+    Unread = messages from someone else, newer than my last read — in one
+    grouped query. The cutoff differs per conversation, so it comes from the
+    join on my own participant row rather than from a Python loop issuing a
+    count per conversation. The conversation list and the unread badge both
+    read this, so the two can never disagree.
+    """
+    rows = db.execute(
+        select(models.Message.conversation_id, func.count())
+        .join(
+            models.Participant,
+            (models.Participant.conversation_id == models.Message.conversation_id)
+            & (models.Participant.user_id == user_id),
+        )
+        .where(
+            models.Message.conversation_id.in_(ids),
+            models.Message.sender_id != user_id,
+            or_(
+                models.Participant.last_read_at.is_(None),
+                models.Message.created_at > models.Participant.last_read_at,
+            ),
+            # A message that has expired is gone as far as the thread is
+            # concerned (it is purged on the next read or write), so it must not
+            # keep a badge lit that opening the thread could never explain.
+            or_(
+                models.Message.expires_at.is_(None),
+                models.Message.expires_at > datetime.now(timezone.utc),
+            ),
+        )
+        .group_by(models.Message.conversation_id)
+    ).all()
+    return {conversation_id: count for conversation_id, count in rows}
+
+
+@app.get("/conversations/unread-count", tags=["messages"])
+def unread_count(principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """What the Messages badge shows: unread messages, and in how many threads.
+
+    The badge refetches this when the socket says a message arrived or a thread
+    was read (in this tab or another), rather than keeping its own tally that
+    could drift from the conversation list.
+    """
+    ids = db.scalars(
+        select(models.Participant.conversation_id).where(models.Participant.user_id == principal.user_id)
+    ).all()
+    unread = _unread_by_conversation(db, principal.user_id, ids) if ids else {}
+    return {"messages": sum(unread.values()), "conversations": sum(1 for n in unread.values() if n)}
+
+
 @app.get("/conversations", tags=["messages"])
 def list_conversations(principal: CurrentUser, db: OrmSession = Depends(get_db)):
     ids = db.scalars(
@@ -576,28 +627,7 @@ def list_conversations(principal: CurrentUser, db: OrmSession = Depends(get_db))
 
     profiles = _profiles({uid for uids in members.values() for uid in uids})
 
-    # Unread = messages from someone else, newer than my last read — in one
-    # grouped query. The cutoff differs per conversation, so it comes from the
-    # join on my own participant row rather than from a Python loop issuing a
-    # count per conversation.
-    unread_rows = db.execute(
-        select(models.Message.conversation_id, func.count())
-        .join(
-            models.Participant,
-            (models.Participant.conversation_id == models.Message.conversation_id)
-            & (models.Participant.user_id == principal.user_id),
-        )
-        .where(
-            models.Message.conversation_id.in_(ids),
-            models.Message.sender_id != principal.user_id,
-            or_(
-                models.Participant.last_read_at.is_(None),
-                models.Message.created_at > models.Participant.last_read_at,
-            ),
-        )
-        .group_by(models.Message.conversation_id)
-    ).all()
-    unread = {conversation_id: count for conversation_id, count in unread_rows}
+    unread = _unread_by_conversation(db, principal.user_id, ids)
 
     # The newest message of each thread in one query (Postgres DISTINCT ON),
     # so the list can say what was last said rather than only when.

@@ -13,6 +13,8 @@ import { kaluta } from '@/lib/api'
 import { isRouteAvailable } from '@/lib/features'
 import { onChange } from '@/lib/live'
 import { useMyProfile } from '@/hooks/useMyProfile'
+import { useUnreadMessages } from '@/hooks/useUnreadMessages'
+import UnreadBadge from './UnreadBadge'
 import { countryName } from '@/lib/profileOptions'
 import { cn } from '@/lib/utils'
 
@@ -39,6 +41,7 @@ export default function ProfileCard() {
   // someone has — a teenager especially — is not for strangers on /u/:handle.
   const connections = useApi(() => kaluta.connections.list(), [])
   useEffect(() => onChange('connections', connections.reload), [connections.reload])
+  const unread = useUnreadMessages()
 
   // The profile is what the editor changes; the account copy only stands in
   // until it has loaded.
@@ -109,6 +112,7 @@ export default function ProfileCard() {
               <li key={key}>
                 <Link
                   to={ROUTE_FOR[key]}
+                  aria-label={key === 'messages' && unread > 0 ? `${t(key)}, ${unread} unread` : undefined}
                   className={cn(
                     'flex w-full items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold',
                     tok.mid,
@@ -117,6 +121,7 @@ export default function ProfileCard() {
                 >
                   <Icon size={12} className="text-gold" aria-hidden="true" />
                   {t(key)}
+                  {key === 'messages' && <UnreadBadge count={unread} className="ms-auto" />}
                 </Link>
               </li>
             )

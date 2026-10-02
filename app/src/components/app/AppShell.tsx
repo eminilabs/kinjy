@@ -6,6 +6,8 @@ import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 import { AppChipBar, AppTopBar } from './AppChrome'
 import ProfileCard from './ProfileCard'
+import UnreadBadge from './UnreadBadge'
+import { useUnreadMessages } from '@/hooks/useUnreadMessages'
 import WellbeingBar from './WellbeingBar'
 
 /** Mobile bottom bar — the blueprint's five, Create in the middle. */
@@ -47,6 +49,7 @@ export default function AppShell({
   const { user, loading } = useAuth()
   const { tok, frameStyle, rtl } = useAppTheme()
   const location = useLocation()
+  const unread = useUnreadMessages()
 
   if (loading) {
     return (
@@ -126,7 +129,7 @@ export default function AppShell({
               <li key={item.label}>
                 <NavLink
                   to={item.to}
-                  aria-label={item.label}
+                  aria-label={item.to === '/messages' && unread > 0 ? `${item.label}, ${unread} unread` : item.label}
                   className={cn(
                     'flex flex-col items-center gap-1 rounded-full px-3 py-1.5 text-[0.65rem] font-medium',
                     'primary' in item && item.primary ? 'text-ink' : active ? 'text-gold-soft' : tok.mid,
@@ -134,11 +137,12 @@ export default function AppShell({
                 >
                   <span
                     className={cn(
-                      'flex h-9 w-9 items-center justify-center rounded-full',
+                      'relative flex h-9 w-9 items-center justify-center rounded-full',
                       'primary' in item && item.primary && 'bg-gradient-to-br from-gold-soft to-gold',
                     )}
                   >
                     <item.icon size={18} aria-hidden="true" />
+                    {item.to === '/messages' && <UnreadBadge count={unread} className="absolute -end-1 -top-1" />}
                   </span>
                   <span className={cn('primary' in item && item.primary && tok.mid)}>{item.label}</span>
                 </NavLink>

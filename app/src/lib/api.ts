@@ -1474,6 +1474,8 @@ export const kaluta = {
     setDisappearing: (conversationId: string, seconds: number) =>
       api.post<{ seconds: number }>(`/conversations/${conversationId}/disappearing`, { seconds }),
     conversations: () => api.get<{ items: Conversation[] }>('/conversations'),
+    /** The Messages badge: unread messages from others, and in how many threads. */
+    unreadCount: () => api.get<{ messages: number; conversations: number }>('/conversations/unread-count'),
     start: (participantIds: string[]) =>
       api.post<{ id: string; encrypted: boolean; existing: boolean }>('/conversations', {
         participant_ids: participantIds,
