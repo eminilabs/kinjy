@@ -16,6 +16,31 @@ import httpx
 BASE = "http://localhost:8200/api"
 SOCIAL = "http://localhost:8203"
 c = httpx.Client(base_url=BASE, timeout=30)
+
+
+def real_image(token):
+    """Upload a real, plain PNG as post media and return its record.
+
+    create_post only attaches media the author owns, so a test that needs a post
+    with media needs a real upload (64x64, not 1x1: UploadCenter refuses that).
+    """
+    import io
+    import struct
+    import zlib
+
+    raw = b"".join(bytes([0]) + bytes([40, 160, 90]) * 64 for _ in range(64))
+
+    def chunk(kind, data):
+        body = struct.pack(">I", len(data)) + kind + data
+        return body + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+
+    data = (bytes([0x89]) + b"PNG" + bytes([13, 10, 26, 10])
+            + chunk(b"IHDR", struct.pack(">IIBBBBB", 64, 64, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+    r = c.post("/media/upload", headers={"Authorization": f"Bearer {token}"}, data={"purpose": "post"},
+               files={"file": ("tone.png", io.BytesIO(data), "image/png")})
+    assert r.status_code == 201, f"could not upload test media: {r.status_code} {r.text[:120]}"
+    return r.json()
 ok = True
 
 
@@ -109,8 +134,9 @@ r = c.get(f"/posts/{sixteen}", headers=auth(teen_tok))
 check("a 14-year-old cannot", r.status_code == 404, f"{r.status_code}")
 
 print("\n== a caption never clears a picture ==")
+sunrise = real_image(adult_tok)
 r = post(adult_tok, "Lovely sunrise this morning", format="image",
-         media=[{"media_id": "mda_fake", "url": "/media/mda_fake", "kind": "image"}])
+         media=[{"media_id": sunrise["id"], "url": sunrise["url"], "kind": "image"}])
 with_media = r.json().get("id") if r.status_code in (200, 201) else None
 check("the post publishes", with_media is not None, r.text[:140])
 check("but it is NOT cleared by the caption",

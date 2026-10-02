@@ -906,4 +906,6 @@ def internal_asset(asset_id: str, db: OrmSession = Depends(get_db)):
         "access": asset.access,
         "url": asset.url or None,
         "storage": asset.provider,
+        "kind": asset.kind,
+        "private": asset.private,
     }

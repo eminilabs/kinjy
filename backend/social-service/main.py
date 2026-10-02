@@ -296,6 +296,55 @@ def _reclassify_after_edit(
     return result
 
 
+NOT_YOUR_MEDIA = "One of the attached files does not exist or is not yours to attach"
+
+
+def _verified_media(items: list[dict], author_id: str) -> list[dict]:
+    """The media a post may carry, as media-service says they are.
+
+    A client used to name any media_id, with any url and any kind, and the post
+    took its word. The age gate depends on that link: a viewer is handed a ticket
+    for each asset of a post they may see, and the decision is made from the
+    *post's* rating. Attach someone else's adult video to a post of your own
+    that rates General, and a teenager who may see your post is given a ticket
+    for the video. So an asset is attached only if it is the author's own post
+    media (not an avatar, not a chat attachment) and finished uploading, and its
+    url and kind are taken from media-service rather than from the request.
+
+    Failing to ask is a refusal, not a pass: unlike marking media restricted
+    afterwards, this is a check, and a check that is skipped when its service
+    hiccups is not one.
+    """
+    checked: list[dict] = []
+    for item in items:
+        media_id = item.get("media_id")
+        if not isinstance(media_id, str) or not media_id:
+            raise HTTPException(status_code=400, detail="Every media item needs a media_id")
+        try:
+            response = httpx.get(f"{MEDIA_URL}/internal/media/{media_id}", timeout=5)
+        except httpx.HTTPError as exc:
+            log.error("could not check media %s: %s", media_id, exc)
+            raise HTTPException(status_code=503, detail="Media is unavailable right now; try again") from exc
+        if response.status_code == 404:
+            raise HTTPException(status_code=400, detail=NOT_YOUR_MEDIA)
+        if response.status_code >= 400:
+            log.error("media-service answered %s for media %s", response.status_code, media_id)
+            raise HTTPException(status_code=503, detail="Media is unavailable right now; try again")
+        asset = response.json()
+        if (
+            asset.get("owner_id") != author_id
+            or asset.get("purpose") is not None
+            or asset.get("private")
+            or asset.get("status") != "ready"
+            or not asset.get("url")
+        ):
+            # The same answer whether it is missing or somebody else's: telling
+            # them apart would confirm which ids exist.
+            raise HTTPException(status_code=400, detail=NOT_YOUR_MEDIA)
+        checked.append({**item, "media_id": asset["id"], "url": asset["url"], "kind": asset.get("kind") or "image"})
+    return checked
+
+
 def _restrict_attached_media(media_ids: list[str | None]) -> None:
     """Tell media-service these assets now need a ticket.
 
@@ -542,6 +591,7 @@ async def create_post(payload: PostIn, principal: CurrentUser, db: OrmSession = 
     if not payload.body.strip() and not payload.media:
         raise HTTPException(status_code=400, detail="A post needs a body or media")
 
+    media = _verified_media(payload.media, principal.user_id)
     data = payload.model_dump(exclude={"topics", "media"})
     # A circle id only means something on a circle post; elsewhere it would be
     # a stray pointer the audience rule might one day read.
@@ -556,13 +606,13 @@ async def create_post(payload: PostIn, principal: CurrentUser, db: OrmSession = 
     db.add(post)
     db.flush()
 
-    for index, item in enumerate(payload.media):
+    for index, item in enumerate(media):
         db.add(
             models.PostMedia(
                 post_id=post.id,
-                media_id=item.get("media_id", ""),
-                url=item.get("url", ""),
-                kind=item.get("kind", "image"),
+                media_id=item["media_id"],
+                url=item["url"],
+                kind=item["kind"],
                 alt_text=item.get("alt_text"),
                 position=index,
                 width=item.get("width"),
@@ -574,7 +624,7 @@ async def create_post(payload: PostIn, principal: CurrentUser, db: OrmSession = 
     # classification row, so a post that reaches the feed without one would be
     # invisible to minors at best and unrated at worst.
     verdict = _classify_and_store(
-        db, post, [m.get("kind", "image") for m in payload.media],
+        db, post, [m["kind"] for m in media],
         _viewer_age(principal.user_id).is_minor,
     )
     db.commit()
@@ -592,7 +642,7 @@ async def create_post(payload: PostIn, principal: CurrentUser, db: OrmSession = 
     # Attached media stops being publicly fetchable from this moment. Marked
     # here, server-side, rather than declared by the uploader: a client that
     # could label its own media "public" would be the age gate.
-    _restrict_attached_media([m.get("media_id") for m in payload.media])
+    _restrict_attached_media([m["media_id"] for m in media])
     db.refresh(post)
 
     await events.publish(
