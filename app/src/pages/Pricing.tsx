@@ -36,10 +36,13 @@ function PricingCta() {
 export default function Pricing() {
   return (
     <PublicShell>
-      <PricingTiers />
-      <OneOffPurchases />
-      <FinePrint />
-      <PricingCta />
+      {/* Pricing reads in the body face only — no serif display headings. */}
+      <div className="kl-plain">
+        <PricingTiers />
+        <OneOffPurchases />
+        <FinePrint />
+        <PricingCta />
+      </div>
     </PublicShell>
   )
 }

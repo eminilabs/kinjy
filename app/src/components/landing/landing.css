@@ -185,3 +185,13 @@
     transition: none !important;
   }
 }
+
+/* A page that asks for a sober voice: headings drop the serif for the body
+   face, a touch heavier and tighter so they still lead. */
+.kl-plain :is(.kl-serif, .kl-h2, .kl-h3) {
+  font-family: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  font-style: normal;
+}
+.kl-plain :is(.kl-serif, .kl-h2, .kl-h3) .italic { font-style: normal; }
