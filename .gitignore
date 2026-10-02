@@ -19,3 +19,6 @@ backups/
 
 # Local docs
 serveur.md
+
+# pytest scratch space, created by backend/tests/run_all.py
+backend/.pytest-tmp/
