@@ -699,6 +699,10 @@ export interface Message {
   media_name?: string | null
   media_type?: string | null
   media_size?: number | null
+  /** The message this one answers; the quote itself is built client-side. */
+  reply_to_id?: string | null
+  /** True when the original has expired. Its content is never sent. */
+  reply_to_deleted?: boolean
   created_at: string
 }
 
@@ -1501,7 +1505,7 @@ export const kaluta = {
      */
     send: (
       conversationId: string,
-      message: { body?: string | null; mediaId?: string; clientId?: string },
+      message: { body?: string | null; mediaId?: string; clientId?: string; replyToId?: string | null },
     ) =>
       api.post<{ id: string; created_at: string; client_id: string | null; duplicate?: boolean }>(
         `/conversations/${conversationId}/messages`,
@@ -1510,6 +1514,7 @@ export const kaluta = {
           kind: message.mediaId ? 'media' : 'text',
           media_id: message.mediaId,
           client_id: message.clientId,
+          reply_to_id: message.replyToId || undefined,
         },
       ),
     /** The thread is on screen: record it as read and tell the room. */

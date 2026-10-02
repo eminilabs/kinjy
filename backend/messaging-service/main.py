@@ -84,6 +84,8 @@ MIGRATIONS = [
     ),
     # A sealed name is longer than the name it hides.
     f"ALTER TABLE {models.SCHEMA}.messages ALTER COLUMN media_name TYPE TEXT",
+    # Replies: the id of the message being answered. Not a foreign key, see the model.
+    f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS reply_to_id VARCHAR(40)",
 ]
 
 app = create_app(
@@ -273,6 +275,8 @@ class MessageIn(BaseModel):
     lang: str | None = None
     # See models.Message.client_id: makes a retried send idempotent.
     client_id: str | None = Field(default=None, max_length=64)
+    # The message this one answers; must belong to the same conversation.
+    reply_to_id: str | None = Field(default=None, max_length=40)
 
 
 def _purge_expired(db: OrmSession, conversation_id: str | None = None) -> int:
@@ -876,6 +880,20 @@ async def send_message(
     elif not (payload.body and payload.body.strip()) and not payload.media_id:
         raise HTTPException(status_code=400, detail="A message needs text or an attachment")
 
+    if payload.reply_to_id:
+        # Looked up inside this conversation, never by id alone: a bare lookup
+        # would confirm that a message exists in a room the sender is not in.
+        # An expired message was purged above, so it is refused like any other
+        # id that is not here.
+        quoted = db.scalar(
+            select(models.Message.id).where(
+                models.Message.id == payload.reply_to_id,
+                models.Message.conversation_id == conversation_id,
+            )
+        )
+        if quoted is None:
+            raise HTTPException(status_code=400, detail="The message you are replying to is not in this conversation")
+
     attachment = await _attachment(payload.media_id, principal.user_id) if payload.media_id else None
 
     # Text first. An attachment sent before the other side accepted has already
@@ -903,6 +921,7 @@ async def send_message(
         media_size=attachment["size_bytes"] if attachment else None,
         lang=payload.lang,
         client_id=payload.client_id,
+        reply_to_id=payload.reply_to_id,
         # The deadline is computed from the room's setting, not sent by the
         # client: letting the sender choose would let them set a shorter timer
         # than the room agreed to, or none at all.
@@ -959,6 +978,9 @@ async def send_message(
             # plaintext to send and the client fetches the ciphertext.
             "body": None if message.encrypted else _plain(message)[0],
             "kind": message.kind,
+            # The id only. Whoever receives this already holds the original
+            # (or shows "older message"); the server never echoes its text.
+            "reply_to_id": message.reply_to_id,
             **_media_fields(message),
             "created_at": message.created_at.isoformat(),
         },
@@ -1065,6 +1087,19 @@ def list_messages(
             stmt.order_by(models.Message.created_at.desc()).limit(min(limit, 100))
         ).all()))
 
+    # One query for the whole page: which of the quoted messages still exist.
+    quoted_ids = {r.reply_to_id for r in rows if r.reply_to_id}
+    alive = (
+        set(db.scalars(
+            select(models.Message.id).where(
+                models.Message.id.in_(quoted_ids),
+                models.Message.conversation_id == conversation_id,
+            )
+        ).all())
+        if quoted_ids
+        else set()
+    )
+
     # Fetching is not reading. A catch-up in a background tab, or a page of
     # history, must not tell the other side "Seen": the client posts /read
     # when the thread is actually on screen.
@@ -1078,6 +1113,9 @@ def list_messages(
                 "ciphertext_b64": base64.b64encode(r.ciphertext).decode() if r.ciphertext else None,
                 "body": _plain(r)[0],
                 "kind": r.kind,
+                "reply_to_id": r.reply_to_id,
+                # Whether the original is gone (expired). Never its content.
+                "reply_to_deleted": bool(r.reply_to_id) and r.reply_to_id not in alive,
                 **_media_fields(r),
                 "created_at": r.created_at,
             }
