@@ -38,7 +38,7 @@ const APP_ROUTES = [
 
 /** Public pages already on the new design: they bring their own navigation and
  *  footer (components/landing/PublicShell), so the old marketing ones step aside. */
-const OWN_CHROME_PAGES = ['/', '/memorials', '/platform']
+const OWN_CHROME_PAGES = ['/', '/memorials', '/platform', '/feeds']
 
 export function isAppRoute(pathname: string): boolean {
   return APP_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`))

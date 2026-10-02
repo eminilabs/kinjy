@@ -1,6 +1,7 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { DoorOpen, FileSearch, Gavel } from 'lucide-react'
 import { CLOUD_EASE } from '@/components/platform/shared'
+import { Eyebrow } from './kit'
 
 const CARDS = [
   {
@@ -20,36 +21,39 @@ const CARDS = [
   },
 ]
 
-/** Section 6 — Governance strip: three guarantees with gold top-border draw. */
+/** Section 6 — three guarantees, set as an editorial row under a drawn gold rule. */
 export default function GovernanceStrip() {
   const reduced = useReducedMotion()
   return (
-    <section className="px-6 py-12 md:py-16" aria-label="Feed governance guarantees">
-      <div className="mx-auto grid max-w-container gap-5 md:grid-cols-3">
+    <section className="kl-pad-x pb-[clamp(40px,6vw,80px)] pt-[clamp(24px,4vw,48px)]" aria-label="Feed governance guarantees">
+      <Eyebrow>Three guarantees</Eyebrow>
+      <div className="mt-8 grid gap-10 md:grid-cols-3 md:gap-8">
         {CARDS.map((c, i) => (
           <motion.div
             key={c.title}
-            className="cloud-card relative overflow-hidden p-6"
+            className="relative pt-8"
             initial={reduced ? false : { opacity: 0, y: 28 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.6 }}
             transition={{ duration: 0.5, ease: CLOUD_EASE, delay: i * 0.1 }}
           >
-            {/* Gold top border draw */}
+            <span aria-hidden="true" className="absolute inset-x-0 top-0 h-px bg-[var(--kl-paper-2)]" />
             <motion.span
               aria-hidden="true"
-              className="absolute inset-x-0 top-0 h-0.5 origin-left"
-              style={{ background: 'var(--grad-arc)' }}
+              className="kl-sheen absolute inset-x-0 top-0 h-[2px] origin-left"
               initial={reduced ? false : { scaleX: 0 }}
               whileInView={{ scaleX: 1 }}
               viewport={{ once: true, amount: 0.6 }}
-              transition={{ duration: 0.4, ease: [0.65, 0, 0.35, 1], delay: 0.2 + i * 0.1 }}
+              transition={{ duration: 0.6, ease: [0.65, 0, 0.35, 1], delay: 0.2 + i * 0.12 }}
             />
-            <span className="cloud-glass flex h-11 w-11 items-center justify-center rounded-full text-gold">
-              <c.icon size={19} />
-            </span>
-            <h3 className="mt-4 font-semibold text-text-hi">{c.title}</h3>
-            <p className="caption mt-2 leading-relaxed">{c.body}</p>
+            <div className="flex items-center justify-between">
+              <span className="kl-serif text-[56px] font-semibold leading-none text-[var(--kl-gold)]">{String(i + 1).padStart(2, '0')}</span>
+              <span className="grid h-11 w-11 place-items-center rounded-full bg-[var(--kl-paper)] text-[var(--kl-gold-deep)]">
+                <c.icon size={19} />
+              </span>
+            </div>
+            <h3 className="kl-serif mt-6 text-[26px] font-semibold leading-tight">{c.title}</h3>
+            <p className="mt-3 max-w-[340px] text-[15px] leading-relaxed text-[var(--kl-mid)]">{c.body}</p>
           </motion.div>
         ))}
       </div>
