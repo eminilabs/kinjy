@@ -7,3 +7,11 @@ export const KL_BTN_GHOST =
 export const KL_PILL_GOLD = 'kl-sheen inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold transition hover:brightness-105'
 export const KL_PILL =
   'inline-flex items-center gap-1.5 rounded-full border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] px-4 py-2 text-sm font-semibold transition-colors hover:border-[var(--kl-gold)]'
+/** A card resting on the page: white, a paper hairline, the long soft drop. */
+export const KL_CARD =
+  'rounded-[20px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] shadow-[0_24px_48px_-34px_var(--kl-shadow)]'
+/** The same card, singled out with a gold edge. */
+export const KL_CARD_GOLD =
+  'rounded-[20px] border border-[var(--kl-gold)] bg-[var(--kl-surface)] shadow-[0_0_0_1px_var(--kl-gold),0_30px_60px_-36px_rgba(169,118,28,.5)]'
+/** Mono label above a block of a demo. */
+export const KL_LABEL = 'kl-mono text-[11px] uppercase tracking-[.14em] text-[var(--kl-low)]'

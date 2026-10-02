@@ -1,6 +1,9 @@
 import { motion } from 'framer-motion'
 import { BookLock, Fingerprint, KeyRound, Network, Wallet } from 'lucide-react'
 import { EASE, useReducedMotion } from '@/components/creators/motion-utils'
+import { Eyebrow } from '@/components/landing/PageKit'
+import { KL_CARD } from '@/components/landing/kl-classes'
+import { cn } from '@/lib/utils'
 
 const ITEMS = [
   {
@@ -34,17 +37,17 @@ const ITEMS = [
 export default function SecurityStrip() {
   const reduced = useReducedMotion()
   return (
-    <section className="noise-overlay twilight-field px-6 py-24 md:py-32">
-      <div className="mx-auto max-w-container">
-        <p className="eyebrow text-gold">Security — Defense in depth</p>
-        <h2 className="h2 mt-4 max-w-2xl">
-          Money moves on <span className="text-gold-grad font-display italic">five locks.</span>
+    <section className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]">
+      <div>
+        <Eyebrow>Security — Defense in depth</Eyebrow>
+        <h2 className="kl-h2 mt-5 max-w-[900px]">
+          Money moves on <span className="text-[var(--kl-gold-deep)]">five locks.</span>
         </h2>
         <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {ITEMS.map((it, i) => (
             <motion.div
               key={it.title}
-              className="cloud-card cloud-card-hover p-5"
+              className={cn(KL_CARD, 'transition-transform hover:-translate-y-0.5 p-5')}
               initial={reduced ? false : { opacity: 0, y: 24 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: '-12%' }}

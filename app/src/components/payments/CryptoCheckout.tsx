@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Bitcoin, Check, Coins, CreditCard, QrCode, Receipt, RotateCcw, ShieldCheck } from 'lucide-react'
-import { ArcButton, LedgerRow, ModeChip } from '@/components/ui-kit'
+import { LedgerRow } from '@/components/ui-kit'
 import { cn } from '@/lib/utils'
 import { EASE, useReducedMotion } from '@/components/creators/motion-utils'
 import { FEATURES } from '@/lib/features'
+import { Eyebrow, Chip, KlButton } from '@/components/landing/PageKit'
+import { KL_CARD, KL_CARD_GOLD, KL_LABEL } from '@/components/landing/kl-classes'
 
 const PRODUCTS = [
   { id: 'premium', label: 'Premium membership', price: 9.99, unit: 'USD / month' },
@@ -100,26 +102,26 @@ export default function CryptoCheckout() {
   const ipnIndex = stage >= 2 ? Math.min(stage - 2, IPN_STAGES.length - 1) : -1
 
   return (
-    <section id="crypto-checkout" className="noise-overlay px-6 py-24 md:py-32" style={{ background: 'var(--ink)' }}>
-      <div className="mx-auto max-w-container">
-        <p className="eyebrow text-gold">Money in — Crypto checkout</p>
-        <h2 className="h2 mt-4 max-w-2xl">
-          Pay in any coin. <span className="text-gold-grad font-display italic">We settle in USDT.</span>
+    <section id="crypto-checkout" className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]">
+      <div>
+        <Eyebrow>Money in — Crypto checkout</Eyebrow>
+        <h2 className="kl-h2 mt-5 max-w-[900px]">
+          Pay in any coin. <span className="text-[var(--kl-gold-deep)]">We settle in USDT.</span>
         </h2>
-        <p className="body-lg mt-4 max-w-2xl text-text-mid">
+        <p className="kl-lead mt-6 !max-w-[680px]">
           One <span className="mono-data text-sm text-sky">POST /v1/payment</span> call mints a
           deposit address for any of 350+ coins. NowPayments watches the chain and POSTs signed
           status callbacks to our IPN endpoint — the receipt reconciles into the immutable Kinjy
           ledger the moment the payment finishes.
         </p>
 
-        <div className="mt-12 grid gap-8 lg:grid-cols-2">
+        <div className="mt-12 grid items-start gap-8 grid-cols-[minmax(0,1fr)] lg:grid-cols-2">
           {/* Left: interactive checkout */}
-          <div className="cloud-card p-6 sm:p-8">
-            <p className="eyebrow text-text-low">1 · Choose what you're paying for</p>
+          <div className={cn(KL_CARD, 'p-6 sm:p-8')}>
+            <p className={KL_LABEL}>1 · Choose what you're paying for</p>
             <div className="mt-4 flex flex-wrap gap-2">
               {OFFERED.map((p) => (
-                <ModeChip
+                <Chip
                   key={p.id}
                   label={`${p.label} · $${p.price}`}
                   active={product === p.id}
@@ -132,10 +134,10 @@ export default function CryptoCheckout() {
               ))}
             </div>
 
-            <p className="eyebrow mt-8 text-text-low">2 · Choose your coin</p>
+            <p className={cn(KL_LABEL, 'mt-8')}>2 · Choose your coin</p>
             <div className="mt-4 flex flex-wrap gap-2">
               {COINS.map((c) => (
-                <ModeChip
+                <Chip
                   key={c.id}
                   label={c.sym === '+350' ? '+350 coins' : `${c.sym}`}
                   active={coin === c.id}
@@ -154,7 +156,7 @@ export default function CryptoCheckout() {
             </p>
 
             <div className="mt-8 flex items-center gap-3">
-              <ArcButton onClick={run} disabled={stage > 0 && stage < 5}>
+              <KlButton onClick={run} disabled={stage > 0 && stage < 5}>
                 {stage === 0 ? (
                   <>
                     <CreditCard size={16} aria-hidden="true" /> Create payment
@@ -168,7 +170,7 @@ export default function CryptoCheckout() {
                     <Coins size={16} aria-hidden="true" /> Awaiting on-chain payment…
                   </>
                 )}
-              </ArcButton>
+              </KlButton>
               {stage >= 5 && (
                 <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-success">
                   <Check size={15} aria-hidden="true" /> Settled to ledger
@@ -185,12 +187,12 @@ export default function CryptoCheckout() {
                   animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.5, ease: EASE }}
-                  className="mt-8 rounded-card-md border border-white/10 bg-ink-3/60 p-5"
+                  className="mt-8 rounded-card-md border border-white/10 bg-[var(--kl-paper)] p-5"
                 >
                   <div className="flex flex-wrap items-start gap-6">
                     <div className="min-w-0 flex-1">
                       <p className="mono-data text-xs text-text-low">POST https://api.nowpayments.io/v1/payment</p>
-                      <pre className="mono-data mt-3 overflow-x-auto rounded-card-sm bg-ink/70 p-3 text-xs leading-relaxed text-sky">
+                      <pre className="mono-data mt-3 overflow-x-auto rounded-card-sm bg-[var(--kl-paper)] p-3 text-xs leading-relaxed text-sky">
 {`{
   "price_amount": ${selected.price},
   "price_currency": "usd",
@@ -275,8 +277,8 @@ export default function CryptoCheckout() {
 
           {/* Right: HMAC IPN verification code card */}
           <div className="flex flex-col gap-6">
-            <div className="cloud-card gold p-6 sm:p-8">
-              <p className="eyebrow inline-flex items-center gap-2 text-gold">
+            <div className={cn(KL_CARD_GOLD, 'p-6 sm:p-8')}>
+              <p className={cn(KL_LABEL, 'inline-flex items-center gap-2 !text-[var(--kl-gold-deep)]')}>
                 <ShieldCheck size={14} aria-hidden="true" /> Trust, but verify — HMAC-signed IPN
               </p>
               <p className="mt-4 text-sm leading-relaxed text-text-mid">
@@ -285,7 +287,7 @@ export default function CryptoCheckout() {
                 an HMAC-SHA512 of the request body with its keys sorted alphabetically, signed with
                 our IPN secret. The ledger only trusts callbacks whose signature recomputes exactly.
               </p>
-              <pre className="mono-data mt-5 overflow-x-auto rounded-card-md border border-white/10 bg-ink/80 p-4 text-xs leading-relaxed text-text-mid">
+              <pre className="mono-data mt-5 overflow-x-auto rounded-card-md border border-white/10 bg-[var(--kl-paper)] p-4 text-xs leading-relaxed text-text-mid">
 {`// Kinjy IPN endpoint
 const sorted = sortKeysRecursive(req.body)
 const payload = JSON.stringify(sorted)
@@ -308,8 +310,8 @@ switch (sorted.payment_status) {
               </pre>
             </div>
 
-            <div className="cloud-card p-6">
-              <p className="eyebrow text-text-low">Full status vocabulary</p>
+            <div className={cn(KL_CARD, 'p-6')}>
+              <p className={KL_LABEL}>Full status vocabulary</p>
               <div className="mt-4 flex flex-wrap gap-2">
                 {['waiting', 'confirming', 'confirmed', 'sending', 'partially_paid', 'finished', 'failed', 'refunded', 'expired'].map((s) => (
                   <span

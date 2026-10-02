@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
 /** The landing's mono eyebrow. */
@@ -58,5 +58,62 @@ export function ClosingStage({
         <div className="relative">{children}</div>
       </div>
     </section>
+  )
+}
+
+/** A pill toggle in the landing's look: gold when on, a paper outline when off. */
+export function Chip({
+  label,
+  active = false,
+  onClick,
+  icon,
+  className,
+}: {
+  label: string
+  active?: boolean
+  onClick?: () => void
+  icon?: ReactNode
+  className?: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-colors',
+        active ? 'kl-sheen' : 'border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] text-[var(--kl-mid)] hover:border-[var(--kl-gold)] hover:text-[var(--kl-ink)]',
+        className,
+      )}
+    >
+      {icon}
+      {label}
+    </button>
+  )
+}
+
+/** The landing's button, with ArcButton's props so a page can swap one for the other. */
+export function KlButton({
+  variant = 'gold',
+  size = 'md',
+  className,
+  children,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'gold' | 'ghost' | 'indigo'; size?: 'sm' | 'md' | 'lg' }) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        'inline-flex items-center justify-center gap-2 font-bold transition disabled:cursor-default disabled:opacity-60',
+        size === 'sm' ? 'rounded-full px-4 py-2 text-sm' : size === 'lg' ? 'rounded-[20px] px-7 py-4 text-[17px]' : 'rounded-[16px] px-6 py-3 text-[15px]',
+        variant === 'gold' && 'kl-sheen shadow-[0_14px_30px_-14px_rgba(169,118,28,.55)] enabled:hover:-translate-y-0.5',
+        variant === 'ghost' && 'border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] font-semibold enabled:hover:border-[var(--kl-gold)]',
+        variant === 'indigo' && 'bg-[var(--kl-indigo)] font-semibold text-white enabled:hover:brightness-110',
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </button>
   )
 }
