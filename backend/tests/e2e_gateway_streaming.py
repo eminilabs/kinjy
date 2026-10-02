@@ -81,6 +81,10 @@ def register():
     return {"Authorization": f"Bearer {r.json()['tokens']['access_token']}"}
 
 
+# media-service checks that a file starts the way its type says; the rest can be filler.
+MP4_HEAD = b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom"
+
+
 class Body:
     """A large file produced on the fly, so the test itself holds almost nothing."""
 
@@ -92,11 +96,42 @@ class Body:
         block = rng.randbytes(1024 * 1024)
         for i in range(self.megabytes):
             chunk = block[i % 997:] + block[: i % 997]  # varies, costs nothing
+            if i == 0:
+                chunk = MP4_HEAD + chunk[len(MP4_HEAD):]
             self.digest.update(chunk)
             yield chunk
 
 
 headers = register()
+
+
+def _tiny_png() -> bytes:
+    """A real 64x64 PNG, to ask media-service where post media is being stored."""
+    import struct
+    import zlib
+
+    raw = b"".join(bytes([0]) + bytes([20, 90, 160]) * 64 for _ in range(64))
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        body = struct.pack(">I", len(data)) + kind + data
+        return body + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+
+    return (bytes([0x89]) + b"PNG" + bytes([13, 10, 26, 10])
+            + chunk(b"IHDR", struct.pack(">IIBBBBB", 64, 64, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+
+# This test moves 150 MB of filler, which UploadCenter would be sent and billed for
+# (and would not serve back without a ticket). The gateway is the same whichever
+# storage sits behind it, so it is measured against the local one.
+probe = httpx.post(f"{BASE}/media/upload", headers=headers, timeout=60, data={"purpose": "post"},
+                   files={"file": ("probe.png", _tiny_png(), "image/png")})
+if probe.status_code == 201:
+    where = httpx.get(f"http://localhost:8213/internal/media/{probe.json()['id']}", timeout=10).json().get("storage")
+    if where == "uploadcenter":
+        print("  SKIP post media is stored at UploadCenter; this test needs the local storage "
+              "(start media-service without POST_MEDIA_PROVIDER=uploadcenter)")
+        sys.exit(2)
 baseline = mem_mb() or 0.0
 print(f"gateway at rest: {baseline:.0f} MB, test file: {SIZE_MB} MB, allowed growth: {HEADROOM_MB:.0f} MB")
 
@@ -179,7 +214,7 @@ def multipart_head(boundary: str, filename: str) -> bytes:
 
 # A client that sends no Content-Length (chunked): the gateway must still relay it.
 small_boundary = "----gwsmall" + "".join(random.choices(string.ascii_lowercase, k=8))
-small = multipart_head(small_boundary, "s.mp4") + b"z" * 70000 + f"\r\n--{small_boundary}--\r\n".encode()
+small = multipart_head(small_boundary, "s.mp4") + MP4_HEAD + b"z" * (70000 - len(MP4_HEAD)) + f"\r\n--{small_boundary}--\r\n".encode()
 r = httpx.post(f"{BASE}/media/upload",
                headers={**headers, "Content-Type": f"multipart/form-data; boundary={small_boundary}"},
                content=(small[i:i + 8192] for i in range(0, len(small), 8192)), timeout=60)
@@ -256,7 +291,7 @@ print("== no leaked connections after aborted downloads")
 # gateway's pool of 100), and 150 abandoned downloads of the big one would only keep
 # media-service busy finishing them.
 small_asset = httpx.post(f"{BASE}/media/upload", headers=headers, timeout=60, data={"purpose": "post"},
-                         files={"file": ("a.mp4", b"x" * (6 * 1024 * 1024), "video/mp4")}).json()
+                         files={"file": ("a.mp4", MP4_HEAD + b"x" * (6 * 1024 * 1024 - len(MP4_HEAD)), "video/mp4")}).json()
 for _ in range(150):
     with httpx.stream("GET", f"{BASE}/media/{small_asset['id']}", headers=headers, timeout=60) as resp:
         for chunk in resp.iter_bytes(64 * 1024):

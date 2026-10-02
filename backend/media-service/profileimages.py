@@ -7,6 +7,7 @@ rather than on the Content-Type a client chose to declare.
 """
 from __future__ import annotations
 
+import ipaddress
 from datetime import datetime, timedelta
 from urllib.parse import urlsplit
 
@@ -99,7 +100,18 @@ def upload_url_allowed(url: str | None) -> bool:
         parts = urlsplit(url)
     except ValueError:
         return False
-    return parts.scheme == "https" and bool(parts.hostname) and not (parts.username or parts.password)
+    host = (parts.hostname or "").lower()
+    if parts.scheme != "https" or not host or parts.username or parts.password:
+        return False
+    # Never an address literal or a bare name: that is how a request gets aimed at
+    # localhost, the private network or a metadata endpoint. A real storage host
+    # is a public domain name, whichever one UploadCenter chooses.
+    try:
+        ipaddress.ip_address(host)
+        return False
+    except ValueError:
+        pass
+    return "." in host and not host.endswith((".local", ".internal", ".localhost", ".lan"))
 
 
 def is_ready(file_out: dict) -> bool:

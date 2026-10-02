@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import httpx
-from fastapi import Depends, HTTPException, Query
+from fastapi import BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.orm import Session as OrmSession
@@ -1344,13 +1344,87 @@ def edit_post(post_id: str, payload: PostIn, principal: CurrentUser, db: OrmSess
     return _post_out(post, db)
 
 
+def _media_to_discard(db: OrmSession, post: models.Post, removed_by: str, previous_status: str) -> list[str]:
+    """The media of a post its author has just removed, that may go with it.
+
+    The post row is only marked removed, so what could outlive it is the file.
+    Deleting it is the author's intent, and leaving a copy at a third party after
+    "delete" is not what anyone expects. But a file is also evidence, so it is
+    kept when:
+
+    - somebody else removed the post: that is moderation, not the author's choice;
+    - the post was already withheld or hidden: the platform took it down, and
+      whoever reviews or appeals that may need the original;
+    - the post was reported, or was rated as exploitative or prohibited:
+      whatever happens to it next may need the original;
+    - another live post still shows the same asset.
+
+    Called inside the delete request; the actual deletion runs after the response.
+    """
+    if removed_by != post.author_id or previous_status not in ("published", "draft"):
+        return []
+    reported = db.scalar(
+        select(func.count()).select_from(models.ContentReport).where(models.ContentReport.content_id == post.id)
+    )
+    rating = db.scalar(
+        select(models.ContentSafetyClassification).where(models.ContentSafetyClassification.content_id == post.id)
+    )
+    # Not human_review_status: every post with media is "pending" (the classifier
+    # cannot see inside a file, source heuristic:media_opaque), so it would keep
+    # everything and delete nothing. A report or a rating is a signal; that is not.
+    if reported or (rating is not None and (rating.exploitation_risk > 0 or rating.age_rating == "PROHIBITED")):
+        return []
+    media_ids = list(db.scalars(select(models.PostMedia.media_id).where(models.PostMedia.post_id == post.id)).all())
+    if not media_ids:
+        return []
+    still_shown = set(
+        db.scalars(
+            select(models.PostMedia.media_id)
+            .join(models.Post, models.Post.id == models.PostMedia.post_id)
+            .where(
+                models.PostMedia.media_id.in_(media_ids),
+                models.PostMedia.post_id != post.id,
+                models.Post.status != "removed",
+            )
+        ).all()
+    )
+    return [m for m in dict.fromkeys(media_ids) if m and m not in still_shown]
+
+
+def _discard_post_media(author_id: str, media_ids: list[str]) -> None:
+    """Ask media-service to delete files whose post is gone. Best effort, logged.
+
+    A failure leaves an orphaned file, which is a tidiness problem and is
+    recoverable; it must never turn a member's "delete" into an error.
+    """
+    for media_id in media_ids:
+        try:
+            httpx.post(
+                f"{MEDIA_URL}/internal/media/{media_id}/discard-post-media",
+                json={"owner_id": author_id},
+                timeout=30,
+            ).raise_for_status()
+        except Exception as exc:
+            log.error("could not discard media %s of a removed post: %s", media_id, exc)
+
+
 @app.delete("/posts/{post_id}", status_code=204, tags=["posts"])
-def delete_post(post_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+def delete_post(
+    post_id: str,
+    principal: CurrentUser,
+    background: BackgroundTasks,
+    db: OrmSession = Depends(get_db),
+):
     post = db.get(models.Post, post_id)
     if post is None or (post.author_id != principal.user_id and not principal.is_admin):
         raise HTTPException(status_code=404, detail="Post not found")
+    previous_status = post.status
     post.status = "removed"
+    discard = _media_to_discard(db, post, removed_by=principal.user_id, previous_status=previous_status)
+    author_id = post.author_id
     db.commit()
+    if discard:
+        background.add_task(_discard_post_media, author_id, discard)
 
 
 # ---------------------------------------------------------------------------
