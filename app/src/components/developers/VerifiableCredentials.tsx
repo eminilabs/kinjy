@@ -5,6 +5,8 @@ import { BadgeCheck, Check, Fingerprint, KeyRound, Send, Store, UserCheck } from
 import { VerifiedBadge } from '@/components/ui-kit'
 import { cn } from '@/lib/utils'
 import { FEATURES } from '@/lib/features'
+import { Eyebrow } from '@/components/landing/PageKit'
+import { KL_CARD } from '@/components/landing/kl-classes'
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 
@@ -61,9 +63,9 @@ export default function VerifiableCredentials() {
   const busy = phase === 'presenting' || phase === 'verifying'
 
   return (
-    <section className="twilight-field noise-overlay relative px-6 py-24 md:py-32">
-      <div className="mx-auto max-w-container">
-        <div className="grid items-center gap-14 lg:grid-cols-[5fr_6fr]">
+    <section className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)] relative">
+      <div>
+        <div className="grid grid-cols-[minmax(0,1fr)] items-center gap-14 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
           {/* Left copy */}
           <motion.div
             initial={{ opacity: 0, y: 32 }}
@@ -71,11 +73,11 @@ export default function VerifiableCredentials() {
             viewport={{ once: true, margin: '-15%' }}
             transition={{ duration: 0.65, ease: EASE }}
           >
-            <p className="eyebrow text-sky">Verifiable Credentials</p>
-            <h2 className="h2 mt-4">
-              Reputation you can <span className="text-gold-grad">carry in your pocket.</span>
+            <Eyebrow>Verifiable Credentials</Eyebrow>
+            <h2 className="kl-h2 mt-5 max-w-[900px]">
+              Reputation you can <span className="text-[var(--kl-gold-deep)]">carry in your pocket.</span>
             </h2>
-            <p className="body-lg mt-5 text-text-mid">
+            <p className="kl-lead mt-6 !max-w-[640px]">
               Expertise badges, trust scores and sales history export as cryptographically signed
               verifiable credentials. Present them anywhere — another platform verifies the
               signature, not your story.
@@ -113,9 +115,9 @@ export default function VerifiableCredentials() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-15%' }}
             transition={{ duration: 0.7, ease: EASE }}
-            className="cloud-card overflow-hidden"
+            className={cn(KL_CARD, 'overflow-hidden')}
           >
-            <div className="flex items-center justify-between border-b border-white/10 bg-ink-3/70 px-5 py-3">
+            <div className="flex items-center justify-between border-b border-white/10 bg-[var(--kl-paper)] px-5 py-3">
               <span className="mono-data flex items-center gap-2 text-xs text-text-low">
                 <Fingerprint size={13} className="text-gold" aria-hidden="true" />
                 reputation.kaluta.vc / export
@@ -140,15 +142,15 @@ export default function VerifiableCredentials() {
               )}
             </div>
 
-            <div className="relative overflow-x-auto bg-ink-3/40 p-5">
+            <div className="relative overflow-x-auto bg-[var(--kl-paper)] p-5">
               <motion.div
                 animate={{
                   opacity: busy ? 0.55 : 1,
                   scale: phase === 'presenting' ? 0.985 : 1,
-                  borderColor: phase === 'verified' ? 'rgba(63,178,127,0.5)' : 'rgba(255,255,255,0.14)',
+                  borderColor: phase === 'verified' ? 'rgba(63,178,127,0.5)' : 'var(--kl-paper-2)',
                 }}
                 transition={{ duration: 0.4, ease: EASE }}
-                className="rounded-card-md border bg-ink/80 p-4"
+                className="rounded-card-md border bg-[var(--kl-paper)] p-4"
               >
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <p className="flex items-center gap-2 text-sm font-semibold text-text-hi">
@@ -199,7 +201,7 @@ export default function VerifiableCredentials() {
                         initial={{ opacity: 0, y: 12 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.15, duration: 0.45, ease: EASE }}
-                        className="mt-3 grid gap-2 sm:grid-cols-3"
+                        className="mt-3 grid grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-3"
                       >
                         {['trustScore 96.4', FEATURES.marketplace ? '312 orders · 1 dispute' : '0 strikes · 4 yrs', 'KYC tier 2'].map((c) => (
                           <span
