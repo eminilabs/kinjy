@@ -13,6 +13,7 @@ Routing is prefix-based and declared in ROUTES below. Two rules matter:
 from __future__ import annotations
 
 import logging
+import time
 
 import httpx
 import asyncio
@@ -20,7 +21,9 @@ import asyncio
 import websockets
 from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+from starlette.background import BackgroundTask
+from starlette.requests import ClientDisconnect
 
 from common import settings
 
@@ -216,6 +219,64 @@ def _resolve(path: str) -> tuple[str, str] | None:
     return None
 
 
+# --- request bodies ----------------------------------------------------------
+#
+# Relaying a body as it arrives means an upstream connection is taken before the
+# body is complete. Buffering used to hide that: a client trickling bytes only
+# cost a coroutine, because nothing was sent upstream until it had finished. So
+# the gateway now bounds what it relays — a size, an idle time between chunks
+# and a total time — and answers 413 / 408 itself instead of holding a slot for
+# a client that is not really sending.
+#
+# Only media-service takes files (200 MB, see its MAX_BYTES, plus multipart
+# framing); every other route takes JSON.
+BODY_LIMIT = 8 * 1024 * 1024
+BODY_LIMIT_MEDIA = 201 * 1024 * 1024
+BODY_IDLE_SECONDS = 20
+BODY_DEADLINE = 60
+BODY_DEADLINE_MEDIA = 900
+
+
+class BodyRejected(Exception):
+    def __init__(self, status: int, detail: str) -> None:
+        super().__init__(detail)
+        self.status, self.detail = status, detail
+
+
+async def guarded_body(request: Request, limit: int, deadline: float):
+    """The client's body, chunk by chunk, refused if it is too big or too slow."""
+    stream = request.stream().__aiter__()
+    started, received = time.monotonic(), 0
+    while True:
+        remaining = deadline - (time.monotonic() - started)
+        if remaining <= 0:
+            raise BodyRejected(408, "The request body took too long to arrive")
+        try:
+            chunk = await asyncio.wait_for(stream.__anext__(), timeout=min(BODY_IDLE_SECONDS, remaining))
+        except StopAsyncIteration:
+            return
+        except asyncio.TimeoutError:
+            raise BodyRejected(408, "The request body stopped arriving") from None
+        received += len(chunk)
+        if received > limit:
+            raise BodyRejected(413, f"The request body exceeds {limit // (1024 * 1024)} MB")
+        yield chunk
+
+
+async def relay(response: httpx.Response):
+    """The upstream body, closing the upstream connection however this ends.
+
+    A client that disconnects mid-download makes the server raise inside this
+    iteration, and Starlette then skips its background task — so the close has
+    to live here, or the connection stays checked out of the pool.
+    """
+    try:
+        async for chunk in response.aiter_raw():
+            yield chunk
+    finally:
+        await response.aclose()
+
+
 @app.api_route(
     "/{full_path:path}",
     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
@@ -245,14 +306,35 @@ async def proxy(full_path: str, request: Request):
     headers["X-Forwarded-For"] = request.client.host if request.client else ""
     headers["X-Forwarded-Host"] = request.headers.get("host", "")
 
+    # The body goes upstream as it arrives, not after it has all arrived: a
+    # 200 MB upload used to sit in this process in full (more than once, since
+    # it was copied on the way through), per concurrent request.
+    #
+    # Content-Length is forwarded so the service sees the size up front and can
+    # refuse early — except when the client also sent Transfer-Encoding, in which
+    # case the two could disagree and the upstream framing is left to httpx.
+    declared = request.headers.get("content-length", "").strip()
+    declared_ok = declared.isascii() and declared.isdigit()
+    chunked = "transfer-encoding" in request.headers
+    has_body = chunked or (declared_ok and int(declared) > 0)
+    if has_body and declared_ok and not chunked:
+        headers["content-length"] = declared
+
+    large = path == "/api/media" or path.startswith("/api/media/")
+    limit = BODY_LIMIT_MEDIA if large else BODY_LIMIT
+    if declared_ok and int(declared) > limit:
+        # Said up front: refuse before a single byte goes upstream.
+        return JSONResponse(status_code=413, content={"detail": f"The request body exceeds {limit // (1024 * 1024)} MB"})
+
     try:
-        response = await _client.request(
+        upstream_request = _client.build_request(
             request.method,
             f"{upstream}{downstream}",
-            content=await request.body(),
+            content=guarded_body(request, limit, BODY_DEADLINE_MEDIA if large else BODY_DEADLINE) if has_body else None,
             headers=headers,
             params=request.query_params,
         )
+        response = await _client.send(upstream_request, stream=True)
     except httpx.LocalProtocolError as exc:
         return JSONResponse(status_code=400, content={"detail": f"Malformed request: {exc}"})
     except httpx.ConnectError:
@@ -262,11 +344,34 @@ async def proxy(full_path: str, request: Request):
         )
     except httpx.TimeoutException:
         return JSONResponse(status_code=504, content={"detail": "Upstream timed out"})
+    except BodyRejected as exc:
+        return JSONResponse(status_code=exc.status, content={"detail": exc.detail})
+    except ClientDisconnect:
+        # The client left mid-upload: nobody is there to answer.
+        return Response(status_code=499)
+    except httpx.TransportError:
+        # The service closed the connection while the body was still going in,
+        # typically having refused it early (too large, not allowed).
+        return JSONResponse(status_code=502, content={"detail": "The service closed the connection"})
 
     out_headers = {k: v for k, v in response.headers.items() if k.lower() not in HOP_BY_HOP}
-    return Response(
-        content=response.content,
+    content_type = response.headers.get("content-type")
+
+    # No body to relay: answer directly rather than open a stream that would be
+    # framed as chunked, which a HEAD, 204 or 304 must not be.
+    if request.method == "HEAD" or response.status_code in (204, 304) or response.status_code < 200:
+        await response.aclose()
+        return Response(status_code=response.status_code, headers=out_headers, media_type=content_type)
+
+    # The response goes back the same way: raw bytes, so a downloaded file is
+    # never held whole here and a service's own Content-Encoding stays truthful.
+    # Its Content-Length is kept so clients can show progress and resume.
+    if "content-length" in response.headers and "transfer-encoding" not in response.headers:
+        out_headers["content-length"] = response.headers["content-length"]
+    return StreamingResponse(
+        relay(response),
         status_code=response.status_code,
         headers=out_headers,
-        media_type=response.headers.get("content-type"),
+        media_type=content_type,
+        background=BackgroundTask(response.aclose),
     )
