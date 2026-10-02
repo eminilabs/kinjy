@@ -257,6 +257,8 @@ forgets the filter still cannot leak.
 | Community discovery | ✅ |
 | Comments | ✅ |
 | Notifications | ✅ |
+| Circles — an adult cannot add, or keep reaching, an unconnected minor | ✅ |
+| Memorials — an adult cannot name an unconnected minor an administrator; a stranger's words are never pushed to a minor's notifications | ✅ |
 | Livestreams | ✅ decision, ⬜ no stack to gate |
 
 ---
@@ -517,6 +519,9 @@ backend/tests/test_classifier.py                        → 26 passed
 backend/tests/e2e_discovery_forums.py (live API)        → 26 checks passed
 backend/tests/e2e_money_age.py     (live API)           → 26 checks passed
 backend/tests/e2e_comments_notifications.py (live)      → 21 checks passed
+backend/tests/e2e_circles.py       (live API)           → 80 checks passed
+backend/tests/e2e_graveyard.py     (live API)           → 88 checks passed
+backend/tests/e2e_graveyard_audit.py (live API)         → 39 checks passed
 backend/tests/schema_drift.py                           → no drift
 ```
 

@@ -55,6 +55,8 @@ class Memorial(Base):
     grave_lng: Mapped[float | None] = mapped_column(Float)
     grave_label: Mapped[str | None] = mapped_column(String(255))
     location_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    # What the device reported when the location was captured at the grave.
+    grave_accuracy_m: Mapped[float | None] = mapped_column(Float)
 
     memorial_audio_url: Mapped[str | None] = mapped_column(String(500))
     audio_autoplay: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -121,6 +123,31 @@ class Reminder(Base):
     occasion: Mapped[str] = mapped_column(String(40), default="death_anniversary")
     due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Which of OFFSETS_HOURS this row is, so the message can say "in 3 days"
+    # and the anniversary it leads up to can be recovered from ``due_at``.
+    offset_hours: Mapped[int | None] = mapped_column(Integer)
+
+
+class MemorialEvent(Base):
+    """One moment on the life timeline (blueprint §8: "biography, timeline").
+
+    A year is required and month and day are not: families often know the year
+    of a wedding or a move and nothing more precise, and inventing a day to fill
+    a date column would be the kind of fabrication the memorial rules forbid.
+    """
+
+    __tablename__ = "memorial_events"
+    __table_args__ = {"schema": SCHEMA}
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("mev"))
+    memorial_id: Mapped[str] = mapped_column(ForeignKey(f"{SCHEMA}.memorials.id", ondelete="CASCADE"), index=True)
+    year: Mapped[int] = mapped_column(Integer)
+    month: Mapped[int | None] = mapped_column(Integer)
+    day: Mapped[int | None] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[str] = mapped_column(String(40))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
 class DeathReport(Base):

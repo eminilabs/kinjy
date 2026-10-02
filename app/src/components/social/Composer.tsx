@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router'
 import {
   Clapperboard,
   FileText,
@@ -23,6 +24,7 @@ import { useAppTheme } from '@/components/appdemo/theme'
 import MemberAvatar from './MemberAvatar'
 import { ApiError, kaluta, type Post, type UploadedMedia } from '@/lib/api'
 import RichTextEditor from './RichTextEditor'
+import { onChange } from '@/lib/live'
 import { htmlToText } from '@/lib/richtext'
 import { LANGUAGES } from '@/i18n'
 import { cn } from '@/lib/utils'
@@ -133,6 +135,8 @@ export default function Composer({
   const [note, setNote] = useState<string | null>(null)
 
   const circles = useApi(() => kaluta.circles.list(), [])
+  // A circle made on the Circles page is offered here without a reload.
+  useEffect(() => onChange('circles', circles.reload), [circles.reload])
 
   const audienceLabel =
     visibility === 'circle'
@@ -387,7 +391,11 @@ export default function Composer({
               <div className="mt-3">
                 {(circles.data ?? []).length === 0 ? (
                   <p className="rounded-card-sm border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-                    You have no circles yet — create one before posting to it.
+                    You have no circles yet —{' '}
+                    <Link to="/circles" className="font-semibold underline underline-offset-2">
+                      create one
+                    </Link>{' '}
+                    before posting to it.
                   </p>
                 ) : (
                   <select
@@ -403,6 +411,13 @@ export default function Composer({
                       </option>
                     ))}
                   </select>
+                )}
+                {/* Said before posting, not discovered afterwards: a circle that
+                    reaches nobody makes the post private to its author. */}
+                {(circles.data ?? []).find((c) => c.id === circleId)?.members_count === 0 && (
+                  <p className="mt-2 text-xs text-warning">
+                    Nobody is in this circle yet — only you will see this post.
+                  </p>
                 )}
               </div>
             )}

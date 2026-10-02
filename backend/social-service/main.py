@@ -4,12 +4,13 @@ from __future__ import annotations
 import json
 import logging
 import re
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.orm import Session as OrmSession
 
 from common import events, notify
@@ -356,7 +357,11 @@ def _post_out(
         # repost() pointing at the original, so this never recurses.
         "repost_of": (
             _post_out(original, db, viewer=viewer, authors=authors, reposted=reposted)
-            if post.repost_of and (original := db.get(models.Post, post.repost_of))
+            if post.repost_of
+            and (original := db.get(models.Post, post.repost_of))
+            # Reposts of restricted posts are refused now, but rows from before
+            # that rule must not carry a circle post into a stranger's feed.
+            and (original.visibility == "public" or original.author_id == viewer)
             and original.status not in ("removed", "draft")
             else None
         ),
@@ -530,14 +535,18 @@ def _context(db: OrmSession, principal) -> ranking.Context:
 
 @app.post("/posts", status_code=201, tags=["posts"])
 async def create_post(payload: PostIn, principal: CurrentUser, db: OrmSession = Depends(get_db)):
-    if payload.visibility == "circle" and not payload.circle_id:
-        raise HTTPException(status_code=400, detail="A circle post needs circle_id")
+    if payload.visibility == "circle":
+        _require_own_circle(principal.user_id, payload.circle_id)
     if payload.visibility == "community" and not payload.community_id:
         raise HTTPException(status_code=400, detail="A community post needs community_id")
     if not payload.body.strip() and not payload.media:
         raise HTTPException(status_code=400, detail="A post needs a body or media")
 
     data = payload.model_dump(exclude={"topics", "media"})
+    # A circle id only means something on a circle post; elsewhere it would be
+    # a stray pointer the audience rule might one day read.
+    if payload.visibility != "circle":
+        data["circle_id"] = None
     post = models.Post(
         id=new_id("pst"),
         author_id=principal.user_id,
@@ -625,7 +634,9 @@ def posts_by_author(
     # Before ordering and before paging: restricted rows are never fetched.
     stmt = agefilter.restrict_query(stmt, age)
     if viewer != author_id:
-        stmt = stmt.where(models.Post.visibility == "public")
+        # The same audience rule as the feed: a follower sees the followers-only
+        # posts, a circle member the posts shared with them, a visitor neither.
+        stmt = stmt.where(_audience_clause(_viewer_audience(viewer)))
 
     total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     rows = db.scalars(
@@ -1206,10 +1217,8 @@ def backfill_classifications(limit: int = 500, db: OrmSession = Depends(get_db))
 
 @app.get("/posts/{post_id}", tags=["posts"])
 def get_post(post_id: str, principal: MaybeUser, db: OrmSession = Depends(get_db)):
-    post = db.get(models.Post, post_id)
-    if post is None or post.status in ("removed", "draft"):
-        raise HTTPException(status_code=404, detail="Post not found")
     viewer = principal.user_id if principal else None
+    post = _readable_post(db, post_id, viewer)
     prefs = _viewer_prefs(viewer)
     age = _viewer_age(viewer)
     # A direct link bypasses the feed entirely, so the same gate runs here.
@@ -1231,10 +1240,8 @@ def get_post_media(post_id: str, principal: MaybeUser, db: OrmSession = Depends(
     off. The age rule is *not* relaxed here — that one is not the viewer's to
     waive.
     """
-    post = db.get(models.Post, post_id)
-    if post is None or post.status in ("removed", "draft"):
-        raise HTTPException(status_code=404, detail="Post not found")
     viewer_id = principal.user_id if principal else None
+    post = _readable_post(db, post_id, viewer_id)
     prefs = _viewer_prefs(viewer_id)
     # The bytes themselves. Withholding the URL is the only protection that
     # actually works - a client told "do not display this" has already
@@ -1300,7 +1307,108 @@ def delete_post(post_id: str, principal: CurrentUser, db: OrmSession = Depends(g
 # Feeds
 # ---------------------------------------------------------------------------
 
-def _visible_posts(principal, age):
+@dataclass(frozen=True)
+class Audience:
+    """Whose restricted posts a viewer may read, as user-service answers it.
+
+    ``following`` opens followers-only posts and ``circles`` opens posts shared
+    to those circles. Empty for a visitor — and empty when user-service cannot
+    be reached, so an outage hides restricted posts instead of showing them.
+    """
+
+    viewer: str | None = None
+    following: frozenset[str] = frozenset()
+    circles: frozenset[str] = frozenset()
+
+
+def _viewer_audience(viewer: str | None) -> Audience:
+    """Asked once per request, on every surface that returns posts.
+
+    Not cached: removing someone from a circle, unfollowing or blocking has to
+    close the door on their next request, not a minute later.
+    """
+    if not viewer:
+        return Audience()
+    try:
+        response = httpx.get(f"{USER_URL}/internal/viewer-audience/{viewer}", timeout=4)
+        response.raise_for_status()
+        data = response.json()
+        return Audience(viewer, frozenset(data.get("following", [])), frozenset(data.get("circles", [])))
+    except Exception as exc:
+        log.warning("audience lookup failed for %s: %s", viewer, exc)
+        return Audience(viewer)
+
+
+def _can_see(post: models.Post, audience: Audience) -> bool:
+    """Whether this viewer may read this post, by its audience.
+
+    The single-post form of :func:`_audience_clause`. The two are one rule
+    spelled twice — once for Python, once for SQL — and sit side by side so
+    they cannot drift. Community posts are read through their community, not
+    here, so outside it only their author sees them.
+    """
+    if post.visibility == "public":
+        return True
+    if audience.viewer is None:
+        return False
+    if post.author_id == audience.viewer:
+        return True
+    if post.visibility == "followers":
+        return post.author_id in audience.following
+    if post.visibility == "circle":
+        return post.circle_id in audience.circles
+    return False
+
+
+def _audience_clause(audience: Audience):
+    """The SQL form of :func:`_can_see`."""
+    if audience.viewer is None:
+        return models.Post.visibility == "public"
+    clauses = [models.Post.visibility == "public", models.Post.author_id == audience.viewer]
+    if audience.following:
+        clauses.append(
+            and_(models.Post.visibility == "followers", models.Post.author_id.in_(audience.following))
+        )
+    if audience.circles:
+        clauses.append(and_(models.Post.visibility == "circle", models.Post.circle_id.in_(audience.circles)))
+    return or_(*clauses)
+
+
+def _require_own_circle(author_id: str, circle_id: str | None) -> None:
+    """A post may only be shared to a circle its author owns.
+
+    Asked of user-service, which owns circles. Fails closed: if the owner
+    cannot be confirmed, the post is not published into a circle at all.
+    """
+    if not circle_id:
+        raise HTTPException(status_code=400, detail="A circle post needs circle_id")
+    try:
+        response = httpx.get(f"{USER_URL}/internal/circles/{circle_id}/owner", timeout=4)
+    except Exception as exc:
+        log.warning("circle owner lookup failed for %s: %s", circle_id, exc)
+        raise HTTPException(status_code=503, detail="Could not check that circle right now. Try again.")
+    if response.status_code != 200 or response.json().get("owner_id") != author_id:
+        raise HTTPException(status_code=404, detail="Circle not found")
+
+
+def _readable_post(db: OrmSession, post_id: str, viewer: str | None) -> models.Post:
+    """A post this viewer may read, or a 404.
+
+    Every route that takes a post id goes through here — opening a link,
+    loading its media, reacting, commenting, sharing. A circle post must not be
+    reachable by a side door just because the feed hides it: an id copied from
+    a screenshot is still an id. 404 rather than 403, so the answer does not
+    confirm that a restricted post exists.
+    """
+    post = db.get(models.Post, post_id)
+    if post is None or post.status in ("removed", "draft"):
+        raise HTTPException(status_code=404, detail="Post not found")
+    if not _can_see(post, _viewer_audience(viewer)):
+        raise HTTPException(status_code=404, detail="Post not found")
+    return post
+
+
+def _visible_posts(principal, age, audience: Audience):
     """The base feed query: published, age-appropriate, and audience-allowed.
 
     Factored out so the shorts reel cannot drift from the feed's rules. A second
@@ -1308,21 +1416,42 @@ def _visible_posts(principal, age):
     surface and hidden on another.
 
     ``age`` is the authoritative profile from the identity record, never the
-    viewer's own settings.
+    viewer's own settings. ``audience`` says which followers-only and circle
+    posts are this viewer's to read: until it existed, every signed-in member
+    could read every followers-only post on the platform, and circle posts
+    reached nobody but their author.
     """
     stmt = select(models.Post).where(models.Post.status == "published")
     # Age eligibility enters the SQL here, before ranking and before paging,
     # so restricted rows are never candidates in the first place.
     stmt = agefilter.restrict_query(stmt, age)
-    if principal is None:
-        return stmt.where(models.Post.visibility == "public")
-    return stmt.where(
-        or_(
-            models.Post.visibility == "public",
-            models.Post.author_id == principal.user_id,
-            models.Post.visibility == "followers",
-        )
+    return stmt.where(_audience_clause(audience))
+
+
+class ReadableIn(BaseModel):
+    viewer: str | None = None
+    post_ids: list[str] = Field(default_factory=list, max_length=200)
+
+
+@app.post("/internal/readable-posts", tags=["internal"])
+def readable_posts(payload: ReadableIn, db: OrmSession = Depends(get_db)):
+    """Which of these posts this member may read, by audience and by age.
+
+    For the realtime hub. A ``post:<id>`` topic carries who commented and when;
+    without this check, anyone holding a circle post's id — a member since
+    removed, for one — could keep listening to it. One query for the whole
+    batch, the same rule as every other read.
+    """
+    ids = list(dict.fromkeys(i for i in payload.post_ids if i))
+    if not ids:
+        return {"post_ids": []}
+    stmt = select(models.Post.id).where(
+        models.Post.id.in_(ids),
+        models.Post.status == "published",
+        _audience_clause(_viewer_audience(payload.viewer)),
     )
+    stmt = agefilter.restrict_query(stmt, _viewer_age(payload.viewer))
+    return {"post_ids": list(db.scalars(stmt).all())}
 
 
 @app.get("/shorts", tags=["shorts"])
@@ -1349,7 +1478,7 @@ def shorts(
     prefs = _viewer_prefs(viewer)
     age = _viewer_age(viewer)
 
-    stmt = _visible_posts(principal, age).where(models.Post.format == "short")
+    stmt = _visible_posts(principal, age, _viewer_audience(viewer)).where(models.Post.format == "short")
     if author:
         stmt = stmt.where(models.Post.author_id == author)
 
@@ -1410,7 +1539,8 @@ def feed(
     # Shared with the shorts reel: published, age-appropriate, audience-allowed.
     # The age rule is applied in the query rather than after - a post a child
     # must not see should never be selected, never serialised and never sent.
-    stmt = _visible_posts(principal, age)
+    audience = _viewer_audience(viewer)
+    stmt = _visible_posts(principal, age, audience)
 
     # Who the viewer follows came with the rest of their graph in _context().
     # It used to be fetched here from /users/me/following with an empty bearer
@@ -1466,6 +1596,8 @@ def feed(
     elif mode == "circles":
         if principal is None:
             raise HTTPException(status_code=401, detail="Sign in to see your circles")
+        # The base query already narrowed circle posts to the circles that reach
+        # this viewer, plus their own; this keeps only those.
         stmt = stmt.where(models.Post.visibility == "circle")
 
     chosen_id = algorithm_id or {
@@ -1554,7 +1686,11 @@ def _inclusion_reasons(post: models.Post, mode: str, viewer: str | None, db: Orm
     elif mode == "topics" and post.topics:
         reasons.append({"kind": "topic", "label": f"Tagged {', '.join('#' + t for t in post.topics.split(',')[:3])}."})
     elif mode == "circles" and post.circle_id:
-        reasons.append({"kind": "circle", "label": "Shared to one of your circles."})
+        reasons.append({
+            "kind": "circle",
+            "label": "You shared it to one of your circles." if post.author_id == viewer
+            else "The author shared it with a circle you are in.",
+        })
     elif mode == "new":
         reasons.append({"kind": "recent", "label": "It is one of the most recent posts on Kinjy."})
     elif mode == "global":
@@ -1568,6 +1704,8 @@ def _inclusion_reasons(post: models.Post, mode: str, viewer: str | None, db: Orm
         reasons.append({"kind": "visibility", "label": "The author made it public."})
     elif post.visibility == "followers":
         reasons.append({"kind": "visibility", "label": "The author shared it with their followers."})
+    elif post.visibility == "circle" and post.author_id != viewer:
+        reasons.append({"kind": "visibility", "label": "The author shared it with a circle you are in."})
 
     return reasons
 
@@ -1587,11 +1725,8 @@ def why_am_i_seeing_this(
     (the score and its components). Reporting "ranked by chronological, score
     0.46" on an unranked feed described something that never happened.
     """
-    post = db.get(models.Post, post_id)
-    if post is None:
-        raise HTTPException(status_code=404, detail="Post not found")
-
     viewer = principal.user_id if principal else None
+    post = _readable_post(db, post_id, viewer)
     ranked = mode in RANKED_MODES
     reasons = _inclusion_reasons(post, mode, viewer, db)
 
@@ -1769,9 +1904,7 @@ def react(post_id: str, payload: ReactIn, principal: CurrentUser, db: OrmSession
     if payload.kind not in REACTION_KINDS:
         raise HTTPException(status_code=400, detail=f"Unknown reaction. Available: {', '.join(REACTION_KINDS)}")
 
-    post = db.get(models.Post, post_id)
-    if post is None:
-        raise HTTPException(status_code=404, detail="Post not found")
+    post = _readable_post(db, post_id, principal.user_id)
 
     existing = db.scalar(
         select(models.Reaction).where(
@@ -1796,7 +1929,9 @@ def react(post_id: str, payload: ReactIn, principal: CurrentUser, db: OrmSession
 
 @app.get("/posts/{post_id}/reactions", tags=["engagement"])
 def post_reactions(post_id: str, principal: MaybeUser, db: OrmSession = Depends(get_db)):
-    return _reaction_summary(db, post_id, principal.user_id if principal else None)
+    viewer = principal.user_id if principal else None
+    _readable_post(db, post_id, viewer)
+    return _reaction_summary(db, post_id, viewer)
 
 
 def _broadcast_reactions(db: OrmSession, post: models.Post, actor: str) -> None:
@@ -1817,9 +1952,7 @@ def _broadcast_reactions(db: OrmSession, post: models.Post, actor: str) -> None:
 
 @app.post("/posts/{post_id}/like", tags=["engagement"])
 def like(post_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
-    post = db.get(models.Post, post_id)
-    if post is None:
-        raise HTTPException(status_code=404, detail="Post not found")
+    post = _readable_post(db, post_id, principal.user_id)
     existing = db.scalar(
         select(models.Reaction).where(
             models.Reaction.post_id == post_id, models.Reaction.user_id == principal.user_id
@@ -1855,13 +1988,18 @@ def repost(post_id: str, payload: RepostIn, principal: CurrentUser, db: OrmSessi
     at the original rather than building a chain — three levels of "X shared Y
     sharing Z" tells the reader nothing.
     """
-    original = db.get(models.Post, post_id)
-    if original is None or original.status in ("removed", "draft"):
-        raise HTTPException(status_code=404, detail="Post not found")
+    original = _readable_post(db, post_id, principal.user_id)
 
     target = db.get(models.Post, original.repost_of) if original.repost_of else original
     if target is None:
         raise HTTPException(status_code=404, detail="Post not found")
+    # A repost carries the original inside it, so sharing a followers-only or
+    # circle post would hand it to the resharer's whole audience. Only what the
+    # author made public may travel further.
+    if target.visibility != "public":
+        raise HTTPException(status_code=400, detail="Only public posts can be shared.")
+    if payload.visibility == "circle":
+        _require_own_circle(principal.user_id, payload.circle_id)
     if target.author_id == principal.user_id and not payload.body.strip():
         raise HTTPException(status_code=400, detail="Reposting your own post needs a comment")
 
@@ -1896,7 +2034,10 @@ def repost(post_id: str, payload: RepostIn, principal: CurrentUser, db: OrmSessi
     db.commit()
     live(f"post:{target.id}", "reposts", post_id=target.id,
          reposts_count=target.reposts_count, actor=principal.user_id)
-    live("feed", "post", post_id=post.id, author_id=principal.user_id, format="text")
+    # The same rule as a new post: only public reposts announce themselves on
+    # the shared channel.
+    if post.visibility == "public":
+        live("feed", "post", post_id=post.id, author_id=principal.user_id, format="text")
     return _post_out(post, db, viewer=principal.user_id)
 
 
@@ -1947,12 +2088,13 @@ def record_views(payload: ViewsIn, principal: CurrentUser, db: OrmSession = Depe
             )
         ).all()
     )
+    audience = _viewer_audience(principal.user_id)
     fresh = [
         post
         for post in db.scalars(
             select(models.Post).where(models.Post.id.in_([i for i in ids if i not in already]))
         ).all()
-        if post.author_id != principal.user_id
+        if post.author_id != principal.user_id and _can_see(post, audience)
     ]
     for post in fresh:
         db.add(models.PostView(post_id=post.id, user_id=principal.user_id))
@@ -1993,9 +2135,7 @@ def _authors(ids: set[str]) -> dict[str, dict]:
 
 @app.post("/posts/{post_id}/comments", status_code=201, tags=["engagement"])
 def add_comment(post_id: str, payload: CommentIn, principal: CurrentUser, db: OrmSession = Depends(get_db)):
-    post = db.get(models.Post, post_id)
-    if post is None:
-        raise HTTPException(status_code=404, detail="Post not found")
+    post = _readable_post(db, post_id, principal.user_id)
 
     # You cannot comment on what you are not allowed to read. Without this a
     # minor could write on an adult post by posting the id directly, and the
@@ -2107,8 +2247,16 @@ def add_comment(post_id: str, payload: CommentIn, principal: CurrentUser, db: Or
          parent_id=parent_id, reply_to=reply_to, depth=depth,
          comments_count=post.comments_count)
     # The author, and whoever is being replied to, hear about it on their own
-    # channel even when they are not looking at the post.
-    for target in {post.author_id, reply_to} - {principal.user_id, None}:
+    # channel even when they are not looking at the post — but only while they
+    # may still read it. Someone removed from a circle keeps their old comment
+    # in the thread; a reply to it must not carry the circle's words to them.
+    targets = {post.author_id, reply_to} - {principal.user_id, None}
+    if post.visibility != "public":
+        targets = {
+            t for t in targets
+            if t == post.author_id or _can_see(post, _viewer_audience(t))
+        }
+    for target in targets:
         live(f"user:{target}", "activity", event_kind="comment",
              post_id=post_id, comment_id=comment.id, actor=principal.user_id)
         notify.notify(
@@ -2143,8 +2291,9 @@ def list_comments(
     """
     age = _viewer_age(principal.user_id if principal else None)
 
-    # The post gate first: comments on something you may not read are not
-    # yours to read either.
+    # The post gates first: comments on something you may not read are not
+    # yours to read either — by audience, then by age.
+    _readable_post(db, post_id, principal.user_id if principal else None)
     if not agefilter.visible_to(db, age, post_id):
         raise HTTPException(status_code=404, detail="Post not found")
 

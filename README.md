@@ -218,6 +218,78 @@ implements the blueprint's first two mandatory refinements against live services
   (Original / AI assisted / AI generated) because the platform cannot detect
   assistance reliably, and the label travels with the post.
 
+### Circles — private audiences
+
+`/circles` (user-service) is the blueprint's module D: Family, Close friends,
+Business, Customers, Custom and **Smart** circles. A circle is a private list —
+only its owner sees who is in it, and nobody is told they were added. What it
+controls is reach: **a post shared to a circle is read by its members and its
+author, and by nobody else.**
+
+- **One audience rule, every door.** `social-service` asks
+  `/internal/viewer-audience/{id}` (who you follow, which circles reach you) on
+  every read, and applies the same rule to the feed, the shorts reel, an
+  author's page, a direct link, media, "Why am I seeing this?", reactions,
+  comments, views and notifications. Only public posts can be reshared — a
+  repost carries the original inside it. The realtime hub grants a `post:<id>`
+  topic only to someone who may read the post, so a removed member cannot keep
+  listening to who comments.
+- **Checked at read time, never copied.** Removing someone, a block, or an
+  unfollow closes the door on the very next request.
+- **Smart circles hold no list.** A rule — connections, followers, people you
+  follow or mutual follows, optionally narrowed to a country and/or city from
+  the member's own profile — is evaluated at every read.
+- **The messaging rule applies.** An adult cannot add an unconnected minor (one
+  generic refusal, naming no age), and a block or a disconnection stops an
+  existing circle reaching them; the owner sees them flagged "Not reached".
+- **Bounded.** Up to 100 circles per member and 5,000 people per circle, since
+  every read recomputes the audience.
+
+```bash
+python backend/tests/e2e_circles.py   # 80 checks, live API
+```
+
+### Digital Graveyard — memorials
+
+`/graveyard` (memorial-service) is the blueprint's §8. The code engraved on a
+resting place opens **`/memorial/:code`**, which works **without an account**:
+whoever scans a headstone reads the life story and timeline, sees the resting
+place, lights a candle, leaves a flower or signs the guest book.
+
+- **Public or private.** A private memorial is a 404 to everyone but its
+  administrators — by id, by QR code and in search.
+- **The family approves the words.** Candles and flowers go up at once;
+  messages and photos wait for an administrator, who is notified — with the
+  text of the message, except to an administrator who is a minor, who is only
+  told something is waiting. An administrator's own words go up at once. A
+  memorial can open its guest book to members, but a visitor without an account
+  always waits — and signs as "A visitor" unless they leave words. The guest
+  book lists words and photos, a page at a time; candles and flowers are
+  counted, and an administrator can take any tribute down from **Manage**.
+- **Files are the family's own.** A portrait, cover or voice recording must be
+  the uploader's file, and is served through short-lived signed links.
+- **Up to three administrators**, in succession order. Naming one is contact,
+  so it follows the messaging rules: the member must accept it from you (by
+  default, be connected first), blocks apply, and an adult cannot name an
+  unconnected minor. The order is a ranking — you can step down, or remove
+  those after you, never one ahead of you; the last cannot leave, and only the
+  first can delete.
+- **A resting place is "captured at the grave"** only if the device reported a
+  position within 50 m. A desktop browser's network guess, or a claim with no
+  accuracy at all, is saved but shown as not yet confirmed.
+- **Anniversary reminders are sent** 10 days, 3 days and 6 hours before, by a
+  sweep safe to run on several workers, and roll over to the next year.
+- **Death verification**: any member can report with evidence (once each, while
+  theirs is open); Kinjy staff take it under review and verify or refuse it from
+  `/graveyard`.
+- **Links are renewed.** Pictures, voice and documents are fetched with
+  five-minute tickets; a page left open re-reads itself every four minutes, and
+  the voice recording picks up where it was.
+
+```bash
+python backend/tests/e2e_graveyard.py   # 88 checks, live API (needs .env for the staff token)
+```
+
 ### Universal Navigation — the signed-in app
 
 Signing in swaps the marketing nav for the blueprint's Universal Navigation: a

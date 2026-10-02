@@ -74,7 +74,7 @@ export default function GraveyardPeek({ orb }: Props) {
         {/* tributes visual + guest book */}
         <div className="grid gap-4 border-t p-4 sm:grid-cols-2" style={{ borderColor: 'rgba(128,128,128,0.15)' }}>
           <div className="flex items-center justify-around">
-            <CandleFlowerWidget kind="candle" tier="premium" name="Musa" />
+            <CandleFlowerWidget kind="candle" tier="free" name="Musa" />
             <CandleFlowerWidget kind="flower" tier="free" name="Musa" />
           </div>
           <div>

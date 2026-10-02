@@ -43,6 +43,10 @@ export default function ProfileCard() {
   useEffect(() => onChange('connections', connections.reload), [connections.reload])
   const unread = useUnreadMessages()
 
+  // A circle made, renamed or deleted anywhere in the app changes this rail.
+  // (The profile's own counts are refreshed by useMyProfile.)
+  useEffect(() => onChange('circles', circles.reload), [circles.reload])
+
   // The profile is what the editor changes; the account copy only stands in
   // until it has loaded.
   const displayName = data?.display_name ?? user?.display_name ?? ''
@@ -147,7 +151,7 @@ export default function ProfileCard() {
                 className={cn(
                   'rounded-full px-2.5 py-1 text-[0.68rem] font-semibold',
                   index === 0
-                    ? 'bg-gold/15 text-gold-soft ring-1 ring-gold/40'
+                    ? cn('bg-gold/15 ring-1 ring-gold/40', tok.text)
                     : cn(tok.subtleBg, tok.mid, tok.hoverBg),
                 )}
               >

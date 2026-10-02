@@ -7,6 +7,7 @@ import {
   Flag,
   HelpCircle,
   Languages,
+  Lock,
   MapPin,
   MessageCircle,
   Repeat2,
@@ -28,6 +29,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Link } from 'react-router'
+
+/** Who can read a restricted post, said on the card so nobody has to guess. */
+const AUDIENCE: Record<string, { label: string; hint: string }> = {
+  followers: { label: 'Followers', hint: 'Only the author’s followers can see this.' },
+  circle: { label: 'Circle', hint: 'Shared with a circle — only its members and the author can see this.' },
+  community: { label: 'Community', hint: 'Shared with a community — only its members can see this.' },
+}
 
 const PROVENANCE_LABEL: Record<string, string> = {
   original: 'Original',
@@ -363,7 +371,15 @@ export default function PostCard({
               </span>
             )}
             <span className="uppercase">{source.lang}</span>
-            {source.visibility !== 'public' && <span>· {source.visibility}</span>}
+            {AUDIENCE[source.visibility] && (
+              <span
+                className="inline-flex items-center gap-1 text-text-mid"
+                title={AUDIENCE[source.visibility].hint}
+              >
+                <Lock size={10} aria-hidden="true" />
+                {AUDIENCE[source.visibility].label}
+              </span>
+            )}
           </p>
         </div>
         <div className="ms-auto flex shrink-0 items-center gap-2">
@@ -529,9 +545,17 @@ export default function PostCard({
         <button
           type="button"
           onClick={toggleRepost}
-          disabled={busy}
+          // A repost carries the original inside it, so only public posts can
+          // travel further; the server refuses the rest, and the button says so.
+          disabled={busy || (target.visibility !== 'public' && !reposted)}
           aria-pressed={reposted}
-          title={reposted ? 'Undo repost' : 'Share this to your followers'}
+          title={
+            reposted
+              ? 'Undo repost'
+              : target.visibility !== 'public'
+                ? 'Only public posts can be shared'
+                : 'Share this to your followers'
+          }
           className={cn(
             'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-40',
             reposted ? 'text-success' : 'text-text-mid hover:text-text-hi',
@@ -569,7 +593,7 @@ export default function PostCard({
             onClick={() => setReporting((open) => !open)}
             aria-expanded={reporting}
             disabled={reported}
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-text-low transition-colors hover:text-text-hi disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-text-low hover:text-text-hi disabled:opacity-40"
           >
             <Flag size={13} aria-hidden="true" />
             {reported ? 'Reported' : 'Report'}
@@ -628,7 +652,7 @@ export default function PostCard({
                     setReportFailed(true)
                   }
                 }}
-                className="rounded-full border border-text-low/30 px-3 py-1.5 text-xs text-text-mid transition-colors hover:text-text-hi"
+                className="rounded-full border border-text-low/30 px-3 py-1.5 text-xs text-text-mid hover:text-text-hi"
               >
                 {reason.label}
               </button>

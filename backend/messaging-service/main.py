@@ -117,6 +117,35 @@ app = create_app(
 _topics: dict[str, set[WebSocket]] = {}
 
 
+SOCIAL_URL = "http://social-service:8000"
+
+
+async def _readable_topics(user_id: str, topics: list[str]) -> list[str]:
+    """Drop ``post:<id>`` topics for posts this member may not read.
+
+    A post topic carries who commented and when. Subscribing used to be open to
+    anyone holding the id, so a member removed from a circle could keep
+    listening to its posts. social-service answers for the whole batch with the
+    same audience rule as every other read; if it cannot answer, the post
+    topics are dropped — live counters wait for a reload, nothing leaks.
+    """
+    post_ids = [t.split(":", 1)[1] for t in topics if t.startswith("post:")]
+    if not post_ids:
+        return topics
+    try:
+        async with httpx.AsyncClient(timeout=4) as client:
+            response = await client.post(
+                f"{SOCIAL_URL}/internal/readable-posts",
+                json={"viewer": user_id, "post_ids": post_ids[:200]},
+            )
+        response.raise_for_status()
+        allowed = set(response.json().get("post_ids", []))
+    except Exception as exc:
+        log.warning("post topic check failed for %s: %s", user_id, exc)
+        allowed = set()
+    return [t for t in topics if not t.startswith("post:") or t.split(":", 1)[1] in allowed]
+
+
 def _subscribe(socket: WebSocket, topics: list[str]) -> None:
     for topic in topics[:200]:
         _topics.setdefault(topic, set()).add(socket)
@@ -1270,6 +1299,7 @@ async def websocket(socket: WebSocket):
             # A client may not subscribe to another member's private channel.
             topics = [t for t in topics if not (t.startswith("user:") and t != f"user:{user_id}")]
             if action == "subscribe":
+                topics = await _readable_topics(user_id, topics)
                 _subscribe(socket, topics)
                 await socket.send_json({"type": "subscribed", "topics": topics})
             elif action == "unsubscribe":

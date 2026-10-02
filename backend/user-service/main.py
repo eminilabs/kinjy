@@ -8,12 +8,12 @@ from datetime import date, datetime, timezone
 import httpx
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import and_, delete, func, or_, select
-from pydantic import BaseModel, Field
 from sqlalchemy import and_, case, delete, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as OrmSession
 
 from common import ageclient, notify
+from common.agesafety import engine
 from common.auth import CurrentUser, MaybeUser
 from common.database import get_db
 from common.ids import new_id
@@ -141,11 +141,73 @@ class ProfileUpdate(BaseModel):
         return None if value is None else profilefields.clean_lang(value)
 
 
+CIRCLE_KINDS = "^(family|close_friends|business|customers|smart|custom)$"
+
+
+class CircleRule(BaseModel):
+    """What a smart circle is made of.
+
+    A smart circle has no member list of its own: it is a question asked again
+    at every read — "my connections in Nairobi", "the people I follow in
+    Kenya". Nothing has to be kept in sync when someone moves, connects or
+    unfollows, because nothing was copied.
+
+    ``source`` is the relationship the members come from; ``country`` and
+    ``city`` narrow it to where they live, as their own profile states it.
+    """
+
+    source: str = Field(pattern="^(connections|followers|following|mutuals)$")
+    # Two letters, as profiles store it — "1!" is not a country.
+    country: str | None = Field(default=None, pattern="^[A-Za-z]{2}$")
+    city: str | None = Field(default=None, max_length=120)
+
+    @field_validator("country")
+    @classmethod
+    def _upper_country(cls, value: str | None) -> str | None:
+        return value.upper() if value else None
+
+    @field_validator("city")
+    @classmethod
+    def _trim_city(cls, value: str | None) -> str | None:
+        # A city of spaces is no city: stored as one, it would be a filter
+        # nobody can match, silently emptying the circle.
+        value = (value or "").strip()
+        return value or None
+
+
+def _circle_name(value: str | None) -> str | None:
+    """Trimmed, and never blank: a circle called "   " is unpickable in every
+    menu that lists it."""
+    if value is None:
+        return None
+    value = value.strip()
+    if not value:
+        raise ValueError("A circle needs a name")
+    return value
+
+
 class CircleIn(BaseModel):
     name: str = Field(min_length=1, max_length=80)
-    kind: str = Field(default="custom", pattern="^(family|close_friends|business|customers|smart|custom)$")
-    color: str | None = None
-    rule: dict | None = None
+    kind: str = Field(default="custom", pattern=CIRCLE_KINDS)
+    color: str | None = Field(default=None, max_length=20)
+    rule: CircleRule | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _trim_name(cls, value: str | None) -> str | None:
+        return _circle_name(value)
+
+
+class CirclePatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+    kind: str | None = Field(default=None, pattern=CIRCLE_KINDS)
+    color: str | None = Field(default=None, max_length=20)
+    rule: CircleRule | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _trim_name(cls, value: str | None) -> str | None:
+        return _circle_name(value)
 
 
 class CircleOut(BaseModel):
@@ -154,10 +216,25 @@ class CircleOut(BaseModel):
     name: str
     kind: str
     color: str | None
+    rule: dict | None
     members_count: int
     created_at: datetime
 
-    model_config = {"from_attributes": True}
+
+class CircleMemberOut(BaseModel):
+    user_id: str
+    handle: str | None
+    display_name: str | None
+    avatar_url: str | None
+    city: str | None
+    verified: bool
+    # False when the circle can no longer reach them — a block, or the age rule
+    # after a disconnection. Listed rather than hidden so the owner can tidy up.
+    active: bool
+
+
+class CircleDetailOut(CircleOut):
+    members: list[CircleMemberOut]
 
 
 class PreferencesIn(BaseModel):
@@ -565,53 +642,366 @@ def following(principal: CurrentUser, db: OrmSession = Depends(get_db)):
 
 
 # --- circles ---------------------------------------------------------------
+#
+# A circle is a private list. Its owner decides who is in it; nobody is asked
+# and nobody is told, the way a contact group in a phone works. What it controls
+# is reach: a post shared to a circle is read by its members and its author, and
+# by no one else.
+#
+# Membership is therefore checked when a post is *read*, not copied anywhere
+# when it is written. social-service asks /internal/viewer-audience on every
+# feed, profile and post read, so removing someone, blocking them or
+# disconnecting from a teenager takes effect on the very next request.
+
+# One sentence for every refusal. Telling an adult *why* a teenager cannot be
+# added — their age, a block, a missing connection — tells them which of those
+# to work around.
+CIRCLE_REFUSAL = "This member cannot be added to a circle."
+
+# Bounds, because every read of a circle post recomputes its audience: an owner
+# with ten thousand circles, or a circle of a million rows, would make every
+# feed request of every member pay for it. Generous for a person; tight for a
+# script.
+MAX_CIRCLES_PER_OWNER = 100
+MAX_MEMBERS_PER_CIRCLE = 5000
+
+
+def _own_circle(db: OrmSession, circle_id: str, owner_id: str) -> models.Circle:
+    circle = db.get(models.Circle, circle_id)
+    if circle is None or circle.owner_id != owner_id:
+        raise HTTPException(status_code=404, detail="Circle not found")
+    return circle
+
+
+def _rule(circle: models.Circle) -> dict | None:
+    if not circle.rule:
+        return None
+    try:
+        data = json.loads(circle.rule)
+    except ValueError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _blocked_with(db: OrmSession, user_id: str) -> set[str]:
+    """Everyone this member blocked, and everyone who blocked them."""
+    rows = db.execute(
+        select(models.Block.user_id, models.Block.blocked_id).where(
+            or_(models.Block.user_id == user_id, models.Block.blocked_id == user_id)
+        )
+    ).all()
+    return {blocked if owner == user_id else owner for owner, blocked in rows}
+
+
+def _connections_of(db: OrmSession, user_id: str) -> set[str]:
+    rows = db.execute(
+        select(models.Connection.requester_id, models.Connection.addressee_id).where(
+            models.Connection.status == "accepted",
+            or_(models.Connection.requester_id == user_id, models.Connection.addressee_id == user_id),
+        )
+    ).all()
+    return {b if a == user_id else a for a, b in rows}
+
+
+def _followers_of(db: OrmSession, user_id: str) -> set[str]:
+    return set(db.scalars(select(models.Follow.follower_id).where(models.Follow.followee_id == user_id)).all())
+
+
+def _following_of(db: OrmSession, user_id: str) -> set[str]:
+    return set(db.scalars(select(models.Follow.followee_id).where(models.Follow.follower_id == user_id)).all())
+
+
+def _rule_source(db: OrmSession, owner_id: str, source: str) -> set[str]:
+    """The people a smart circle's ``source`` names, before any place filter."""
+    if source == "connections":
+        return _connections_of(db, owner_id)
+    if source == "followers":
+        return _followers_of(db, owner_id)
+    if source == "following":
+        return _following_of(db, owner_id)
+    if source == "mutuals":
+        return _followers_of(db, owner_id) & _following_of(db, owner_id)
+    return set()
+
+
+def _in_place(profile: models.Profile | None, rule: dict) -> bool:
+    """Whether a member lives where the rule asks, by their own profile.
+
+    A member who has not said where they live matches no place: a rule for
+    "Nairobi" must not quietly include everyone who left the field empty.
+    """
+    country, city = rule.get("country"), rule.get("city")
+    if not country and not city:
+        return True
+    if profile is None:
+        return False
+    if country and (profile.country or "").upper() != country.upper():
+        return False
+    if city and (profile.city or "").strip().casefold() != city.strip().casefold():
+        return False
+    return True
+
+
+def _reachable(owner_id: str, member_id: str, connected: bool) -> bool:
+    """Whether ``owner``'s circles may carry posts to ``member``.
+
+    The messaging rule, applied to the other private channel. A circle post
+    lands in its members' feeds unasked, which is exactly what an unsolicited
+    message does — so an adult reaches an unconnected minor through neither.
+    Ages come from the identity record; a failed lookup is treated as a minor,
+    so an outage narrows reach instead of widening it.
+    """
+    owner = ageclient.age_profile(owner_id)
+    member = ageclient.age_profile(member_id)
+    return engine.can_message_user(owner, member, connected=connected).allowed
+
+
+def _circle_members(db: OrmSession, circle: models.Circle) -> list[tuple[str, bool]]:
+    """``(member_id, active)`` for this circle.
+
+    A static circle lists everyone its owner added, flagging those it can no
+    longer reach. A smart circle lists only the people its rule reaches right
+    now — it has nobody else to show, because it holds no list.
+    """
+    blocked = _blocked_with(db, circle.owner_id)
+    connections = _connections_of(db, circle.owner_id)
+
+    if circle.kind == "smart":
+        rule = _rule(circle) or {}
+        candidates = _rule_source(db, circle.owner_id, rule.get("source", "")) - {circle.owner_id} - blocked
+        if not candidates:
+            return []
+        profiles = {
+            p.user_id: p
+            for p in db.scalars(select(models.Profile).where(models.Profile.user_id.in_(candidates))).all()
+        }
+        return [
+            (member_id, True)
+            for member_id in sorted(candidates)
+            if _in_place(profiles.get(member_id), rule)
+            and _reachable(circle.owner_id, member_id, member_id in connections)
+        ]
+
+    member_ids = db.scalars(
+        select(models.CircleMember.member_id)
+        .where(models.CircleMember.circle_id == circle.id)
+        .order_by(models.CircleMember.added_at)
+    ).all()
+    return [
+        (
+            member_id,
+            member_id not in blocked and _reachable(circle.owner_id, member_id, member_id in connections),
+        )
+        for member_id in member_ids
+    ]
+
+
+def _circles_reaching(db: OrmSession, viewer_id: str) -> set[str]:
+    """Every circle whose posts this member may read."""
+    reached: set[str] = set()
+    blocked = _blocked_with(db, viewer_id)
+    connections = _connections_of(db, viewer_id)
+
+    # Static circles that list them.
+    for circle_id, owner_id in db.execute(
+        select(models.Circle.id, models.Circle.owner_id)
+        .join(models.CircleMember, models.CircleMember.circle_id == models.Circle.id)
+        .where(models.CircleMember.member_id == viewer_id, models.Circle.kind != "smart")
+    ).all():
+        if owner_id not in blocked and _reachable(owner_id, viewer_id, owner_id in connections):
+            reached.add(circle_id)
+
+    # Smart circles whose question they answer. Only owners related to the
+    # viewer can have one, so only those circles are read.
+    following = _following_of(db, viewer_id)  # owners whose followers include the viewer
+    followers = _followers_of(db, viewer_id)  # owners who follow the viewer
+    owners = (connections | following | followers) - blocked - {viewer_id}
+    if owners:
+        me = db.get(models.Profile, viewer_id)
+        for circle in db.scalars(
+            select(models.Circle).where(models.Circle.kind == "smart", models.Circle.owner_id.in_(owners))
+        ).all():
+            rule = _rule(circle) or {}
+            owner_id = circle.owner_id
+            related = {
+                "connections": owner_id in connections,
+                "followers": owner_id in following,
+                "following": owner_id in followers,
+                "mutuals": owner_id in following and owner_id in followers,
+            }.get(rule.get("source", ""), False)
+            if related and _in_place(me, rule) and _reachable(owner_id, viewer_id, owner_id in connections):
+                reached.add(circle.id)
+    return reached
+
+
+def _circle_out(db: OrmSession, circle: models.Circle, members: list[tuple[str, bool]] | None = None) -> dict:
+    members = _circle_members(db, circle) if members is None else members
+    return {
+        "id": circle.id,
+        "owner_id": circle.owner_id,
+        "name": circle.name,
+        "kind": circle.kind,
+        "color": circle.color,
+        "rule": _rule(circle),
+        # Who a post shared to it would actually reach, not who was ever added.
+        "members_count": sum(1 for _, active in members if active),
+        "created_at": circle.created_at,
+    }
+
+
+def _circle_detail(db: OrmSession, circle: models.Circle) -> dict:
+    members = _circle_members(db, circle)
+    profiles = {
+        p.user_id: p
+        for p in db.scalars(
+            select(models.Profile).where(models.Profile.user_id.in_([m for m, _ in members]))
+        ).all()
+    } if members else {}
+    return {
+        **_circle_out(db, circle, members),
+        "members": [
+            {
+                "user_id": member_id,
+                "handle": profiles[member_id].handle if member_id in profiles else None,
+                "display_name": profiles[member_id].display_name if member_id in profiles else None,
+                "avatar_url": profiles[member_id].avatar_url if member_id in profiles else None,
+                "city": profiles[member_id].city if member_id in profiles else None,
+                "verified": bool(profiles[member_id].verified) if member_id in profiles else False,
+                "active": active,
+            }
+            for member_id, active in members
+        ],
+    }
+
+
+def _stored_rule(rule: CircleRule) -> str:
+    # The validators have already upper-cased the country and dropped a blank city.
+    return json.dumps(rule.model_dump(exclude_none=True))
+
 
 @app.get("/circles", response_model=list[CircleOut], tags=["circles"])
 def list_circles(principal: CurrentUser, db: OrmSession = Depends(get_db)):
     rows = db.scalars(
         select(models.Circle).where(models.Circle.owner_id == principal.user_id).order_by(models.Circle.created_at)
     ).all()
-    return [CircleOut.model_validate(row) for row in rows]
+    return [_circle_out(db, row) for row in rows]
 
 
-@app.post("/circles", response_model=CircleOut, status_code=201, tags=["circles"])
+@app.post("/circles", response_model=CircleDetailOut, status_code=201, tags=["circles"])
 def create_circle(payload: CircleIn, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    if payload.kind == "smart" and payload.rule is None:
+        raise HTTPException(status_code=400, detail="A smart circle needs a rule: who it is made of.")
+    if payload.kind != "smart" and payload.rule is not None:
+        raise HTTPException(status_code=400, detail="Only a smart circle has a rule.")
+    owned = db.scalar(
+        select(func.count()).select_from(models.Circle).where(models.Circle.owner_id == principal.user_id)
+    ) or 0
+    if owned >= MAX_CIRCLES_PER_OWNER:
+        raise HTTPException(
+            status_code=400, detail=f"You can have up to {MAX_CIRCLES_PER_OWNER} circles. Delete one to make another."
+        )
     circle = models.Circle(
         id=new_id("cir"),
         owner_id=principal.user_id,
         name=payload.name,
         kind=payload.kind,
         color=payload.color,
-        rule=json.dumps(payload.rule) if payload.rule else None,
+        rule=_stored_rule(payload.rule) if payload.rule else None,
     )
     db.add(circle)
     db.commit()
     db.refresh(circle)
-    return CircleOut.model_validate(circle)
+    return _circle_detail(db, circle)
+
+
+@app.get("/circles/{circle_id}", response_model=CircleDetailOut, tags=["circles"])
+def get_circle(circle_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """One circle and its members — for its owner only. Being in someone's
+    circle does not entitle you to see who else is."""
+    return _circle_detail(db, _own_circle(db, circle_id, principal.user_id))
+
+
+@app.patch("/circles/{circle_id}", response_model=CircleDetailOut, tags=["circles"])
+def update_circle(circle_id: str, payload: CirclePatch, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """Rename, recolour, change kind, or rewrite a smart circle's rule.
+
+    Turning a circle smart replaces its member list with the rule — the list is
+    deleted rather than kept dormant, because a list nobody can see would come
+    back to life the day the circle is turned static again. Turning a smart
+    circle static starts it empty for the same reason.
+    """
+    circle = _own_circle(db, circle_id, principal.user_id)
+    if payload.name is not None:
+        circle.name = payload.name
+    if "color" in payload.model_fields_set:
+        circle.color = payload.color
+
+    kind = payload.kind or circle.kind
+    if kind == "smart":
+        if payload.rule is None and circle.kind != "smart":
+            raise HTTPException(status_code=400, detail="A smart circle needs a rule: who it is made of.")
+        if circle.kind != "smart":
+            db.execute(delete(models.CircleMember).where(models.CircleMember.circle_id == circle.id))
+            circle.members_count = 0
+        if payload.rule is not None:
+            circle.rule = _stored_rule(payload.rule)
+    else:
+        if payload.rule is not None:
+            raise HTTPException(status_code=400, detail="Only a smart circle has a rule.")
+        circle.rule = None
+    circle.kind = kind
+
+    db.commit()
+    db.refresh(circle)
+    return _circle_detail(db, circle)
 
 
 @app.post("/circles/{circle_id}/members/{member_id}", status_code=201, tags=["circles"])
 def add_to_circle(circle_id: str, member_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
-    circle = db.get(models.Circle, circle_id)
-    if circle is None or circle.owner_id != principal.user_id:
-        raise HTTPException(status_code=404, detail="Circle not found")
+    circle = _own_circle(db, circle_id, principal.user_id)
+    if circle.kind == "smart":
+        raise HTTPException(
+            status_code=400, detail="A smart circle is filled by its rule — change the rule instead."
+        )
+    if member_id == principal.user_id:
+        raise HTTPException(status_code=400, detail="You already see everything you share to your circles.")
+    try:
+        _ensure_profile(db, member_id)
+    except HTTPException:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    connected = member_id in _connections_of(db, principal.user_id)
+    if member_id in _blocked_with(db, principal.user_id) or not _reachable(principal.user_id, member_id, connected):
+        raise HTTPException(status_code=403, detail=CIRCLE_REFUSAL)
+
     if db.scalar(
         select(models.CircleMember).where(
             models.CircleMember.circle_id == circle_id, models.CircleMember.member_id == member_id
         )
     ):
-        return {"added": False, "already": True}
+        return {"added": False, "already": True, "members_count": _circle_out(db, circle)["members_count"]}
+    size = db.scalar(
+        select(func.count()).select_from(models.CircleMember).where(models.CircleMember.circle_id == circle_id)
+    ) or 0
+    if size >= MAX_MEMBERS_PER_CIRCLE:
+        raise HTTPException(
+            status_code=400, detail=f"A circle holds up to {MAX_MEMBERS_PER_CIRCLE} people."
+        )
     db.add(models.CircleMember(circle_id=circle_id, member_id=member_id))
     circle.members_count += 1
-    db.commit()
-    return {"added": True, "members_count": circle.members_count}
+    try:
+        db.commit()
+    except IntegrityError:
+        # Two taps in flight at once: the unique constraint let one through and
+        # the other is simply "already there", not a server error.
+        db.rollback()
+        return {"added": False, "already": True, "members_count": _circle_out(db, circle)["members_count"]}
+    return {"added": True, "members_count": _circle_out(db, circle)["members_count"]}
 
 
 @app.delete("/circles/{circle_id}/members/{member_id}", status_code=204, tags=["circles"])
 def remove_from_circle(circle_id: str, member_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
-    circle = db.get(models.Circle, circle_id)
-    if circle is None or circle.owner_id != principal.user_id:
-        raise HTTPException(status_code=404, detail="Circle not found")
+    circle = _own_circle(db, circle_id, principal.user_id)
     removed = db.execute(
         delete(models.CircleMember).where(
             models.CircleMember.circle_id == circle_id, models.CircleMember.member_id == member_id
@@ -624,11 +1014,38 @@ def remove_from_circle(circle_id: str, member_id: str, principal: CurrentUser, d
 
 @app.delete("/circles/{circle_id}", status_code=204, tags=["circles"])
 def delete_circle(circle_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
-    circle = db.get(models.Circle, circle_id)
-    if circle is None or circle.owner_id != principal.user_id:
-        raise HTTPException(status_code=404, detail="Circle not found")
+    """Posts already shared to it stay with their author and reach nobody else:
+    the circle they named no longer reaches anyone."""
+    circle = _own_circle(db, circle_id, principal.user_id)
     db.delete(circle)
     db.commit()
+
+
+@app.get("/internal/circles/{circle_id}/owner", tags=["internal"])
+def circle_owner(circle_id: str, db: OrmSession = Depends(get_db)):
+    """Who owns a circle — so a post can only be shared to its author's own.
+    Without this check, knowing another member's circle id was enough to
+    publish into their circle."""
+    circle = db.get(models.Circle, circle_id)
+    if circle is None:
+        raise HTTPException(status_code=404, detail="Circle not found")
+    return {"owner_id": circle.owner_id}
+
+
+@app.get("/internal/viewer-audience/{user_id}", tags=["internal"])
+def viewer_audience(user_id: str, db: OrmSession = Depends(get_db)):
+    """Whose restricted posts this member may read.
+
+    ``following`` opens followers-only posts, ``circles`` opens circle posts.
+    social-service asks on every read; both answers are computed here, where
+    the follow graph, the blocks and the circles live, rather than copied into
+    the post rows where they would go stale.
+    """
+    blocked = _blocked_with(db, user_id)
+    return {
+        "following": sorted(_following_of(db, user_id) - blocked),
+        "circles": sorted(_circles_reaching(db, user_id)),
+    }
 
 
 # --- preferences -----------------------------------------------------------
