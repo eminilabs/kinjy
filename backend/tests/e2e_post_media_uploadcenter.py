@@ -30,7 +30,8 @@ import httpx
 
 BASE = "http://localhost:8200/api"
 MEDIA_DIRECT = "http://localhost:8213"
-c = httpx.Client(base_url=BASE, timeout=120)
+# Generous: storing a file at UploadCenter has taken from 12 to 134 seconds for the same size.
+c = httpx.Client(base_url=BASE, timeout=600)
 direct = httpx.Client(base_url=MEDIA_DIRECT, timeout=120, follow_redirects=False)
 ok = True
 

@@ -24,7 +24,7 @@ import httpx
 
 BASE = "http://localhost:8200/api"
 MEDIA_DIRECT = "http://localhost:8213"
-c = httpx.Client(base_url=BASE, timeout=120)
+c = httpx.Client(base_url=BASE, timeout=600)
 direct = httpx.Client(base_url=MEDIA_DIRECT, timeout=60, follow_redirects=False)
 ok = True
 
