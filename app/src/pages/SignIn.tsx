@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { AlertCircle, Fingerprint, Loader2, ShieldCheck } from 'lucide-react'
 import ArcButton from '@/components/ui-kit/ArcButton'
@@ -31,6 +32,7 @@ function passwordProblem(value: string): string | null {
 }
 
 export default function SignIn() {
+  const { t } = useTranslation()
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const { user, signIn, signUp } = useAuth()
@@ -112,7 +114,7 @@ export default function SignIn() {
       <div className="mx-auto grid w-full max-w-container items-center gap-14 lg:grid-cols-[1fr_460px]">
         {/* Left: promise */}
         <div className="hidden lg:block">
-          <p className="eyebrow text-gold">Your society awaits</p>
+          <p className="eyebrow text-gold">{t('signin.yourSocietyAwaits')}</p>
           <h1 className="h1 mt-4 max-w-lg">
             One account.{' '}
             <span className="font-display italic text-gold-grad">{spelled(OPEN_MODULES)} modules.</span>
@@ -121,15 +123,13 @@ export default function SignIn() {
             <li className="flex items-start gap-3">
               <Fingerprint size={18} className="mt-0.5 shrink-0 text-gold" aria-hidden="true" />
               <span>
-                <strong className="text-text-hi">Passkeys, not a biometric database.</strong> Your
-                fingerprint or face unlocks your device locally — Kinjy never stores it.
+                <strong className="text-text-hi">{t('signin.passkeysNotABiometric')}</strong> {t('signin.yourFingerprintOrFace')}
               </span>
             </li>
             <li className="flex items-start gap-3">
               <ShieldCheck size={18} className="mt-0.5 shrink-0 text-gold" aria-hidden="true" />
               <span>
-                <strong className="text-text-hi">Leave whenever you want.</strong> Deactivate or
-                delete from your settings, with no justification asked and a cooling period you choose.
+                <strong className="text-text-hi">{t('signin.leaveWheneverYouWant')}</strong> {t('signin.deactivateOrDeleteFrom')}
               </span>
             </li>
           </ul>
@@ -160,17 +160,17 @@ export default function SignIn() {
             {mode === 'signup' && (
               <>
                 <label className="block">
-                  <span className="caption mb-1.5 block">Your name</span>
+                  <span className="caption mb-1.5 block">{t('signin.yourName')}</span>
                   <input
                     className={field}
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="Your full name"
+                    placeholder={t('signin.yourFullName')}
                     autoComplete="name"
                   />
                 </label>
                 <label className="block">
-                  <span className="caption mb-1.5 block">Date of birth</span>
+                  <span className="caption mb-1.5 block">{t('signin.dateOfBirth')}</span>
                   <input
                     type="date"
                     className={field}
@@ -184,12 +184,11 @@ export default function SignIn() {
                       Telling someone the minimum age is telling them which date
                       to type instead. */}
                   <span id="dob-why" className="caption mt-1.5 block">
-                    We use this to give you the right experience for your age. It is not shown on
-                    your profile.
+                    {t('signin.weUseThisTo')}
                   </span>
                 </label>
                 <label className="block">
-                  <span className="caption mb-1.5 block">Handle</span>
+                  <span className="caption mb-1.5 block">{t('signin.handle')}</span>
                   <div className="flex items-center gap-2">
                     <span className="text-text-low">@</span>
                     <input
@@ -210,7 +209,7 @@ export default function SignIn() {
             )}
 
             <label className="block">
-              <span className="caption mb-1.5 block">Email</span>
+              <span className="caption mb-1.5 block">{t('signin.email')}</span>
               <input
                 className={field}
                 type="email"
@@ -223,7 +222,7 @@ export default function SignIn() {
             </label>
 
             <label className="block">
-              <span className="caption mb-1.5 block">Password</span>
+              <span className="caption mb-1.5 block">{t('signin.password')}</span>
               <input
                 className={field}
                 type="password"
@@ -239,7 +238,7 @@ export default function SignIn() {
 
             {mode === 'signup' && (
               <label className="block">
-                <span className="caption mb-1.5 block">Referral code — optional</span>
+                <span className="caption mb-1.5 block">{t('signin.referralCodeOptional')}</span>
                 <input
                   className={field}
                   value={referral}
@@ -247,7 +246,7 @@ export default function SignIn() {
                   placeholder="ABCD1234"
                 />
                 <span className="mt-1.5 block text-xs text-text-low">
-                  Credits whoever invited you — one level, 20% of our revenue on what you do.
+                  {t('signin.creditsWhoeverInvitedYou')}
                 </span>
               </label>
             )}
@@ -273,14 +272,14 @@ export default function SignIn() {
               <>
                 No account yet?{' '}
                 <button type="button" onClick={() => setMode('signup')} className="text-gold-soft hover:underline">
-                  Create one
+                  {t('signin.createOne')}
                 </button>
               </>
             ) : (
               <>
                 By creating an account you accept the{' '}
                 <Link to="/safety" className="text-gold-soft hover:underline">
-                  community standards
+                  {t('signin.communityStandards')}
                 </Link>
                 .
               </>

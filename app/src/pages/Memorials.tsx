@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { motion, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router'
 import { BellRing, CalendarDays, Flame, ShieldCheck, Smartphone, Users } from 'lucide-react'
@@ -18,10 +19,11 @@ const lineEase = [0.65, 0, 0.35, 1] as [number, number, number, number]
 
 /** Small calendar glyph with three reminder rings drawing in sequence (10d / 3d / 6h). */
 function ReminderCalendar() {
+  const { t } = useTranslation()
   const reduced = useReducedMotion()
   return (
     <div className="flex items-center gap-5">
-      <svg viewBox="0 0 96 96" className="h-24 w-24" role="img" aria-label="Calendar with three reminder rings: 10 days, 3 days, 6 hours before an anniversary">
+      <svg viewBox="0 0 96 96" className="h-24 w-24" role="img" aria-label={t('memorials.calendarWithThreeReminder')}>
         <rect x="18" y="22" width="60" height="56" rx="10" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="2" />
         <line x1="18" y1="38" x2="78" y2="38" stroke="rgba(255,255,255,0.2)" strokeWidth="2" />
         <line x1="32" y1="16" x2="32" y2="26" stroke="rgba(255,255,255,0.2)" strokeWidth="2" strokeLinecap="round" />
@@ -49,9 +51,9 @@ function ReminderCalendar() {
         <circle cx="48" cy="58" r="2.4" fill="#F0C878" />
       </svg>
       <ul className="space-y-1.5 mono-data text-[0.7rem] text-text-mid">
-        <li><span className="text-gold-soft">10 days</span> before</li>
-        <li><span className="text-gold-soft">3 days</span> before</li>
-        <li><span className="text-gold-soft">6 hours</span> before</li>
+        <li><span className="text-gold-soft">{t('memorials.days')}</span> {t('memorials.before')}</li>
+        <li><span className="text-gold-soft">{t('memorials.days2')}</span> before</li>
+        <li><span className="text-gold-soft">{t('memorials.hours')}</span> before</li>
       </ul>
     </div>
   )
@@ -59,6 +61,7 @@ function ReminderCalendar() {
 
 /** Three interlocking administrator rings, rotating slowly (24s). */
 function StewardshipRings() {
+  const { t } = useTranslation()
   const reduced = useReducedMotion()
   return (
     <motion.div
@@ -66,7 +69,7 @@ function StewardshipRings() {
       animate={reduced ? undefined : { rotate: 360 }}
       transition={{ duration: 24, repeat: Infinity, ease: 'linear' }}
       role="img"
-      aria-label="Three interlocking rings representing up to three memorial administrators with named succession"
+      aria-label={t('memorials.threeInterlockingRingsRepresenting')}
     >
       {[
         { x: 48, y: 30 },
@@ -88,6 +91,7 @@ function StewardshipRings() {
 
 /** Marks something the blueprint names that is not built yet — said plainly, not shown as if it worked. */
 function HorizonTag() {
+  const { t } = useTranslation()
   const reduced = useReducedMotion()
   return (
     <span className="inline-flex items-center gap-2 rounded-full border border-sky/40 bg-sky/10 px-3 py-1 mono-data text-[0.62rem] tracking-[0.2em] text-sky">
@@ -96,7 +100,7 @@ function HorizonTag() {
         animate={reduced ? undefined : { opacity: [0.4, 1, 0.4] }}
         transition={{ duration: 2.4, repeat: Infinity }}
       />
-      ON THE HORIZON
+      {t('memorials.onTheHorizon')}
     </span>
   )
 }
@@ -132,6 +136,7 @@ function DriftingPetals() {
  * serif-forward, deliberately calm motion.
  */
 export default function Memorials() {
+  const { t } = useTranslation()
   const reduced = useReducedMotion()
   const [modalOpen, setModalOpen] = useState(false)
   const [lit, setLit] = useState<{ id: number; name: string }[]>([])
@@ -175,7 +180,7 @@ export default function Memorials() {
             className="eyebrow text-gold"
             style={{ letterSpacing: '0.28em' }}
           >
-            Module I — Digital Graveyard
+            {t('memorials.moduleIDigitalGraveyard')}
           </motion.p>
           <WordRise
             as="h1"
@@ -191,8 +196,7 @@ export default function Memorials() {
             transition={{ delay: 1.1, duration: 0.9, ease: cloudEase }}
             className="body-lg mx-auto mt-6 max-w-xl text-[#D8D3C8]"
           >
-            A permanent, verified place of remembrance — biographies, voices, candles
-            and flowers, visited from anywhere on Earth.
+            {t('memorials.aPermanentVerifiedPlace')}
           </motion.p>
           {/* candle ignites at 1.2s */}
           <motion.div
@@ -210,11 +214,10 @@ export default function Memorials() {
       <section className="px-6 py-24">
         <div className="mx-auto max-w-container">
           <div className="mx-auto mb-14 max-w-2xl text-center">
-            <p className="eyebrow text-gold">Anatomy</p>
-            <h2 className="h2 mt-3 font-display text-white">A memorial, complete.</h2>
+            <p className="eyebrow text-gold">{t('memorials.anatomy')}</p>
+            <h2 className="h2 mt-3 font-display text-white">{t('memorials.aMemorialComplete')}</h2>
             <p className="body-lg mt-4 text-[#D8D3C8]">
-              Every memorial is a whole life, carefully kept. Hover each element to see
-              where it lives.
+              {t('memorials.everyMemorialIsA')}
             </p>
           </div>
           <MemorialAnatomy />
@@ -225,8 +228,8 @@ export default function Memorials() {
       <section className="border-y border-white/8 bg-[#0B0F22] px-6 py-24">
         <div className="mx-auto max-w-container">
           <div className="mx-auto mb-14 max-w-2xl text-center">
-            <p className="eyebrow text-gold">Trust pipeline</p>
-            <h2 className="h2 mt-3 font-display text-white">Verified, gently and thoroughly.</h2>
+            <p className="eyebrow text-gold">{t('memorials.trustPipeline')}</p>
+            <h2 className="h2 mt-3 font-display text-white">{t('memorials.verifiedGentlyAndThoroughly')}</h2>
           </div>
           <VerificationPipeline />
         </div>
@@ -236,15 +239,13 @@ export default function Memorials() {
       <section className="px-6 py-24">
         <div className="mx-auto grid max-w-container items-center gap-12 lg:grid-cols-12">
           <div className="lg:col-span-5">
-            <p className="eyebrow text-gold">At the resting place</p>
-            <h2 className="h3 mt-3 font-display text-2xl text-white">A code on the stone. A world of memory behind it.</h2>
+            <p className="eyebrow text-gold">{t('memorials.atTheRestingPlace')}</p>
+            <h2 className="h3 mt-3 font-display text-2xl text-white">{t('memorials.aCodeOnThe')}</h2>
             <p className="body-lg mt-5 text-[#D8D3C8]">
-              Engraved QR plaques open the memorial instantly — for visitors at the
-              grave, and for generations who never knew them in person.
+              {t('memorials.engravedQrPlaquesOpen')}
             </p>
             <p className="caption mt-4 !text-text-mid">
-              Coordinates captured at the grave are marked confirmed. Typed ones are
-              marked not yet confirmed. They are never estimated, never fabricated.
+              {t('memorials.coordinatesCapturedAtThe')}
             </p>
           </div>
           <div className="lg:col-span-7">
@@ -257,8 +258,8 @@ export default function Memorials() {
       <section className="border-y border-white/8 bg-[#0B0F22] px-6 py-24">
         <div className="mx-auto max-w-container">
           <div className="mx-auto mb-14 max-w-2xl text-center">
-            <p className="eyebrow text-gold">Remembrance rhythm</p>
-            <h2 className="h2 mt-3 font-display text-white">Never abandoned. Never vandalized. Never lost.</h2>
+            <p className="eyebrow text-gold">{t('memorials.remembranceRhythm')}</p>
+            <h2 className="h2 mt-3 font-display text-white">{t('memorials.neverAbandonedNeverVandalized')}</h2>
           </div>
           <div className="grid gap-6 md:grid-cols-3">
             {[
@@ -288,7 +289,7 @@ export default function Memorials() {
                           <span className="h-1.5 w-20 rounded-full bg-white/15" style={{ width: `${72 - i * 14}px` }} />
                         </div>
                       ))}
-                      <p className="mono-data text-[0.58rem] tracking-widest text-text-low">3 MESSAGES AWAITING APPROVAL</p>
+                      <p className="mono-data text-[0.58rem] tracking-widest text-text-low">{t('memorials.messagesAwaitingApproval')}</p>
                     </div>
                   </div>
                 ),
@@ -329,14 +330,12 @@ export default function Memorials() {
             transition={{ duration: 1, ease: cloudEase }}
           >
             <HorizonTag />
-            <p className="eyebrow mt-5 text-gold">Digital legacy contacts</p>
-            <h3 className="mt-3 font-display text-2xl text-white">Your wishes, honored after you.</h3>
+            <p className="eyebrow mt-5 text-gold">{t('memorials.digitalLegacyContacts')}</p>
+            <h3 className="mt-3 font-display text-2xl text-white">{t('memorials.yourWishesHonoredAfter')}</h3>
             <p className="body-lg mt-4 text-text-mid">
-              Soon you will be able to name someone you trust to look after your account
-              and your memorial wishes when you are gone — faith-style preferences
-              included, exactly as you documented them, never inferred.
+              {t('memorials.soonYouWillBe')}
             </p>
-            <p className="caption mt-4 !text-text-mid">Not available yet.</p>
+            <p className="caption mt-4 !text-text-mid">{t('memorials.notAvailableYet')}</p>
           </motion.div>
 
           <motion.div
@@ -349,11 +348,10 @@ export default function Memorials() {
             <HorizonTag />
             <h3 className="mt-4 flex items-center gap-2 font-display text-2xl text-white">
               <Smartphone size={20} className="text-gold-soft" />
-              Future: AR memorials
+              {t('memorials.futureArMemorials')}
             </h3>
             <p className="body-lg mt-3 text-text-mid">
-              Point a phone at the resting place and see flowers, candles and stories
-              gathered in augmented space.
+              {t('memorials.pointAPhoneAt')}
             </p>
             {/* soft-focus phone silhouette with drifting petals */}
             <div className="relative mx-auto mt-6 h-44 w-24">
@@ -381,7 +379,7 @@ export default function Memorials() {
           transition={{ duration: 1.2 }}
           className="font-display text-[clamp(1.8rem,4vw,2.8rem)] italic text-gold-grad"
         >
-          “To be remembered is to remain.”
+          {t('memorials.toBeRememberedIs')}
         </motion.h2>
 
         <div className="relative mx-auto mt-10 flex w-fit flex-wrap items-center justify-center gap-4">
@@ -400,7 +398,7 @@ export default function Memorials() {
             to="/graveyard"
             className="inline-flex select-none items-center justify-center gap-2 rounded-full bg-gradient-to-br from-gold-soft to-gold px-8 py-4 text-base font-bold text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] hover:brightness-110"
           >
-            Create a memorial
+            {t('memorials.createAMemorial')}
           </Link>
           <button
             type="button"
@@ -411,11 +409,11 @@ export default function Memorials() {
             )}
           >
             <Flame size={16} />
-            Light a candle for someone →
+            {t('memorials.lightACandleFor')}
           </button>
         </div>
         <p className="caption mx-auto mt-4 max-w-sm !text-text-mid">
-          Ask me about memorials — I’m here to help, gently.
+          {t('memorials.askMeAboutMemorials')}
         </p>
 
         {/* recently lit row */}
