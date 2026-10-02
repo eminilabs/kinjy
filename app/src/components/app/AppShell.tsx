@@ -96,7 +96,9 @@ export default function AppShell({
               {title ? (
                 <div>
                   <h1 className={cn('text-xl font-semibold md:text-2xl', tok.text)}>{title}</h1>
-                  {subtitle && <p className={cn('mt-1 max-w-xl text-xs', tok.low)}>{subtitle}</p>}
+                  {/* tok.mid, not tok.low: the page's one-line description is read, not
+                      glanced at, and tok.low sits at 3.2–3.9:1 on the dark modes. */}
+                  {subtitle && <p className={cn('mt-1 max-w-xl text-xs', tok.mid)}>{subtitle}</p>}
                 </div>
               ) : (
                 <span />

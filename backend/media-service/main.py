@@ -880,14 +880,27 @@ def discard_profile_image(asset_id: str, payload: DiscardIn, db: OrmSession = De
 
 
 @app.get("/internal/media/{asset_id}", tags=["internal"])
-def internal_profile_image(asset_id: str, db: OrmSession = Depends(get_db)):
-    """What user-service needs before putting an asset on a profile."""
+def internal_asset(asset_id: str, db: OrmSession = Depends(get_db)):
+    """Who uploaded an asset, and what it is — one answer for every service.
+
+    user-service reads ``purpose`` and ``status`` before putting an asset on a
+    profile. memorial-service and the others read ``owner_id`` and ``kind``
+    before letting a member attach a file they uploaded: otherwise anyone
+    holding somebody else's asset id could attach it to a public page and have
+    the service mint viewing tickets for it.
+
+    There is exactly one route on this path. FastAPI answers from whichever was
+    declared first, so a second one — with a different set of fields — would
+    silently starve the other service of the fields it reads.
+    """
     asset = db.get(models.Asset, asset_id)
     if asset is None:
         raise HTTPException(status_code=404, detail="Asset not found")
     return {
         "id": asset.id,
         "owner_id": asset.owner_id,
+        "kind": asset.kind,
+        "content_type": asset.content_type,
         "purpose": asset.purpose,
         "status": asset.status,
         "access": asset.access,

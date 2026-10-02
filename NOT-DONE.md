@@ -203,9 +203,9 @@ Checked on production 2026-08-20, promise by promise.
   answer; no screen calls them. The marketing page promises an archive, an
   interactive timeline, a narrated documentary and biographies. None of that
   has a UI.
-- **Memorial death verification workflow** (UNCONFIRMED → REPORTED → UNDER REVIEW
-  → VERIFIED) and the 3-relative corroboration for deceased persons — modelled,
-  no UI.
+- **3-relative corroboration for deceased persons** — modelled with the family
+  tree, which is hidden. The memorial death verification itself (UNCONFIRMED →
+  REPORTED → UNDER REVIEW → VERIFIED) now has its UI; see Graveyard below.
 - **Smoke test leaves data behind** — `smoke-test.sh` registers two members and
   posts several items on every run, and never cleans up. Fine locally, wrong
   against anything shared.
@@ -273,6 +273,106 @@ seen running:
 - **Every screenshot-level judgement** — spacing, contrast, whether a design
   actually reads well. All visual claims in this project rest on DOM measurements,
   not on seeing the page.
+
+## Graveyard (02/10)
+
+Visibility, tribute moderation, editing, the public QR page, the life timeline,
+the grave location, administrators and succession, anniversary reminders and
+death verification are built, and covered by `backend/tests/e2e_graveyard.py`
+(88 checks) plus a browser pass of `/memorial/:code` and `/graveyard` (visitor,
+family and member; WCAG AA in dark and light; 390px). A death on 29 February
+used to make the memorial impossible to create; it no longer does.
+
+A full audit followed (`backend/tests/e2e_graveyard_audit.py`, 39 checks). It
+found and fixed: any administrator could remove the first and then delete the
+memorial; naming an administrator bypassed the contact and age rules; an
+administrator's own message waited for their own approval; the reminder series
+ended after an outage; a "captured at the grave" claim was taken on trust; a
+published tribute could not be taken down from the screen; candles buried the
+guest book; and the public `/memorials` page showed a dead button, a candle that
+was never sent anywhere, a made-up legacy contact and a paid tier that does not
+exist.
+
+Not built — in the blueprint (`info.md` §8):
+
+- **Photos and videos.** The blueprint says "photos/videos/voice". A memorial
+  has one portrait, one cover and one voice recording, and a visitor's message
+  may carry a photo; there is no gallery and no video anywhere.
+- **Paid flowers and candles** ("free + paid"). `paid` and `amount` exist on
+  tributes; nothing charges, and the public pages no longer show a paid tier.
+  The age rule is already settled — every checkout passes the `payments` gate
+  (18+, AGE-SAFETY.md §24–25). The blueprint gives no price and no split.
+- **Digital legacy contacts** — named in the blueprint, nothing more: who they
+  are, what they may do, and what triggers it are not written down.
+
+Deferred by the blueprint itself:
+
+- **AR memorials** — "future AR memorials".
+- **"Family" visibility** is accepted and treated as private (administrators
+  only): the family is whoever the family tree says, and the tree is hidden
+  (`FEATURES.familyTree`).
+
+Known limits:
+
+- **"Captured at the grave" is the device's word.** The location is marked
+  confirmed when the device reports a position within 50 m; nothing proves the
+  phone was at the grave, and a client that lies about its accuracy is
+  believed.
+- **No rate limit on visitors** — nor anywhere on the platform. A visitor
+  without an account can light any number of candles; an administrator can take
+  them down one by one, but not in bulk. Their messages always wait for the
+  family, so nothing they write appears unreviewed.
+- **A tribute's author cannot withdraw it.** Only an administrator can take it
+  down.
+- **Deleting a memorial leaves its files** in media-service, restricted and
+  owned by whoever uploaded them.
+- **The reporter of a death is not told the outcome** unless they administer
+  the memorial; the family is.
+- **Reminders fall at midnight UTC** on the anniversary, not at the family's
+  local midnight.
+- **Staff are not notified** of a new death report; they see the queue on
+  `/graveyard` when they open it.
+- Verified locally only, not on kinjy.com.
+
+## Circles (02/10)
+
+Membership, smart circles and the audience rule are built and covered by
+`backend/tests/e2e_circles.py` (80 checks) plus browser passes of `/circles`
+(functional flow, live updates, WCAG contrast in dark, light and cloud, 390px).
+
+**Audit of 02/10, fixed:** reply notifications reached members removed from the
+circle; any holder of a post id could subscribe to its live topic; blank names,
+non-letter countries and blank cities were accepted; two simultaneous adds
+answered 500; circles and members had no upper bound; warnings and errors on
+`/circles` were unreadable in light mode and several texts sat under 4.5:1.
+
+What the tests do not cover:
+
+- **Verified locally only**, not on kinjy.com.
+- **Smart circles trust the profile.** "Followers in Kigoma" means followers
+  whose own profile says Kigoma; nothing verifies where anyone lives.
+- **Members are not notified** of a circle post; it simply appears in their feed
+  and in the Circles mode. Deliberate for now — a notification per post would be
+  noisy — but not decided.
+- **Community-only posts are readable by their author alone**, by id as well as
+  in the feed. That was already the feed's behaviour; nothing in the app reads a
+  community's posts yet, so nothing visible changed.
+- **Fixed on the way, worth knowing:** every signed-in member could read every
+  followers-only post on the platform, and the Following feed was always empty
+  (social-service called `/users/me/following` with an empty token). Both now go
+  through the same audience lookup as circles.
+- **A live subscription is checked when it is made**, not again while it is
+  open: a member removed while their page is open keeps receiving counter
+  updates for that post until the page reloads or the socket reconnects. The
+  updates carry counts and ids, never text.
+- **Shared app chrome under 4.5:1**, outside `/circles` itself: the `text-low`
+  token is 3.7:1 in dark and 2.6:1 in cloud (profile card labels, handles), and
+  the gold-gradient primary style is 3.5:1 in light (active nav chip,
+  notification badge, buttons on other pages). `/circles` avoids both; fixing
+  them is a design-token change for the whole app.
+- **`e2e_messaging_age.py` fails** at "could not open messages: 403" — the
+  parental tier lock from 25/09 refuses the teen account it registers. Unrelated
+  to circles; the test predates the lock and needs a supervised teen.
 
 ## Parental supervision (25/09)
 

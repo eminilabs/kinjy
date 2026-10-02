@@ -594,14 +594,41 @@ export interface Privacy {
   discoverable: boolean
 }
 
+/**
+ * What a smart circle is made of: a relationship, optionally narrowed to where
+ * people live. Evaluated on the server at every read — it holds no list.
+ */
+export interface CircleRule {
+  source: 'connections' | 'followers' | 'following' | 'mutuals'
+  country?: string | null
+  city?: string | null
+}
+
 export interface Circle {
   id: string
   owner_id?: string
   name: string
   kind: string
   color?: string | null
+  rule?: CircleRule | null
+  /** Who a post shared to it would reach right now. */
   members_count: number
   created_at?: string
+}
+
+export interface CircleMember {
+  user_id: string
+  handle: string | null
+  display_name: string | null
+  avatar_url: string | null
+  city: string | null
+  verified: boolean
+  /** False when the circle can no longer reach them (a block, or the age rule). */
+  active: boolean
+}
+
+export interface CircleDetail extends Circle {
+  members: CircleMember[]
 }
 
 export interface Community {
@@ -754,10 +781,35 @@ export interface Memorial {
   birth_date: string | null
   death_date: string | null
   biography: string | null
+  /** Signed for this viewer, short-lived: never store or share them. */
+  photo_url: string | null
+  cover_url: string | null
+  faith_style: string
+  faith_style_source: string | null
+  audio: { url: string | null; autoplay: boolean }
   qr_code: string
   qr_url: string
+  visibility: 'public' | 'private'
+  moderation: 'open' | 'pending_approval'
+  /** unconfirmed → reported → under_review → verified */
   death_status: string
-  grave: { lat: number | null; lng: number | null; label: string | null; verified: boolean }
+  verified_at: string | null
+  tribute_counts: Record<string, number>
+  /** Whether the viewer administers it. */
+  is_admin: boolean
+  /** Administrators only. */
+  pending_tributes?: number
+  /** Administrators only: 1 is the first in the succession, who alone may delete it. */
+  admin_rank?: number
+  grave: {
+    lat: number | null
+    lng: number | null
+    label: string | null
+    verified: boolean
+    /** What the device said when it was captured at the grave, in metres. */
+    accuracy_m: number | null
+  }
+  created_at: string
 }
 
 export interface Tribute {
@@ -765,7 +817,35 @@ export interface Tribute {
   kind: string
   author_name: string
   body: string | null
+  media_url: string | null
   created_at: string
+  status?: string
+}
+
+export interface MemorialEvent {
+  id: string
+  year: number
+  month: number | null
+  day: number | null
+  title: string
+  body: string | null
+}
+
+export interface MemorialAdmin {
+  user_id: string
+  succession_order: number
+  handle: string | null
+  display_name: string | null
+  avatar_url: string | null
+}
+
+export interface DeathReviewItem {
+  id: string
+  full_name: string
+  death_date: string | null
+  death_status: string
+  qr_code: string
+  reports: Array<{ id: number; evidence: string; document_url: string | null; reported_by: string; created_at: string }>
 }
 
 export interface Product {
@@ -1389,11 +1469,19 @@ export const kaluta = {
 
   circles: {
     list: () => api.get<Circle[]>('/circles'),
-    create: (input: { name: string; kind?: string; color?: string }) =>
-      api.post<Circle>('/circles', { kind: 'custom', ...input }),
+    /** One circle and its members — its owner only. */
+    get: (id: string) => api.get<CircleDetail>(`/circles/${id}`),
+    create: (input: { name: string; kind?: string; color?: string; rule?: CircleRule }) =>
+      api.post<CircleDetail>('/circles', { kind: 'custom', ...input }),
+    update: (id: string, patch: { name?: string; kind?: string; color?: string | null; rule?: CircleRule }) =>
+      api.patch<CircleDetail>(`/circles/${id}`, patch),
     remove: (id: string) => api.delete<void>(`/circles/${id}`),
     addMember: (circleId: string, memberId: string) =>
-      api.post<{ added: boolean; members_count?: number }>(`/circles/${circleId}/members/${memberId}`),
+      api.post<{ added: boolean; already?: boolean; members_count?: number }>(
+        `/circles/${circleId}/members/${memberId}`,
+      ),
+    removeMember: (circleId: string, memberId: string) =>
+      api.delete<void>(`/circles/${circleId}/members/${memberId}`),
   },
 
   communities: {
@@ -1550,24 +1638,99 @@ export const kaluta = {
     /**
      * Browse the graveyard. Public on purpose: a memorial exists to be
      * visited, and requiring an account to find a grave is the wrong default.
+     * `mine` lists the memorials you look after instead, private ones included.
      */
     list: (params: { q?: string; mine?: boolean; limit?: number } = {}) => {
       const query = new URLSearchParams()
       if (params.q) query.set('q', params.q)
       if (params.mine) query.set('mine', 'true')
       query.set('limit', String(params.limit ?? 30))
-      return api.get<{ total: number; items: Memorial[] }>(`/memorials?${query}`, {
-        auth: Boolean(params.mine),
-      })
+      return api.get<{ total: number; items: Memorial[] }>(`/memorials?${query}`)
     },
-    create: (input: { full_name: string; birth_date?: string; death_date?: string; biography?: string }) =>
-      api.post<Memorial>('/memorials', input),
-    get: (id: string) => api.get<Memorial>(`/memorials/${id}`, { auth: false }),
-    byQr: (code: string) => api.get<Memorial>(`/memorials/qr/${code}`, { auth: false }),
-    tributes: (id: string) =>
-      api.get<{ counts: Record<string, number>; items: Tribute[] }>(`/memorials/${id}/tributes`, { auth: false }),
-    tribute: (id: string, input: { kind: string; author_name: string; body?: string }) =>
+    create: (input: {
+      full_name: string
+      birth_date?: string
+      death_date?: string
+      biography?: string
+      visibility?: 'public' | 'private'
+    }) => api.post<Memorial>('/memorials', input),
+    get: (id: string) => api.get<Memorial>(`/memorials/${id}`),
+    byQr: (code: string) => api.get<Memorial>(`/memorials/qr/${encodeURIComponent(code)}`),
+    update: (
+      id: string,
+      patch: Partial<{
+        full_name: string
+        birth_date: string | null
+        death_date: string | null
+        biography: string | null
+        visibility: 'public' | 'private'
+        moderation: 'open' | 'pending_approval'
+        faith_style: string
+        faith_style_source: 'documented_wish' | 'admin_choice' | null
+        photo_media_id: string | null
+        cover_media_id: string | null
+        audio_media_id: string | null
+        audio_autoplay: boolean
+      }>,
+    ) => api.patch<Memorial>(`/memorials/${id}`, patch),
+    remove: (id: string) => api.delete<void>(`/memorials/${id}`),
+
+    /**
+     * Approved tributes, newest first. `kind` is one kind or several joined by
+     * commas — the guest book asks for `message,photo` so candles cannot push
+     * the words off the first page. `counts` is always whole; `total` follows
+     * the filter.
+     */
+    tributes: (id: string, opts: { kind?: string; limit?: number; offset?: number } = {}) => {
+      const query = new URLSearchParams()
+      if (opts.kind) query.set('kind', opts.kind)
+      if (opts.limit) query.set('limit', String(opts.limit))
+      if (opts.offset) query.set('offset', String(opts.offset))
+      const qs = query.toString()
+      return api.get<{ total: number; counts: Record<string, number>; items: Tribute[] }>(
+        `/memorials/${id}/tributes${qs ? `?${qs}` : ''}`,
+      )
+    },
+    tribute: (id: string, input: { kind: string; author_name?: string; body?: string; media_id?: string }) =>
       api.post<{ id: string; status: string }>(`/memorials/${id}/tributes`, input),
+    pendingTributes: (id: string) => api.get<{ items: Tribute[] }>(`/memorials/${id}/tributes/pending`),
+    moderate: (id: string, tributeId: string, decision: 'approved' | 'rejected') =>
+      api.post<{ id: string; status: string }>(
+        `/memorials/${id}/tributes/${tributeId}/moderate?decision=${decision}`,
+      ),
+
+    events: (id: string) => api.get<{ items: MemorialEvent[] }>(`/memorials/${id}/events`),
+    addEvent: (id: string, input: { year: number; month?: number; day?: number; title: string; body?: string }) =>
+      api.post<MemorialEvent>(`/memorials/${id}/events`, input),
+    deleteEvent: (id: string, eventId: string) => api.delete<void>(`/memorials/${id}/events/${eventId}`),
+
+    setLocation: (
+      id: string,
+      input: { lat: number; lng: number; label?: string; captured_on_site: boolean; accuracy_m?: number },
+    ) =>
+      api.post<{ verified: boolean; lat: number; lng: number; label: string | null; accuracy_m: number | null }>(
+        `/memorials/${id}/location`,
+        input,
+      ),
+    clearLocation: (id: string) => api.delete<void>(`/memorials/${id}/location`),
+
+    admins: (id: string) => api.get<{ max: number; items: MemorialAdmin[] }>(`/memorials/${id}/admins`),
+    addAdmin: (id: string, userId: string) =>
+      api.post<{ added: boolean; already?: boolean; succession_order?: number }>(`/memorials/${id}/admins/${userId}`),
+    removeAdmin: (id: string, userId: string) => api.delete<void>(`/memorials/${id}/admins/${userId}`),
+
+    reminders: (id: string) =>
+      api.get<{ items: Array<{ occasion: string; due_at: string; offset_hours: number | null }> }>(
+        `/memorials/${id}/reminders`,
+      ),
+    reportDeath: (id: string, input: { evidence: string; document_media_id?: string }) =>
+      api.post<{ death_status: string }>(`/memorials/${id}/report-death`, input),
+
+    /** Platform staff: deaths waiting for a decision. */
+    reviewQueue: () => api.get<{ items: DeathReviewItem[] }>('/admin/memorials/death-reports'),
+    startReview: (id: string) => api.post<{ death_status: string }>(`/admin/memorials/${id}/review`),
+    decideDeath: (id: string, outcome: 'verified' | 'rejected') =>
+      api.post<{ death_status: string }>(`/admin/memorials/${id}/verify-death?outcome=${outcome}`),
   },
 
   market: {

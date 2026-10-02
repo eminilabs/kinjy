@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { BellRing, CalendarDays, Flame, Landmark, ShieldCheck, Smartphone, Users } from 'lucide-react'
-import { ArcButton, CandleFlowerWidget } from '@/components/ui-kit'
+import { Link } from 'react-router'
+import { BellRing, CalendarDays, Flame, ShieldCheck, Smartphone, Users } from 'lucide-react'
+import { CandleFlowerWidget } from '@/components/ui-kit'
 import LightMotes from '@/components/memorials/LightMotes'
 import MemorialAnatomy from '@/components/memorials/MemorialAnatomy'
 import VerificationPipeline from '@/components/memorials/VerificationPipeline'
@@ -82,6 +83,21 @@ function StewardshipRings() {
         <Users size={16} />
       </span>
     </motion.div>
+  )
+}
+
+/** Marks something the blueprint names that is not built yet — said plainly, not shown as if it worked. */
+function HorizonTag() {
+  const reduced = useReducedMotion()
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-sky/40 bg-sky/10 px-3 py-1 mono-data text-[0.62rem] tracking-[0.2em] text-sky">
+      <motion.span
+        className="h-1.5 w-1.5 rounded-full bg-sky"
+        animate={reduced ? undefined : { opacity: [0.4, 1, 0.4] }}
+        transition={{ duration: 2.4, repeat: Infinity }}
+      />
+      ON THE HORIZON
+    </span>
   )
 }
 
@@ -185,7 +201,7 @@ export default function Memorials() {
             transition={{ delay: 1.2, duration: 0.8, ease: cloudEase }}
             className="mt-4 inline-block origin-bottom"
           >
-            <CandleFlowerWidget kind="candle" tier="premium" />
+            <CandleFlowerWidget kind="candle" tier="free" />
           </motion.div>
         </div>
       </section>
@@ -227,8 +243,8 @@ export default function Memorials() {
               grave, and for generations who never knew them in person.
             </p>
             <p className="caption mt-4 !text-text-mid">
-              Grave coordinates are captured on-site and verified. They are never
-              estimated, never fabricated.
+              Coordinates captured at the grave are marked confirmed. Typed ones are
+              marked not yet confirmed. They are never estimated, never fabricated.
             </p>
           </div>
           <div className="lg:col-span-7">
@@ -249,7 +265,7 @@ export default function Memorials() {
               {
                 icon: BellRing,
                 title: 'Anniversary reminders',
-                body: 'Gentle notifications at 10 days, 3 days, and 6 hours before — opt-in, per memorial, never insistent.',
+                body: 'Gentle notifications to each of the memorial’s administrators at 10 days, 3 days, and 6 hours before the anniversary.',
                 visual: <ReminderCalendar />,
               },
               {
@@ -261,7 +277,7 @@ export default function Memorials() {
               {
                 icon: ShieldCheck,
                 title: 'Content moderation',
-                body: 'Every guest contribution enters pending approval before it appears. The space stays sacred.',
+                body: 'By default, every message and photo waits for the family’s approval before it appears. The space stays sacred.',
                 visual: (
                   <div className="flex h-24 items-center gap-4">
                     <ShieldCheck size={44} className="text-gold/80" />
@@ -312,20 +328,15 @@ export default function Memorials() {
             viewport={{ once: true, amount: 0.5 }}
             transition={{ duration: 1, ease: cloudEase }}
           >
-            <p className="eyebrow text-gold">Digital legacy contacts</p>
+            <HorizonTag />
+            <p className="eyebrow mt-5 text-gold">Digital legacy contacts</p>
             <h3 className="mt-3 font-display text-2xl text-white">Your wishes, honored after you.</h3>
             <p className="body-lg mt-4 text-text-mid">
-              Designate who manages your account and memorial wishes after you’re gone.
-              Wishes are stored and honored — including faith-style preferences, exactly
-              as you documented them.
+              Soon you will be able to name someone you trust to look after your account
+              and your memorial wishes when you are gone — faith-style preferences
+              included, exactly as you documented them, never inferred.
             </p>
-            <div className="mt-6 flex items-center gap-3 rounded-card-md border border-white/10 bg-white/[0.04] p-4">
-              <Landmark size={18} className="shrink-0 text-gold-soft" />
-              <p className="caption !text-text-mid">
-                Legacy contact: <strong className="text-text-hi">Zawadi M.</strong> · wishes
-                document on file · faith style: as documented, never inferred
-              </p>
-            </div>
+            <p className="caption mt-4 !text-text-mid">Not available yet.</p>
           </motion.div>
 
           <motion.div
@@ -335,14 +346,7 @@ export default function Memorials() {
             transition={{ duration: 1, delay: 0.15, ease: cloudEase }}
             className="relative overflow-hidden rounded-card-xl border border-white/10 bg-white/[0.03] p-7"
           >
-            <span className="inline-flex items-center gap-2 rounded-full border border-sky/40 bg-sky/10 px-3 py-1 mono-data text-[0.62rem] tracking-[0.2em] text-sky">
-              <motion.span
-                className="h-1.5 w-1.5 rounded-full bg-sky"
-                animate={reduced ? undefined : { opacity: [0.4, 1, 0.4] }}
-                transition={{ duration: 2.4, repeat: Infinity }}
-              />
-              ON THE HORIZON
-            </span>
+            <HorizonTag />
             <h3 className="mt-4 flex items-center gap-2 font-display text-2xl text-white">
               <Smartphone size={20} className="text-gold-soft" />
               Future: AR memorials
@@ -392,9 +396,12 @@ export default function Memorials() {
               />
             </div>
           )}
-          <ArcButton size="lg" className="hover:brightness-105">
+          <Link
+            to="/graveyard"
+            className="inline-flex select-none items-center justify-center gap-2 rounded-full bg-gradient-to-br from-gold-soft to-gold px-8 py-4 text-base font-bold text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] hover:brightness-110"
+          >
             Create a memorial
-          </ArcButton>
+          </Link>
           <button
             type="button"
             onClick={() => setModalOpen(true)}

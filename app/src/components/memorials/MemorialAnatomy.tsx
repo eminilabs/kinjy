@@ -10,10 +10,10 @@ type Region = 'bio' | 'media' | 'guestbook' | 'tributes' | 'location' | 'faith'
 
 const CALLOUTS: { id: Region; title: string; body: string; icon: typeof BookOpen }[] = [
   { id: 'bio', title: 'Biography & timeline', body: 'Life story told in dated chapters.', icon: BookOpen },
-  { id: 'media', title: 'Photos, videos & voice', body: 'Memorial audio with autoplay ON/OFF always visible — respect first.', icon: Image },
-  { id: 'guestbook', title: 'Guest book & condolences', body: 'Every message is moderated before it appears.', icon: ShieldCheck },
-  { id: 'tributes', title: 'Digital flowers & candles', body: 'Free and paid tributes; paid support memorial upkeep.', icon: Flower2 },
-  { id: 'location', title: 'Grave location', body: 'Latitude/longitude captured on-site. Verified — never fabricated.', icon: MapPin },
+  { id: 'media', title: 'Portrait, cover & voice', body: 'A portrait, a cover image and a voice recording. Autoplay is the family’s choice — ON or OFF.', icon: Image },
+  { id: 'guestbook', title: 'Guest book & condolences', body: 'By default, messages and photos wait for the family’s approval before they appear.', icon: ShieldCheck },
+  { id: 'tributes', title: 'Digital flowers & candles', body: 'Anyone can light a candle or leave a flower, free.', icon: Flower2 },
+  { id: 'location', title: 'Grave location', body: 'Latitude/longitude captured at the grave are marked confirmed; typed ones are marked not yet confirmed. Never fabricated.', icon: MapPin },
   { id: 'faith', title: 'Faith style', body: 'Chosen only from documented wishes or by administrators. Never inferred by AI.', icon: Mic2 },
 ]
 

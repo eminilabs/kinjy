@@ -1,7 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Flame, X } from 'lucide-react'
-import { ArcButton, CandleFlowerWidget } from '@/components/ui-kit'
+import { CandleFlowerWidget } from '@/components/ui-kit'
+import { lifeSpan } from '@/components/graveyard/format'
+import { ApiError, kaluta, type Memorial } from '@/lib/api'
 
 const cloudEase = [0.22, 1, 0.36, 1] as [number, number, number, number]
 
@@ -11,28 +14,39 @@ interface LitCandle {
 }
 
 /**
- * “Light a candle for someone” modal (memorials.md §7): candle widget +
- * name field; lighting plays a gentle bloom and adds the flame to a row
- * of recently lit candles.
+ * “Light a candle for someone” (memorials.md §7).
+ *
+ * The candle is real: the visitor finds a memorial that exists, and lighting it
+ * adds a candle to that memorial for its family and every visitor to see — the
+ * same one the QR page lights. No account is needed, and it is free.
  */
 export default function LightCandleModal({
   open,
   onClose,
-  lit,
   onLight,
 }: {
   open: boolean
   onClose: () => void
   lit: LitCandle[]
+  /** Called with the name on the memorial once its candle is lit. */
   onLight: (name: string) => void
 }) {
-  const [name, setName] = useState('')
-  const [justLit, setJustLit] = useState(false)
+  const [query, setQuery] = useState('')
+  // Results carry the query they answer, so an older answer is never shown for a newer one.
+  const [found, setFound] = useState<{ q: string; items: Memorial[] } | null>(null)
+  const [lighting, setLighting] = useState<string | null>(null)
+  const [done, setDone] = useState<Memorial | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const latest = useRef(0)
   const reduced = useReducedMotion()
+  const q = query.trim()
+  const results = found && found.q === q ? found.items : null
 
   const handleClose = () => {
-    setJustLit(false)
-    setName('')
+    setQuery('')
+    setFound(null)
+    setDone(null)
+    setError(null)
     onClose()
   }
 
@@ -45,11 +59,30 @@ export default function LightCandleModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  const light = () => {
-    const trimmed = name.trim()
-    if (!trimmed || justLit) return
-    onLight(trimmed)
-    setJustLit(true)
+  useEffect(() => {
+    if (!open || q.length < 2) return
+    const ticket = ++latest.current
+    const timer = window.setTimeout(() => {
+      kaluta.memorials
+        .list({ q, limit: 6 })
+        .then((page) => ticket === latest.current && setFound({ q, items: page.items }))
+        .catch(() => ticket === latest.current && setFound({ q, items: [] }))
+    }, 300)
+    return () => window.clearTimeout(timer)
+  }, [open, q])
+
+  const light = async (memorial: Memorial) => {
+    setLighting(memorial.id)
+    setError(null)
+    try {
+      await kaluta.memorials.tribute(memorial.id, { kind: 'candle' })
+      setDone(memorial)
+      onLight(memorial.full_name)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not light the candle. Try again.')
+    } finally {
+      setLighting(null)
+    }
   }
 
   return (
@@ -85,65 +118,95 @@ export default function LightCandleModal({
                 <X size={18} />
               </button>
             </div>
-            <p className="caption mt-2 !text-text-mid">
-              A small light travels with their name. Free, always.
-            </p>
 
-            <label className="mt-6 block">
-              <span className="mono-data text-[0.68rem] tracking-[0.18em] text-gold-soft">IN MEMORY OF</span>
-              <input
-                autoFocus
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && light()}
-                placeholder="Their name…"
-                maxLength={60}
-                className="mt-2 w-full rounded-card-sm border border-white/15 bg-white/[0.05] px-4 py-3 text-text-hi placeholder:text-text-low focus:border-gold/50 focus:outline-none"
-              />
-            </label>
-
-            <div className="mt-6 flex items-center justify-between gap-4">
-              <ArcButton onClick={light} disabled={!name.trim() || justLit}>
-                <Flame size={16} />
-                {justLit ? 'Candle lit' : 'Light it gently'}
-              </ArcButton>
-              <AnimatePresence>
-                {justLit && (
-                  <motion.div
-                    initial={{ scale: 0, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.6, ease: cloudEase }}
+            {done ? (
+              <div className="mt-6 text-center">
+                <motion.div
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ duration: 0.6, ease: cloudEase }}
+                  className="inline-block"
+                >
+                  <CandleFlowerWidget kind="candle" tier="free" name={done.full_name} />
+                </motion.div>
+                <p role="status" className="mt-2 text-sm text-text-hi">
+                  Your candle is lit for {done.full_name}.
+                </p>
+                <p className="caption mt-1 !text-text-mid">Their family and every visitor can see it on the memorial.</p>
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+                  <Link
+                    to={`/memorial/${done.qr_code}`}
+                    className="rounded-full border border-gold/40 px-5 py-2 text-sm font-semibold text-text-hi hover:border-gold/70"
                   >
-                    <CandleFlowerWidget kind="candle" tier="free" name={name.trim()} />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {justLit && (
-              <motion.p
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.4, duration: 0.8 }}
-                className="mt-4 text-center font-display text-sm italic text-[#D8D3C8]"
-              >
-                A flame now burns for {name.trim()}.
-              </motion.p>
-            )}
-
-            {/* recently lit candles */}
-            {lit.length > 0 && (
-              <div className="mt-6 border-t border-white/10 pt-4">
-                <p className="mono-data text-[0.62rem] tracking-[0.18em] text-text-low">RECENTLY LIT</p>
-                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-                  {lit.slice(-6).map((c) => (
-                    <span key={c.id} className="inline-flex items-center gap-1.5 text-[0.78rem] text-text-mid">
-                      <Flame size={11} className="text-gold-soft" /> {c.name}
-                    </span>
-                  ))}
+                    Open the memorial
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDone(null)
+                      setQuery('')
+                      setFound(null)
+                    }}
+                    className="rounded-full px-5 py-2 text-sm font-semibold text-text-mid hover:text-text-hi"
+                  >
+                    Light another
+                  </button>
                 </div>
               </div>
+            ) : (
+              <>
+                <p className="caption mt-2 !text-text-mid">
+                  Free, always. It appears on their memorial for the family and every visitor to see.
+                </p>
+                <label className="mt-6 block">
+                  <span className="mono-data text-[0.68rem] tracking-[0.18em] text-gold-soft">IN MEMORY OF</span>
+                  <input
+                    autoFocus
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Type their name…"
+                    maxLength={60}
+                    aria-label="Find the memorial by name"
+                    className="mt-2 w-full rounded-card-sm border border-white/15 bg-white/[0.05] px-4 py-3 text-text-hi placeholder:text-text-low focus:border-gold/50 focus:outline-none"
+                  />
+                </label>
+
+                <ul className="mt-3 max-h-56 space-y-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {q.length >= 2 && results === null && <li className="px-1 text-xs text-text-mid">Looking…</li>}
+                  {results?.length === 0 && (
+                    <li className="px-1 text-xs text-text-mid">
+                      No public memorial by that name yet.{' '}
+                      <Link to="/graveyard" className="text-text-hi underline underline-offset-2">
+                        Create one
+                      </Link>
+                      .
+                    </li>
+                  )}
+                  {(results ?? []).map((m) => (
+                    <li key={m.id} className="flex items-center gap-3 rounded-card-sm px-2 py-2 hover:bg-white/[0.05]">
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm text-text-hi">{m.full_name}</span>
+                        <span className="block text-xs text-text-mid">{lifeSpan(m.birth_date, m.death_date)}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void light(m)}
+                        disabled={lighting !== null}
+                        aria-label={`Light a candle for ${m.full_name}`}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-br from-gold-soft to-gold px-3.5 py-1.5 text-xs font-bold text-ink disabled:opacity-40"
+                      >
+                        <Flame size={12} aria-hidden="true" />
+                        {lighting === m.id ? 'Lighting…' : 'Light'}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {error && (
+                  <p role="alert" className="mt-3 text-sm text-danger">
+                    {error}
+                  </p>
+                )}
+              </>
             )}
           </motion.div>
         </motion.div>
