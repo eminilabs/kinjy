@@ -18,12 +18,14 @@ function PlatformCta() {
   return (
     <section className="mx-auto max-w-[1320px] px-4 pt-[120px]" aria-label="Call to action">
       <div
-        className="kl-night-section force-dark relative overflow-hidden rounded-[20px] px-[clamp(24px,6vw,80px)] py-[clamp(100px,10vw,130px)] text-center"
-        style={{ background: 'radial-gradient(120% 140% at 50% 0%, #242142 0%, #0B0E1D 70%)' }}
+        className="relative overflow-hidden rounded-[20px] px-[clamp(24px,6vw,80px)] py-[clamp(100px,10vw,130px)] text-center"
+        style={{ background: 'linear-gradient(180deg, var(--kl-stage-a), var(--kl-stage-b))' }}
       >
-        <p className="kl-mono text-xs tracking-[.14em] text-[#F0C878]">THE WHOLE MAP</p>
+        <div aria-hidden="true" className="kl-sheen absolute -left-16 -top-20 h-[300px] w-[300px] rounded-full opacity-40 blur-[90px]" />
+        <div aria-hidden="true" className="absolute -bottom-24 -right-10 h-[300px] w-[300px] rounded-full bg-[var(--kl-sky)] opacity-40 blur-[90px]" />
+        <p className="kl-mono relative text-xs tracking-[.14em] text-[var(--kl-gold-deep)]">THE WHOLE MAP</p>
         <h2
-          className="kl-serif mx-auto mt-5 max-w-[900px] font-semibold text-[var(--kl-night-text)]"
+          className="kl-serif relative mx-auto mt-5 max-w-[900px] font-semibold"
           style={{ fontSize: 'clamp(48px, 8vw, 112px)', lineHeight: 0.92, letterSpacing: '-.02em' }}
         >
           See it alive.
@@ -66,7 +68,7 @@ function PlatformCta() {
             {FEATURES.assistant && (
               <Link
                 to="/assistant"
-                className="kl-night-glass inline-flex items-center gap-2 rounded-[20px] px-8 py-4 text-[17px] font-semibold text-[var(--kl-night-text)] transition hover:border-[#D9A648]"
+                className="inline-flex items-center gap-2 rounded-[20px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] px-8 py-4 text-[17px] font-semibold transition hover:border-[#D9A648]"
               >
                 Meet Kinjy Assistant <ArrowRight size={17} />
               </Link>

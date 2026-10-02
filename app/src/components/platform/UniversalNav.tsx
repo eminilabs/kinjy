@@ -52,7 +52,7 @@ function AppShellBar() {
   return (
     <div className="cloud-card overflow-hidden rounded-card-xl">
       {/* Primary bar */}
-      <div className="flex items-center gap-3 border-b border-white/10 bg-ink-2/70 px-4 py-3">
+      <div className="flex items-center gap-3 border-b border-white/10 bg-ink-2 px-4 py-3">
         <img src="/logo.svg" alt="" className="h-6 w-6" />
         <span className="font-display text-sm font-medium">Kinjy</span>
         <div className="ml-auto flex items-center gap-2 text-text-mid">
@@ -76,7 +76,7 @@ function AppShellBar() {
                   'group relative flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
                   d.key === 'create'
                     ? 'bg-gradient-to-br from-gold-soft to-gold text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]'
-                    : 'bg-white/5 text-text-mid hover:bg-white/10 hover:text-text-hi',
+                    : 'bg-[var(--kl-paper)] text-text-mid hover:text-text-hi',
                 )}
               >
                 <d.icon size={13} />
@@ -96,7 +96,7 @@ function AppShellBar() {
               </div>
             )
           })}
-          <div className="flex shrink-0 items-center gap-1 rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-text-mid">
+          <div className="flex shrink-0 items-center gap-1 rounded-full bg-[var(--kl-paper)] px-3 py-1.5 text-xs font-semibold text-text-mid">
             <MoreHorizontal size={13} /> More
           </div>
         </motion.div>
@@ -109,27 +109,27 @@ function AppShellBar() {
 function PhoneFrame() {
   return (
     <div className="relative mx-auto w-[260px]">
-      <div className="cloud-card overflow-hidden rounded-[2rem] border-white/20 bg-ink-2/80 shadow-cloud-hover">
+      <div className="cloud-card overflow-hidden rounded-[2rem] bg-ink-2 shadow-cloud-hover">
         {/* Screen */}
-        <div className="space-y-2.5 p-4 pb-20">
+        <div className="space-y-2.5 bg-[var(--kl-paper)] p-4 pb-20">
           <div className="flex items-center gap-2">
             <img src="/logo.svg" alt="" className="h-5 w-5" />
             <span className="font-display text-xs font-medium">Kinjy</span>
           </div>
           {[2, 8].map((a) => (
-            <div key={a} className="rounded-card-sm border border-white/10 bg-white/5 p-3">
+            <div key={a} className="rounded-card-sm border border-white/10 bg-[var(--kl-surface)] p-3">
               <div className="flex items-center gap-2">
                 <Avatar index={a} size={26} />
-                <div className="h-2 w-20 rounded-full bg-white/15" />
+                <div className="h-2 w-20 rounded-full bg-[var(--kl-paper-2)]" />
               </div>
-              <div className="mt-2.5 h-2 w-full rounded-full bg-white/10" />
-              <div className="mt-1.5 h-2 w-3/4 rounded-full bg-white/10" />
+              <div className="mt-2.5 h-2 w-full rounded-full bg-[var(--kl-paper-2)]" />
+              <div className="mt-1.5 h-2 w-3/4 rounded-full bg-[var(--kl-paper-2)]" />
               <div className="mt-2.5 h-16 rounded-card-sm bg-gradient-to-br from-indigo/30 to-gold/15" />
             </div>
           ))}
         </div>
         {/* Bottom bar */}
-        <div className="absolute inset-x-0 bottom-0 border-t border-white/10 bg-ink-2/95 px-6 pb-4 pt-2.5 backdrop-blur-xl">
+        <div className="absolute inset-x-0 bottom-0 border-t border-white/10 bg-ink-2 px-6 pb-4 pt-2.5">
           <div className="relative flex items-center justify-between text-text-mid">
             <Home size={19} className="text-gold-soft" />
             <Compass size={19} />
@@ -144,7 +144,7 @@ function PhoneFrame() {
         </div>
       </div>
       {/* Notch hint */}
-      <div className="absolute left-1/2 top-2.5 h-4 w-20 -translate-x-1/2 rounded-full bg-ink/90" />
+      <div className="absolute left-1/2 top-2.5 h-4 w-20 -translate-x-1/2 rounded-full bg-[var(--kl-paper-2)]" />
     </div>
   )
 }
@@ -175,9 +175,7 @@ export default function UniversalNav() {
             viewport={{ once: true, amount: 0.65 }}
             transition={{ duration: 0.6, ease: CLOUD_EASE }}
           >
-            <div className="force-dark rounded-[20px] bg-[#0B0E1D] p-1 shadow-[0_30px_60px_-30px_rgba(11,14,29,.6)]">
-              <AppShellBar />
-            </div>
+            <AppShellBar />
             <ul className="mt-6 grid gap-3 sm:grid-cols-2">
               {BULLETS.map((b, i) => (
                 <motion.li
@@ -204,9 +202,7 @@ export default function UniversalNav() {
             transition={{ duration: 0.6, ease: CLOUD_EASE }}
             style={{ transformPerspective: 900 }}
           >
-            <div className="force-dark">
-              <PhoneFrame />
-            </div>
+            <PhoneFrame />
             <p className="mt-6 text-center text-sm text-[var(--kl-low)]">Mobile bottom bar · raised gold Create, center-docked</p>
           </motion.div>
         </div>

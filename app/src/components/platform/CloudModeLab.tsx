@@ -118,7 +118,6 @@ export default function CloudModeLab() {
   const [systemDark, setSystemDark] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches,
   )
-  const reduced = useReducedMotion()
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
@@ -129,36 +128,27 @@ export default function CloudModeLab() {
 
   const effective: Exclude<Mode, 'system'> = mode === 'system' ? (systemDark ? 'dark' : 'light') : mode
 
-  // The band's own background subtly reflects the selected ambient
-  const bandBg =
-    effective === 'cloud'
-      ? AMBIENTS[ambient].bg
-      : effective === 'light'
-        ? 'linear-gradient(160deg, rgba(246,241,231,0.08) 0%, rgba(11,14,29,0) 70%), #0B0E1D'
-        : '#0B0E1D'
-
   return (
-    <motion.section
-      // force-dark: this section paints its own background (every ambient is a
-      // dark gradient) in both themes, so it has to carry the dark text tokens
-      // with it. Without it, light mode put near-black ink on near-black.
-      className="noise-overlay force-dark kl-night-section relative mx-[clamp(12px,2vw,24px)] mt-[120px] overflow-hidden rounded-[20px] px-[clamp(20px,5vw,64px)] py-[120px]"
+    // A paper panel like the rest of the page: only the preview window wears
+    // the ambient, which is the thing being demonstrated.
+    <section
+      className="relative mx-[clamp(12px,2vw,24px)] mt-[120px] overflow-hidden rounded-[20px] px-[clamp(20px,5vw,64px)] py-[120px]"
       aria-label="Cloud display mode"
-      animate={{ background: bandBg }}
-      transition={{ duration: reduced ? 0 : 1 }}
-      style={{ background: AMBIENTS[0].bg }}
+      style={{ background: 'linear-gradient(160deg, var(--kl-stage-a), var(--kl-stage-b))' }}
     >
+      <div aria-hidden="true" className="absolute -right-20 -top-20 h-[320px] w-[320px] rounded-full bg-[var(--kl-indigo)] opacity-25 blur-[90px]" />
+      <div aria-hidden="true" className="kl-sheen absolute -bottom-24 left-10 h-[260px] w-[260px] rounded-full opacity-30 blur-[90px]" />
       <div className="mx-auto grid max-w-[1180px] grid-cols-[minmax(0,1fr)] items-center gap-12 lg:grid-cols-2">
         {/* Copy */}
         <div>
-          <p className="kl-mono text-xs tracking-[.14em] text-[#F0C878]">SIGNATURE</p>
-          <h2 className="kl-h2 mt-4 text-[var(--kl-night-text)]">Cloud mode. Our visual soul.</h2>
-          <p className="mt-5 max-w-lg text-lg leading-[1.6] text-[var(--kl-night-mid)]">
+          <p className="kl-mono text-xs tracking-[.14em] text-[var(--kl-gold-deep)]">SIGNATURE</p>
+          <h2 className="kl-h2 mt-4">Cloud mode. Our visual soul.</h2>
+          <p className="kl-lead mt-5 max-w-lg">
             Soft translucent panels. Floating cards. Subtle depth. Low clutter. Configure your
             ambient sky — Twilight, Dawn, Savanna, Ocean — or switch to Light, Dark, or System
             anytime.
           </p>
-          <ul className="mt-6 space-y-2 text-sm text-text-mid">
+          <ul className="mt-6 space-y-2 text-sm text-[var(--kl-mid)]">
             <li className="flex items-center gap-2.5">
               <span className="h-1.5 w-1.5 rounded-full bg-gold" /> Glass panels · blur 18px · saturate 140%
             </li>
@@ -177,7 +167,7 @@ export default function CloudModeLab() {
         {/* Interactive mode lab */}
         <div>
           {/* 4-way segmented control */}
-          <div className="cloud-glass mx-auto flex w-fit rounded-full p-1" role="radiogroup" aria-label="Display mode">
+          <div className="mx-auto flex w-fit rounded-full border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] p-1 shadow-[0_16px_30px_-24px_var(--kl-shadow)]" role="radiogroup" aria-label="Display mode">
             {MODES.map((m) => (
               <button
                 key={m.key}
@@ -187,7 +177,7 @@ export default function CloudModeLab() {
                 onClick={() => setMode(m.key)}
                 className={cn(
                   'flex items-center gap-1.5 rounded-full px-2.5 py-2 text-xs font-semibold transition-colors duration-300 sm:px-4 sm:text-sm',
-                  mode === m.key ? 'bg-gradient-to-br from-gold-soft to-gold text-ink' : 'text-text-mid hover:text-text-hi',
+                  mode === m.key ? 'kl-sheen' : 'text-[var(--kl-mid)] hover:text-[var(--kl-ink)]',
                 )}
               >
                 <m.icon size={14} />
@@ -208,18 +198,18 @@ export default function CloudModeLab() {
                 title={a.label}
                 className={cn(
                   'h-9 w-9 rounded-full border-2 transition-all duration-300',
-                  ambient === i ? 'scale-110 border-gold shadow-[0_0_12px_rgba(217,166,72,0.5)]' : 'border-white/20 hover:border-white/40',
+                  ambient === i ? 'scale-110 border-[#D9A648] shadow-[0_0_12px_rgba(217,166,72,0.5)]' : 'border-[var(--kl-surface)] hover:border-[#D9A648]/60',
                 )}
                 style={{ background: a.bg }}
               />
             ))}
           </div>
 
-          <div className="mt-6">
+          <div className="mt-6 shadow-[0_30px_60px_-30px_var(--kl-shadow)]">
             <LabWindow mode={effective} ambient={ambient} />
           </div>
         </div>
       </div>
-    </motion.section>
+    </section>
   )
 }

@@ -49,7 +49,7 @@ export default function Constellation() {
 
         {/* Focus card: the hovered module and what it connects to */}
         <div
-          className="mt-10 hidden min-h-[184px] max-w-[440px] rounded-2xl border border-[var(--kl-invert-border)] bg-[var(--kl-invert)] px-6 py-[22px] text-[var(--kl-invert-ink)] shadow-[0_30px_60px_-34px_rgba(11,14,29,.7)] lg:block"
+          className="mt-10 hidden min-h-[184px] max-w-[440px] rounded-2xl border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] px-6 py-[22px] shadow-[0_30px_60px_-34px_var(--kl-shadow)] lg:block"
           aria-live="polite"
         >
           <AnimatePresence mode="wait">
@@ -61,14 +61,14 @@ export default function Constellation() {
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.22, ease: CLOUD_EASE }}
               >
-                <span className="kl-mono text-xs tracking-[.08em] text-[#F0C878]">
+                <span className="kl-mono text-xs tracking-[.08em] text-[var(--kl-gold-deep)]">
                   MODULE {activeModule.letter} · {String(activeIndex + 1).padStart(2, '0')} / {MODULES.length}
                 </span>
-                <div className="kl-serif mt-2 text-[30px] font-medium italic leading-tight text-[#F0C878]">{activeModule.name}</div>
-                <p className="mt-3 text-sm text-[var(--kl-night-mid)]">Connects to:</p>
+                <div className="kl-serif mt-2 text-[30px] font-semibold leading-tight">{activeModule.name}</div>
+                <p className="mt-3 text-sm text-[var(--kl-low)]">Connects to:</p>
                 <ul className="mt-2 flex flex-wrap gap-1.5">
                   {connectionNames(activeModule.letter).map((n) => (
-                    <li key={n} className="rounded-full border border-white/15 bg-white/[0.06] px-2.5 py-1 text-xs font-medium">
+                    <li key={n} className="rounded-full bg-[var(--kl-paper)] px-2.5 py-1 text-xs font-semibold">
                       {n}
                     </li>
                   ))}
@@ -76,9 +76,9 @@ export default function Constellation() {
               </motion.div>
             ) : (
               <motion.div key="hint" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <span className="kl-mono text-xs tracking-[.08em] text-[#F0C878]">{MODULES.length} MODULES</span>
-                <p className="kl-serif mt-2 text-[26px] font-medium italic leading-snug text-[#F0C878]">One map, every integration.</p>
-                <p className="mt-3 text-sm text-[var(--kl-night-mid)]">Hover a module to trace its integrations across the platform.</p>
+                <span className="kl-mono text-xs tracking-[.08em] text-[var(--kl-gold-deep)]">{MODULES.length} MODULES</span>
+                <p className="kl-serif mt-2 text-[26px] font-semibold leading-snug">One map, every integration.</p>
+                <p className="mt-3 text-sm text-[var(--kl-low)]">Hover a module to trace its integrations across the platform.</p>
               </motion.div>
             )}
           </AnimatePresence>
@@ -167,15 +167,15 @@ export default function Constellation() {
                     cy={p.y}
                     r={hot ? 40 : 34}
                     style={{
-                      fill: hot ? '#0B0E1D' : 'var(--kl-surface)',
+                      fill: 'var(--kl-surface)',
                       stroke: hot ? '#D9A648' : 'var(--kl-paper-2)',
                       strokeWidth: hot ? 2 : 1.5,
                       transition: 'all 240ms cubic-bezier(0.22,1,0.36,1)',
                       filter: 'drop-shadow(0 10px 14px rgba(36,31,22,0.12))',
                     }}
                   />
-                  <circle cx={p.x} cy={p.y} r={20} style={{ fill: hot ? 'rgba(240,200,120,0.18)' : tile, transition: 'fill 240ms ease' }} />
-                  <g className="pointer-events-none" style={{ color: hot ? '#F0C878' : ink }}>
+                  <circle cx={p.x} cy={p.y} r={20} style={{ fill: hot ? '#F0C878' : tile, transition: 'fill 240ms ease' }} />
+                  <g className="pointer-events-none" style={{ color: hot ? '#241F16' : ink }}>
                     <foreignObject x={p.x - 12} y={p.y - 12} width={24} height={24}>
                       <ModuleGlyph id={m.glyph} size={24} className="!text-current" />
                     </foreignObject>
@@ -205,8 +205,9 @@ export default function Constellation() {
             transition={{ duration: 0.7, ease: [0.34, 1.56, 0.64, 1] }}
             style={{ transformOrigin: '400px 400px' }}
           >
-            <circle cx={CX} cy={CY} r={56} fill="#0B0E1D" />
-            <circle cx={CX} cy={CY} r={64} fill="none" stroke="rgba(217,166,72,0.6)" strokeWidth="1.2" strokeDasharray="3 6" />
+            <circle cx={CX} cy={CY} r={58} fill="url(#const-arc)" />
+            <circle cx={CX} cy={CY} r={54} style={{ fill: 'var(--kl-surface)' }} />
+            <circle cx={CX} cy={CY} r={68} fill="none" stroke="rgba(217,166,72,0.6)" strokeWidth="1.2" strokeDasharray="3 6" />
             <foreignObject x={CX - 32} y={CY - 32} width={64} height={64} className="pointer-events-none">
               <Avatar index={4} size={64} name="You" />
             </foreignObject>

@@ -49,8 +49,8 @@ const GLOWS = ['var(--kl-sky)', 'var(--kl-coral)', '#D9A648']
 
 /**
  * One module, on the landing's feature row: the text beside a soft stage, and
- * the module's illustration on that stage as a night screen — the
- * illustrations are app screens, and screens stay night on paper.
+ * the module's illustration resting on that stage as a card in the page's
+ * own theme.
  */
 function ModuleBlock({ mod, index }: { mod: ModuleInfo; index: number }) {
   const Visual = VISUALS[mod.visual ?? mod.letter]
@@ -107,7 +107,7 @@ function ModuleBlock({ mod, index }: { mod: ModuleInfo; index: number }) {
           className={cn('absolute h-[240px] w-[240px] rounded-full opacity-40 blur-[80px]', flip ? '-bottom-16 -left-12' : '-right-16 -top-16')}
           style={{ background: GLOWS[index % GLOWS.length] }}
         />
-        <div className="force-dark relative mx-auto max-w-[460px] rounded-2xl bg-[#0B0E1D] p-1 shadow-[0_30px_60px_-30px_rgba(11,14,29,.7)]">
+        <div className="relative mx-auto max-w-[460px]">
           <Visual />
         </div>
       </motion.div>
