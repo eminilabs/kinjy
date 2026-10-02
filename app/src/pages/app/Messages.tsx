@@ -11,7 +11,6 @@ import {
   Lock,
   MessageSquare,
   Mic,
-  Paperclip,
   Plus,
   Search,
   Send,
@@ -26,6 +25,7 @@ import {
 } from 'lucide-react'
 import AppShell from '@/components/app/AppShell'
 import { useAppTheme } from '@/components/appdemo/theme'
+import AttachmentMenu from '@/components/social/AttachmentMenu'
 import MediaLightbox from '@/components/social/MediaLightbox'
 import MemberAvatar from '@/components/social/MemberAvatar'
 import { useApi } from '@/hooks/useApi'
@@ -624,7 +624,6 @@ export default function Messages() {
   }
 
   const [staged, setStaged] = useState<File[]>([])
-  const fileInput = useRef<HTMLInputElement>(null)
   const stage = (files: FileList | File[] | null) => {
     // Copied now, not inside the updater: a FileList is live, and the input
     // is cleared right after this call, which would empty it first.
@@ -1601,16 +1600,6 @@ export default function Messages() {
                   exactly where a full-height thread puts its composer. No
                   orb, no gap: Send keeps the full width. */}
               <form onSubmit={send} className={cn('mt-3 flex items-center gap-2 border-t border-white/8 pt-3', FEATURES.assistant && 'pe-14 lg:pe-12')}>
-                <input
-                  ref={fileInput}
-                  type="file"
-                  multiple
-                  hidden
-                  onChange={(e) => {
-                    stage(e.target.files)
-                    e.target.value = ''
-                  }}
-                />
                 {recordingSince !== null ? (
                   <>
                     <button
@@ -1636,15 +1625,7 @@ export default function Messages() {
                   </>
                 ) : (
                   <>
-                    <button
-                      type="button"
-                      onClick={() => fileInput.current?.click()}
-                      aria-label="Attach files"
-                      title="Photos, videos, audio, documents — any file up to 200 MB"
-                      className="shrink-0 rounded-full border border-white/12 p-2.5 text-text-mid hover:border-gold/40 hover:text-gold-soft"
-                    >
-                      <Paperclip size={15} aria-hidden="true" />
-                    </button>
+                    <AttachmentMenu onFiles={stage} />
                     <input
                       value={draft}
                       onChange={(e) => onDraftChange(e.target.value)}
