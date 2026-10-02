@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Check, Eye, MessageSquare, Sparkles, TreeDeciduous, UserPlus, UsersRound, X } from 'lucide-react'
+import { Link } from 'react-router'
+import { ArrowRight, Eye, MessageSquare, Sparkles, TreeDeciduous, UserPlus, UsersRound } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useApi } from '@/hooks/useApi'
-import { ApiError, kaluta, type ConnectionEntry } from '@/lib/api'
+import { ApiError, kaluta } from '@/lib/api'
 import { FEATURES, type Feature } from '@/lib/features'
 import { announce, onChange } from '@/lib/live'
 import { Badge, Panel, PanelState } from './primitives'
 import { cn } from '@/lib/utils'
-import MemberAvatar from '@/components/social/MemberAvatar'
 
 const CHOICES = [
   { id: 'everyone', label: 'Anyone' },
@@ -75,16 +75,16 @@ const ALL_CONTROLS: Control[] = [
 const CONTROLS = ALL_CONTROLS.filter((control) => !control.feature || FEATURES[control.feature])
 
 /**
- * Privacy — who may reach you, and the invitations waiting on you.
+ * Privacy — who may reach you.
  *
- * The two belong on one screen: a pending invitation is only meaningful next to
- * the rule that decides what accepting it would unlock.
+ * The invitations and connections themselves are managed on /connections; this
+ * tab keeps the rules and a pointer there, so there is one place to act on a
+ * person rather than two that can each do half of it.
  */
 export default function Privacy() {
   const prefs = useApi<Record<string, unknown>>(() => kaluta.account.preferences(), [])
   const connections = useApi(() => kaluta.connections.list(), [])
   const [saving, setSaving] = useState<string | null>(null)
-  const [busy, setBusy] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
 
   useEffect(() => onChange('connections', connections.reload), [connections.reload])
@@ -104,46 +104,8 @@ export default function Privacy() {
     }
   }
 
-  const respond = async (entry: ConnectionEntry, accept: boolean) => {
-    setBusy(entry.user_id)
-    setNote(null)
-    try {
-      await kaluta.connections.respond(entry.user_id, accept)
-      connections.reload()
-      announce('profile')
-      setNote(
-        accept
-          ? `Connected with ${entry.profile?.display_name ?? 'them'}. You can now message each other.`
-          : 'Invitation declined.',
-      )
-    } catch (err) {
-      setNote(err instanceof ApiError ? err.message : 'Could not answer the invitation')
-    } finally {
-      setBusy(null)
-    }
-  }
-
-  const incoming = connections.data?.incoming ?? []
-  const outgoing = connections.data?.outgoing ?? []
-  const accepted = connections.data?.accepted ?? []
-
-  const Person = ({ entry, children }: { entry: ConnectionEntry; children?: React.ReactNode }) => (
-    <li className="flex items-center gap-2.5 rounded-card-sm border border-white/8 bg-ink-2/40 p-3">
-      <MemberAvatar
-        handle={entry.profile?.handle}
-        displayName={entry.profile?.display_name}
-        avatarUrl={entry.profile?.avatar_url}
-        size={32}
-      />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-text-hi">
-          {entry.profile?.display_name ?? entry.user_id.slice(0, 12)}
-        </p>
-        {entry.message && <p className="caption truncate">“{entry.message}”</p>}
-      </div>
-      {children}
-    </li>
-  )
+  const incoming = connections.data?.incoming.length ?? 0
+  const accepted = connections.data?.accepted.length ?? 0
 
   return (
     <div className="grid gap-5 lg:grid-cols-2">
@@ -257,82 +219,27 @@ export default function Privacy() {
         </PanelState>
       </Panel>
 
-      <div className="space-y-5">
-        <Panel
-          title="Invitations"
-          subtitle={`Accepting is what opens messaging, ${FEATURES.familyTree ? 'family links ' : ''}and community invites.`}
-          action={incoming.length > 0 ? <Badge tone="warn">{incoming.length} waiting</Badge> : undefined}
-        >
-          <PanelState
-            loading={connections.loading}
-            error={connections.error}
-            empty={incoming.length === 0 && outgoing.length === 0}
-            emptyLabel="No invitations right now."
+      <Panel
+        title="Connections"
+        subtitle={`Accepting an invitation is what opens messaging, ${FEATURES.familyTree ? 'family links ' : ''}and community invites.`}
+        action={incoming > 0 ? <Badge tone="warn">{incoming} waiting</Badge> : undefined}
+      >
+        <PanelState loading={connections.loading} error={connections.error}>
+          <p className="text-sm text-text-mid">
+            <span className="mono-data text-gold-soft">{incoming}</span>{' '}
+            {incoming === 1 ? 'invitation' : 'invitations'} waiting ·{' '}
+            <span className="mono-data text-gold-soft">{accepted}</span>{' '}
+            {accepted === 1 ? 'connection' : 'connections'}
+          </p>
+          <Link
+            to={incoming > 0 ? '/connections?tab=incoming' : '/connections'}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-gold/40 px-3.5 py-1.5 text-xs font-semibold text-gold-soft hover:bg-gold/10"
           >
-            {incoming.length > 0 && (
-              <>
-                <p className="caption mb-2">Waiting for you</p>
-                <ul className="space-y-2">
-                  {incoming.map((entry) => (
-                    <Person key={entry.id} entry={entry}>
-                      <div className="flex shrink-0 gap-1">
-                        <button
-                          type="button"
-                          onClick={() => respond(entry, true)}
-                          disabled={busy === entry.user_id}
-                          aria-label="Accept"
-                          className="rounded-full border border-emerald-400/40 p-1.5 text-emerald-300 hover:bg-emerald-400/10 disabled:opacity-40"
-                        >
-                          <Check size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => respond(entry, false)}
-                          disabled={busy === entry.user_id}
-                          aria-label="Decline"
-                          className="rounded-full border border-white/12 p-1.5 text-text-mid hover:border-red-400/40 hover:text-red-200 disabled:opacity-40"
-                        >
-                          <X size={13} />
-                        </button>
-                      </div>
-                    </Person>
-                  ))}
-                </ul>
-              </>
-            )}
-
-            {outgoing.length > 0 && (
-              <>
-                <p className="caption mb-2 mt-4">Sent by you</p>
-                <ul className="space-y-2">
-                  {outgoing.map((entry) => (
-                    <Person key={entry.id} entry={entry}>
-                      <Badge tone="neutral">Pending</Badge>
-                    </Person>
-                  ))}
-                </ul>
-              </>
-            )}
-          </PanelState>
-        </Panel>
-
-        <Panel title="Your connections" subtitle={`${accepted.length} accepted`}>
-          <PanelState
-            loading={connections.loading}
-            error={connections.error}
-            empty={accepted.length === 0}
-            emptyLabel="No connections yet. Invite someone from the feed's suggestions."
-          >
-            <ul className="space-y-2">
-              {accepted.map((entry) => (
-                <Person key={entry.id} entry={entry}>
-                  <Badge tone="good">Connected</Badge>
-                </Person>
-              ))}
-            </ul>
-          </PanelState>
-        </Panel>
-      </div>
+            Manage your connections
+            <ArrowRight size={13} aria-hidden="true" />
+          </Link>
+        </PanelState>
+      </Panel>
 
       {note && <p className="text-sm text-gold-soft lg:col-span-2">{note}</p>}
     </div>

@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Link } from 'react-router'
 import { Award, Crown, MapPin, Medal, Users } from 'lucide-react'
 import { VerifiedBadge } from '@/components/ui-kit'
@@ -10,6 +11,7 @@ import { useApi } from '@/hooks/useApi'
 import { useAuth } from '@/hooks/useAuth'
 import { kaluta } from '@/lib/api'
 import { isRouteAvailable } from '@/lib/features'
+import { onChange } from '@/lib/live'
 import { useMyProfile } from '@/hooks/useMyProfile'
 import { countryName } from '@/lib/profileOptions'
 import { cn } from '@/lib/utils'
@@ -19,7 +21,7 @@ import { cn } from '@/lib/utils'
  * its verification badge, handle, and place.
  */
 /** The shortcuts /app pins. Destinations, not feed modes — and only open ones. */
-const PINNED: ChromeKey[] = (['home', 'create', 'familyTree', 'messages'] as ChromeKey[]).filter(
+const PINNED: ChromeKey[] = (['home', 'create', 'familyTree', 'messages', 'connections'] as ChromeKey[]).filter(
   (key) => isRouteAvailable(ROUTE_FOR[key]),
 )
 
@@ -33,6 +35,10 @@ export default function ProfileCard() {
   // Shared with the top bar and the composer, and refreshed whenever the
   // profile changes (an edit, or following someone changing a count here).
   const data = useMyProfile()
+  // Only on this card, which nobody but the member sees: how many connections
+  // someone has — a teenager especially — is not for strangers on /u/:handle.
+  const connections = useApi(() => kaluta.connections.list(), [])
+  useEffect(() => onChange('connections', connections.reload), [connections.reload])
 
   // The profile is what the editor changes; the account copy only stands in
   // until it has loaded.
@@ -73,6 +79,19 @@ export default function ProfileCard() {
             <dt className={cn('text-[0.65rem]', tok.low)}>Following</dt>
             <dd className="mono-data text-sm font-semibold text-gold-soft">
               {data?.following_count ?? 0}
+            </dd>
+          </div>
+          <div>
+            <dt className={cn('text-[0.65rem]', tok.low)}>
+              <Link to="/connections" className="hover:text-gold-soft">
+                {t('connections')}
+              </Link>
+            </dt>
+            <dd className="mono-data text-sm font-semibold text-gold-soft">
+              {/* The label is the link for assistive tech; the number is a bigger target for the pointer. */}
+              <Link to="/connections" tabIndex={-1} aria-hidden="true">
+                {connections.data ? connections.data.accepted.length : '–'}
+              </Link>
             </dd>
           </div>
         </dl>

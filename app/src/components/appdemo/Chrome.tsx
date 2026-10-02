@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  Bell, Coins, Globe, Home, Landmark, MessagesSquare, Pin, Plus, Radio,
+  Bell, Coins, Globe, Handshake, Home, Landmark, MessagesSquare, Pin, Plus, Radio,
   Search, Store, TreePine, Users, UsersRound,
   Compass, CircleUserRound, Flame, Cloudy, Sun, Moon, MonitorSmartphone,
 } from 'lucide-react'
@@ -13,7 +13,7 @@ import type { ChromeKey, DisplayMode, AppLang } from './theme'
 
 export const MODULE_ICONS: Partial<Record<ChromeKey, LucideIcon>> = {
   home: Home, following: Users, forYou: Flame, public: Globe, forums: MessagesSquare,
-  circles: CircleUserRound, communities: UsersRound, messages: MessagesSquare, live: Radio,
+  circles: CircleUserRound, communities: UsersRound, messages: MessagesSquare, connections: Handshake, live: Radio,
   familyTree: TreePine, graveyard: Landmark, explore: Compass, marketplace: Store,
   create: Plus, earnings: Coins, profile: CircleUserRound,
 }

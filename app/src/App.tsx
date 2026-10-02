@@ -24,6 +24,7 @@ const SignIn = lazy(() => import('./pages/SignIn'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const SocialHub = lazy(() => import('./pages/SocialHub'))
 const Circles = lazy(() => import('./pages/app/Circles'))
+const Connections = lazy(() => import('./pages/app/Connections'))
 const Communities = lazy(() => import('./pages/app/Communities'))
 const Forums = lazy(() => import('./pages/app/Forums'))
 const Messages = lazy(() => import('./pages/app/Messages'))
@@ -85,6 +86,7 @@ export default function App() {
           <Route path="/hub" element={<SocialHub />} />
           {/* Universal Navigation destinations, per the blueprint */}
           <Route path="/circles" element={<Circles />} />
+          <Route path="/connections" element={<Connections />} />
           <Route path="/communities" element={<Communities />} />
           <Route path="/forums" element={<Forums />} />
           <Route path="/messages" element={<Messages />} />

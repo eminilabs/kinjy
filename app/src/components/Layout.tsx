@@ -19,6 +19,7 @@ const APP_ROUTES = [
   '/hub',
   '/dashboard',
   '/circles',
+  '/connections',
   '/communities',
   '/forums',
   '/messages',
