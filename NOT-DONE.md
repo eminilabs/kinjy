@@ -489,3 +489,22 @@ What the tests do not cover:
   the navigation needed to remount the route discards the patch; stopping the
   service is both simpler and closer to the real failure.
 
+## Deploying leaves deleted files behind (02/10)
+
+- **`deploy.sh` copies but never deletes, and it finally cost a deploy.** The
+  tree ships as a tar extracted over the top of the last one, so a file removed
+  from the repository lives on the server forever. Merging develop deleted four
+  unused shadcn components whose packages had also been dropped from
+  `package.json`; the stale copies on the server were still in the build
+  context, so `npm run build` type-checked files that no longer exist here and
+  failed on four modules nobody imports. Nine stale files were found in all,
+  dating back to 16 August, including `backend/social-service/classifier.py` -
+  moved to `common/` on 25/09 and still sitting in production a week later.
+  They have been removed by hand. The fix belongs in `deploy.sh`: extract into
+  a fresh directory and swap, or carry a manifest and delete what is not in it.
+  Until then every deploy inherits whatever the last one left.
+- **Nothing was lost by it this time** - the deploy failed at the build step,
+  before production was touched, which is the behaviour you want. But the
+  failure pointed at files that do not exist in the repository, which is a
+  confusing place to start debugging.
+
