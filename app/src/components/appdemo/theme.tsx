@@ -119,6 +119,7 @@ export const CHROME_STRINGS = {
   forums: { en: 'Forums', sw: 'Vikao', fr: 'Forums', ar: 'المنتديات', zh: '论坛' },
   circles: { en: 'Circles', sw: 'Duara', fr: 'Cercles', ar: 'الدوائر', zh: '圈子' },
   communities: { en: 'Communities', sw: 'Jumuiya', fr: 'Communautés', ar: 'المجتمعات', zh: '社区' },
+  connections: { en: 'Connections', sw: 'Mahusiano', fr: 'Relations', ar: 'العلاقات', zh: '联系人' },
   messages: { en: 'Messages', sw: 'Ujumbe', fr: 'Messages', ar: 'الرسائل', zh: '消息' },
   live: { en: 'Live', sw: 'Moja kwa Moja', fr: 'En direct', ar: 'مباشر', zh: '直播' },
   familyTree: { en: 'Family Tree', sw: 'Mti wa Familia', fr: 'Arbre familial', ar: 'شجرة العائلة', zh: '家谱' },
