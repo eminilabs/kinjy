@@ -186,6 +186,7 @@ export default function DevHero() {
         </div>
 
         {/* Right: live code card */}
+        <div className="kl-stage min-w-0">
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}
@@ -193,15 +194,15 @@ export default function DevHero() {
           className={cn(KL_CARD, 'overflow-hidden !rounded-card-xl')}
         >
           {/* title bar */}
-          <div className="flex items-center gap-2 border-b border-white/10 bg-[var(--kl-paper)] px-5 py-3">
+          <div className="flex items-center gap-2 border-b border-white/10 bg-[var(--kl-code)] px-5 py-3">
             <span className="h-2.5 w-2.5 rounded-full bg-danger/70" aria-hidden="true" />
             <span className="h-2.5 w-2.5 rounded-full bg-warning/70" aria-hidden="true" />
             <span className="h-2.5 w-2.5 rounded-full bg-success/70" aria-hidden="true" />
             <span className="mono-data ms-3 text-xs text-text-low">family-path.graphql</span>
             <span className="mono-data ms-auto text-xs text-gold">POST /graphql</span>
           </div>
-          <div className="bg-[var(--kl-paper)] p-5 font-mono text-[0.82rem] leading-relaxed">
-            <pre aria-label="GraphQL query example" className="min-h-[9.5rem] whitespace-pre-wrap">
+          <div className="bg-[var(--kl-code)] p-5 font-mono text-[0.9rem] leading-[1.7]">
+            <pre aria-label="GraphQL query example" className="min-h-[12.5rem] whitespace-pre-wrap">
               {visibleLines.map((l, i) => (
                 <div key={i} className="flex">
                   <span className="w-7 select-none text-end text-text-low/60 pe-3">{i + 1}</span>
@@ -257,7 +258,7 @@ export default function DevHero() {
                   transition={{ duration: 0.3, ease: EASE }}
                   className="overflow-hidden"
                 >
-                  <div className="mt-4 rounded-card-md border border-white/10 bg-[var(--kl-paper)] p-4">
+                  <div className="mt-4 rounded-card-md border border-white/10 bg-[var(--kl-code)] p-4">
                     {RESPONSE_LINES.map((l, i) => (
                       <motion.div
                         key={i}
@@ -277,6 +278,7 @@ export default function DevHero() {
             </AnimatePresence>
           </div>
         </motion.div>
+        </div>
       </div>
     </section>
   )

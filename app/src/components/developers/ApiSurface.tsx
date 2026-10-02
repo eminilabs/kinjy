@@ -64,7 +64,7 @@ function ConsentMock() {
     ['Post on your behalf', false],
   ] as const
   return (
-    <div className="rounded-card-sm border border-white/10 bg-[var(--kl-paper)] p-3">
+    <div className="rounded-card-sm border border-white/10 bg-[var(--kl-code)] p-3">
       <p className="mb-2 text-[0.68rem] font-semibold text-text-hi">
         <span className="text-gold">Nia App</span> requests access
       </p>
@@ -100,7 +100,7 @@ function ConsentMock() {
 function StorefrontTile() {
   return (
     <div className="flex items-center gap-3">
-      <div className="flex-1 rounded-card-sm border border-white/10 bg-[var(--kl-paper)] p-3">
+      <div className="flex-1 rounded-card-sm border border-white/10 bg-[var(--kl-code)] p-3">
         <div className="mb-2 h-9 rounded-sm bg-gradient-to-br from-indigo/60 to-sky/30" />
         <p className="text-[0.68rem] font-semibold text-text-hi">TransitBoard</p>
         <p className="font-mono text-[0.62rem] text-text-low">★ 4.9 · 12.4k installs</p>
@@ -185,7 +185,7 @@ export default function ApiSurface() {
               <motion.div
                 variants={{ hover: { scale: 1.02 } }}
                 transition={{ duration: 0.3, ease: EASE }}
-                className="rounded-card-md border border-white/10 bg-[var(--kl-paper)] p-3.5"
+                className="rounded-card-md border border-white/10 bg-[var(--kl-code)] p-3.5"
               >
                 {c.diagram}
               </motion.div>

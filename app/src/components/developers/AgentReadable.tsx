@@ -26,7 +26,7 @@ function SemanticVisual() {
   return (
     <div className="relative flex h-40 items-center justify-center">
       <Orb size={38} />
-      <div className="ms-4 rounded-card-sm border border-white/15 bg-[var(--kl-paper)] p-2.5 font-mono text-[0.62rem] leading-relaxed text-text-mid">
+      <div className="ms-4 rounded-card-sm border border-white/15 bg-[var(--kl-code)] p-2.5 font-mono text-[0.62rem] leading-relaxed text-text-mid">
         <p><span className="text-gold">"capabilities"</span>: [</p>
         <p>&nbsp;&nbsp;<span className="text-success">"posts.create"</span>,</p>
         <p>&nbsp;&nbsp;<span className="text-success">"family.path.find"</span>,</p>
@@ -58,7 +58,7 @@ function SemanticVisual() {
       </svg>
       <div className="absolute -bottom-3 left-1/2 flex -translate-x-1/2 gap-7">
         {['{}', '</>', '⇄'].map((g) => (
-          <span key={g} className="rounded-sm border border-gold/30 bg-[var(--kl-paper)] px-1.5 py-0.5 font-mono text-[0.6rem] text-gold-soft">{g}</span>
+          <span key={g} className="rounded-sm border border-gold/30 bg-[var(--kl-code)] px-1.5 py-0.5 font-mono text-[0.6rem] text-gold-soft">{g}</span>
         ))}
       </div>
     </div>
@@ -146,7 +146,7 @@ export default function AgentReadable() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-15%' }}
           transition={{ duration: 0.65, ease: EASE }}
-          className="kl-h2 mx-auto max-w-[900px] text-center"
+          className="kl-h2 max-w-[900px]"
         >
           APIs for people who use agents —{' '}
           <span className="text-[var(--kl-gold-deep)]">and agents that use APIs.</span>
@@ -167,7 +167,7 @@ export default function AgentReadable() {
               </span>
               <h3 className="h3 mb-3">{c.title}</h3>
               <p className="mb-6 flex-1 text-sm leading-relaxed text-text-mid">{c.body}</p>
-              <div className="rounded-card-md border border-white/10 bg-[var(--kl-paper)]">{c.visual}</div>
+              <div className="rounded-card-md border border-white/10 bg-[var(--kl-code)]">{c.visual}</div>
             </motion.div>
           ))}
         </div>

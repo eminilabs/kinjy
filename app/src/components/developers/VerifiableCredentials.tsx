@@ -110,6 +110,7 @@ export default function VerifiableCredentials() {
           </motion.div>
 
           {/* Right: credential card + present flow */}
+          <div className="kl-stage min-w-0">
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -117,7 +118,7 @@ export default function VerifiableCredentials() {
             transition={{ duration: 0.7, ease: EASE }}
             className={cn(KL_CARD, 'overflow-hidden')}
           >
-            <div className="flex items-center justify-between border-b border-white/10 bg-[var(--kl-paper)] px-5 py-3">
+            <div className="flex items-center justify-between border-b border-white/10 bg-[var(--kl-code)] px-5 py-3">
               <span className="mono-data flex items-center gap-2 text-xs text-text-low">
                 <Fingerprint size={13} className="text-gold" aria-hidden="true" />
                 reputation.kaluta.vc / export
@@ -142,7 +143,7 @@ export default function VerifiableCredentials() {
               )}
             </div>
 
-            <div className="relative overflow-x-auto bg-[var(--kl-paper)] p-5">
+            <div className="relative overflow-x-auto bg-[var(--kl-code)] p-5">
               <motion.div
                 animate={{
                   opacity: busy ? 0.55 : 1,
@@ -150,7 +151,7 @@ export default function VerifiableCredentials() {
                   borderColor: phase === 'verified' ? 'rgba(63,178,127,0.5)' : 'var(--kl-paper-2)',
                 }}
                 transition={{ duration: 0.4, ease: EASE }}
-                className="rounded-card-md border bg-[var(--kl-paper)] p-4"
+                className="rounded-card-md border bg-[var(--kl-code)] p-4"
               >
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <p className="flex items-center gap-2 text-sm font-semibold text-text-hi">
@@ -223,6 +224,7 @@ export default function VerifiableCredentials() {
               keys held by the member · selective disclosure · revocable per verifier
             </p>
           </motion.div>
+          </div>
         </div>
       </div>
     </section>

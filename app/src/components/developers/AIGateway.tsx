@@ -79,10 +79,10 @@ export default function AIGateway() {
           transition={{ duration: 0.65, ease: EASE }}
         >
           <Eyebrow>Kinjy AI Gateway</Eyebrow>
-          <h3 className="h3 mt-4 font-display text-3xl font-medium">
+          <h2 className="kl-h2 mt-5 max-w-[900px]">
             One gateway. <span className="text-[var(--kl-gold-deep)]">Every worthy model.</span>
-          </h3>
-          <ul className="mt-7 space-y-3.5">
+          </h2>
+          <ul className="mt-8 space-y-3.5 text-[16px]">
             {[
               'Never hard-coded to a single provider — the router chooses per request',
               'Routes by task, accuracy, language, cost, speed and data sensitivity',
@@ -107,6 +107,7 @@ export default function AIGateway() {
         </motion.div>
 
         {/* Right: routing diagram */}
+        <div className="kl-stage min-w-0">
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -114,7 +115,7 @@ export default function AIGateway() {
           transition={{ duration: 0.7, ease: EASE }}
           className={cn(KL_CARD, 'overflow-hidden')}
         >
-          <div className="flex items-center justify-between border-b border-white/10 bg-[var(--kl-paper)] px-5 py-3">
+          <div className="flex items-center justify-between border-b border-white/10 bg-[var(--kl-code)] px-5 py-3">
             <span className="mono-data flex items-center gap-2 text-xs text-text-low">
               <Route size={13} className="text-gold" aria-hidden="true" />
               gateway.kaluta.ai/route
@@ -129,7 +130,7 @@ export default function AIGateway() {
             </button>
           </div>
 
-          <div className="overflow-x-auto bg-[var(--kl-paper)] p-4">
+          <div className="overflow-x-auto bg-[var(--kl-code)] p-4">
             <div className="relative h-[300px] w-[600px]">
               {/* wires */}
               <svg viewBox="0 0 600 300" className="absolute inset-0 h-full w-full" aria-hidden="true">
@@ -248,6 +249,7 @@ export default function AIGateway() {
             decision #{round + 1} · weights: accuracy 0.35 · cost 0.2 · speed 0.2 · language 0.15 · sensitivity 0.1
           </p>
         </motion.div>
+        </div>
       </div>
     </section>
   )

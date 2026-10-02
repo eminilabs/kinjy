@@ -17,6 +17,7 @@
   --kl-stage-a: #f6f1e7;         /* feature stages, gradient ends */
   --kl-stage-b: #ede4d3;
   --kl-dash: #d9c9a8;            /* dashed rings, "coming soon" outlines */
+  --kl-code: #f3f4f9;            /* code windows: a cool grey, not the warm paper */
   --kl-cutout: #ffffff;          /* the ring that separates an avatar from what is behind it */
   --kl-glass-bg: rgba(255, 255, 255, 0.66);
   --kl-glass-border: rgba(255, 255, 255, 0.95);
@@ -65,6 +66,7 @@
   --kl-stage-a: #141833;
   --kl-stage-b: #1c2144;
   --kl-dash: #3a4068;
+  --kl-code: #0f1329;
   --kl-cutout: var(--k-night);
   --kl-glass-bg: rgba(255, 255, 255, 0.06);
   --kl-glass-border: rgba(255, 255, 255, 0.12);
@@ -197,3 +199,23 @@
 }
 .kl-plain :is(.kl-serif, .kl-h2, .kl-h3, .font-display, .display-xl, .display-lg, .h1, .h2):not(.kl-brand) .italic,
 .kl-plain .font-display.italic { font-style: normal; }
+
+/* A soft stage the page's demos rest on: the landing's feature-row panel. */
+.kl-stage {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 20px;
+  padding: clamp(16px, 3vw, 40px);
+  background: linear-gradient(160deg, var(--kl-stage-a), var(--kl-stage-b));
+}
+.kl-stage::before,
+.kl-stage::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  border-radius: 9999px;
+  filter: blur(90px);
+}
+.kl-stage::before { width: 280px; height: 280px; right: -64px; top: -80px; background: var(--kl-sky); opacity: 0.35; }
+.kl-stage::after { width: 260px; height: 260px; left: -64px; bottom: -96px; background: #d9a648; opacity: 0.3; }

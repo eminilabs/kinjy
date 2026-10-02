@@ -71,7 +71,7 @@ export default function TrainingLicensing() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-15%' }}
           transition={{ duration: 0.65, ease: EASE }}
-          className="mx-auto max-w-3xl text-center"
+          className="max-w-3xl"
         >
           <Eyebrow>AI-Training Licensing</Eyebrow>
           <h2 className="kl-h2 mt-5 max-w-[900px]">
@@ -199,6 +199,7 @@ export default function TrainingLicensing() {
           </motion.div>
 
           {/* Right: certificate + ledger + counter */}
+          <div className="kl-stage min-w-0">
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -207,7 +208,7 @@ export default function TrainingLicensing() {
             className="flex flex-col gap-5"
           >
             <div className={cn(KL_CARD, 'overflow-hidden')}>
-              <div className="flex items-center justify-between border-b border-white/10 bg-[var(--kl-paper)] px-5 py-3">
+              <div className="flex items-center justify-between border-b border-white/10 bg-[var(--kl-code)] px-5 py-3">
                 <span className="mono-data flex items-center gap-2 text-xs text-text-low">
                   <FileBadge2 size={13} className="text-gold" aria-hidden="true" />
                   license.certificate / KTL-2025-00841
@@ -223,7 +224,7 @@ export default function TrainingLicensing() {
                   {optedIn ? 'active' : 'specimen'}
                 </span>
               </div>
-              <div className="bg-[var(--kl-paper)] p-5">
+              <div className="bg-[var(--kl-code)] p-5">
                 <div className="grid grid-cols-[minmax(0,1fr)] gap-x-8 gap-y-2.5 sm:grid-cols-2">
                   {[
                     ['creator', 'did:kinjy:member:demo-0042'],
@@ -259,6 +260,7 @@ export default function TrainingLicensing() {
               <LedgerRow id="lg-8912" label="Kinjy Leaders contribution (5%)" amount="+$15.42" reconciled={false} timestamp="Dec 01" />
             </div>
           </motion.div>
+          </div>
         </div>
       </div>
     </section>

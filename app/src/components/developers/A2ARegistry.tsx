@@ -196,7 +196,7 @@ export default function A2ARegistry() {
             transition={{ duration: 0.7, ease: EASE }}
             className={cn(KL_CARD, 'flex flex-col overflow-hidden')}
           >
-            <div className="flex items-center justify-between border-b border-white/10 bg-[var(--kl-paper)] px-5 py-3">
+            <div className="flex items-center justify-between border-b border-white/10 bg-[var(--kl-code)] px-5 py-3">
               <span className="mono-data flex items-center gap-2 text-xs text-text-low">
                 <Bot size={13} className="text-gold" aria-hidden="true" />
                 a2a.exchange / scripted session
@@ -220,7 +220,7 @@ export default function A2ARegistry() {
               )}
             </div>
 
-            <div className="flex-1 space-y-4 overflow-x-auto bg-[var(--kl-paper)] p-5">
+            <div className="flex-1 space-y-4 overflow-x-auto bg-[var(--kl-code)] p-5">
               {phase < 0 && (
                 <div className="flex h-full min-h-[260px] flex-col items-center justify-center gap-3 text-center">
                   <span
@@ -266,7 +266,7 @@ export default function A2ARegistry() {
                     initial={{ opacity: 0, y: 24, scale: 0.97 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     transition={{ duration: 0.55, ease: EASE }}
-                    className="rounded-card-md border border-gold/45 bg-[var(--kl-paper)] p-5 !border-[var(--kl-gold)]"
+                    className="rounded-card-md border border-gold/45 bg-[var(--kl-code)] p-5 !border-[var(--kl-gold)]"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <p className="flex items-center gap-2 text-sm font-semibold text-text-hi">

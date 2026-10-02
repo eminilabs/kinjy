@@ -70,9 +70,9 @@ export default function AlgorithmPublish() {
           transition={{ duration: 0.65, ease: EASE }}
         >
           <Eyebrow>Algorithm Marketplace</Eyebrow>
-          <h3 className="h3 mt-4 font-display text-3xl font-medium">
+          <h2 className="kl-h2 mt-5 max-w-[900px]">
             Ship ranking logic users <span className="text-[var(--kl-gold-deep)]">choose to install.</span>
-          </h3>
+          </h2>
           <ul className="mt-7 space-y-3.5">
             {BULLETS.map((b, i) => (
               <motion.li
@@ -99,6 +99,7 @@ export default function AlgorithmPublish() {
         </motion.div>
 
         {/* Right: manifest card + counter */}
+        <div className="kl-stage min-w-0">
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -106,14 +107,14 @@ export default function AlgorithmPublish() {
           transition={{ duration: 0.7, ease: EASE }}
         >
           <div className={cn(KL_CARD, 'overflow-hidden')}>
-            <div className="flex items-center gap-2 border-b border-white/10 bg-[var(--kl-paper)] px-5 py-3">
+            <div className="flex items-center gap-2 border-b border-white/10 bg-[var(--kl-code)] px-5 py-3">
               <span className="h-2.5 w-2.5 rounded-full bg-gold/70" aria-hidden="true" />
               <span className="mono-data ms-1 text-xs text-text-low">algorithm.manifest.json</span>
               <span className="mono-data ms-auto rounded-full border border-sky/30 bg-sky/10 px-2.5 py-0.5 text-[0.65rem] text-sky">
                 sandbox ✓ replayed
               </span>
             </div>
-            <div className="min-h-[19rem] bg-[var(--kl-paper)] p-5 font-mono text-[0.78rem] leading-[1.75]">
+            <div className="min-h-[19rem] bg-[var(--kl-code)] p-5 font-mono text-[0.78rem] leading-[1.75]">
               {MANIFEST_LINES.slice(0, linesShown).map((segs, i) => (
                 <div key={i} className="whitespace-pre">
                   {segs.map(([txt, cls], j) => (
@@ -145,6 +146,7 @@ export default function AlgorithmPublish() {
             </motion.p>
           </div>
         </motion.div>
+        </div>
       </div>
     </section>
   )
