@@ -379,6 +379,19 @@ def _post_out(
     signed_media = {
         m.media_id: mediasign.sign_url(m.url, m.media_id, viewer) for m in media
     }
+    # A feed passes the batch it resolved for the whole page. A single-post
+    # response - creating one, editing one, opening one by link - passed
+    # nothing, so `author` came back null and the card had no name to show
+    # until something refetched it. Whoever posted saw the wrong name on their
+    # own post until they reloaded. Resolving it here rather than at each call
+    # site, because four of them had already forgotten.
+    if authors is None:
+        wanted = {post.author_id}
+        if post.repost_of:
+            original = db.get(models.Post, post.repost_of)
+            if original is not None:
+                wanted.add(original.author_id)
+        authors = _resolve_authors(wanted)
     return {
         "id": post.id,
         "author_id": post.author_id,
@@ -493,6 +506,22 @@ def _resolve_authors(ids: set[str]) -> dict[str, dict]:
     except Exception as exc:
         log.warning("could not resolve post authors: %s", exc)
         return {}
+
+
+def _refuse_or_404(profile, detail: str = "Post not found") -> None:
+    """Raise for a viewer who may not see something.
+
+    Fails closed either way; only the explanation differs. A degraded age
+    lookup is a fault on our side and is retryable, so it must not be dressed
+    up as a missing post - a member sent looking for content that is in front
+    of them learns to distrust the whole surface.
+    """
+    if getattr(profile, "degraded", False):
+        raise HTTPException(
+            status_code=503,
+            detail="We could not check your account just now. Please try again.",
+        )
+    raise HTTPException(status_code=404, detail=detail)
 
 
 def _viewer_age(user_id: str | None):
@@ -1275,7 +1304,7 @@ def get_post(post_id: str, principal: MaybeUser, db: OrmSession = Depends(get_db
     # 404 rather than 403: confirming that a post exists but is out of reach
     # tells somebody exactly which links are worth passing to a minor.
     if not agefilter.visible_to(db, age, post.id):
-        raise HTTPException(status_code=404, detail="Post not found")
+        _refuse_or_404(age)
     post.views_count += 1
     db.commit()
     return _apply_prefs(_post_out(post, db, viewer=viewer), prefs)
@@ -1296,8 +1325,9 @@ def get_post_media(post_id: str, principal: MaybeUser, db: OrmSession = Depends(
     # The bytes themselves. Withholding the URL is the only protection that
     # actually works - a client told "do not display this" has already
     # downloaded it.
-    if not agefilter.visible_to(db, _viewer_age(viewer_id), post.id):
-        raise HTTPException(status_code=404, detail="Post not found")
+    viewer_age = _viewer_age(viewer_id)
+    if not agefilter.visible_to(db, viewer_age, post.id):
+        _refuse_or_404(viewer_age)
     rows = db.scalars(
         select(models.PostMedia)
         .where(models.PostMedia.post_id == post.id)
@@ -2277,7 +2307,7 @@ def add_comment(post_id: str, payload: CommentIn, principal: CurrentUser, db: Or
     # comment would then carry their handle into a thread they cannot see.
     commenter = _viewer_age(principal.user_id)
     if not agefilter.visible_to(db, commenter, post.id):
-        raise HTTPException(status_code=404, detail="Post not found")
+        _refuse_or_404(commenter)
 
     parent = db.get(models.Comment, payload.parent_id) if payload.parent_id else None
     if payload.parent_id and (parent is None or parent.post_id != post_id):
@@ -2430,7 +2460,7 @@ def list_comments(
     # yours to read either — by audience, then by age.
     _readable_post(db, post_id, principal.user_id if principal else None)
     if not agefilter.visible_to(db, age, post_id):
-        raise HTTPException(status_code=404, detail="Post not found")
+        _refuse_or_404(age)
 
     stmt = select(models.Comment).where(
         models.Comment.post_id == post_id, models.Comment.status == "published"

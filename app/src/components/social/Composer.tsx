@@ -79,9 +79,22 @@ const VISIBILITY = [
 
 type Kind = 'text' | 'image' | 'video' | 'article'
 
+/**
+ * The types the server actually stores, named one by one rather than as
+ * `image/*`.
+ *
+ * `image/*` is what an iPhone reads as "send whatever you have", and what it
+ * has is HEIC - which media-service refuses with a 415 and no browser can
+ * display anyway. Naming jpeg and png makes iOS transcode the photo on the way
+ * out, so the picture a member chose is the picture that uploads. It also stops
+ * the picker offering files that were always going to be rejected.
+ */
+const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif'
+const VIDEO_ACCEPT = 'video/mp4,video/webm'
+
 const KINDS: Array<{ id: Kind; label: string; icon: typeof ImageIcon; accept?: string; tint: string }> = [
-  { id: 'image', label: 'Photo', icon: ImageIcon, accept: 'image/*', tint: 'text-emerald-400' },
-  { id: 'video', label: 'Video', icon: Video, accept: 'video/*', tint: 'text-red-400' },
+  { id: 'image', label: 'Photo', icon: ImageIcon, accept: IMAGE_ACCEPT, tint: 'text-emerald-400' },
+  { id: 'video', label: 'Video', icon: Video, accept: VIDEO_ACCEPT, tint: 'text-red-400' },
   { id: 'article', label: 'Article', icon: FileText, tint: 'text-sky' },
 ]
 

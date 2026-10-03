@@ -116,7 +116,23 @@ async def upload(
     else:
         kind = ALLOWED.get(content_type)
         if kind is None:
-            raise HTTPException(status_code=415, detail=f"Unsupported content type: {file.content_type}")
+            # Named, with the way out. HEIC is the common case by a distance -
+            # it is what an iPhone produces by default, no browser displays it,
+            # and "Unsupported content type: image/heic" tells the member
+            # nothing they can act on.
+            if content_type in ("image/heic", "image/heif"):
+                raise HTTPException(
+                    status_code=415,
+                    detail=(
+                        "This photo is in Apple's HEIC format, which browsers cannot show. "
+                        "On iPhone: Settings > Camera > Formats > Most Compatible, or share "
+                        "the photo as JPEG."
+                    ),
+                )
+            raise HTTPException(
+                status_code=415,
+                detail=f"{file.content_type} files are not supported here. Use JPEG, PNG, WebP or GIF.",
+            )
 
     asset_id = new_id("mda")
     folder = ROOT / principal.user_id[:12]
