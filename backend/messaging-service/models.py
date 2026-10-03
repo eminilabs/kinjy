@@ -70,7 +70,7 @@ class Message(Base):
     encrypted: Mapped[bool] = mapped_column(Boolean, default=True)
     ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary)
     body: Mapped[str | None] = mapped_column(Text)
-    kind: Mapped[str] = mapped_column(String(20), default="text")  # text|media|call_event
+    kind: Mapped[str] = mapped_column(String(20), default="text")  # text|media|sticker|call_event
     media_url: Mapped[str | None] = mapped_column(String(500))
     # Attachment facts as media-service recorded them at upload — never as the
     # sending client described them.
@@ -86,6 +86,10 @@ class Message(Base):
     # No foreign key on purpose: an expired message is really deleted, and this
     # id must outlive it so the API can say "the original is gone".
     reply_to_id: Mapped[str | None] = mapped_column(String(40))
+    # A standalone sticker message (kind "sticker"): an id from stickers.py and
+    # nothing else, never a URL or an image. Public catalogue data, so it is
+    # stored as is in every conversation, end-to-end encrypted ones included.
+    sticker_id: Mapped[str | None] = mapped_column(String(64))
     # Chosen by the sending device before the request goes out. A retry after
     # a dropped response carries the same id, so it finds the message already
     # stored instead of sending it twice. Unique per sender (partial index in

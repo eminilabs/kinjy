@@ -25,6 +25,7 @@ const MEDIA_LABELS: Record<string, string> = {
 
 /** A short, plain line for the quoted message. Never anything the member cannot already see. */
 function quoteText(message: Message): string {
+  if (message.kind === 'sticker') return 'Sticker'
   if (message.encrypted) return 'Encrypted message'
   const text = (message.body ?? '').replace(/\s+/g, ' ').trim()
   if (text) return text.length > 140 ? `${text.slice(0, 140)}…` : text

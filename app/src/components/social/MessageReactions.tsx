@@ -1,15 +1,14 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
-import { createPortal } from 'react-dom'
 import { Reply, SmilePlus, X } from 'lucide-react'
-import type { Reaction, Sticker } from '@/lib/api'
+import FloatingPanel from '@/components/social/FloatingPanel'
+import StickerPanel from '@/components/social/StickerPanel'
+import type { Reaction, Sticker, StickerCatalogue } from '@/lib/api'
 import { stickerUrl } from '@/lib/stickers'
 import { cn } from '@/lib/utils'
 
 /**
  * Sticker reactions under a message, the way WhatsApp shows them: a small
  * pill under the bubble with the stickers received and how many, a tap on it
- * to see who reacted, and a short row of stickers to pick from.
+ * to see who reacted, and the shared sticker panel to pick from.
  *
  * Only ids from the server's catalogue are ever shown or sent; the picture is
  * built from the id (lib/stickers.ts), never from a URL a peer supplied.
@@ -77,131 +76,36 @@ export function ReactButton({ onOpen, label }: { onOpen: (anchor: DOMRect) => vo
 }
 
 /**
- * A small floating panel, portalled to <body>: the thread sits inside a
- * backdrop-filtered card, where position:fixed would be relative to the card
- * and the panel would be clipped by the scrolling list.
- */
-function Floating({
-  anchor,
-  label,
-  onClose,
-  children,
-}: {
-  anchor: DOMRect
-  label: string
-  onClose: () => void
-  children: ReactNode
-}) {
-  const ref = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
-  const opener = useRef<Element | null>(document.activeElement)
-
-  useLayoutEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const { width, height } = el.getBoundingClientRect()
-    const above = anchor.top - height - 8
-    const top = above >= 8 ? above : Math.min(anchor.bottom + 8, window.innerHeight - height - 8)
-    const left = Math.min(Math.max(8, anchor.left + anchor.width / 2 - width / 2), window.innerWidth - width - 8)
-    setPos({ top, left })
-  }, [anchor])
-
-  useEffect(() => {
-    const away = (e: PointerEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
-    }
-    const key = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation()
-        onClose()
-      }
-    }
-    document.addEventListener('pointerdown', away, true)
-    document.addEventListener('keydown', key, true)
-    const previous = opener.current
-    return () => {
-      document.removeEventListener('pointerdown', away, true)
-      document.removeEventListener('keydown', key, true)
-      // Focus goes back to whatever opened the panel.
-      if (previous instanceof HTMLElement && document.contains(previous)) previous.focus()
-    }
-  }, [onClose])
-
-  return createPortal(
-    <div
-      ref={ref}
-      role="dialog"
-      aria-label={label}
-      style={{ position: 'fixed', top: pos?.top ?? 0, left: pos?.left ?? 0, opacity: pos ? 1 : 0 }}
-      className="z-50 max-w-[calc(100vw-16px)] rounded-card-md border border-white/12 bg-ink-2 p-1.5 shadow-lg"
-    >
-      {children}
-    </div>,
-    document.body,
-  )
-}
-
-/**
- * Pick a sticker. Arrow keys move, Enter or Space picks, Escape closes and
- * focus returns to the button that opened it. When opened from a long press
- * it also offers Reply, so a phone has both without a second gesture.
+ * Pick a sticker for a reaction: the same panel the composer opens to send one
+ * (StickerPanel), so both uses share one catalogue and one set of conventions.
+ * Opened from a long press it also offers Reply, so a phone has both without a
+ * second gesture.
  */
 export function StickerPicker({
   anchor,
-  stickers,
+  catalogue,
   current,
   onPick,
   onReply,
   onClose,
 }: {
   anchor: DOMRect
-  stickers: Sticker[]
+  catalogue: StickerCatalogue
   current: string | undefined
   onPick: (id: string) => void
   onReply?: () => void
   onClose: () => void
 }) {
-  const row = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const buttons = row.current?.querySelectorAll<HTMLButtonElement>('button[data-sticker]')
-    const start = [...(buttons ?? [])].find((b) => b.dataset.sticker === current) ?? buttons?.[0]
-    start?.focus()
-  }, [current])
-
-  const move = (e: React.KeyboardEvent) => {
-    const buttons = [...(row.current?.querySelectorAll<HTMLButtonElement>('button[data-sticker]') ?? [])]
-    const at = buttons.indexOf(document.activeElement as HTMLButtonElement)
-    if (at < 0) return
-    const next = { ArrowRight: at + 1, ArrowLeft: at - 1, Home: 0, End: buttons.length - 1 }[e.key]
-    if (next === undefined) return
-    e.preventDefault()
-    buttons[(next + buttons.length) % buttons.length]?.focus()
-  }
-
   return (
-    <Floating anchor={anchor} label="Choose a sticker" onClose={onClose}>
-      <div ref={row} onKeyDown={move} className="flex max-w-full flex-wrap justify-center gap-0.5">
-        {stickers.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            data-sticker={s.id}
-            aria-label={s.name}
-            aria-pressed={s.id === current}
-            title={s.name}
-            onClick={() => {
-              onPick(s.id)
-              onClose()
-            }}
-            className={cn(
-              'rounded-full p-1 hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold/60',
-              s.id === current && 'bg-gold/20',
-            )}
-          >
-            <StickerImage id={s.id} name="" size={32} />
-          </button>
-        ))}
-      </div>
+    <FloatingPanel anchor={anchor} label="Choose a sticker" onClose={onClose}>
+      <StickerPanel
+        catalogue={catalogue}
+        current={current}
+        onPick={(id) => {
+          onPick(id)
+          onClose()
+        }}
+      />
       {onReply && (
         <button
           type="button"
@@ -215,7 +119,7 @@ export function StickerPicker({
           Reply
         </button>
       )}
-    </Floating>
+    </FloatingPanel>
   )
 }
 
@@ -238,7 +142,7 @@ export function ReactionList({
   onClose: () => void
 }) {
   return (
-    <Floating anchor={anchor} label="Who reacted" onClose={onClose}>
+    <FloatingPanel anchor={anchor} label="Who reacted" onClose={onClose}>
       <ul className="min-w-[200px] max-w-[260px] py-1">
         {reactions.map((r) => (
           <li key={r.user_id} className="flex items-center gap-2 px-2 py-1">
@@ -261,6 +165,6 @@ export function ReactionList({
           </li>
         ))}
       </ul>
-    </Floating>
+    </FloatingPanel>
   )
 }
