@@ -1,4 +1,9 @@
 .env
+# Any hand-made copy of it too: a file called .env.backup-2026-10-03 is
+# not matched by the line above, and `git add -A` would publish every
+# secret in it to a public repository.
+.env.backup*
+.env.*.backup
 *.log
 __pycache__/
 *.py[cod]
