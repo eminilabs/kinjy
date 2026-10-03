@@ -105,6 +105,28 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
 
 
+class MessageReaction(Base):
+    """One sticker a member put under one message.
+
+    One row per (message, member): choosing another sticker replaces the row,
+    choosing the same one removes it. The sticker is an id from ``stickers.py``,
+    never a URL or an image. No foreign key: an expired message is really
+    deleted by ``_purge_expired``, which deletes its reactions first.
+    """
+
+    __tablename__ = "message_reactions"
+    __table_args__ = (
+        UniqueConstraint("message_id", "user_id", name="uq_reaction_message_user"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    message_id: Mapped[str] = mapped_column(String(40), index=True)
+    user_id: Mapped[str] = mapped_column(String(40))
+    sticker_id: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
 class Notification(Base):
     __tablename__ = "notifications"
     __table_args__ = {"schema": SCHEMA}
