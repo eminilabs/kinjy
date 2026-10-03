@@ -1677,16 +1677,27 @@ def feed(
             # Saying "you follow nobody" would be a lie the member cannot see
             # through; an error they can retry is the honest answer.
             raise HTTPException(status_code=503, detail="Your feed could not be loaded right now. Please try again.")
-        if not following:
+        # Your own posts belong in your own feed. They were excluded because the
+        # audience was exactly the set of people you follow, and nobody follows
+        # themselves - so a member could publish something, reload, and find the
+        # feed empty, which is what this looked like from the outside: posting
+        # into a void.
+        audience = set(following) | ({viewer} if viewer else set())
+        if not audience:
             return {"mode": mode, "algorithm": "chronological", "items": [],
                     "age_tier": agefilter.tier_of(age), "degraded": age.degraded,
                     "empty_reason": "not_following_anyone"}
         rows = db.scalars(
-            stmt.where(models.Post.author_id.in_(following))
+            stmt.where(models.Post.author_id.in_(audience))
             .order_by(models.Post.created_at.desc())
             .limit(limit)
             .offset(offset)
         ).all()
+        if not rows and not following:
+            # Still empty, and the reason is the one the member can act on.
+            return {"mode": mode, "algorithm": "chronological", "items": [],
+                    "age_tier": agefilter.tier_of(age), "degraded": age.degraded,
+                    "empty_reason": "not_following_anyone"}
         authors = _resolve_authors(_author_ids(db, list(rows)))
         reposted = _reposted_by(db, viewer, list(rows))
         return {
