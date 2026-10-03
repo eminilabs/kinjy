@@ -48,7 +48,9 @@ export default function SocialHub() {
     setParams(next, { replace: true })
   }
   const setMode = (next: string) => {
-    // Switching mode drops a filter that belonged to the previous one.
+    // Switching mode drops a filter that belonged to the previous one, and
+    // retires the "showing New instead" notice: the member has chosen.
+    setFellBackFrom(null)
     const params = next === 'new' ? new URLSearchParams() : new URLSearchParams({ mode: next })
     setParams(params, { replace: true })
   }
@@ -130,6 +132,13 @@ export default function SocialHub() {
   useViewTracking(feedRef, Boolean(feed))
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Set when Following turned out to be empty and New was shown instead, so
+  // the switch is explained to the member rather than silent.
+  const [fellBackFrom, setFellBackFrom] = useState<string | null>(null)
+  // A mode the member asked for after being shown the fallback. Without this,
+  // "Show Following anyway" is undone by the very fallback that offered it: the
+  // feed comes back empty, falls back again, and the button does nothing.
+  const insistedOn = useRef<string | null>(null)
   // New posts are announced, not injected. Splicing a stranger's post into the
   // list while somebody is reading moves the text under their eyes; a banner
   // lets them choose the moment.
@@ -185,7 +194,28 @@ export default function SocialHub() {
         },
         { signal: controller.signal },
       )
-      if (!controller.signal.aborted) setFeed(page)
+      if (controller.signal.aborted) return
+      // A Following feed with nobody followed is empty by construction, and a
+      // member who opens the app to a blank screen reads it as their posts
+      // having gone, not as a mode behaving exactly as specified. Changing the
+      // stored default fixes new accounts; this fixes the ones already carrying
+      // "following", whose stored preference cannot be told apart from a
+      // deliberate choice - so rather than overwrite it, the feed falls back
+      // for this visit and says why.
+      if (
+        page.items.length === 0 &&
+        page.empty_reason === 'not_following_anyone' &&
+        mode !== 'new' &&
+        insistedOn.current !== mode
+      ) {
+        setFellBackFrom(mode)
+        setParams(new URLSearchParams(), { replace: true })
+        return
+      }
+      // Deliberately not cleared here: the fallback's own successful load is
+      // what arrives next, and clearing on success wiped the explanation before
+      // it could be read. It is cleared when the member picks a mode instead.
+      setFeed(page)
     } catch (err) {
       if (controller.signal.aborted) return
       setError(err instanceof ApiError ? err.message : 'Could not load the feed')
@@ -420,6 +450,26 @@ export default function SocialHub() {
                   Refresh
                 </button>
               </div>
+            )}
+
+            {fellBackFrom && !loading && (
+              <p className="cloud-card mb-3 p-3 text-sm text-text-mid">
+                You are not following anyone yet, so this is the New feed.{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Clearing the marker first, so asking for Following again
+                    // is not immediately undone by the fallback that brought
+                    // this notice up.
+                    insistedOn.current = fellBackFrom
+                    setFellBackFrom(null)
+                    setMode(fellBackFrom)
+                  }}
+                  className="underline hover:text-text-hi"
+                >
+                  Show Following anyway
+                </button>
+              </p>
             )}
 
             {!loading && !error && feed?.items.length === 0 && (
