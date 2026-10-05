@@ -10,7 +10,6 @@ import Experience from '@/components/dashboard/Experience'
 import Privacy from '@/components/dashboard/Privacy'
 import ProfileEditor from '@/components/dashboard/ProfileEditor'
 import { Badge, Panel } from '@/components/dashboard/primitives'
-import WalletStrip from '@/components/dashboard/WalletStrip'
 import AppShell from '@/components/app/AppShell'
 import { cn } from '@/lib/utils'
 
@@ -100,9 +99,9 @@ export default function Dashboard() {
     'inline-flex items-center gap-2 rounded-full border border-[var(--cloud-border)] bg-[var(--cloud)] px-4 py-2 text-sm font-semibold text-text-mid transition-colors hover:border-gold/50 hover:text-text-hi'
 
   return (
-    <AppShell rail={false}>
+    <AppShell>
       {/* Header: who this space belongs to, and the two things you do from it */}
-      <header className="mb-8 flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
         <div className="min-w-0">
           <p className="mono-data text-[0.7rem] uppercase tracking-[0.14em] text-gold-soft">Your space</p>
           <h1 className="mt-2 truncate text-[clamp(34px,5vw,60px)] font-bold leading-[1.02] tracking-[-0.04em] text-text-hi">
@@ -137,44 +136,31 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <WalletStrip />
+      <nav className="flex flex-wrap gap-1 border-b border-white/8" aria-label="Dashboard sections">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            aria-current={tab === t.id ? 'page' : undefined}
+            className={cn(
+              'relative px-4 py-3 text-sm font-medium',
+              tab === t.id ? 'text-gold-soft' : 'text-text-mid hover:text-text-hi',
+            )}
+          >
+            {t.label}
+            {tab === t.id && (
+              <span
+                aria-hidden="true"
+                className="absolute inset-x-3 -bottom-px h-0.5 rounded-full"
+                style={{ background: 'var(--grad-arc)' }}
+              />
+            )}
+          </button>
+        ))}
+      </nav>
 
-      <div className="mt-10 grid grid-cols-[minmax(0,1fr)] gap-x-12 gap-y-6 lg:grid-cols-[210px_minmax(0,1fr)]">
-        {/* Sections: a numbered list beside the content on desktop, a scrolling row on phones */}
-        <nav aria-label="Dashboard sections" className="min-w-0 lg:sticky lg:top-[150px] lg:self-start">
-          <ol className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] lg:mx-0 lg:flex-col lg:gap-0 lg:overflow-visible lg:px-0 [&::-webkit-scrollbar]:hidden">
-            {TABS.map((t, i) => {
-              const on = tab === t.id
-              return (
-                <li key={t.id} className="shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setTab(t.id)}
-                    aria-current={on ? 'page' : undefined}
-                    className={cn(
-                      'group relative flex w-full items-baseline gap-3 whitespace-nowrap rounded-full px-4 py-2 text-start text-sm font-semibold transition-colors',
-                      'lg:rounded-none lg:border-b lg:border-[var(--cloud-border)] lg:px-0 lg:py-3.5 lg:text-[15px]',
-                      on
-                        ? 'max-lg:bg-[linear-gradient(135deg,#f0c878,#d9a648)] max-lg:text-[#0B0E1D] lg:text-text-hi'
-                        : 'bg-text-hi/[0.05] text-text-mid hover:text-text-hi lg:bg-transparent',
-                    )}
-                  >
-                    <span className={cn('mono-data hidden text-[0.7rem] lg:inline', on ? 'text-gold-soft' : 'text-text-low')}>
-                      {String(i + 1).padStart(2, '0')}
-                    </span>
-                    {t.label}
-                    {on && (
-                      <span aria-hidden="true" className="absolute -left-4 top-3 hidden h-[calc(100%-24px)] w-1 rounded-full bg-gradient-to-b from-gold-soft to-gold lg:block" />
-                    )}
-                  </button>
-                </li>
-              )
-            })}
-          </ol>
-        </nav>
-
-        <div className="min-w-0">
-      <div>
+      <div className="mt-6">
         {tab === 'earnings' && (
           <div className="space-y-5">
             <Earnings />
@@ -222,8 +208,6 @@ export default function Dashboard() {
             <CloseAccount />
           </div>
         )}
-      </div>
-        </div>
       </div>
     </AppShell>
   )
