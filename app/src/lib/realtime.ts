@@ -6,6 +6,8 @@ export interface RealtimeEvent {
   /** chat */
   conversation_id?: string
   message_id?: string
+  /** chat: the message a new message answers (id only) */
+  reply_to_id?: string | null
   sender_id?: string
   encrypted?: boolean
   body?: string | null

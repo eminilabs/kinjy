@@ -80,6 +80,12 @@ class Message(Base):
     media_type: Mapped[str | None] = mapped_column(String(100))
     media_size: Mapped[int | None] = mapped_column(BigInteger)
     lang: Mapped[str | None] = mapped_column(String(5))
+    # The message this one answers. Only the id is kept: the quoted text is
+    # built by the client from what it already holds, because in an end-to-end
+    # conversation the server cannot read it and must not copy it in the clear.
+    # No foreign key on purpose: an expired message is really deleted, and this
+    # id must outlive it so the API can say "the original is gone".
+    reply_to_id: Mapped[str | None] = mapped_column(String(40))
     # Chosen by the sending device before the request goes out. A retry after
     # a dropped response carries the same id, so it finds the message already
     # stored instead of sending it twice. Unique per sender (partial index in
