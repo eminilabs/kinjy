@@ -508,3 +508,43 @@ What the tests do not cover:
   failure pointed at files that do not exist in the repository, which is a
   confusing place to start debugging.
 
+
+## The imported members have not signed in yet (05/10)
+
+- **Nobody has verified that DSM's password hashes authenticate here.** The
+  library half is settled: passlib's bcrypt accepts a PHP-style `$2y$` hash
+  with the same cost and salt, verifies the right password and rejects a wrong
+  one, and the `error reading bcrypt version` line in the logs is trapped and
+  harmless. An earlier run that raised `UnknownHashError` proved nothing - the
+  test string had been mangled by shell quoting, not by passlib.
+- **What is still unknown is the shape of the 14,791 hashes now in production.**
+  All 14,791 rows have *a* hash, but their prefixes were never counted. If any
+  of them are legacy MD5 or SHA rather than bcrypt, those members cannot sign
+  in and will get "wrong password" rather than anything that explains itself.
+  The check is one query - the prefix and length distribution of
+  `auth.users.password_hash` - and it was not run because reading production
+  was refused at the time. **Run it before telling anyone their account is
+  ready.** A non-bcrypt hash is not a disaster: it means a forced password
+  reset for those members, which is a decision to take knowingly rather than
+  discover from support messages.
+- **No imported member has actually logged in end to end.** Hash shape aside,
+  the sign-in path for these accounts - no `users.profiles` row until it is
+  materialised on demand, no age profile for the 7,484 without a usable birth
+  date - has not been exercised once against production.
+
+## A 200 MB limit nobody could reach (05/10)
+
+- ~~Large photo and video posts fail against UploadCenter.~~ Fixed and deployed
+  on 05/10: the client that sends the file had a flat 15-second timeout, which
+  httpx also applies to the write phase, so that was the budget for pushing the
+  whole body to R2 on a service advertising a 200 MB limit. The send now has
+  its own budget scaled to the file.
+- **The suite had been green through all of it.** Its large-file check uploaded
+  an mp4 header followed by 8 MB of random bytes; local storage never looked
+  inside a file, so it passed, and UploadCenter - which decodes what it is
+  given - refused it for being a fake, hiding the timeout underneath. A test
+  fixture that no real storage would accept is not a test of storage.
+- **The deploy restarted postgres and rabbitmq, not only media-service.**
+  `up -d --build media-service` recreated its dependencies too, so the whole
+  platform took a short database blip for a one-service fix. Everything came
+  back healthy (13/13), but a targeted restart is not as targeted as it looks.
