@@ -582,3 +582,25 @@ What the tests do not cover:
   `user.password_changed` for a notifier that does not exist yet.
 - **The new panel is in English only**, like the rest of the security screen.
   It joins the pages still waiting on the translation pass.
+
+## Communities became groups (05/10)
+
+- ~~A post addressed to a community was visible to nobody.~~ Fixed and deployed
+  on 05/10: members post into a community, its posts reach its members' feeds
+  and its own page, membership is checked before posting, and a member can
+  leave. Communities have shareable URLs (`/communities/<slug>`), and the
+  destination survives the sign-in door.
+- **A public community is readable by the API without signing in, but not in
+  the browser.** The page lives inside the signed-in shell, so a visitor is
+  redirected to sign in even for a community whose whole point is being public.
+  The backend already answers anonymously and the test covers it, so this is a
+  UI decision rather than a rule - but it means a public group cannot actually
+  be looked into before joining, which is what public was supposed to buy.
+- **Nothing notifies a community when somebody posts in it.** Joining a group
+  and then having to go and look at it is most of the way back to a forum. The
+  notify helper is already used for join requests and could carry this.
+- **The community page is English**, like the rest of the app pages, while the
+  landing, sign-in and reset pages are in five languages.
+- **No pagination on a community's posts.** The endpoint takes limit and offset
+  and the page asks for the first twenty, so a busy group silently stops at
+  twenty until somebody wires the rest.
