@@ -30,9 +30,16 @@ import schemas
 
 log = logging.getLogger("auth-service")
 
+# `create_all` only ever creates missing *tables*, so a column added after the
+# first deploy has to be stated here or it exists in the model and nowhere else.
+MIGRATIONS = [
+    f"ALTER TABLE {models.SCHEMA}.users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ",
+]
+
 app = create_app(
     name="auth-service",
     schema=models.SCHEMA,
+    migrations=MIGRATIONS,
     description="Accounts, sessions, passkeys, account lifecycle, direct sponsor and referral pool.",
 )
 
@@ -316,6 +323,102 @@ def revoke_session(session_id: str, principal: CurrentUser, db: OrmSession = Dep
         raise HTTPException(status_code=404, detail="Session not found")
     session.revoked_at = _now()
     db.commit()
+
+
+# How many wrong guesses at the current password before this route stops
+# answering, and over what window. The caller already holds a valid token, so
+# this is not the front door - but it is the one place where guessing the
+# password of an account you are already inside pays off, which is exactly the
+# position somebody with a borrowed laptop is in.
+PASSWORD_CHANGE_MAX_FAILURES = 5
+PASSWORD_CHANGE_WINDOW_MIN = 15
+
+
+@app.post("/auth/password", tags=["auth"])
+async def change_password(
+    payload: schemas.PasswordChangeIn, principal: CurrentUser, request: Request,
+    db: OrmSession = Depends(get_db),
+):
+    """Change your own password, and sign the other devices out.
+
+    Signing the others out is the behaviour, not an option, because the reason
+    a member changes a password is usually that somebody else has it. Leaving
+    those sessions alive would make the change cosmetic.
+
+    One limit worth being honest about: access tokens are stateless and are not
+    invalidated here, so a token already issued keeps working until it expires
+    (ACCESS_TOKEN_TTL_MIN, 30 minutes by default). Revoking the sessions stops
+    it being *renewed*, which closes the hole within that window rather than
+    instantly.
+    """
+    user = _active_user(db, principal.user_id)
+
+    if not user.password_hash:
+        # Nothing to change. Inventing a "set your first password" flow here
+        # would let anyone holding a passkey session add a second way in, which
+        # is a decision for the account's owner to make knowingly.
+        raise HTTPException(
+            status_code=409,
+            detail="This account signs in with a passkey and has no password to change.",
+        )
+
+    since = _now() - timedelta(minutes=PASSWORD_CHANGE_WINDOW_MIN)
+    recent_failures = db.scalar(
+        select(func.count())
+        .select_from(models.LoginEvent)
+        .where(
+            models.LoginEvent.user_id == user.id,
+            models.LoginEvent.kind == "password_change",
+            models.LoginEvent.succeeded.is_(False),
+            models.LoginEvent.created_at >= since,
+        )
+    ) or 0
+    if recent_failures >= PASSWORD_CHANGE_MAX_FAILURES:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many incorrect attempts. Wait a few minutes and try again.",
+        )
+
+    if not security.verify_password(payload.current_password, user.password_hash):
+        _log_event(db, user.id, "password_change", request, ok=False)
+        db.commit()
+        raise HTTPException(status_code=400, detail="That is not your current password")
+
+    if payload.current_password == payload.new_password:
+        raise HTTPException(status_code=400, detail="The new password is the same as the current one")
+
+    now = _now()
+    user.password_hash = security.hash_password(payload.new_password)
+    user.password_changed_at = now
+
+    # The session to keep, if the caller named one and it is theirs. An
+    # unparseable or foreign token keeps nothing rather than failing the
+    # change: the password is the thing that had to change.
+    keep_session_id = None
+    if payload.refresh_token:
+        claims = security.decode_token(payload.refresh_token, expected_type=security.REFRESH)
+        if claims and claims.get("sub") == user.id:
+            keep_session_id = claims.get("sid")
+
+    ended = 0
+    for session in user.sessions:
+        if session.id == keep_session_id or not session.active:
+            continue
+        session.revoked_at = now
+        ended += 1
+
+    _log_event(db, user.id, "password_change", request)
+    db.commit()
+
+    await events.publish(
+        "user.password_changed",
+        {"user_id": user.id, "sessions_ended": ended, "at": now.isoformat()},
+    )
+    return {
+        "changed_at": now,
+        "sessions_ended": ended,
+        "signed_out_here": keep_session_id is None,
+    }
 
 
 @app.get("/auth/passkeys", response_model=list[schemas.PasskeyOut], tags=["passkeys"])

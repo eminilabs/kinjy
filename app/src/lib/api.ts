@@ -244,6 +244,16 @@ export interface AuthUser {
   kyc_verified: boolean
   referral_code: string
   status: string
+  /** Null means never changed since the account was created. */
+  password_changed_at: string | null
+  /** False for an account that signs in with a passkey only. */
+  has_password: boolean
+}
+
+export interface PasswordChangeResult {
+  changed_at: string
+  sessions_ended: number
+  signed_out_here: boolean
 }
 
 export interface AuthResult {
@@ -1965,6 +1975,25 @@ export const kaluta = {
 
     kyc: () => api.get<KycStatus>('/kyc/status'),
     startKyc: () => api.post<{ status: string; attempt?: number }>('/kyc/start'),
+
+    /**
+     * Change the password, and sign the other devices out.
+     *
+     * The current refresh token goes with the request so the server knows which
+     * session to keep - without it the member would be signed out of the very
+     * device they are standing at. If the server signs us out anyway (no token
+     * to hand it), the stored tokens are cleared rather than left to fail on
+     * the next call.
+     */
+    async changePassword(current_password: string, new_password: string) {
+      const result = await api.post<PasswordChangeResult>('/auth/password', {
+        current_password,
+        new_password,
+        refresh_token: tokens.refresh,
+      })
+      if (result.signed_out_here) tokens.clear()
+      return result
+    },
 
     sessions: () => api.get<DeviceSession[]>('/auth/sessions'),
     revokeSession: (id: string) => api.delete<void>(`/auth/sessions/${id}`),

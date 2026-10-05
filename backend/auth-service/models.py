@@ -40,6 +40,11 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
     handle: Mapped[str] = mapped_column(String(40), unique=True, nullable=False)
     password_hash: Mapped[str | None] = mapped_column(String(255))
+    # Null for an account whose password has never been changed, including every
+    # member imported from DSM - absent is not the same as "changed at import
+    # time", and a member asking when they last changed it deserves the
+    # difference.
+    password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
 
     role: Mapped[str] = mapped_column(String(20), default="member")  # member|creator|admin|superadmin
@@ -68,6 +73,15 @@ class User(Base):
 
     sessions: Mapped[list["Session"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     passkeys: Mapped[list["Passkey"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+
+    @property
+    def has_password(self) -> bool:
+        """Whether there is a password to change at all.
+
+        Read by the security screen so it can say so, rather than offering a
+        form that can only ever be refused.
+        """
+        return bool(self.password_hash)
 
 
 class Session(Base):
@@ -145,7 +159,8 @@ class LoginEvent(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[str] = mapped_column(String(40), index=True)
-    kind: Mapped[str] = mapped_column(String(30))  # password|passkey|otp|refresh|logout|failed
+    # password|passkey|otp|refresh|logout|failed|password_change
+    kind: Mapped[str] = mapped_column(String(30))
     ip: Mapped[str | None] = mapped_column(String(45))
     user_agent: Mapped[str | None] = mapped_column(Text)
     succeeded: Mapped[bool] = mapped_column(Boolean, default=True)
