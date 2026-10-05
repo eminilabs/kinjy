@@ -551,15 +551,23 @@ What the tests do not cover:
 
 ## Changing a password is not recovering one (05/10)
 
-- **There is still no "forgot password" flow.** A member can now change a
-  password they know; a member who has forgotten theirs has no way back in and
-  no email reset to ask for. That gap matters more than it did yesterday,
-  because 14,791 imported members have never typed their Kinjy password and
-  some will not remember a DSM one.
-- **It is also the only answer for a legacy hash.** If any imported hash turns
-  out not to be bcrypt, those members cannot sign in *and* cannot use the change
-  form, which requires the current password. Until a reset exists, the only
-  remedy is setting a password for them by hand.
+- ~~There is still no "forgot password" flow.~~ Built on 05/10: ask by email,
+  a one-hour single-use link, a new password, every session signed out. It is
+  also what answers a legacy hash - a member whose imported hash cannot verify
+  can get back in without anybody editing the database by hand.
+- **But nothing can be sent until SMTP is configured.** Production has no
+  SMTP_HOST or SMTP_FROM, so the endpoint reports itself unavailable and the
+  page says so rather than offering a form that cannot work. The flow is inert
+  on kinjy.com until those are in the server's .env, and until then the only
+  remedy for a member who cannot sign in is still setting a password by hand.
+- **No mail has ever been sent from production.** The whole path - DNS, SPF,
+  DKIM, whether the host is allowed to send, whether Gmail keeps it out of spam
+  - is untested outside a local sink. Expect the first real send to be the one
+  that finds the problem.
+- **No Kinjy address has ever been verified.** `email_verified` is on the model
+  and is never set to true anywhere, so a reset link goes to whatever address
+  was typed at registration or imported from DSM. That is the usual model and is
+  not wrong, but it is worth knowing it is unchecked.
 - **An access token outlives the change by up to 30 minutes.** Revoking the
   sessions stops renewal, but a token already issued keeps working until it
   expires, so somebody who had the account is out within the half hour rather
