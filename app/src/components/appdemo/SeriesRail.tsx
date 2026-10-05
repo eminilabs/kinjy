@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Bell, ChevronRight, Clapperboard, Flame, Play, SkipForward } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { avatarStyle } from './theme'
+import { Eyebrow } from '@/components/landing/PageKit'
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 const SNAP: [number, number, number, number] = [0.34, 1.56, 0.64, 1]
@@ -52,8 +53,8 @@ export default function SeriesRail() {
   }
 
   return (
-    <section className="noise-overlay relative bg-ink-2/20 px-6 py-24 md:py-28">
-      <div className="mx-auto max-w-container">
+    <section className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]">
+      <div>
         <motion.div
           initial={{ opacity: 0, y: 28 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -61,11 +62,11 @@ export default function SeriesRail() {
           transition={{ duration: 0.6, ease: EASE }}
           className="mb-12 max-w-2xl"
         >
-          <p className="eyebrow text-gold">Serialized content &amp; habit loops</p>
-          <h3 className="h3 mt-3 font-display text-3xl font-medium">
-            Stories that <span className="text-gold-grad">come back to you.</span>
-          </h3>
-          <p className="mt-3 text-sm leading-relaxed text-text-mid">
+          <Eyebrow>Serialized content &amp; habit loops</Eyebrow>
+          <h2 className="kl-h2 mt-5 max-w-[900px]">
+            Stories that <span className="text-[var(--kl-gold-deep)]">come back to you.</span>
+          </h2>
+          <p className="kl-lead mt-6 !max-w-[560px]">
             Creators publish in seasons and episodes. Kinjy tracks where you stopped, lines up the next
             episode and celebrates creator streaks — healthy rituals, not infinite scroll.
           </p>

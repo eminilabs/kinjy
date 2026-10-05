@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { ArrowRight } from 'lucide-react'
-import { CloudCard } from '@/components/ui-kit'
+import { Eyebrow } from '@/components/landing/PageKit'
 import { FEATURES, isRouteAvailable } from '@/lib/features'
 import { cn } from '@/lib/utils'
 import { useReducedMotion } from './motion-utils'
@@ -58,7 +58,7 @@ function TypedFormula({ parts, start }: { parts: string[]; start: boolean }) {
   const renderPart = (text: string) =>
     text.split(/([+·=→])/).map((chunk, j) =>
       /^[+·=→]$/.test(chunk) ? (
-        <span key={j} className={cn('text-gold-soft transition-all duration-500', done && 'text-gold [text-shadow:0_0_14px_rgba(217,166,72,0.7)]')}>
+        <span key={j} className={cn('text-[var(--kl-gold-deep)] transition-all duration-500', done && 'font-bold text-[var(--kl-gold)]')}>
           {chunk}
         </span>
       ) : (
@@ -70,12 +70,12 @@ function TypedFormula({ parts, start }: { parts: string[]; start: boolean }) {
   const offsets: number[] = []
   parts.forEach((_p, i) => offsets.push(i === 0 ? 0 : offsets[i - 1] + parts[i - 1].length))
   return (
-    <p className="mono-data mt-4 text-base leading-relaxed text-text-hi">
+    <p className="kl-mono my-3 min-h-[3.4em] text-[15px] leading-relaxed">
       {parts.map((p, i) => {
         const visible = p.slice(0, Math.max(0, Math.min(p.length, n - offsets[i])))
         return <span key={i}>{renderPart(visible)}</span>
       })}
-      {!done && start && <span className="animate-pulse text-gold-soft">▍</span>}
+      {!done && start && <span className="animate-pulse text-[var(--kl-gold-deep)]">▍</span>}
     </p>
   )
 }
@@ -94,28 +94,37 @@ export default function FormulaCards() {
   }, [])
 
   return (
-    <section ref={rootRef} className="noise-overlay bg-ink px-6 py-24 md:py-32">
-      <div className="mx-auto max-w-container">
-        <p className="eyebrow text-center text-sky">The direct programme</p>
-        <h2 className="h2 mt-4 text-center">
-          {FEATURES.marketplace ? 'Commerce math you can audit.' : 'Commission math you can audit.'}
-        </h2>
-        <div className={cn('mt-12 grid gap-4', FORMULAS.length === 3 ? 'md:grid-cols-3' : 'md:grid-cols-2')}>
-          {FORMULAS.map((f) => (
-            <CloudCard key={f.title} hoverable className="p-6">
-              <h3 className="text-lg font-semibold text-gold-soft">{f.title}</h3>
-              <TypedFormula parts={f.parts} start={start} />
-              <p className="caption mt-4">{f.caption}</p>
-            </CloudCard>
-          ))}
+    <section ref={rootRef} className="kl-pad-x border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <Eyebrow>The direct programme</Eyebrow>
+          <h2 className="kl-h2 mt-5 max-w-[720px]">
+            {FEATURES.marketplace ? 'Commerce math you can audit.' : 'Commission math you can audit.'}
+          </h2>
         </div>
         {isRouteAvailable('/commerce') && (
-          <div className="mt-10 text-center">
-            <Link to="/commerce" className="inline-flex items-center gap-2 font-semibold text-gold-soft transition-all hover:gap-3">
-              Full commerce details <ArrowRight size={16} aria-hidden="true" />
-            </Link>
-          </div>
+          <Link to="/commerce" className="inline-flex items-center gap-2 font-semibold text-[var(--kl-gold-deep)] transition-all hover:gap-3">
+            Full commerce details <ArrowRight size={16} aria-hidden="true" />
+          </Link>
         )}
+      </div>
+      <div className={cn('mt-12 grid gap-5', FORMULAS.length === 3 ? 'md:grid-cols-3' : 'md:grid-cols-2')}>
+        {FORMULAS.map((f, i) => (
+          <article
+            key={f.title}
+            className="flex flex-col rounded-[20px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] p-7 shadow-[0_18px_36px_-30px_var(--kl-shadow)] transition-transform hover:-translate-y-0.5"
+          >
+            <div className="flex items-center justify-between">
+              <span className="kl-mono text-[11px] uppercase tracking-[.14em] text-[var(--kl-low)]">Formula {String(i + 1).padStart(2, '0')}</span>
+              <span className="h-2 w-2 rounded-full" style={{ background: ['#D9A648', '#8FB8E8', '#E07856'][i % 3] }} aria-hidden="true" />
+            </div>
+            <h3 className="kl-serif mt-4 text-[26px] font-semibold leading-tight">{f.title}</h3>
+            <div className="mt-5 rounded-[12px] bg-[var(--kl-paper)] px-4 py-1">
+              <TypedFormula parts={f.parts} start={start} />
+            </div>
+            <p className="mt-5 text-[15px] leading-relaxed text-[var(--kl-mid)]">{f.caption}</p>
+          </article>
+        ))}
       </div>
     </section>
   )

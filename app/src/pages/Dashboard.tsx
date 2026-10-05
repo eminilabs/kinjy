@@ -94,46 +94,47 @@ export default function Dashboard() {
   // empty dashboard that 401s panel by panel.
   if (!user) return <Navigate to="/join?mode=signin" replace />
 
+  const isAdmin = user.role === 'admin' || user.role === 'superadmin'
+  const ghost =
+    'inline-flex items-center gap-2 rounded-full border border-[var(--cloud-border)] bg-[var(--cloud)] px-4 py-2 text-sm font-semibold text-text-mid transition-colors hover:border-gold/50 hover:text-text-hi'
+
   return (
-    <AppShell
-      title={user.display_name}
-      subtitle="Your earnings, verification, devices and account lifecycle."
-      action={
+    <AppShell>
+      {/* Header: who this space belongs to, and the two things you do from it */}
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+        <div className="min-w-0">
+          <p className="mono-data text-[0.7rem] uppercase tracking-[0.14em] text-gold-soft">Your space</p>
+          <h1 className="mt-2 truncate text-[clamp(34px,5vw,60px)] font-bold leading-[1.02] tracking-[-0.04em] text-text-hi">
+            {user.display_name}
+          </h1>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="mono-data text-sm text-text-mid">@{user.handle}</span>
+            <Badge tone={user.kyc_verified ? 'good' : 'neutral'}>
+              {user.kyc_verified ? (
+                <>
+                  <ShieldCheck size={12} className="mr-1 inline" aria-hidden="true" />
+                  Verified
+                </>
+              ) : (
+                'Unverified'
+              )}
+            </Badge>
+            {user.role !== 'member' && <Badge tone="warn">{user.role}</Badge>}
+            {user.status !== 'active' && <Badge tone="bad">{user.status}</Badge>}
+          </div>
+        </div>
         <div className="flex items-center gap-2">
-          {(user.role === 'admin' || user.role === 'superadmin') && (
-            <Link
-              to="/admin"
-              className="rounded-full border border-white/12 px-4 py-2 text-sm font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
-            >
+          {isAdmin && (
+            <Link to="/admin" className={ghost}>
               Admin console
             </Link>
           )}
-          <button
-            type="button"
-            onClick={() => void signOut()}
-            className="inline-flex items-center gap-2 rounded-full border border-white/12 px-4 py-2 text-sm font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
-          >
+          <button type="button" onClick={() => void signOut()} className={ghost}>
             <LogOut size={14} aria-hidden="true" />
             Sign out
           </button>
         </div>
-      }
-    >
-      <div className="mb-5 flex flex-wrap items-center gap-2">
-        <span className="mono-data text-sm text-text-mid">@{user.handle}</span>
-        <Badge tone={user.kyc_verified ? 'good' : 'neutral'}>
-          {user.kyc_verified ? (
-            <>
-              <ShieldCheck size={12} className="mr-1 inline" aria-hidden="true" />
-              Verified
-            </>
-          ) : (
-            'Unverified'
-          )}
-        </Badge>
-        {user.role !== 'member' && <Badge tone="warn">{user.role}</Badge>}
-        {user.status !== 'active' && <Badge tone="bad">{user.status}</Badge>}
-      </div>
+      </header>
 
       <nav className="flex flex-wrap gap-1 border-b border-white/8" aria-label="Dashboard sections">
         {TABS.map((t) => (

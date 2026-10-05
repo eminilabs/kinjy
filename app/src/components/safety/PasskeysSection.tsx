@@ -1,5 +1,8 @@
 import { motion } from 'framer-motion'
 import { Fingerprint, Server, Database, KeyRound, X, MailCheck, Smartphone, Usb, BellRing, Laptop } from 'lucide-react'
+import { Eyebrow } from '@/components/landing/PageKit'
+import { KL_CARD } from '@/components/landing/kl-classes'
+import { cn } from '@/lib/utils'
 
 const CHIPS = [
   { icon: MailCheck, label: 'Email OTP' },
@@ -16,15 +19,15 @@ const CHIPS = [
  */
 export default function PasskeysSection() {
   return (
-    <section aria-labelledby="passkeys-heading" className="twilight-field noise-overlay py-24">
-      <div className="mx-auto grid max-w-container items-center gap-12 px-6 lg:grid-cols-[5fr_6fr]">
+    <section aria-labelledby="passkeys-heading" className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-center gap-12 lg:grid-cols-[5fr_6fr]">
         {/* Copy */}
         <div>
-          <p className="eyebrow text-gold">Sign-in security</p>
-          <h2 id="passkeys-heading" className="h2 mt-3">
+          <Eyebrow>Sign-in security</Eyebrow>
+          <h2 id="passkeys-heading" className="kl-h2 mt-5 max-w-[900px]">
             Your face never leaves your phone.
           </h2>
-          <p className="body-lg mt-5 max-w-lg text-text-mid">
+          <p className="kl-lead mt-6 !max-w-[680px]">
             Kinjy uses <strong className="text-text-hi">device-level passkeys</strong> — your
             phone or computer unlocks locally with its own biometrics. There is{' '}
             <strong className="text-gold-soft">no central fingerprint or facial database</strong>{' '}
@@ -48,11 +51,11 @@ export default function PasskeysSection() {
         </div>
 
         {/* Visual: phone → public key → server; crossed-out biometric DB */}
-        <div className="cloud-card relative p-6 md:p-8">
+        <div className={cn(KL_CARD, 'relative p-6 md:p-8')}>
           <div className="flex flex-wrap items-center justify-center gap-4 md:justify-between">
             {/* Phone */}
             <div className="flex flex-col items-center gap-2">
-              <div className="relative flex h-36 w-[76px] items-center justify-center rounded-[18px] border border-white/20 bg-ink-3 shadow-cloud">
+              <div className="relative flex h-36 w-[76px] items-center justify-center rounded-[18px] border border-white/20 bg-[var(--kl-paper)] shadow-cloud">
                 <span className="absolute top-1.5 h-1 w-8 rounded-full bg-white/20" aria-hidden="true" />
                 <motion.span
                   animate={{ opacity: [0.55, 1, 0.55], scale: [1, 1.08, 1] }}
@@ -85,7 +88,7 @@ export default function PasskeysSection() {
                 </defs>
               </svg>
               <motion.span
-                className="absolute top-0 start-0 flex items-center gap-1.5 rounded-full border border-gold/50 bg-ink px-2.5 py-1"
+                className="absolute top-0 start-0 flex items-center gap-1.5 rounded-full border border-gold/50 bg-[var(--kl-surface)] px-2.5 py-1"
                 animate={{
                   offsetDistance: ['0%', '100%'],
                   opacity: [0, 1, 1, 0],
@@ -100,7 +103,7 @@ export default function PasskeysSection() {
 
             {/* Server */}
             <div className="flex flex-col items-center gap-2">
-              <div className="flex h-20 w-16 flex-col items-center justify-center gap-1.5 rounded-card-md border border-white/20 bg-ink-3 shadow-cloud">
+              <div className="flex h-20 w-16 flex-col items-center justify-center gap-1.5 rounded-card-md border border-white/20 bg-[var(--kl-paper)] shadow-cloud">
                 <Server size={26} className="text-sky" strokeWidth={1.6} />
                 <span className="flex gap-1">
                   <span className="h-1.5 w-1.5 rounded-full bg-success" />

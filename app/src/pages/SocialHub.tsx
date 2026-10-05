@@ -231,8 +231,8 @@ export default function SocialHub() {
       {/* Docked "why am I seeing this", as /app presents it: the explanation of
           the *feed* lives here, and each card keeps its own Why? button for the
           explanation of that post. */}
-      <div className="rounded-card-lg cloud-glass p-4">
-        <p className="eyebrow text-gold">Why am I seeing this?</p>
+      <div className="rounded-[20px] cloud-glass p-5">
+        <p className="mono-data text-[0.7rem] uppercase tracking-[0.14em] text-gold-soft">Why am I seeing this?</p>
         <p className="mt-2 text-xs leading-relaxed text-text-mid">
           Your feed is currently ranked by{' '}
           <span className="font-bold text-text-hi">
@@ -259,8 +259,8 @@ export default function SocialHub() {
       </div>
 
       {trending.length > 0 && (
-        <div className="rounded-card-lg cloud-glass p-4">
-          <p className="mb-2.5 flex items-center gap-1.5 text-sm font-bold text-text-hi">
+        <div className="rounded-[20px] cloud-glass p-5">
+          <p className="mb-3 flex items-center gap-1.5 text-[0.95rem] font-bold tracking-[-0.01em] text-text-hi">
             <TrendingUp size={14} className="text-coral" aria-hidden="true" />
             Trending in this feed
           </p>
@@ -328,6 +328,18 @@ export default function SocialHub() {
   return (
     <AppShell aside={rail}>
       <div className="min-w-0">
+          {/* Header: which feed this is, and what it promises */}
+          <header className="mb-5">
+            <p className="mono-data text-[0.7rem] uppercase tracking-[0.14em] text-gold-soft">Your feed</p>
+            <h1 className="mt-2 text-[clamp(32px,4.4vw,52px)] font-bold leading-[1.02] tracking-[-0.04em] text-text-hi">
+              {catalog.modes.find((m) => m.id === mode)?.label ?? 'Feed'}
+            </h1>
+            {catalog.modes.find((m) => m.id === mode)?.description && (
+              <p className="mt-2.5 max-w-xl text-sm leading-relaxed text-text-low">
+                {catalog.modes.find((m) => m.id === mode)?.description}
+              </p>
+            )}
+          </header>
           <FeedModeMenu
             modes={catalog.modes}
             active={mode}
@@ -423,9 +435,11 @@ export default function SocialHub() {
             )}
 
             {!loading && !error && feed?.items.length === 0 && (
-              <div className="cloud-card p-8 text-center">
-                <Sparkles size={20} className="mx-auto text-gold" aria-hidden="true" />
-                <p className="mt-3 text-sm text-text-mid">
+              <div className="cloud-card p-10 text-center">
+                <span className="mx-auto grid h-12 w-12 place-items-center rounded-[14px] bg-gold/15 text-gold-soft">
+                  <Sparkles size={22} aria-hidden="true" />
+                </span>
+                <p className="mx-auto mt-4 max-w-sm text-[15px] leading-relaxed text-text-mid">
                   {EMPTY_REASON[feed.empty_reason ?? ''] ?? 'Nothing here yet — publish the first post.'}
                 </p>
               </div>

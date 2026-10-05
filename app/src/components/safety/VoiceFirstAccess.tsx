@@ -13,8 +13,9 @@ import {
   Volume2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { ArcButton } from '@/components/ui-kit'
 import { EASE, useReducedMotion } from './motion-utils'
+import { Eyebrow, KlButton } from '@/components/landing/PageKit'
+import { KL_CARD } from '@/components/landing/kl-classes'
 
 const COMMANDS = [
   { id: 'circles', label: '“Open my Circles”', icon: Users, result: 'Circles opened — 4 circles, 2 unread threads' },
@@ -83,15 +84,15 @@ export default function VoiceFirstAccess() {
   }
 
   return (
-    <section aria-labelledby="voice-first-heading" className="px-6 py-24">
-      <div className="mx-auto max-w-container">
+    <section aria-labelledby="voice-first-heading" className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]">
+      <div>
         <div className="max-w-2xl">
-          <p className="eyebrow text-sky">Voice-First Navigation &amp; Accessibility+</p>
-          <h2 id="voice-first-heading" className="h2 mt-3">
+          <Eyebrow>Voice-First Navigation &amp; Accessibility+</Eyebrow>
+          <h2 id="voice-first-heading" className="kl-h2 mt-5 max-w-[900px]">
             Speak it. Hear it.{' '}
-            <span className="font-display italic text-gold-grad">Read it your way.</span>
+            <span className="font-display italic text-[var(--kl-gold-deep)]">Read it your way.</span>
           </h2>
-          <p className="body-lg mt-4 text-text-mid">
+          <p className="kl-lead mt-6 !max-w-[680px]">
             Voice commands, AI audio description, and a reading mode that adapts to you — every
             voice feature is always paired with a visible, tappable alternative.
           </p>
@@ -104,7 +105,7 @@ export default function VoiceFirstAccess() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-15%' }}
             transition={{ duration: 0.7, ease: EASE }}
-            className="cloud-card p-5"
+            className={cn(KL_CARD, 'p-5')}
           >
             <p className="mono-data flex items-center gap-2 text-[0.7rem] uppercase tracking-wider text-text-low">
               <Mic size={13} className="text-gold" aria-hidden="true" /> Voice command demo
@@ -116,7 +117,7 @@ export default function VoiceFirstAccess() {
                 return (
                   <div
                     key={cmd.id}
-                    className="rounded-card-md border border-white/10 bg-ink-3/60 p-4"
+                    className="rounded-card-md border border-white/10 bg-[var(--kl-paper)] p-4"
                   >
                     <div className="flex flex-wrap items-center gap-3">
                       <button
@@ -180,7 +181,7 @@ export default function VoiceFirstAccess() {
             </div>
 
             {/* AI audio description */}
-            <div className="mt-5 rounded-card-md border border-white/10 bg-ink-3/60 p-4">
+            <div className="mt-5 rounded-card-md border border-white/10 bg-[var(--kl-paper)] p-4">
               <div className="relative h-36 overflow-hidden rounded-card-sm">
                 <img
                   src="/marketplace-hero.jpg"
@@ -193,7 +194,7 @@ export default function VoiceFirstAccess() {
                 </span>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-3">
-                <ArcButton size="sm" variant="indigo" onClick={runDescription} disabled={describing}>
+                <KlButton size="sm" variant="indigo" onClick={runDescription} disabled={describing}>
                   {describing ? (
                     <>
                       <Square size={13} aria-hidden="true" /> Describing…
@@ -203,7 +204,7 @@ export default function VoiceFirstAccess() {
                       <AudioLines size={15} aria-hidden="true" /> Listen to AI description
                     </>
                   )}
-                </ArcButton>
+                </KlButton>
                 {describing && <Waveform active reduced={reduced} />}
               </div>
               <AnimatePresence>
@@ -229,7 +230,7 @@ export default function VoiceFirstAccess() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-15%' }}
             transition={{ duration: 0.7, delay: 0.12, ease: EASE }}
-            className="cloud-card p-5"
+            className={cn(KL_CARD, 'p-5')}
           >
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="mono-data flex items-center gap-2 text-[0.7rem] uppercase tracking-wider text-text-low">
@@ -259,7 +260,7 @@ export default function VoiceFirstAccess() {
             <div
               className={cn(
                 'mt-5 rounded-card-md border p-6 transition-colors duration-500 ease-cloud-ease',
-                dyslexiaMode ? 'border-gold/30 bg-paper text-paper-ink' : 'border-white/10 bg-ink-3/60',
+                dyslexiaMode ? 'border-gold/30 bg-paper text-paper-ink' : 'border-white/10 bg-[var(--kl-paper)]',
               )}
             >
               <motion.p
@@ -309,7 +310,7 @@ export default function VoiceFirstAccess() {
 /** Small image glyph chip for the described post. */
 function ProvenanceChip() {
   return (
-    <span className="mono-data inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-ink-3/80 px-2.5 py-1 text-[0.62rem] uppercase tracking-wider text-text-mid">
+    <span className="mono-data inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-[var(--kl-paper)] px-2.5 py-1 text-[0.62rem] uppercase tracking-wider text-text-mid">
       <ImageIcon size={11} aria-hidden="true" /> image post
     </span>
   )

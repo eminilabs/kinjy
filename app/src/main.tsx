@@ -11,7 +11,7 @@ createRoot(document.getElementById('root')!).render(
     <AuthProvider>
       {/* persist: the member's display mode and language survive navigation and
           reloads. The /app demo nests its own throwaway provider. */}
-      <AppThemeProvider persist>
+      <AppThemeProvider persist initialMode="system">
         <App />
       </AppThemeProvider>
     </AuthProvider>

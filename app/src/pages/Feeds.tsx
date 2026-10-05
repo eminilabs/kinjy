@@ -9,29 +9,40 @@ import DevPublish from '@/components/feeds/DevPublish'
 import GovernanceStrip from '@/components/feeds/GovernanceStrip'
 import { ToastProvider, useToasts } from '@/components/feeds/Toast'
 import type { Algorithm } from '@/components/feeds/data'
+import PublicShell from '@/components/landing/PublicShell'
 
-/** Section 7 — CTA. */
+/** Section 7 — CTA, on the landing's closing paper stage. */
 function FeedsCta() {
   return (
-    <section className="twilight-field noise-overlay relative px-6 py-24 md:py-32" aria-label="Call to action">
-      <div className="mx-auto max-w-2xl text-center">
-        <p className="eyebrow text-gold">Your Rules</p>
-        <h2 className="h2 mt-4">Take the controls.</h2>
-        <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+    <section className="mx-auto max-w-[1320px] px-4 pt-[clamp(40px,6vw,80px)]" aria-label="Call to action">
+      <div
+        className="relative overflow-hidden rounded-[20px] px-[clamp(24px,6vw,80px)] py-[clamp(90px,10vw,130px)] text-center"
+        style={{ background: 'linear-gradient(180deg, var(--kl-stage-a), var(--kl-stage-b))' }}
+      >
+        <div aria-hidden="true" className="kl-sheen absolute -left-16 -top-20 h-[300px] w-[300px] rounded-full opacity-40 blur-[90px]" />
+        <div aria-hidden="true" className="absolute -bottom-24 -right-10 h-[300px] w-[300px] rounded-full bg-[var(--kl-coral)] opacity-30 blur-[90px]" />
+        <p className="kl-mono relative text-xs uppercase tracking-[.14em] text-[var(--kl-gold-deep)]">Your rules</p>
+        <h2
+          className="kl-serif relative mx-auto mt-5 max-w-[900px] font-semibold"
+          style={{ fontSize: 'clamp(48px, 8vw, 112px)', lineHeight: 0.92, letterSpacing: '-.02em' }}
+        >
+          Take the controls.
+        </h2>
+        <div className="relative mt-12 flex flex-col items-center justify-center gap-4 sm:flex-row">
           <Link
             to="/app"
-            className="inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-gold-soft to-gold px-8 py-4 text-base font-bold text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] transition hover:brightness-110"
+            className="kl-sheen inline-flex items-center gap-2 rounded-[20px] px-8 py-4 text-[17px] font-bold shadow-[0_14px_30px_-12px_rgba(169,118,28,.55)] transition-transform hover:-translate-y-0.5"
           >
             Open the app demo <ArrowRight size={17} />
           </Link>
           <Link
             to="/pricing"
-            className="cloud-glass inline-flex items-center gap-2 rounded-full px-8 py-4 text-base font-semibold text-text-hi transition hover:border-gold/40 hover:text-gold-soft"
+            className="inline-flex items-center gap-2 rounded-[20px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] px-8 py-4 text-[17px] font-semibold transition hover:border-[#D9A648]"
           >
             See pricing <ArrowRight size={17} />
           </Link>
         </div>
-        <p className="caption mt-6">Custom algorithm feeds are a Premium feature.</p>
+        <p className="relative mt-6 text-sm text-[var(--kl-mid)]">Custom algorithm feeds are a Premium feature.</p>
       </div>
     </section>
   )
@@ -86,8 +97,10 @@ function FeedsInner() {
 /** Route /feeds — 10 feed modes, transparency triad, 15-algorithm marketplace. */
 export default function Feeds() {
   return (
-    <ToastProvider>
-      <FeedsInner />
-    </ToastProvider>
+    <PublicShell>
+      <ToastProvider>
+        <FeedsInner />
+      </ToastProvider>
+    </PublicShell>
   )
 }

@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Ban, FileBadge2, FileText, Mic2, ScrollText, Video } from 'lucide-react'
-import { LedgerRow, ModeChip } from '@/components/ui-kit'
+import { LedgerRow } from '@/components/ui-kit'
 import { cn } from '@/lib/utils'
+import { Eyebrow, Chip } from '@/components/landing/PageKit'
+import { KL_CARD } from '@/components/landing/kl-classes'
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 
@@ -62,34 +64,34 @@ export default function TrainingLicensing() {
   }
 
   return (
-    <section className="noise-overlay relative bg-ink px-6 py-24 md:py-32">
-      <div className="mx-auto max-w-container">
+    <section className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)] relative">
+      <div>
         <motion.div
           initial={{ opacity: 0, y: 28 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-15%' }}
           transition={{ duration: 0.65, ease: EASE }}
-          className="mx-auto max-w-3xl text-center"
+          className="max-w-3xl"
         >
-          <p className="eyebrow text-gold">AI-Training Licensing</p>
-          <h2 className="h2 mt-4">
-            Your catalog, licensed — <span className="text-arc-grad">never scraped.</span>
+          <Eyebrow>AI-Training Licensing</Eyebrow>
+          <h2 className="kl-h2 mt-5 max-w-[900px]">
+            Your catalog, licensed — <span className="text-[var(--kl-gold-deep)]">never scraped.</span>
           </h2>
-          <p className="body-lg mt-5 text-text-mid">
+          <p className="kl-lead mt-6 !max-w-[640px]">
             Creators opt in to license their content for AI training through the agent-readable
             licensing controls. Granular scopes, hard expiry, instant revocation — and every
             licensed request pays out through the immutable ledger.
           </p>
         </motion.div>
 
-        <div className="mt-16 grid gap-10 lg:grid-cols-[5fr_6fr]">
+        <div className="mt-16 grid grid-cols-[minmax(0,1fr)] gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
           {/* Left: consent panel */}
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-15%' }}
             transition={{ duration: 0.7, ease: EASE }}
-            className="cloud-card flex flex-col p-7"
+            className={cn(KL_CARD, 'flex flex-col p-7')}
           >
             <h3 className="h3 mb-1 flex items-center gap-2.5">
               <ScrollText size={19} className="text-gold" aria-hidden="true" />
@@ -100,7 +102,7 @@ export default function TrainingLicensing() {
               your work until you say so — scope by scope.
             </p>
 
-            <p className="eyebrow mb-3 text-[0.62rem] text-text-low">content scopes</p>
+            <p className="kl-mono mb-3 text-[11px] uppercase tracking-[.14em] text-[var(--kl-low)]">content scopes</p>
             <div className="space-y-2.5">
               {MEDIA.map((m) => (
                 <button
@@ -143,10 +145,10 @@ export default function TrainingLicensing() {
               ))}
             </div>
 
-            <p className="eyebrow mb-3 mt-6 text-[0.62rem] text-text-low">license duration</p>
+            <p className="kl-mono mb-3 mt-6 text-[11px] uppercase tracking-[.14em] text-[var(--kl-low)]">license duration</p>
             <div className="flex flex-wrap gap-2">
               {DURATIONS.map((d) => (
-                <ModeChip key={d} label={d} active={duration === d} onClick={() => setDuration(d)} />
+                <Chip key={d} label={d} active={duration === d} onClick={() => setDuration(d)} />
               ))}
             </div>
 
@@ -159,7 +161,7 @@ export default function TrainingLicensing() {
                     setRevokedOnce(false)
                   }}
                   disabled={activeScopes.length === 0}
-                  className="inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-2.5 text-sm font-semibold text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] transition-transform duration-200 ease-snap-ease hover:scale-[1.02] active:scale-95 disabled:opacity-40"
+                  className="inline-flex items-center gap-2 rounded-full kl-sheen px-5 py-2.5 text-sm font-semibold transition-transform duration-200 ease-snap-ease hover:scale-[1.02] active:scale-95 disabled:opacity-40"
                 >
                   <FileBadge2 size={15} aria-hidden="true" />
                   Opt in to training licensing
@@ -197,6 +199,7 @@ export default function TrainingLicensing() {
           </motion.div>
 
           {/* Right: certificate + ledger + counter */}
+          <div className="kl-stage min-w-0">
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -204,8 +207,8 @@ export default function TrainingLicensing() {
             transition={{ delay: 0.1, duration: 0.7, ease: EASE }}
             className="flex flex-col gap-5"
           >
-            <div className="cloud-card overflow-hidden">
-              <div className="flex items-center justify-between border-b border-white/10 bg-ink-3/70 px-5 py-3">
+            <div className={cn(KL_CARD, 'overflow-hidden')}>
+              <div className="flex items-center justify-between border-b border-white/10 bg-[var(--kl-code)] px-5 py-3">
                 <span className="mono-data flex items-center gap-2 text-xs text-text-low">
                   <FileBadge2 size={13} className="text-gold" aria-hidden="true" />
                   license.certificate / KTL-2025-00841
@@ -221,8 +224,8 @@ export default function TrainingLicensing() {
                   {optedIn ? 'active' : 'specimen'}
                 </span>
               </div>
-              <div className="bg-ink-3/40 p-5">
-                <div className="grid gap-x-8 gap-y-2.5 sm:grid-cols-2">
+              <div className="bg-[var(--kl-code)] p-5">
+                <div className="grid grid-cols-[minmax(0,1fr)] gap-x-8 gap-y-2.5 sm:grid-cols-2">
                   {[
                     ['creator', 'did:kinjy:member:demo-0042'],
                     ['scopes', activeScopes.length ? activeScopes.join(' · ') : '— none selected'],
@@ -244,19 +247,20 @@ export default function TrainingLicensing() {
               </div>
               <div className="flex items-center justify-between border-t border-white/10 px-5 py-3.5">
                 <span className="mono-data text-[0.68rem] text-text-low">licensed requests this month</span>
-                <span className="mono-data text-lg font-semibold text-gold-grad" aria-live="polite">
+                <span className="mono-data text-lg font-semibold text-[var(--kl-gold-deep)]" aria-live="polite">
                   {optedIn ? requests.toLocaleString('en-US') : '0'}
                 </span>
               </div>
             </div>
 
             <div className="space-y-2">
-              <p className="eyebrow text-[0.62rem] text-text-low">compensation · immutable ledger</p>
+              <p className="kl-mono text-[11px] uppercase tracking-[.14em] text-[var(--kl-low)]">compensation · immutable ledger</p>
               <LedgerRow id="lg-8841" label="Training license — text corpus (Q4)" amount="+$212.40" reconciled timestamp="Nov 30" />
               <LedgerRow id="lg-8907" label="Voice narration license — podcast set" amount="+$96.15" reconciled timestamp="Nov 30" />
               <LedgerRow id="lg-8912" label="Kinjy Leaders contribution (5%)" amount="+$15.42" reconciled={false} timestamp="Dec 01" />
             </div>
           </motion.div>
+          </div>
         </div>
       </div>
     </section>

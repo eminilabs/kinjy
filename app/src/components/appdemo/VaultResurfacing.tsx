@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Archive, ArrowDown, BookMarked, MessagesSquare, Sparkles, TrendingUp, Undo2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Eyebrow } from '@/components/landing/PageKit'
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 const SNAP: [number, number, number, number] = [0.34, 1.56, 0.64, 1]
@@ -20,8 +21,8 @@ export default function VaultResurfacing() {
   }
 
   return (
-    <section className="noise-overlay relative bg-ink px-6 py-24 md:py-28">
-      <div className="mx-auto max-w-container">
+    <section className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]">
+      <div>
         <motion.div
           initial={{ opacity: 0, y: 28 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -29,11 +30,11 @@ export default function VaultResurfacing() {
           transition={{ duration: 0.6, ease: EASE }}
           className="mb-12 max-w-2xl"
         >
-          <p className="eyebrow text-gold">AI memory resurfacing</p>
-          <h3 className="h3 mt-3 font-display text-3xl font-medium">
-            Your saves <span className="text-gold-grad">remember with you.</span>
-          </h3>
-          <p className="mt-3 text-sm leading-relaxed text-text-mid">
+          <Eyebrow>AI memory resurfacing</Eyebrow>
+          <h2 className="kl-h2 mt-5 max-w-[900px]">
+            Your saves <span className="text-[var(--kl-gold-deep)]">remember with you.</span>
+          </h2>
+          <p className="kl-lead mt-6 !max-w-[560px]">
             The Knowledge Vault doesn’t let good things sink. When a saved idea becomes relevant again,
             Kinjy resurfaces it in your feed — connected to the live conversation.
           </p>

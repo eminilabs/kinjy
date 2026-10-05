@@ -62,48 +62,50 @@ function People() {
 
   return (
     <RailCard title="People to follow">
-      <p className={cn('mb-3 -mt-2 text-[0.68rem]', tok.low)}>
+      <p className={cn('mb-4 -mt-2 text-xs', tok.low)}>
         {REASON[suggestions.data?.reason ?? ''] ?? 'Suggested for you'}
       </p>
 
       {suggestions.loading && <p className={cn('text-xs', tok.low)}>Loading…</p>}
 
-      <ul className="space-y-3">
+      <ul className="divide-y divide-[var(--cloud-border)]">
         {items.map((person) => (
-          <li key={person.user_id} className="flex items-center gap-2.5">
-            <MemberAvatar
-              handle={person.handle}
-              displayName={person.display_name}
-              avatarUrl={person.avatar_url}
-              size={32}
-            />
-            <div className="min-w-0 flex-1">
-              <p className={cn('truncate text-xs font-semibold', tok.text)}>
-                <Link to={`/u/${person.handle}`} className="hover:underline">
-                  {person.display_name}
-                </Link>
-              </p>
-              <p className={cn('truncate text-[0.68rem]', tok.low)}>
-                @{person.handle}
-                {person.city ? ` · ${person.city}` : ''}
-              </p>
+          <li key={person.user_id} className="py-3.5 first:pt-0 last:pb-0">
+            <div className="flex items-center gap-3">
+              <MemberAvatar
+                handle={person.handle}
+                displayName={person.display_name}
+                avatarUrl={person.avatar_url}
+                size={40}
+              />
+              <div className="min-w-0 flex-1">
+                <p className={cn('truncate text-sm font-bold leading-tight', tok.text)}>
+                  <Link to={`/u/${person.handle}`} className="hover:underline">
+                    {person.display_name}
+                  </Link>
+                </p>
+                <p className={cn('mt-0.5 truncate text-xs', tok.low)}>
+                  @{person.handle}
+                  {person.city ? ` · ${person.city}` : ''}
+                </p>
+              </div>
             </div>
-            <div className="flex shrink-0 flex-col gap-1">
+            <div className="mt-2.5 grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => follow(person)}
                 disabled={busy === person.user_id || followed.has(person.user_id)}
                 title="Follow — one-way, no permission needed"
                 className={cn(
-                  'rounded-full border px-2.5 py-1 text-[0.68rem] font-semibold',
+                  'inline-flex items-center justify-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors',
                   followed.has(person.user_id)
-                    ? cn('border-current/20', tok.low)
-                    : 'border-gold/40 text-gold-soft hover:bg-gold/10',
+                    ? cn('border-[var(--cloud-border)]', tok.low)
+                    : 'border-gold/50 text-gold-soft hover:bg-gold/10',
                 )}
               >
                 {followed.has(person.user_id) ? 'Following' : (
                   <>
-                    <UserPlus size={10} className="me-0.5 inline" aria-hidden="true" />
+                    <UserPlus size={12} aria-hidden="true" />
                     Follow
                   </>
                 )}
@@ -114,20 +116,20 @@ function People() {
                 disabled={busy === person.user_id || invited.has(person.user_id)}
                 title="Connect — they have to accept before you can message them"
                 className={cn(
-                  'rounded-full border px-2.5 py-1 text-[0.68rem] font-semibold',
+                  'inline-flex items-center justify-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors',
                   invited.has(person.user_id)
-                    ? cn('border-current/20', tok.low)
-                    : 'border-sky/40 text-sky hover:bg-sky/10',
+                    ? cn('border-[var(--cloud-border)]', tok.low)
+                    : 'border-sky/50 text-sky hover:bg-sky/10',
                 )}
               >
                 {invited.has(person.user_id) ? (
                   <>
-                    <Clock size={10} className="me-0.5 inline" aria-hidden="true" />
+                    <Clock size={12} aria-hidden="true" />
                     Pending
                   </>
                 ) : (
                   <>
-                    <Check size={10} className="me-0.5 inline" aria-hidden="true" />
+                    <Check size={12} aria-hidden="true" />
                     Connect
                   </>
                 )}

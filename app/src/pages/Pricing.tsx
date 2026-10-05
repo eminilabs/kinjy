@@ -1,59 +1,45 @@
-import { useNavigate } from 'react-router'
-import { motion } from 'framer-motion'
+import { Link } from 'react-router'
 import { ArrowRight } from 'lucide-react'
-import { ArcButton } from '@/components/ui-kit'
 import PricingTiers from '@/components/pricing/PricingTiers'
 import OneOffPurchases from '@/components/pricing/OneOffPurchases'
 import FinePrint from '@/components/pricing/FinePrint'
-import { KineticWords } from '@/components/creators/Kinetic'
-import { EASE, useReducedMotion } from '@/components/creators/motion-utils'
+import PublicShell from '@/components/landing/PublicShell'
+import { ClosingStage } from '@/components/landing/PageKit'
+import { KL_BTN_GHOST, KL_BTN_GOLD } from '@/components/landing/kl-classes'
+import { useJoinTarget } from '@/components/landing/useJoinTarget'
 
-/** Section 5 — CTA. */
+/** Section 5 — CTA, on the landing's closing paper stage. */
 function PricingCta() {
-  const navigate = useNavigate()
-  const reduced = useReducedMotion()
+  const join = useJoinTarget()
   return (
-    <section className="noise-overlay twilight-field px-6 py-24 md:py-32">
-      <motion.div
-        className="mx-auto max-w-2xl text-center"
-        initial={reduced ? false : { opacity: 0, y: 40 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: '-20%' }}
-        transition={{ duration: 0.7, ease: EASE }}
-      >
-        <KineticWords
-          as="h2"
-          className="h2"
-          ariaLabel="Start free. Stay because it's beautiful."
-          delay={0}
-          words={[
-            { text: 'Start' },
-            { text: 'free.', gold: true },
-            { text: 'Stay' },
-            { text: 'because' },
-            { text: 'it’s' },
-            { text: 'beautiful.', gold: true },
-          ]}
-        />
-        <div className="mt-9 flex flex-wrap justify-center gap-3">
-          <ArcButton size="lg" onClick={() => navigate('/app')}>Create free account</ArcButton>
-          <ArcButton size="lg" variant="ghost" onClick={() => navigate('/app')}>
-            Open the app demo <ArrowRight size={16} aria-hidden="true" />
-          </ArcButton>
-        </div>
-      </motion.div>
-    </section>
+    <ClosingStage
+      eyebrow="Start free"
+      title={
+        <>
+          Start free. Stay because it’s <span className="italic text-[var(--kl-gold-deep)]">beautiful.</span>
+        </>
+      }
+    >
+      <div className="mt-12 flex flex-col items-center justify-center gap-4 sm:flex-row">
+        <Link to={join.to} className={KL_BTN_GOLD}>
+          Create free account <ArrowRight size={17} aria-hidden="true" />
+        </Link>
+        <Link to="/app" className={KL_BTN_GHOST}>
+          Open the app demo <ArrowRight size={17} aria-hidden="true" />
+        </Link>
+      </div>
+    </ClosingStage>
   )
 }
 
 /** /pricing — Free / Basic / Premium tiers (pricing.md). */
 export default function Pricing() {
   return (
-    <>
+    <PublicShell>
       <PricingTiers />
       <OneOffPurchases />
       <FinePrint />
       <PricingCta />
-    </>
+    </PublicShell>
   )
 }

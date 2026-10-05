@@ -1,5 +1,7 @@
 import { motion } from 'framer-motion'
 import { BookOpenText, HandCoins, Vault } from 'lucide-react'
+import { KL_CARD } from '@/components/landing/kl-classes'
+import { cn } from '@/lib/utils'
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 
@@ -24,7 +26,7 @@ function SemanticVisual() {
   return (
     <div className="relative flex h-40 items-center justify-center">
       <Orb size={38} />
-      <div className="ms-4 rounded-card-sm border border-white/15 bg-ink/60 p-2.5 font-mono text-[0.62rem] leading-relaxed text-text-mid">
+      <div className="ms-4 rounded-card-sm border border-white/15 bg-[var(--kl-code)] p-2.5 font-mono text-[0.62rem] leading-relaxed text-text-mid">
         <p><span className="text-gold">"capabilities"</span>: [</p>
         <p>&nbsp;&nbsp;<span className="text-success">"posts.create"</span>,</p>
         <p>&nbsp;&nbsp;<span className="text-success">"family.path.find"</span>,</p>
@@ -56,7 +58,7 @@ function SemanticVisual() {
       </svg>
       <div className="absolute -bottom-3 left-1/2 flex -translate-x-1/2 gap-7">
         {['{}', '</>', '⇄'].map((g) => (
-          <span key={g} className="rounded-sm border border-gold/30 bg-ink/70 px-1.5 py-0.5 font-mono text-[0.6rem] text-gold-soft">{g}</span>
+          <span key={g} className="rounded-sm border border-gold/30 bg-[var(--kl-code)] px-1.5 py-0.5 font-mono text-[0.6rem] text-gold-soft">{g}</span>
         ))}
       </div>
     </div>
@@ -73,7 +75,7 @@ function LicenseVisual() {
       </svg>
       <motion.span
         aria-hidden="true"
-        className="absolute left-1/2 top-1/2 flex h-7 w-7 items-center justify-center rounded-full border border-gold/50 bg-ink font-mono text-[0.55rem] text-gold-soft shadow-[0_0_14px_rgba(217,166,72,0.4)]"
+        className="absolute left-1/2 top-1/2 flex h-7 w-7 items-center justify-center rounded-full border border-gold/50 bg-[var(--kl-surface)] font-mono text-[0.55rem] text-gold-soft shadow-[0_0_14px_rgba(217,166,72,0.4)]"
         animate={{ x: [-56, 56, -56], y: [-16, -16, -16] }}
         transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
       >
@@ -137,20 +139,20 @@ const COLUMNS = [
 /** Section 4 — The agent-readable platform (refinement #18). */
 export default function AgentReadable() {
   return (
-    <section className="twilight-field noise-overlay relative px-6 py-24 md:py-32">
-      <div className="mx-auto max-w-container">
+    <section className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)] relative">
+      <div>
         <motion.h2
           initial={{ opacity: 0, y: 28 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-15%' }}
           transition={{ duration: 0.65, ease: EASE }}
-          className="h2 mx-auto max-w-3xl text-center"
+          className="kl-h2 max-w-[900px]"
         >
           APIs for people who use agents —{' '}
-          <span className="text-arc-grad">and agents that use APIs.</span>
+          <span className="text-[var(--kl-gold-deep)]">and agents that use APIs.</span>
         </motion.h2>
 
-        <div className="mt-16 grid gap-6 lg:grid-cols-3">
+        <div className="mt-16 grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-3">
           {COLUMNS.map((c, i) => (
             <motion.div
               key={c.title}
@@ -158,14 +160,14 @@ export default function AgentReadable() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: '-12%' }}
               transition={{ delay: i * 0.1, duration: 0.6, ease: EASE }}
-              className="cloud-card cloud-card-hover flex flex-col p-7"
+              className={cn(KL_CARD, 'transition-transform hover:-translate-y-0.5 flex flex-col p-7')}
             >
               <span className="mb-5 flex h-11 w-11 items-center justify-center rounded-card-sm border border-sky/25 bg-sky/10 text-sky">
                 <c.icon size={20} aria-hidden="true" />
               </span>
               <h3 className="h3 mb-3">{c.title}</h3>
               <p className="mb-6 flex-1 text-sm leading-relaxed text-text-mid">{c.body}</p>
-              <div className="rounded-card-md border border-white/10 bg-ink-2/40">{c.visual}</div>
+              <div className="rounded-card-md border border-white/10 bg-[var(--kl-code)]">{c.visual}</div>
             </motion.div>
           ))}
         </div>

@@ -81,9 +81,9 @@ const TOKENS: Record<ResolvedMode, AppTheme['tok']> = {
     text: 'text-text-hi',
     mid: 'text-text-mid',
     low: 'text-text-low',
-    card: 'border border-black/10 bg-white/80 shadow-[0_12px_32px_-14px_rgba(36,31,22,0.3)]',
-    cardSolid: 'border border-black/10 bg-paper',
-    divider: 'divide-black/10',
+    card: 'border border-[var(--cloud-border)] bg-white shadow-cloud',
+    cardSolid: 'border border-[var(--cloud-border)] bg-paper',
+    divider: 'divide-[var(--cloud-border)]',
     hoverBg: 'hover:bg-black/5',
     input: 'border border-black/15 bg-black/[0.04]',
     subtleBg: 'bg-black/[0.04]',
@@ -192,11 +192,14 @@ function useStored<T extends string>(
 export function AppThemeProvider({
   children,
   persist = false,
+  initialMode = 'cloud',
 }: {
   children: ReactNode
   persist?: boolean
+  /** The mode the window opens in (a remembered choice still wins when `persist` is on). */
+  initialMode?: DisplayMode
 }) {
-  const [mode, setMode] = useStored<DisplayMode>('kaluta.display_mode', 'cloud', persist, DISPLAY_MODES)
+  const [mode, setMode] = useStored<DisplayMode>('kaluta.display_mode', initialMode, persist, DISPLAY_MODES)
   const [ambient, setAmbient] = useStored<Ambient>('kaluta.ambient', 'twilight', persist, AMBIENT_KEYS)
   const [lang, setLang] = useStored<AppLang>('kaluta.app_lang', 'en', persist, APP_LANGS)
   const systemDark = useSystemDark()
@@ -220,7 +223,7 @@ export function AppThemeProvider({
       resolved === 'cloud'
         ? AMBIENTS[ambient].style
         : resolved === 'light'
-          ? { background: 'linear-gradient(160deg, #F6F1E7 0%, #EDE4D3 100%)' }
+          ? { background: 'var(--k-white)' }
           : { background: '#0B0E1D' }
     return {
       mode,

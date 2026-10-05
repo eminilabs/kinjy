@@ -65,7 +65,7 @@ export default function AppShell({
   // the steps up. The marketing sections have always used it; the app frame —
   // the largest gradient in the product — never did.
   return (
-    <div className="relative min-h-[100dvh] noise-overlay" style={frameStyle} dir={rtl ? 'rtl' : 'ltr'}>
+    <div className="app-shell relative min-h-[100dvh] noise-overlay" style={frameStyle} dir={rtl ? 'rtl' : 'ltr'}>
       {/* Chrome: the app owns the top of the page here — the marketing navbar
           is suppressed on these routes, so this sticks to 0 rather than 72. */}
       <div className="sticky top-0 z-30">
@@ -161,8 +161,8 @@ export default function AppShell({
 export function RailCard({ title, children }: { title: string; children: ReactNode }) {
   const { tok } = useAppTheme()
   return (
-    <section className={cn('rounded-card-lg p-4', tok.card)}>
-      <h2 className={cn('mb-3 text-sm font-semibold', tok.text)}>{title}</h2>
+    <section className={cn('rounded-[20px] p-5', tok.card)}>
+      <h2 className={cn('mb-3.5 text-[0.95rem] font-bold tracking-[-0.01em]', tok.text)}>{title}</h2>
       {children}
     </section>
   )

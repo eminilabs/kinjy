@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { motion, useInView } from 'framer-motion'
 import { Check } from 'lucide-react'
+import { Eyebrow } from '@/components/landing/PageKit'
+import { KL_CARD } from '@/components/landing/kl-classes'
+import { cn } from '@/lib/utils'
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 
@@ -57,8 +60,8 @@ export default function AlgorithmPublish() {
   }, [inView])
 
   return (
-    <section className="noise-overlay relative bg-ink-2/30 px-6 py-24 md:py-28">
-      <div ref={rootRef} className="mx-auto grid max-w-container items-center gap-14 lg:grid-cols-2">
+    <section className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)] relative">
+      <div ref={rootRef} className="grid grid-cols-[minmax(0,1fr)] items-center gap-14 lg:grid-cols-2">
         {/* Left copy */}
         <motion.div
           initial={{ opacity: 0, y: 32 }}
@@ -66,10 +69,10 @@ export default function AlgorithmPublish() {
           viewport={{ once: true, margin: '-15%' }}
           transition={{ duration: 0.65, ease: EASE }}
         >
-          <p className="eyebrow text-gold">Algorithm Marketplace</p>
-          <h3 className="h3 mt-4 font-display text-3xl font-medium">
-            Ship ranking logic users <span className="text-gold-grad">choose to install.</span>
-          </h3>
+          <Eyebrow>Algorithm Marketplace</Eyebrow>
+          <h2 className="kl-h2 mt-5 max-w-[900px]">
+            Ship ranking logic users <span className="text-[var(--kl-gold-deep)]">choose to install.</span>
+          </h2>
           <ul className="mt-7 space-y-3.5">
             {BULLETS.map((b, i) => (
               <motion.li
@@ -96,21 +99,22 @@ export default function AlgorithmPublish() {
         </motion.div>
 
         {/* Right: manifest card + counter */}
+        <div className="kl-stage min-w-0">
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-15%' }}
           transition={{ duration: 0.7, ease: EASE }}
         >
-          <div className="cloud-card overflow-hidden">
-            <div className="flex items-center gap-2 border-b border-white/10 bg-ink-3/70 px-5 py-3">
+          <div className={cn(KL_CARD, 'overflow-hidden')}>
+            <div className="flex items-center gap-2 border-b border-white/10 bg-[var(--kl-code)] px-5 py-3">
               <span className="h-2.5 w-2.5 rounded-full bg-gold/70" aria-hidden="true" />
               <span className="mono-data ms-1 text-xs text-text-low">algorithm.manifest.json</span>
               <span className="mono-data ms-auto rounded-full border border-sky/30 bg-sky/10 px-2.5 py-0.5 text-[0.65rem] text-sky">
                 sandbox ✓ replayed
               </span>
             </div>
-            <div className="min-h-[19rem] bg-ink-3/50 p-5 font-mono text-[0.78rem] leading-[1.75]">
+            <div className="min-h-[19rem] bg-[var(--kl-code)] p-5 font-mono text-[0.78rem] leading-[1.75]">
               {MANIFEST_LINES.slice(0, linesShown).map((segs, i) => (
                 <div key={i} className="whitespace-pre">
                   {segs.map(([txt, cls], j) => (
@@ -127,7 +131,7 @@ export default function AlgorithmPublish() {
           {/* install counter */}
           <div className="mt-5 flex items-center justify-between rounded-card-md border border-gold/25 bg-gold/10 px-5 py-4">
             <div>
-              <p className="eyebrow text-gold-soft">Installs this week</p>
+              <p className="kl-mono text-xs uppercase tracking-[.14em] text-[var(--kl-gold-deep)]">Installs this week</p>
               <p className="caption mt-1">Family First · by amara.codes</p>
             </div>
             <motion.p
@@ -142,6 +146,7 @@ export default function AlgorithmPublish() {
             </motion.p>
           </div>
         </motion.div>
+        </div>
       </div>
     </section>
   )

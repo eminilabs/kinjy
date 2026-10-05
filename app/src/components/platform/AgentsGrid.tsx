@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { UserRound, Compass, Bot, ShieldCheck, MessagesSquare, LibraryBig, Vault, Route } from 'lucide-react'
 import { FEATURES } from '@/lib/features'
 import { CLOUD_EASE, OrbDot, useActiveInView } from './shared'
+import { MODULE_TONES } from './tones'
 
 const ALL_AGENTS = [
   {
@@ -79,15 +80,14 @@ function GatewayRouter() {
               <path
                 d={`M 210 40 Q ${(210 + t.x) / 2} 96 ${t.x} ${t.y - 18}`}
                 fill="none"
-                stroke={hot ? '#F0C878' : 'rgba(255,255,255,0.14)'}
-                strokeWidth={hot ? 1.8 : 1.1}
-                style={{ transition: 'stroke 420ms ease', filter: hot ? 'drop-shadow(0 0 6px rgba(240,200,120,0.55))' : undefined }}
+                strokeWidth={hot ? 2.2 : 1.4}
+                style={{ stroke: hot ? '#D9A648' : 'var(--kl-dash)', transition: 'stroke 420ms ease' }}
               />
               {hot && !reduced && (
                 <motion.circle
                   key={`pulse-${route}`}
                   r={4}
-                  fill="#F0C878"
+                  fill="#D9A648"
                   initial={{ cx: 210, cy: 40, opacity: 1 }}
                   animate={{ cx: t.x, cy: t.y - 18, opacity: [1, 1, 0] }}
                   transition={{ duration: 1.1, ease: [0.65, 0, 0.35, 1] }}
@@ -97,23 +97,21 @@ function GatewayRouter() {
                 cx={t.x}
                 cy={t.y}
                 r={20}
-                fill={hot ? 'rgba(217,166,72,0.18)' : 'rgba(255,255,255,0.06)'}
-                stroke={hot ? 'rgba(240,200,120,0.8)' : 'rgba(255,255,255,0.18)'}
-                style={{ transition: 'all 420ms ease' }}
+                style={{ fill: hot ? '#0B0E1D' : 'var(--kl-surface)', stroke: hot ? '#D9A648' : 'var(--kl-dash)', strokeWidth: 1.5, transition: 'all 420ms ease' }}
               />
-              <text x={t.x} y={t.y + 38} textAnchor="middle" fill={hot ? '#F0C878' : '#A7ACBF'} fontSize="12" fontWeight="700" fontFamily="'JetBrains Mono', monospace" style={{ transition: 'fill 420ms ease' }}>
+              <text x={t.x} y={t.y + 38} textAnchor="middle" fontSize="12" fontWeight="700" fontFamily="'JetBrains Mono', monospace" style={{ fill: hot ? 'var(--kl-gold-deep)' : 'var(--kl-low)', transition: 'fill 420ms ease' }}>
                 {MODELS[i]}
               </text>
             </g>
           )
         })}
-        <circle cx={210} cy={40} r={22} fill="rgba(74,82,224,0.25)" stroke="rgba(143,184,232,0.6)" strokeWidth="1.4" />
+        <circle cx={210} cy={40} r={24} fill="#4A52E0" />
         <text x={210} y={44} textAnchor="middle" fill="#F4F2EE" fontSize="10.5" fontWeight="700" fontFamily="'JetBrains Mono', monospace">
           TASK
         </text>
       </svg>
-      <p className="caption mt-1 text-center">
-        Routing now: <span className="mono-data text-gold-soft">{MODELS[route]}</span> — picked by task, language, accuracy, cost & speed
+      <p className="mt-1 text-center text-sm text-[var(--kl-mid)]">
+        Routing now: <span className="kl-mono text-[var(--kl-gold-deep)]">{MODELS[route]}</span> — picked by task, language, accuracy, cost & speed
       </p>
     </div>
   )
@@ -123,36 +121,37 @@ function GatewayRouter() {
 export default function AgentsGrid() {
   const reduced = useReducedMotion()
   return (
-    <section className="px-6 py-24 md:py-32" aria-label="AI agents across the platform">
-      <div className="mx-auto max-w-container">
+    <section className="kl-pad-x py-[120px]" aria-label="AI agents across the platform">
+      <div>
         <div className="mx-auto max-w-2xl text-center">
-          <p className="eyebrow text-sky">The Intelligence Layer</p>
-          <h2 className="h2 mt-4">An intelligent layer, not a feature.</h2>
-          <p className="body-lg mt-4 text-text-mid">
+          <p className="kl-mono text-xs tracking-[.14em] text-[var(--kl-gold-deep)]">THE INTELLIGENCE LAYER</p>
+          <h2 className="kl-h2 mt-4">An intelligent layer, not a feature.</h2>
+          <p className="kl-lead mx-auto mt-5">
             Six kinds of agents run through every module — visible, accountable, and always on your side.
           </p>
         </div>
 
-        <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Three across, unless that would leave one card alone on the last row. */}
+        <div className={`mt-14 grid gap-4 sm:grid-cols-2 ${AGENTS.length % 3 === 1 ? '' : 'lg:grid-cols-3'}`}>
           {AGENTS.map((a, i) => (
             <motion.div
               key={a.name}
-              className="cloud-card cloud-card-hover p-6"
+              className="rounded-2xl border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] p-7 transition-[transform,border-color] hover:-translate-y-0.5 hover:border-[var(--kl-gold)]"
               initial={reduced ? false : { opacity: 0, y: 28 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, amount: 0.5 }}
               transition={{ duration: 0.5, ease: CLOUD_EASE, delay: (i % 3) * 0.08 }}
             >
               <div className="flex items-center justify-between">
-                <span className="cloud-glass flex h-11 w-11 items-center justify-center rounded-full text-sky">
-                  <a.icon size={20} />
+                <span className="grid h-12 w-12 place-items-center rounded-[10px]" style={{ background: MODULE_TONES[i % MODULE_TONES.length][1], color: MODULE_TONES[i % MODULE_TONES.length][0] }}>
+                  <a.icon size={22} />
                 </span>
                 <OrbDot size={18} delay={i * 0.7} />
               </div>
-              <h3 className="mt-4 font-semibold text-text-hi">{a.name}</h3>
-              <p className="caption mt-2 leading-relaxed">{a.body}</p>
+              <h3 className="kl-serif mt-6 text-[22px] font-semibold leading-tight">{a.name}</h3>
+              <p className="mt-2 text-[15px] leading-relaxed text-[var(--kl-mid)]">{a.body}</p>
               <div className="mt-4 flex items-center justify-between">
-                <span className="rounded-full border border-sky/30 bg-sky/10 px-2.5 py-1 text-[0.66rem] font-bold uppercase tracking-widest text-sky">
+                <span className="kl-mono rounded-full bg-[var(--kl-paper)] px-2.5 py-1 text-[0.66rem] uppercase tracking-widest text-[var(--kl-gold-deep)]">
                   {a.chip}
                 </span>
                 {a.link && (
@@ -167,7 +166,8 @@ export default function AgentsGrid() {
 
         {/* Knowledge Vault + AI Gateway note card */}
         <motion.div
-          className="cloud-card mt-8 grid gap-8 p-8 md:grid-cols-2"
+          className="mt-4 grid gap-8 rounded-[20px] p-[clamp(24px,4vw,48px)] md:grid-cols-2"
+          style={{ background: 'linear-gradient(160deg, var(--kl-stage-a), var(--kl-stage-b))' }}
           initial={reduced ? false : { opacity: 0, y: 28 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.4 }}
@@ -175,18 +175,18 @@ export default function AgentsGrid() {
         >
           <div>
             <div className="flex items-center gap-2.5">
-              <Vault size={20} className="text-gold" />
-              <h3 className="font-semibold text-text-hi">Personal Knowledge Vault</h3>
+              <Vault size={20} className="text-[var(--kl-gold-deep)]" />
+              <h3 className="kl-serif text-[22px] font-semibold">Personal Knowledge Vault</h3>
             </div>
-            <p className="caption mt-2 leading-relaxed">
+            <p className="mt-2 text-[15px] leading-relaxed text-[var(--kl-mid)]">
               Your documents, memories and answers — encrypted, yours, and available to your agents
               only with your explicit say-so.
             </p>
-            <div className="mt-5 flex items-center gap-2.5">
-              <Route size={20} className="text-gold" />
-              <h3 className="font-semibold text-text-hi">The AI Gateway</h3>
+            <div className="mt-7 flex items-center gap-2.5">
+              <Route size={20} className="text-[var(--kl-gold-deep)]" />
+              <h3 className="kl-serif text-[22px] font-semibold">The AI Gateway</h3>
             </div>
-            <p className="caption mt-2 max-w-md leading-relaxed">
+            <p className="mt-2 max-w-md text-[15px] leading-relaxed text-[var(--kl-mid)]">
               Never hard-coded to one provider — the router picks the model by task, language,
               accuracy, cost, speed and data sensitivity: Kimi, DeepSeek and others.
             </p>

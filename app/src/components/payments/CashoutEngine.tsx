@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, animate, motion } from 'framer-motion'
 import { Check, Lock, LockOpen, Play, RotateCcw, Send, ShieldCheck, Users } from 'lucide-react'
-import { ArcButton, LedgerRow } from '@/components/ui-kit'
+import { LedgerRow } from '@/components/ui-kit'
 import { FEATURES } from '@/lib/features'
 import { cn } from '@/lib/utils'
 import { EASE, useReducedMotion } from '@/components/creators/motion-utils'
+import { Eyebrow, KlButton } from '@/components/landing/PageKit'
+import { KL_CARD, KL_CARD_GOLD, KL_LABEL } from '@/components/landing/kl-classes'
 
 /* ------------------------------------------------------------------ */
 /* The direct split: a $120 agency purchase                            */
@@ -97,13 +99,13 @@ function LevelSplit() {
   }, [reduced])
 
   return (
-    <div className="cloud-card p-6 sm:p-8">
+    <div className={cn(KL_CARD, 'p-6 sm:p-8')}>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="eyebrow text-text-low">The ${PURCHASE.total} split</p>
-          <h3 className="h3 mt-2">One purchase. One commission.</h3>
+          <p className={KL_LABEL}>The ${PURCHASE.total} split</p>
+          <h3 className="mt-2 text-[22px] font-bold tracking-[-0.02em]">One purchase. One commission.</h3>
         </div>
-        <ArcButton size="sm" variant={stage >= 4 ? 'ghost' : 'gold'} onClick={run} disabled={running}>
+        <KlButton size="sm" variant={stage >= 4 ? 'ghost' : 'gold'} onClick={run} disabled={running}>
           {stage >= 4 ? (
             <>
               <RotateCcw size={14} aria-hidden="true" /> Replay split
@@ -113,7 +115,7 @@ function LevelSplit() {
               <Play size={14} aria-hidden="true" /> Run the split
             </>
           )}
-        </ArcButton>
+        </KlButton>
       </div>
 
       {/* purchase origin */}
@@ -142,7 +144,7 @@ function LevelSplit() {
           animate={stage >= 1 && !reduced ? { scale: [0.97, 1.01, 1] } : { scale: 1 }}
           transition={{ duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
         >
-          <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full border border-white/20 bg-ink-2">
+          <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full border border-white/20 bg-[var(--kl-paper)]">
             <Users size={15} className="text-text-mid" aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1">
@@ -187,8 +189,8 @@ function LevelSplit() {
                       ? 'border-gold bg-gradient-to-br from-gold-soft to-gold text-ink'
                       : row.tone === 'sky'
                         ? 'border-sky bg-sky/25 text-text-hi'
-                        : 'border-white/20 bg-ink-2 text-text-mid'
-                    : 'border-white/15 bg-ink-2 text-text-low',
+                        : 'border-white/20 bg-[var(--kl-paper)] text-text-mid'
+                    : 'border-white/15 bg-[var(--kl-paper)] text-text-low',
                 )}
               >
                 {row.pct}%
@@ -314,7 +316,7 @@ function EscrowAccumulator() {
   return (
     <div className="flex flex-col gap-6">
       {/* member escrow card */}
-      <div className="cloud-card gold p-6 sm:p-8">
+      <div className={cn(KL_CARD_GOLD, 'p-6 sm:p-8')}>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <span className="flex h-12 w-12 items-center justify-center rounded-full font-display text-lg" style={{ background: 'var(--grad-orb)' }}>
@@ -325,7 +327,7 @@ function EscrowAccumulator() {
               <p className="caption">verified · BSC wallet whitelisted</p>
             </div>
           </div>
-          <ArcButton size="sm" variant={released ? 'ghost' : 'gold'} onClick={run} disabled={running}>
+          <KlButton size="sm" variant={released ? 'ghost' : 'gold'} onClick={run} disabled={running}>
             {released ? (
               <>
                 <RotateCcw size={14} aria-hidden="true" /> Replay
@@ -333,7 +335,7 @@ function EscrowAccumulator() {
             ) : (
               'Simulate commissions'
             )}
-          </ArcButton>
+          </KlButton>
         </div>
 
         {/* balance + progress to $1 */}
@@ -402,8 +404,8 @@ function EscrowAccumulator() {
       </div>
 
       {/* Mass Payouts batch */}
-      <div className="cloud-card p-6 sm:p-8">
-        <p className="eyebrow inline-flex items-center gap-2 text-text-low">
+      <div className={cn(KL_CARD, 'p-6 sm:p-8')}>
+        <p className={cn(KL_LABEL, 'inline-flex items-center gap-2')}>
           <Users size={14} aria-hidden="true" /> Mass Payouts batch · money out
         </p>
         <ul className="mt-5 space-y-3">
@@ -466,20 +468,20 @@ function EscrowAccumulator() {
 export default function CashoutEngine() {
   const reduced = useReducedMotion()
   return (
-    <section className="noise-overlay px-6 py-24 md:py-32" style={{ background: 'var(--ink)' }}>
-      <div className="mx-auto max-w-container">
-        <p className="eyebrow text-gold">Money out — Commission cashout engine</p>
-        <h2 className="h2 mt-4 max-w-3xl">
+    <section className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]">
+      <div>
+        <Eyebrow>Money out — Commission cashout engine</Eyebrow>
+        <h2 className="kl-h2 mt-5 max-w-[900px]">
           One sponsor, paid from our own margin.{' '}
-          <span className="text-gold-grad font-display italic">One dollar out the door.</span>
+          <span className="text-[var(--kl-gold-deep)]">One dollar out the door.</span>
         </h2>
-        <p className="body-lg mt-4 max-w-2xl text-text-mid">
+        <p className="kl-lead mt-6 !max-w-[680px]">
           Every purchase allocates commissions across ten inviter levels in the immutable ledger.
           Balances under $1 rest in NowPayments custody escrow; the moment they cross a dollar, the
           member is swept into the next Mass Payouts batch — automatically.
         </p>
         <motion.div
-          className="mt-12 grid items-start gap-8 lg:grid-cols-2"
+          className="mt-12 grid items-start gap-8 grid-cols-[minmax(0,1fr)] lg:grid-cols-2"
           initial={reduced ? false : { opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-10%' }}

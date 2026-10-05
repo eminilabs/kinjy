@@ -11,8 +11,10 @@ import {
   Waves,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { ArcButton, ProvenanceTag } from '@/components/ui-kit'
+import { ProvenanceTag } from '@/components/ui-kit'
 import { EASE, useReducedMotion } from './motion-utils'
+import { Eyebrow, KlButton } from '@/components/landing/PageKit'
+import { KL_CARD } from '@/components/landing/kl-classes'
 
 const BASE_SAFE_COUNT = 12847
 
@@ -33,15 +35,15 @@ export default function CrisisAlertMode() {
   const safeCount = BASE_SAFE_COUNT + (markedSafe ? 1 : 0)
 
   return (
-    <section aria-labelledby="crisis-heading" className="px-6 py-24">
-      <div className="mx-auto max-w-container">
+    <section aria-labelledby="crisis-heading" className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]">
+      <div>
         <div className="max-w-2xl">
-          <p className="eyebrow text-coral">Crisis &amp; Community Alert Mode</p>
-          <h2 id="crisis-heading" className="h2 mt-3">
+          <Eyebrow>Crisis &amp; Community Alert Mode</Eyebrow>
+          <h2 id="crisis-heading" className="kl-h2 mt-5 max-w-[900px]">
             When it matters most, Kinjy switches to{' '}
-            <span className="font-display italic text-gold-grad">crisis mode.</span>
+            <span className="font-display italic text-[var(--kl-gold-deep)]">crisis mode.</span>
           </h2>
-          <p className="body-lg mt-4 text-text-mid">
+          <p className="kl-lead mt-6 !max-w-[680px]">
             Verified local alerts cut through the feed — from city to district to your own street —
             and one tap tells everyone who loves you that you're okay.
           </p>
@@ -54,7 +56,7 @@ export default function CrisisAlertMode() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-15%' }}
             transition={{ duration: 0.7, ease: EASE }}
-            className="cloud-card overflow-hidden"
+            className={cn(KL_CARD, 'overflow-hidden')}
           >
             {/* Alert header */}
             <div className="border-b border-white/10 bg-coral/[0.08] px-5 py-4">
@@ -86,7 +88,7 @@ export default function CrisisAlertMode() {
               </p>
 
               {/* Check-in row */}
-              <div className="mt-5 flex flex-wrap items-center gap-4 rounded-card-md border border-white/10 bg-ink-3/60 p-4">
+              <div className="mt-5 flex flex-wrap items-center gap-4 rounded-card-md border border-white/10 bg-[var(--kl-paper)] p-4">
                 <div aria-live="polite">
                   <p className="mono-data text-[0.65rem] uppercase tracking-wider text-text-low">
                     Marked safe in your area
@@ -109,7 +111,7 @@ export default function CrisisAlertMode() {
                     </AnimatePresence>
                   </p>
                 </div>
-                <ArcButton
+                <KlButton
                   size="sm"
                   variant={markedSafe ? 'ghost' : 'gold'}
                   className={cn('ms-auto', markedSafe && 'border-success/50 text-success')}
@@ -125,7 +127,7 @@ export default function CrisisAlertMode() {
                       <HeartHandshake size={15} aria-hidden="true" /> I'm safe
                     </>
                   )}
-                </ArcButton>
+                </KlButton>
               </div>
 
               {/* Family-circle notification preview */}
@@ -164,7 +166,7 @@ export default function CrisisAlertMode() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-15%' }}
             transition={{ duration: 0.7, delay: 0.12, ease: EASE }}
-            className="cloud-card p-5"
+            className={cn(KL_CARD, 'p-5')}
           >
             <p className="mono-data flex items-center gap-2 text-[0.7rem] uppercase tracking-wider text-text-low">
               <Users size={13} className="text-sky" aria-hidden="true" /> Alert distribution
@@ -180,7 +182,7 @@ export default function CrisisAlertMode() {
                   whileInView={{ opacity: 1, x: 0 }}
                   viewport={{ once: true, amount: 0.6 }}
                   transition={{ duration: 0.5, delay: feed.delay, ease: EASE }}
-                  className="relative flex items-center gap-3 rounded-card-md border border-white/10 bg-ink-3/60 p-3.5"
+                  className="relative flex items-center gap-3 rounded-card-md border border-white/10 bg-[var(--kl-paper)] p-3.5"
                 >
                   {/* connecting arc between feed layers */}
                   {i < FEEDS.length - 1 && (

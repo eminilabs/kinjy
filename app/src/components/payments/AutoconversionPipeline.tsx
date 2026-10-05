@@ -2,6 +2,8 @@ import { motion } from 'framer-motion'
 import { ArrowLeftRight, Banknote, Bitcoin, Database, Vault } from 'lucide-react'
 import { EASE, useReducedMotion } from '@/components/creators/motion-utils'
 import { cn } from '@/lib/utils'
+import { Eyebrow } from '@/components/landing/PageKit'
+import { KL_CARD } from '@/components/landing/kl-classes'
 
 const NODES = [
   {
@@ -41,13 +43,13 @@ export default function AutoconversionPipeline() {
   const reduced = useReducedMotion()
 
   return (
-    <section className="noise-overlay twilight-field px-6 py-24 md:py-32">
-      <div className="mx-auto max-w-container">
-        <p className="eyebrow text-gold">Treasury — Autoconversion pipeline</p>
-        <h2 className="h2 mt-4 max-w-2xl">
-          350 coins in. <span className="text-gold-grad font-display italic">One asset out.</span>
+    <section className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]">
+      <div>
+        <Eyebrow>Treasury — Autoconversion pipeline</Eyebrow>
+        <h2 className="kl-h2 mt-5 max-w-[900px]">
+          350 coins in. <span className="text-[var(--kl-gold-deep)]">One asset out.</span>
         </h2>
-        <p className="body-lg mt-4 max-w-2xl text-text-mid">
+        <p className="kl-lead mt-6 !max-w-[680px]">
           Kinjy never holds a zoo of volatile tokens. Everything members pay is converted inside
           NowPayments custody — off-chain, balance-to-balance — into a single BSC USDT treasury
           balance, then swept to the company safe wallet.
@@ -86,7 +88,7 @@ export default function AutoconversionPipeline() {
                   </svg>
                 )}
                 <motion.div
-                  className={cn('cloud-card cloud-card-hover h-full p-5', i === 4 && 'shadow-gold-ring')}
+                  className={cn(KL_CARD, 'transition-transform hover:-translate-y-0.5 h-full p-5', i === 4 && '!border-[var(--kl-gold)]')}
                   initial={reduced ? false : { opacity: 0, y: 28 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true, margin: '-15%' }}
@@ -103,7 +105,7 @@ export default function AutoconversionPipeline() {
                   </div>
                   <h3 className="mt-4 font-sans text-base font-semibold text-text-hi">{n.title}</h3>
                   <p className="caption mt-1.5">{n.sub}</p>
-                  <p className="mono-data mt-3 rounded-card-sm border border-white/10 bg-ink/60 px-2.5 py-1.5 text-[0.7rem] text-gold-soft">
+                  <p className="mono-data mt-3 rounded-card-sm border border-white/10 bg-[var(--kl-paper)] px-2.5 py-1.5 text-[0.7rem] text-gold-soft">
                     {n.mono}
                   </p>
                 </motion.div>

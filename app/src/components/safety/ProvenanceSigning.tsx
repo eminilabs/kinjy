@@ -12,8 +12,10 @@ import {
   Wand2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { ArcButton, ProvenanceTag } from '@/components/ui-kit'
+import { ProvenanceTag } from '@/components/ui-kit'
 import { EASE, useReducedMotion } from './motion-utils'
+import { Eyebrow, KlButton } from '@/components/landing/PageKit'
+import { KL_CARD } from '@/components/landing/kl-classes'
 
 const CHAIN = [
   { icon: Camera, label: 'Captured', detail: 'Signed at the sensor — credentials embedded instantly' },
@@ -42,15 +44,15 @@ export default function ProvenanceSigning() {
   const [verified, setVerified] = useState(false)
 
   return (
-    <section aria-labelledby="c2pa-heading" className="noise-overlay twilight-field px-6 py-24">
-      <div className="mx-auto max-w-container">
+    <section aria-labelledby="c2pa-heading" className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]">
+      <div>
         <div className="max-w-2xl">
-          <p className="eyebrow text-sky">C2PA Provenance Signing</p>
-          <h2 id="c2pa-heading" className="h2 mt-3">
+          <Eyebrow>C2PA Provenance Signing</Eyebrow>
+          <h2 id="c2pa-heading" className="kl-h2 mt-5 max-w-[900px]">
             Verifiable authenticity for the{' '}
-            <span className="font-display italic text-gold-grad">synthetic-media era.</span>
+            <span className="font-display italic text-[var(--kl-gold-deep)]">synthetic-media era.</span>
           </h2>
-          <p className="body-lg mt-4 text-text-mid">
+          <p className="kl-lead mt-6 !max-w-[680px]">
             Labels tell you what we believe. C2PA credentials prove it. Media captured on Kinjy is
             cryptographically signed at the moment of capture — and the signature survives every
             honest edit.
@@ -64,7 +66,7 @@ export default function ProvenanceSigning() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-15%' }}
             transition={{ duration: 0.7, ease: EASE }}
-            className="cloud-card p-5"
+            className={cn(KL_CARD, 'p-5')}
           >
             <div className="flex flex-wrap items-center gap-3 border-b border-white/10 pb-4">
               <div className="relative h-16 w-24 overflow-hidden rounded-card-sm">
@@ -109,7 +111,7 @@ export default function ProvenanceSigning() {
                       'z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border',
                       i === 0
                         ? 'border-gold/60 bg-gold/15 text-gold-soft'
-                        : 'border-white/15 bg-ink-3 text-sky',
+                        : 'border-white/15 bg-[var(--kl-paper)] text-sky',
                     )}
                   >
                     <step.icon size={15} aria-hidden="true" />
@@ -140,13 +142,13 @@ export default function ProvenanceSigning() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-15%' }}
             transition={{ duration: 0.7, delay: 0.12, ease: EASE }}
-            className="cloud-card p-5"
+            className={cn(KL_CARD, 'p-5')}
           >
             <div className="flex items-center justify-between gap-3">
               <p className="mono-data flex items-center gap-2 text-[0.7rem] uppercase tracking-wider text-text-low">
                 <Fingerprint size={13} className="text-gold" aria-hidden="true" /> Content credentials
               </p>
-              <ArcButton
+              <KlButton
                 size="sm"
                 variant={verified ? 'ghost' : 'indigo'}
                 onClick={() => setVerified((v) => !v)}
@@ -161,7 +163,7 @@ export default function ProvenanceSigning() {
                     <Aperture size={14} aria-hidden="true" /> Verify
                   </>
                 )}
-              </ArcButton>
+              </KlButton>
             </div>
 
             <AnimatePresence initial={false}>
@@ -174,7 +176,7 @@ export default function ProvenanceSigning() {
                   transition={{ duration: 0.55, ease: EASE }}
                   className="overflow-hidden"
                 >
-                  <div className="mt-4 rounded-card-md border border-gold/30 bg-ink-3/80 p-4">
+                  <div className="mt-4 rounded-card-md border border-gold/30 bg-[var(--kl-paper)] p-4">
                     <p className="flex items-center gap-2 text-sm font-semibold text-success">
                       <Check size={15} aria-hidden="true" /> Signature valid — chain unbroken
                     </p>
@@ -215,11 +217,11 @@ export default function ProvenanceSigning() {
             </AnimatePresence>
 
             <div className="mt-4 grid grid-cols-2 gap-3">
-              <div className="rounded-card-sm border border-white/10 bg-ink-3/60 p-3">
+              <div className="rounded-card-sm border border-white/10 bg-[var(--kl-paper)] p-3">
                 <p className="mono-data text-[0.65rem] uppercase tracking-wider text-text-low">Signed at</p>
                 <p className="mt-1 text-sm font-semibold text-text-hi">Capture, not upload</p>
               </div>
-              <div className="rounded-card-sm border border-white/10 bg-ink-3/60 p-3">
+              <div className="rounded-card-sm border border-white/10 bg-[var(--kl-paper)] p-3">
                 <p className="mono-data text-[0.65rem] uppercase tracking-wider text-text-low">Standard</p>
                 <p className="mt-1 text-sm font-semibold text-text-hi">Open C2PA 2.1</p>
               </div>

@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import { Braces, Radio, KeyRound, Store } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { FEATURES } from '@/lib/features'
+import { KL_CARD } from '@/components/landing/kl-classes'
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 
@@ -63,7 +64,7 @@ function ConsentMock() {
     ['Post on your behalf', false],
   ] as const
   return (
-    <div className="rounded-card-sm border border-white/10 bg-ink/60 p-3">
+    <div className="rounded-card-sm border border-white/10 bg-[var(--kl-code)] p-3">
       <p className="mb-2 text-[0.68rem] font-semibold text-text-hi">
         <span className="text-gold">Nia App</span> requests access
       </p>
@@ -79,7 +80,7 @@ function ConsentMock() {
             >
               <span
                 className={cn(
-                  'absolute top-0.5 h-2.5 w-2.5 rounded-full bg-ink transition-all',
+                  'absolute top-0.5 h-2.5 w-2.5 rounded-full bg-[var(--kl-surface)] transition-all',
                   on ? 'end-0.5' : 'start-0.5 bg-white/60',
                 )}
               />
@@ -88,7 +89,7 @@ function ConsentMock() {
         ))}
       </div>
       <div className="mt-2.5 flex gap-2">
-        <span className="rounded-full bg-gradient-to-br from-gold-soft to-gold px-2.5 py-1 text-[0.62rem] font-bold text-ink">Allow</span>
+        <span className="kl-sheen rounded-full px-2.5 py-1 text-[0.62rem] font-bold">Allow</span>
         <span className="rounded-full border border-white/15 px-2.5 py-1 text-[0.62rem] font-semibold text-text-mid">Deny</span>
       </div>
     </div>
@@ -99,14 +100,14 @@ function ConsentMock() {
 function StorefrontTile() {
   return (
     <div className="flex items-center gap-3">
-      <div className="flex-1 rounded-card-sm border border-white/10 bg-ink/60 p-3">
+      <div className="flex-1 rounded-card-sm border border-white/10 bg-[var(--kl-code)] p-3">
         <div className="mb-2 h-9 rounded-sm bg-gradient-to-br from-indigo/60 to-sky/30" />
         <p className="text-[0.68rem] font-semibold text-text-hi">TransitBoard</p>
         <p className="font-mono text-[0.62rem] text-text-low">★ 4.9 · 12.4k installs</p>
       </div>
       <div className="w-24 rounded-card-sm border border-gold/30 bg-gold/10 p-2.5 text-center">
         <p className="font-mono text-[0.6rem] uppercase tracking-wider text-gold-soft">You keep</p>
-        <p className="font-mono text-lg font-semibold text-gold-grad">80%</p>
+        <p className="font-mono text-lg font-semibold text-[var(--kl-gold-deep)]">80%</p>
       </div>
     </div>
   )
@@ -142,14 +143,14 @@ const CARDS = [
 /** Section 2 — API surface: 4 capability cards with animated mini-diagrams. */
 export default function ApiSurface() {
   return (
-    <section id="api-surface" className="noise-overlay relative bg-ink px-6 py-24 md:py-28">
-      <div className="mx-auto max-w-container">
+    <section id="api-surface" className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)] relative">
+      <div>
         <motion.p
           initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-15%' }}
           transition={{ duration: 0.5, ease: EASE }}
-          className="eyebrow text-sky"
+          className="kl-mono text-xs uppercase tracking-[.14em] text-[var(--kl-gold-deep)]"
         >
           API surface
         </motion.p>
@@ -158,12 +159,12 @@ export default function ApiSurface() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-15%' }}
           transition={{ duration: 0.6, ease: EASE }}
-          className="h2 mt-4 max-w-2xl"
+          className="kl-h2 mt-5 max-w-[900px]"
         >
-          One society, <span className="text-gold-grad">four doors in.</span>
+          One society, <span className="text-[var(--kl-gold-deep)]">four doors in.</span>
         </motion.h2>
 
-        <div className="mt-14 grid gap-6 sm:grid-cols-2">
+        <div className="mt-14 grid grid-cols-[minmax(0,1fr)] gap-6 sm:grid-cols-2">
           {CARDS.map((c, i) => (
             <motion.div
               key={c.title}
@@ -172,7 +173,7 @@ export default function ApiSurface() {
               viewport={{ once: true, margin: '-12%' }}
               transition={{ delay: i * 0.08, duration: 0.55, ease: EASE }}
               whileHover="hover"
-              className="cloud-card cloud-card-hover group p-6"
+              className={cn(KL_CARD, 'transition-transform hover:-translate-y-0.5 group p-6')}
             >
               <div className="mb-4 flex items-center gap-3">
                 <span className="flex h-11 w-11 items-center justify-center rounded-card-sm border border-gold/25 bg-gold/10 text-gold-soft">
@@ -184,7 +185,7 @@ export default function ApiSurface() {
               <motion.div
                 variants={{ hover: { scale: 1.02 } }}
                 transition={{ duration: 0.3, ease: EASE }}
-                className="rounded-card-md border border-white/10 bg-ink-2/50 p-3.5"
+                className="rounded-card-md border border-white/10 bg-[var(--kl-code)] p-3.5"
               >
                 {c.diagram}
               </motion.div>

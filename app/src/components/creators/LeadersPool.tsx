@@ -2,6 +2,9 @@ import { useEffect, useRef } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { Crown, ShieldCheck, Trophy, Users } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { Eyebrow, Stage } from '@/components/landing/PageKit'
+import { MODULE_TONES } from '@/components/platform/tones'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -68,13 +71,13 @@ export default function LeadersPool() {
   }, [])
 
   return (
-    <section ref={rootRef} className="noise-overlay twilight-field px-6 py-24 md:py-32">
-      <div className="mx-auto grid max-w-container items-center gap-14 lg:grid-cols-12">
+    <section ref={rootRef} className="kl-pad-x border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-[clamp(40px,6vw,96px)] lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         {/* Copy */}
-        <div className="lg:col-span-5">
-          <p className="eyebrow text-gold">Kinjy Leaders</p>
-          <h2 className="h2 mt-4">5% of what Kinjy earns, every month.</h2>
-          <ul className="mt-7 space-y-5">
+        <div className="min-w-0">
+          <Eyebrow>Kinjy Leaders</Eyebrow>
+          <h2 className="kl-h2 mt-5">5% of what Kinjy earns, every month.</h2>
+          <ul className="mt-10 border-t border-[var(--kl-paper-2)]">
             {[
               {
                 icon: Trophy,
@@ -96,58 +99,62 @@ export default function LeadersPool() {
                 title: 'Snapshot → fraud review → payment batch',
                 body: 'The month is frozen, screened, then paid in one batch. A commission that was later clawed back does not count towards a place.',
               },
-            ].map((b) => (
-              <li key={b.title} className="flex items-start gap-4">
-                <span className="cloud-glass mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-card-sm">
-                  <b.icon size={18} className="text-gold" aria-hidden="true" />
+            ].map((b, i) => (
+              <li key={b.title} className="flex items-start gap-4 border-b border-[var(--kl-paper-2)] py-5">
+                <span
+                  className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px]"
+                  style={{ background: MODULE_TONES[i % 4][1], color: MODULE_TONES[i % 4][0] }}
+                >
+                  <b.icon size={18} aria-hidden="true" />
                 </span>
                 <div>
-                  <h3 className="font-semibold text-text-hi">{b.title}</h3>
-                  <p className="mt-1 text-sm leading-relaxed text-text-mid">{b.body}</p>
+                  <h3 className="font-semibold">{b.title}</h3>
+                  <p className="mt-1 text-[15px] leading-relaxed text-[var(--kl-mid)]">{b.body}</p>
                 </div>
               </li>
             ))}
           </ul>
-          <p className="mono-data mt-6 rounded-card-sm border border-gold/25 bg-gold/[0.06] px-4 py-3 text-gold-soft">
+          <p className="kl-mono mt-6 rounded-[12px] bg-[var(--kl-paper)] px-4 py-3 text-[13px] text-[var(--kl-gold-deep)]">
             your share = your commission this month ÷ Σ commission of the top 10,000
           </p>
         </div>
 
-        {/* Leaderboard + donut + pipeline */}
-        <div className="lg:col-span-7">
-          <div className="leaderboard cloud-card p-5">
-            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+        {/* Leaderboard + donut + pipeline, on a stage */}
+        <Stage className="min-w-0 p-[clamp(14px,3vw,36px)] lg:sticky lg:top-24" glows={['#D9A648', 'var(--kl-sky)']}>
+          <div className="leaderboard rounded-[20px] bg-[var(--kl-surface)] p-5 shadow-[0_30px_60px_-36px_var(--kl-shadow)]">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--kl-paper-2)] pb-4">
               <div>
-                <p className="text-sm font-semibold text-text-hi">Kinjy Leaders — November</p>
-                <p className="mono-data text-[0.65rem] text-text-low">9,982 / 10,000 qualifying</p>
+                <p className="kl-serif text-xl font-semibold">Kinjy Leaders — November</p>
+                <p className="kl-mono mt-0.5 text-[11px] text-[var(--kl-low)]">9,982 / 10,000 qualifying</p>
               </div>
-              <span className="mono-data rounded-full bg-gold/15 px-3 py-1 text-[0.68rem] text-gold-soft">
-                snapshot frozen ✓
-              </span>
+              <span className="kl-mono rounded-full bg-[#DDF0E5] px-3 py-1 text-[11px] text-[#2E7D57]">snapshot frozen ✓</span>
             </div>
-            <div className="mt-2 grid gap-1 sm:grid-cols-[1fr_auto] sm:gap-6">
+            <div className="mt-2 grid gap-1 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-6">
               <ol>
                 {LEADERS.map((l, i) => (
                   <li
                     key={l.name}
-                    className="leader-row flex items-center gap-3 rounded-card-sm px-2 py-2 transition-colors hover:bg-white/[0.04]"
+                    className={cn(
+                      'leader-row flex items-center gap-3 rounded-[12px] px-2 py-2 transition-colors hover:bg-[var(--kl-paper)]',
+                      i === 0 && 'bg-[var(--kl-paper)]',
+                    )}
                   >
-                    <span className="mono-data w-6 text-end text-text-low">{i + 1}</span>
+                    <span className={cn('kl-mono w-6 text-end text-xs', i < 3 ? 'font-semibold text-[var(--kl-gold-deep)]' : 'text-[var(--kl-low)]')}>{i + 1}</span>
                     <span
                       aria-hidden="true"
-                      className="h-8 w-8 shrink-0 rounded-full border border-white/15 bg-cover"
+                      className="h-8 w-8 shrink-0 rounded-full bg-cover"
                       style={{ backgroundImage: 'url(/avatars-set.jpg)', backgroundSize: '400% 300%', backgroundPosition: l.avatar }}
                     />
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-hi">{l.name}</span>
-                    <span className="mono-data text-gold-soft">${l.earned.toLocaleString()}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{l.name}</span>
+                    <span className="kl-mono text-sm text-[var(--kl-gold-deep)]">${l.earned.toLocaleString()}</span>
                   </li>
                 ))}
               </ol>
               {/* share donut beside the top entry */}
               <div className="lsr-donut mx-auto flex flex-col items-center justify-center gap-2 self-start pt-2 sm:pt-4">
-                <div className="relative h-24 w-24">
+                <div className="relative h-28 w-28">
                   <svg viewBox="0 0 64 64" className="h-full w-full -rotate-90">
-                    <circle cx="32" cy="32" r="26" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="6" />
+                    <circle cx="32" cy="32" r="26" fill="none" stroke="var(--kl-paper-2)" strokeWidth="6" />
                     <circle
                       className="lsr-arc"
                       cx="32"
@@ -168,38 +175,35 @@ export default function LeadersPool() {
                     </defs>
                   </svg>
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="mono-data text-sm font-semibold text-gold-soft">{SHARE.toFixed(2)}%</span>
-                    <span className="text-[0.6rem] uppercase tracking-wider text-text-low">share</span>
+                    <span className="kl-serif text-lg font-semibold">{SHARE.toFixed(2)}%</span>
+                    <span className="kl-mono text-[9px] uppercase tracking-wider text-[var(--kl-low)]">share</span>
                   </div>
                 </div>
-                <p className="caption text-center">rank #1 share<br />of the pool</p>
+                <p className="text-center text-xs text-[var(--kl-low)]">rank #1 share<br />of the pool</p>
               </div>
             </div>
 
             {/* monthly pipeline */}
-            <div className="pool-pipeline relative mt-5 border-t border-white/10 pt-5">
+            <div className="pool-pipeline relative mt-5 border-t border-[var(--kl-paper-2)] pt-5">
               <div className="relative flex items-center justify-between">
-                <span className="absolute inset-x-4 top-1/2 h-px -translate-y-1/2 bg-white/12" aria-hidden="true" />
+                <span className="absolute inset-x-4 top-4 h-px border-t border-dashed border-[var(--kl-dash)]" aria-hidden="true" />
                 <span
-                  className="pool-pulse absolute top-1/2 h-2 w-10 -translate-y-1/2 rounded-full"
-                  style={{ background: 'linear-gradient(90deg, transparent, #F0C878)', filter: 'blur(1px)' }}
+                  className="pool-pulse absolute top-4 h-2 w-10 -translate-y-1/2 rounded-full"
+                  style={{ background: 'linear-gradient(90deg, transparent, #D9A648)', filter: 'blur(1px)' }}
                   aria-hidden="true"
                 />
                 {PIPELINE.map((p, i) => (
                   <div key={p} className="relative flex flex-col items-center gap-1.5">
-                    <span
-                      className="flex h-8 w-8 items-center justify-center rounded-full border border-gold/40 bg-ink-2 mono-data text-[0.65rem] text-gold-soft"
-                      aria-hidden="true"
-                    >
+                    <span className="kl-sheen kl-mono flex h-8 w-8 items-center justify-center rounded-full text-[11px]" aria-hidden="true">
                       {i + 1}
                     </span>
-                    <span className="caption text-center">{p}</span>
+                    <span className="text-center text-xs text-[var(--kl-mid)]">{p}</span>
                   </div>
                 ))}
               </div>
             </div>
           </div>
-        </div>
+        </Stage>
       </div>
     </section>
   )

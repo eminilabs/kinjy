@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { AlertCircle, Fingerprint, Loader2, ShieldCheck } from 'lucide-react'
-import ArcButton from '@/components/ui-kit/ArcButton'
+import PublicShell from '@/components/landing/PublicShell'
+import { Eyebrow, KlButton, Stage } from '@/components/landing/PageKit'
 import { useAuth } from '@/hooks/useAuth'
 import { ApiError } from '@/lib/api'
 import { OPEN_MODULES, spelled } from '@/lib/features'
@@ -105,189 +106,201 @@ export default function SignIn() {
     }
   }
 
-  const field = 'w-full rounded-card-sm bg-ink-2/70 border border-white/10 px-4 py-3 text-text-hi placeholder:text-text-low focus:border-gold/50 focus:outline-none'
+  const field =
+    'w-full rounded-[12px] border border-[var(--kl-paper-2)] bg-[var(--kl-bg)] px-4 py-3 text-[16px] text-[var(--kl-ink)] placeholder:text-[var(--kl-low)] focus:border-[var(--kl-gold)] focus:outline-none focus:ring-2 focus:ring-[var(--kl-gold)]/25'
+  const label = 'mb-1.5 block text-[13px] font-semibold text-[var(--kl-mid)]'
+  const hint = 'mt-1.5 block text-[13px] leading-snug text-[var(--kl-low)]'
+  const fieldError = 'mt-1.5 block text-[13px] text-[#B23B3B]'
 
   return (
-    <section className="twilight-field noise-overlay flex min-h-[calc(100svh-72px)] items-center px-6 py-16">
-      <div className="mx-auto grid w-full max-w-container items-center gap-14 lg:grid-cols-[1fr_460px]">
-        {/* Left: promise */}
-        <div className="hidden lg:block">
-          <p className="eyebrow text-gold">Your society awaits</p>
-          <h1 className="h1 mt-4 max-w-lg">
-            One account.{' '}
-            <span className="font-display italic text-gold-grad">{spelled(OPEN_MODULES)} modules.</span>
-          </h1>
-          <ul className="mt-8 space-y-4 text-text-mid">
-            <li className="flex items-start gap-3">
-              <Fingerprint size={18} className="mt-0.5 shrink-0 text-gold" aria-hidden="true" />
-              <span>
-                <strong className="text-text-hi">Passkeys, not a biometric database.</strong> Your
-                fingerprint or face unlocks your device locally — Kinjy never stores it.
-              </span>
-            </li>
-            <li className="flex items-start gap-3">
-              <ShieldCheck size={18} className="mt-0.5 shrink-0 text-gold" aria-hidden="true" />
-              <span>
-                <strong className="text-text-hi">Leave whenever you want.</strong> Deactivate or
-                delete from your settings, with no justification asked and a cooling period you choose.
-              </span>
-            </li>
-          </ul>
-        </div>
-
-        {/* Right: the form */}
-        <div className="cloud-card p-7 md:p-8">
-          <div className="flex gap-1 rounded-full bg-ink-2/60 p-1">
-            {(['signin', 'signup'] as Mode[]).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => {
-                  setMode(m)
-                  setError(null)
-                }}
-                className={cn(
-                  'flex-1 rounded-full px-4 py-2 text-sm font-semibold',
-                  mode === m ? 'bg-gold text-ink' : 'text-text-mid hover:text-text-hi',
-                )}
-              >
-                {m === 'signin' ? 'Sign in' : 'Create account'}
-              </button>
-            ))}
+    <PublicShell>
+      <section className="kl-pad-x py-[clamp(40px,6vw,80px)]">
+        <div className="grid grid-cols-[minmax(0,1fr)] items-center gap-[clamp(40px,6vw,96px)] lg:grid-cols-[minmax(0,1fr)_minmax(0,480px)]">
+          {/* Left: promise */}
+          <div className="hidden min-w-0 lg:block">
+            <Eyebrow>Your society awaits</Eyebrow>
+            <h1 className="kl-serif mt-6 max-w-[620px] text-balance text-[clamp(44px,5.4vw,80px)] font-semibold leading-[0.98] tracking-[-0.02em]">
+              One account.{' '}
+              <span className="text-[var(--kl-gold-deep)]">{spelled(OPEN_MODULES)} modules.</span>
+            </h1>
+            <ul className="mt-10 max-w-[520px] border-t border-[var(--kl-paper-2)]">
+              <li className="flex items-start gap-4 border-b border-[var(--kl-paper-2)] py-5">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-[#F6EBD3] text-[#8A6414]">
+                  <Fingerprint size={18} aria-hidden="true" />
+                </span>
+                <span className="text-[16px] leading-relaxed text-[var(--kl-mid)]">
+                  <strong className="text-[var(--kl-ink)]">Passkeys, not a biometric database.</strong> Your
+                  fingerprint or face unlocks your device locally — Kinjy never stores it.
+                </span>
+              </li>
+              <li className="flex items-start gap-4 border-b border-[var(--kl-paper-2)] py-5">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-[#E3ECF7] text-[#2F6BA8]">
+                  <ShieldCheck size={18} aria-hidden="true" />
+                </span>
+                <span className="text-[16px] leading-relaxed text-[var(--kl-mid)]">
+                  <strong className="text-[var(--kl-ink)]">Leave whenever you want.</strong> Deactivate or
+                  delete from your settings, with no justification asked and a cooling period you choose.
+                </span>
+              </li>
+            </ul>
           </div>
 
-          <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
-            {mode === 'signup' && (
-              <>
+          {/* Right: the form, on a stage */}
+          <Stage className="min-w-0 p-[clamp(14px,3vw,32px)]" glows={['var(--kl-sky)', '#D9A648']}>
+            <div className="rounded-[20px] bg-[var(--kl-surface)] p-6 shadow-[0_30px_60px_-34px_var(--kl-shadow)] md:p-8">
+              <div className="flex gap-1 rounded-full bg-[var(--kl-paper)] p-1">
+                {(['signin', 'signup'] as Mode[]).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => {
+                      setMode(m)
+                      setError(null)
+                    }}
+                    className={cn(
+                      'flex-1 rounded-full px-4 py-2.5 text-sm font-semibold transition-colors',
+                      mode === m ? 'kl-sheen' : 'text-[var(--kl-mid)] hover:text-[var(--kl-ink)]',
+                    )}
+                  >
+                    {m === 'signin' ? 'Sign in' : 'Create account'}
+                  </button>
+                ))}
+              </div>
+
+              <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
+                {mode === 'signup' && (
+                  <>
+                    <label className="block">
+                      <span className={label}>Your name</span>
+                      <input
+                        className={field}
+                        value={displayName}
+                        onChange={(e) => setDisplayName(e.target.value)}
+                        placeholder="Your full name"
+                        autoComplete="name"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className={label}>Date of birth</span>
+                      <input
+                        type="date"
+                        className={field}
+                        value={birthDate}
+                        onChange={(e) => setBirthDate(e.target.value)}
+                        autoComplete="bday"
+                        max={new Date().toISOString().slice(0, 10)}
+                        aria-describedby="dob-why"
+                      />
+                      {/* Says what it is for, and nothing about what would qualify.
+                          Telling someone the minimum age is telling them which date
+                          to type instead. */}
+                      <span id="dob-why" className={hint}>
+                        We use this to give you the right experience for your age. It is not shown on
+                        your profile.
+                      </span>
+                    </label>
+                    <label className="block">
+                      <span className={label}>Handle</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[var(--kl-low)]">@</span>
+                        <input
+                          className={field}
+                          value={handle}
+                          onChange={(e) => {
+                            setHandleEdited(true)
+                            setHandle(e.target.value.toLowerCase())
+                          }}
+                          placeholder="your.handle"
+                          autoComplete="username"
+                          aria-invalid={Boolean(handleError)}
+                        />
+                      </div>
+                      {handleError && <span className={fieldError}>{handleError}</span>}
+                    </label>
+                  </>
+                )}
+
                 <label className="block">
-                  <span className="caption mb-1.5 block">Your name</span>
+                  <span className={label}>Email</span>
                   <input
                     className={field}
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="Your full name"
-                    autoComplete="name"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                    required
                   />
                 </label>
+
                 <label className="block">
-                  <span className="caption mb-1.5 block">Date of birth</span>
+                  <span className={label}>Password</span>
                   <input
-                    type="date"
                     className={field}
-                    value={birthDate}
-                    onChange={(e) => setBirthDate(e.target.value)}
-                    autoComplete="bday"
-                    max={new Date().toISOString().slice(0, 10)}
-                    aria-describedby="dob-why"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={mode === 'signup' ? 'At least 10 characters' : '••••••••••'}
+                    autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                    aria-invalid={Boolean(passwordError)}
+                    required
                   />
-                  {/* Says what it is for, and nothing about what would qualify.
-                      Telling someone the minimum age is telling them which date
-                      to type instead. */}
-                  <span id="dob-why" className="caption mt-1.5 block">
-                    We use this to give you the right experience for your age. It is not shown on
-                    your profile.
-                  </span>
+                  {passwordError && <span className={fieldError}>{passwordError}</span>}
                 </label>
-                <label className="block">
-                  <span className="caption mb-1.5 block">Handle</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-text-low">@</span>
+
+                {mode === 'signup' && (
+                  <label className="block">
+                    <span className={label}>Referral code — optional</span>
                     <input
                       className={field}
-                      value={handle}
-                      onChange={(e) => {
-                        setHandleEdited(true)
-                        setHandle(e.target.value.toLowerCase())
-                      }}
-                      placeholder="your.handle"
-                      autoComplete="username"
-                      aria-invalid={Boolean(handleError)}
+                      value={referral}
+                      onChange={(e) => setReferral(e.target.value.toUpperCase())}
+                      placeholder="ABCD1234"
                     />
+                    <span className={hint}>
+                      Credits whoever invited you — one level, 20% of our revenue on what you do.
+                    </span>
+                  </label>
+                )}
+
+                {error && (
+                  <div
+                    role="alert"
+                    className="flex items-start gap-2.5 rounded-[12px] border border-[#B23B3B]/40 bg-[#B23B3B]/10 px-4 py-3 text-sm text-[#B23B3B]"
+                  >
+                    <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+                    <span>{error}</span>
                   </div>
-                  {handleError && <span className="mt-1.5 block text-xs text-red-300">{handleError}</span>}
-                </label>
-              </>
-            )}
+                )}
 
-            <label className="block">
-              <span className="caption mb-1.5 block">Email</span>
-              <input
-                className={field}
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                autoComplete="email"
-                required
-              />
-            </label>
+                <KlButton size="lg" className="w-full" disabled={!canSubmit} type="submit">
+                  {submitting && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
+                  {mode === 'signin' ? 'Sign in' : 'Create your account'}
+                </KlButton>
+              </form>
 
-            <label className="block">
-              <span className="caption mb-1.5 block">Password</span>
-              <input
-                className={field}
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={mode === 'signup' ? 'At least 10 characters' : '••••••••••'}
-                autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-                aria-invalid={Boolean(passwordError)}
-                required
-              />
-              {passwordError && <span className="mt-1.5 block text-xs text-red-300">{passwordError}</span>}
-            </label>
-
-            {mode === 'signup' && (
-              <label className="block">
-                <span className="caption mb-1.5 block">Referral code — optional</span>
-                <input
-                  className={field}
-                  value={referral}
-                  onChange={(e) => setReferral(e.target.value.toUpperCase())}
-                  placeholder="ABCD1234"
-                />
-                <span className="mt-1.5 block text-xs text-text-low">
-                  Credits whoever invited you — one level, 20% of our revenue on what you do.
-                </span>
-              </label>
-            )}
-
-            {error && (
-              <div
-                role="alert"
-                className="flex items-start gap-2.5 rounded-card-sm border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200"
-              >
-                <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <ArcButton size="lg" className="w-full justify-center" disabled={!canSubmit}>
-              {submitting && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
-              {mode === 'signin' ? 'Sign in' : 'Create your account'}
-            </ArcButton>
-          </form>
-
-          <p className="caption mt-5 text-center">
-            {mode === 'signin' ? (
-              <>
-                No account yet?{' '}
-                <button type="button" onClick={() => setMode('signup')} className="text-gold-soft hover:underline">
-                  Create one
-                </button>
-              </>
-            ) : (
-              <>
-                By creating an account you accept the{' '}
-                <Link to="/safety" className="text-gold-soft hover:underline">
-                  community standards
-                </Link>
-                .
-              </>
-            )}
-          </p>
+              <p className="mt-5 text-center text-[13px] text-[var(--kl-low)]">
+                {mode === 'signin' ? (
+                  <>
+                    No account yet?{' '}
+                    <button type="button" onClick={() => setMode('signup')} className="font-semibold text-[var(--kl-gold-deep)] hover:underline">
+                      Create one
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    By creating an account you accept the{' '}
+                    <Link to="/safety" className="font-semibold text-[var(--kl-gold-deep)] hover:underline">
+                      community standards
+                    </Link>
+                    .
+                  </>
+                )}
+              </p>
+            </div>
+          </Stage>
         </div>
-      </div>
-    </section>
+      </section>
+    </PublicShell>
   )
 }
