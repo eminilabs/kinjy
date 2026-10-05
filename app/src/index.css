@@ -283,6 +283,11 @@
     box-shadow: 0 24px 48px -34px rgba(36, 31, 22, 0.32), 0 1px 3px rgba(36, 31, 22, 0.04);
   }
 
+  /* Every card in the signed-in app takes the landing's 20px corner. */
+  .app-shell :is(.cloud-card, .cloud-glass.rounded-card-lg) {
+    border-radius: 20px;
+  }
+
   /* The gold button, as on the landing: the same warm gold and dark ink in
      every theme. Left to the theme tokens it turned brown on paper, and its
      `text-ink` turned white. */
