@@ -732,6 +732,8 @@ export interface Message {
   reply_to_id?: string | null
   /** True when the original has expired. Its content is never sent. */
   reply_to_deleted?: boolean
+  /** For kind "sticker": the catalogue id, and nothing else. */
+  sticker_id?: string | null
   /** Who put which catalogue sticker under this message. Members only. */
   reactions?: Reaction[]
   created_at: string
@@ -1618,16 +1620,24 @@ export const kaluta = {
      */
     send: (
       conversationId: string,
-      message: { body?: string | null; mediaId?: string; clientId?: string; replyToId?: string | null },
+      message: {
+        body?: string | null
+        mediaId?: string
+        clientId?: string
+        replyToId?: string | null
+        /** Sends a standalone sticker: a catalogue id, no text, no file. */
+        stickerId?: string | null
+      },
     ) =>
       api.post<{ id: string; created_at: string; client_id: string | null; duplicate?: boolean }>(
         `/conversations/${conversationId}/messages`,
         {
           body: message.body || null,
-          kind: message.mediaId ? 'media' : 'text',
+          kind: message.stickerId ? 'sticker' : message.mediaId ? 'media' : 'text',
           media_id: message.mediaId,
           client_id: message.clientId,
           reply_to_id: message.replyToId || undefined,
+          sticker_id: message.stickerId || undefined,
         },
       ),
     /** The sticker catalogue: the only ids the server accepts as a reaction. */
