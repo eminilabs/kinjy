@@ -18,6 +18,42 @@ log = logging.getLogger("media-service.uploadcenter")
 TIMEOUT_SECONDS = 15
 HEAD_BYTES = 32
 
+# TIMEOUT_SECONDS is the budget for an API call: a presign, a status read, a
+# delete. It is deliberately short, because those answer in well under a second
+# and a hung one should not hold a worker thread.
+#
+# Sending the file is not an API call. httpx applies a plain `timeout=` to the
+# write phase as well, so a flat 15 seconds was also the budget for pushing the
+# whole body to R2 - fine for an avatar, impossible for the 200 MB this service
+# accepts. A member posting a video got "File storage is unavailable right now"
+# after the PUT timed out, with the file left in `uploading` state so the
+# cleanup delete was then refused with a 409.
+#
+# So the send gets its own budget, scaled to the body the way the readiness poll
+# below already is. This leg is our server to R2, not the member's phone - their
+# bytes have already arrived - so it is sized from measured throughput rather
+# than from what a phone manages: 7 MB went up in 19 seconds from a developer's
+# connection, about 370 KB/s. The allowance below is a quarter of that, so a bad
+# day still finishes and the 200 MB this service accepts fits under the ceiling.
+# The ceiling matters because a stalled upload holds one of the six remote slots
+# for its whole budget.
+SEND_BASE_SECONDS = 30
+SEND_PER_MB_SECONDS = 4.0
+SEND_MAX_SECONDS = 900
+
+
+def _send_timeout(size_bytes: int) -> httpx.Timeout:
+    budget = min(SEND_MAX_SECONDS, SEND_BASE_SECONDS + SEND_PER_MB_SECONDS * size_bytes / (1024 * 1024))
+    # connect stays short: an unreachable host should fail fast, not sit out the
+    # whole send budget.
+    return httpx.Timeout(budget, connect=10.0)
+
+
+def _upload_http(timeout: httpx.Timeout) -> httpx.Client:
+    """The client that sends a body. Separate from _cdn_http because its budget
+    depends on how much there is to send, not on how long a call may take."""
+    return httpx.Client(timeout=timeout, follow_redirects=False)
+
 
 class UploadCenterError(Exception):
     """A failed call. ``status`` is the HTTP status, or None for a network error."""
@@ -25,6 +61,14 @@ class UploadCenterError(Exception):
     def __init__(self, message: str, status: int | None = None):
         super().__init__(message)
         self.status = status
+
+
+class UploadTooSlow(UploadCenterError):
+    """Ran out of time sending the body, as opposed to waiting on their scan.
+
+    Both end as a 504, but a member whose connection was slow should not be
+    told we were still checking their file.
+    """
 
 
 def enabled() -> bool:
@@ -52,8 +96,16 @@ def put_bytes(upload_url: str, data: bytes, mime_type: str) -> None:
     to it. The URL carries its own signature; no API key goes with it.
     """
     try:
-        with _cdn_http() as client:
+        with _upload_http(_send_timeout(len(data))) as client:
             response = client.put(upload_url, content=data, headers={"Content-Type": mime_type})
+    except httpx.TimeoutException as exc:
+        # Distinguished from unreachable: the storage answered, we ran out of
+        # time sending. 504 tells the member to try again rather than implying
+        # the service is down.
+        log.warning("uploadcenter storage PUT timed out after %.0fs for %d bytes",
+                    _send_timeout(len(data)).write or 0, len(data))
+        raise UploadTooSlow(
+            "The file took too long to upload; try again", status=504) from exc
     except httpx.HTTPError as exc:
         raise UploadCenterError("The file storage service is unreachable") from exc
     if response.status_code >= 300:

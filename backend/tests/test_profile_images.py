@@ -281,7 +281,8 @@ def test_put_bytes_sends_the_file_without_the_api_key(monkeypatch):
         return httpx.Response(200)
 
     monkeypatch.setattr(uploadcenter.settings, "UPLOADCENTER_API_KEY", "sk_test_123")
-    monkeypatch.setattr(uploadcenter, "_cdn_http", lambda: httpx.Client(transport=httpx.MockTransport(handler)))
+    monkeypatch.setattr(uploadcenter, "_upload_http",
+                        lambda timeout: httpx.Client(transport=httpx.MockTransport(handler)))
     uploadcenter.put_bytes("https://bucket.r2.test/f_1?sig=x", PNG, "image/png")
 
     assert seen == {"auth": None, "type": "image/png", "body": PNG, "method": "PUT"}
@@ -289,12 +290,44 @@ def test_put_bytes_sends_the_file_without_the_api_key(monkeypatch):
 
 def test_put_bytes_failure_is_an_uploadcenter_error(monkeypatch):
     monkeypatch.setattr(
-        uploadcenter, "_cdn_http",
-        lambda: httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(403))),
+        uploadcenter, "_upload_http",
+        lambda timeout: httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(403))),
     )
     with pytest.raises(uploadcenter.UploadCenterError) as caught:
         uploadcenter.put_bytes("https://bucket.r2.test/f_1", PNG, "image/png")
     assert caught.value.status == 403
+
+
+def test_the_send_budget_grows_with_the_file():
+    """A flat timeout was also the budget for pushing the body, so anything past
+    a few megabytes failed with "File storage is unavailable" - on a service
+    that accepts 200 MB. The budget has to follow the size."""
+    small = uploadcenter._send_timeout(200 * 1024).write
+    big = uploadcenter._send_timeout(100 * 1024 * 1024).write
+    assert small >= uploadcenter.SEND_BASE_SECONDS
+    assert big > small * 2
+    # The largest file the service accepts must still fit inside the ceiling,
+    # otherwise the limit advertised to members is one they cannot reach.
+    assert uploadcenter._send_timeout(200 * 1024 * 1024).write <= uploadcenter.SEND_MAX_SECONDS
+    assert uploadcenter._send_timeout(10 * 1024 * 1024 * 1024).write == uploadcenter.SEND_MAX_SECONDS
+    # Connecting is not sending: an unreachable host still fails fast.
+    assert uploadcenter._send_timeout(100 * 1024 * 1024).connect <= 15
+
+
+def test_a_slow_send_is_not_reported_as_storage_being_down(monkeypatch):
+    """Two different things to tell a member: we cannot reach storage, or we ran
+    out of time sending. The second is retryable and is their connection, so it
+    must not arrive as "File storage is unavailable right now"."""
+    def stall(request):
+        raise httpx.WriteTimeout("too slow", request=request)
+
+    monkeypatch.setattr(
+        uploadcenter, "_upload_http",
+        lambda timeout: httpx.Client(transport=httpx.MockTransport(stall)),
+    )
+    with pytest.raises(uploadcenter.UploadTooSlow) as caught:
+        uploadcenter.put_bytes("https://bucket.r2.test/f_1", PNG, "image/png")
+    assert caught.value.status == 504
 
 
 def test_read_head_asks_for_the_first_bytes_only(monkeypatch):

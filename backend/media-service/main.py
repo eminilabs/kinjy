@@ -324,6 +324,8 @@ def _remote_failure_detail(exc: uploadcenter.UploadCenterError) -> str:
     # stay in the log: they describe our vendor, not the member's problem.
     if exc.status == 422:
         return "The storage service's checks refused this file"
+    if isinstance(exc, uploadcenter.UploadTooSlow):
+        return "The file took too long to upload; check your connection and try again"
     if exc.status == 504:
         return "The storage service took too long to check this file; try again"
     return "File storage is unavailable right now; try again"

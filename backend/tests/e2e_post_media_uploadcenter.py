@@ -136,22 +136,48 @@ print("== through the gateway too")
 r = c.get(f"/media/{asset_id}?{mine}", headers={**author, "Range": "bytes=2-6"})
 check("a slice through the gateway", r.status_code == 206 and r.content == image[2:7], (r.status_code, r.content))
 
+def big_png(width: int, height: int, rnd: random.Random) -> bytes:
+    """A real PNG of a few megabytes: noise, so it does not compress away.
+
+    This used to be an mp4 header followed by eight megabytes of random bytes.
+    Local storage never looked inside a file, so it passed; UploadCenter decodes
+    what it is given and refused it, and the suite failed for a reason that had
+    nothing to do with relaying a large file. What is being checked here is that
+    a big file comes back whole and sliceable, so it only has to be big and
+    real.
+    """
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        body = tag + data
+        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+
+    rows = bytearray()
+    for _ in range(height):
+        rows.append(0)
+        rows += rnd.randbytes(width * 3)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(bytes(rows), 1))
+        + chunk(b"IEND", b"")
+    )
+
+
 print("== a larger file is relayed intact")
-mp4 = b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom" + random.Random(5).randbytes(8 * 1024 * 1024)
+blob = big_png(1600, 1600, random.Random(5))
 started = time.time()
-r = upload(author, "clip.mp4", mp4, "video/mp4")
-check("an 8 MB video is accepted", r.status_code == 201, (r.status_code, r.text[:160]))
+r = upload(author, "big.png", blob, "image/png")
+check(f"a {len(blob) // 1024 // 1024} MB file is accepted", r.status_code == 201, (r.status_code, r.text[:160]))
 big = r.json().get("id", "") if r.status_code == 201 else ""
 print(f"     (stored in {time.time() - started:.0f}s)")
 if big:
     t = ticket(big, author_id)
     r = direct.get(f"/media/{big}?{t}", headers=author)
     check("it comes back whole",
-          r.status_code == 200 and hashlib.sha256(r.content).hexdigest() == hashlib.sha256(mp4).hexdigest(),
+          r.status_code == 200 and hashlib.sha256(r.content).hexdigest() == hashlib.sha256(blob).hexdigest(),
           (r.status_code, len(r.content)))
-    middle = 3 * 1024 * 1024
+    middle = len(blob) // 2
     r = direct.get(f"/media/{big}?{t}", headers={**author, "Range": f"bytes={middle}-{middle + 99}"})
-    check("a slice from the middle is exact", r.status_code == 206 and r.content == mp4[middle:middle + 100],
+    check("a slice from the middle is exact", r.status_code == 206 and r.content == blob[middle:middle + 100],
           (r.status_code, len(r.content)))
 
 print("== deletion")
