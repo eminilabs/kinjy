@@ -30,6 +30,7 @@ export default function AppShell({
   subtitle,
   action,
   aside,
+  rail = true,
   children,
 }: {
   /**
@@ -42,6 +43,8 @@ export default function AppShell({
   action?: ReactNode
   /** Right-hand context rail. Omitted on pages that don't need one. */
   aside?: ReactNode
+  /** The left rail (profile, pinned modules, circles). A page that carries its own navigation turns it off. */
+  rail?: boolean
   children: ReactNode
 }) {
   const { user, loading } = useAuth()
@@ -74,17 +77,20 @@ export default function AppShell({
       <div
         className={cn(
           'mx-auto grid max-w-container gap-4 px-3 pb-24 pt-4 md:px-4 lg:pb-8',
-          aside
+          !rail && 'max-w-[1180px]',
+          rail && (aside
             ? 'lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_290px]'
-            : 'lg:grid-cols-[220px_minmax(0,1fr)]',
+            : 'lg:grid-cols-[220px_minmax(0,1fr)]'),
         )}
       >
         {/* Left rail — identity and shortcuts */}
-        <div className="hidden lg:block">
-          <div className="sticky top-[140px]">
-            <ProfileCard />
+        {rail && (
+          <div className="hidden lg:block">
+            <div className="sticky top-[140px]">
+              <ProfileCard />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Centre column */}
         <main className="min-w-0">

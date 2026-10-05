@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { ArrowRight, Wallet as WalletIcon } from 'lucide-react'
 import { useApi } from '@/hooks/useApi'
-import { ApiError, kaluta, type CommissionsPage, type PayoutEligibility, type Wallet } from '@/lib/api'
-import { Badge, Panel, PanelState, Stat, inputClass } from './primitives'
+import { ApiError, kaluta, type CommissionsPage, type PayoutEligibility } from '@/lib/api'
+import { Badge, Panel, PanelState, inputClass } from './primitives'
 
 const usd = (value: string | number) =>
   `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -29,7 +29,6 @@ const BLOCKER_COPY: Record<string, string> = {
  * exactly which of the three is missing rather than watching a balance sit still.
  */
 export default function Earnings() {
-  const wallet = useApi<Wallet>(() => kaluta.account.wallet(), [])
   const commissions = useApi<CommissionsPage>(() => kaluta.account.commissions({ limit: 10 }), [])
   const eligibility = useApi<PayoutEligibility>(() => kaluta.account.payoutEligibility(), [])
 
@@ -63,50 +62,6 @@ export default function Earnings() {
 
   return (
     <div className="grid gap-5 lg:grid-cols-2">
-      <Panel
-        title="Wallet"
-        subtitle="Balances reconcile line-by-line to the immutable ledger."
-        className="lg:col-span-2"
-      >
-        <PanelState loading={wallet.loading} error={wallet.error}>
-          {wallet.data && (
-            <>
-              <div className="grid gap-6 sm:grid-cols-4">
-                <Stat label="Available" value={usd(wallet.data.available)} tone="gold" />
-                <Stat label="Pending" value={usd(wallet.data.pending)} tone="muted" hint="In a dispute window" />
-                <Stat label="Lifetime earned" value={usd(wallet.data.lifetime_earned)} />
-                <Stat label="Lifetime paid out" value={usd(wallet.data.lifetime_paid)} tone="muted" />
-              </div>
-
-              {/* Progress toward the $1 batch threshold */}
-              <div className="mt-6">
-                <div className="flex items-baseline justify-between">
-                  <span className="caption">Payout threshold</span>
-                  <span className="mono-data text-sm text-text-mid">
-                    {usd(wallet.data.available)} / {usd(wallet.data.payout_threshold)}
-                  </span>
-                </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/8">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-gold-soft to-gold"
-                    style={{
-                      width: `${Math.min(
-                        100,
-                        (Number(wallet.data.available) / Number(wallet.data.payout_threshold)) * 100,
-                      )}%`,
-                    }}
-                  />
-                </div>
-                <p className="caption mt-2">
-                  Commissions accrue in custody escrow and join the next batch once you clear{' '}
-                  {usd(wallet.data.payout_threshold)}.
-                </p>
-              </div>
-            </>
-          )}
-        </PanelState>
-      </Panel>
-
       <Panel
         title="Where your commission came from"
         subtitle="20% of Kinjy's revenue on everything the members you sponsored do."
