@@ -41,49 +41,45 @@ export default function ProfileCard() {
 
   return (
     <div className="space-y-3">
-      <div className={cn('rounded-card-lg p-4 text-center', tok.card)}>
+      <div className={cn('rounded-[20px] p-5 text-center', tok.card)}>
         <div className="flex justify-center">
-          <MemberAvatar handle={user?.handle} displayName={displayName} avatarUrl={data?.avatar_url} size={80} ring />
+          <MemberAvatar handle={user?.handle} displayName={displayName} avatarUrl={data?.avatar_url} size={84} ring />
         </div>
 
-        <p className={cn('mt-3 flex items-center justify-center gap-1.5 text-sm font-bold', tok.text)}>
+        <p className={cn('mt-4 flex items-center justify-center gap-1.5 text-[17px] font-bold leading-tight tracking-[-0.02em]', tok.text)}>
           {displayName}
           {user?.kyc_verified && <VerifiedBadge size={15} />}
         </p>
-        <div className="mt-1 flex flex-col items-center gap-1.5">
-          <span className="rounded-full bg-gold/10 px-2 py-0.5 text-xs font-medium text-gold-soft">
-            @{user?.handle}
-          </span>
-          {place && (
-            <span className={cn('flex items-center gap-1 text-[0.7rem]', tok.low)}>
-              <MapPin size={10} aria-hidden="true" />
-              {place}
-            </span>
-          )}
-        </div>
+        <p className={cn('mono-data mt-1 truncate text-xs', tok.mid)}>@{user?.handle}</p>
+        {place && (
+          <p className={cn('mt-1.5 flex items-center justify-center gap-1 text-[0.72rem]', tok.low)}>
+            <MapPin size={11} aria-hidden="true" />
+            {place}
+          </p>
+        )}
 
-        <dl className={cn('mt-3 flex justify-center gap-5 border-t pt-3', tok.divider, 'border-t-current/10')}>
+        <dl className="mt-4 grid grid-cols-2 divide-x divide-[var(--cloud-border)] border-t border-[var(--cloud-border)] pt-4">
           <div>
-            <dt className={cn('text-[0.65rem]', tok.low)}>Followers</dt>
-            <dd className="mono-data text-sm font-semibold text-gold-soft">
+            <dd className={cn('text-2xl font-bold leading-none tracking-[-0.03em] tabular-nums', tok.text)}>
               {data?.followers_count ?? 0}
             </dd>
+            <dt className={cn('mt-1.5 text-[0.7rem]', tok.low)}>Followers</dt>
           </div>
           <div>
-            <dt className={cn('text-[0.65rem]', tok.low)}>Following</dt>
-            <dd className="mono-data text-sm font-semibold text-gold-soft">
+            <dd className={cn('text-2xl font-bold leading-none tracking-[-0.03em] tabular-nums', tok.text)}>
               {data?.following_count ?? 0}
             </dd>
+            <dt className={cn('mt-1.5 text-[0.7rem]', tok.low)}>Following</dt>
           </div>
         </dl>
       </div>
 
       {/* Pinned modules */}
-      <div className={cn('rounded-card-lg p-3.5', tok.card)}>
-        <p className={cn('mb-2 text-[0.65rem] font-bold uppercase tracking-wider', tok.low)}>
+      <div className={cn('rounded-[20px] p-4', tok.card)}>
+        <p className="mono-data mb-3 text-[0.65rem] uppercase tracking-[0.14em] text-gold-soft">
           {t('pinned')}
         </p>
-        <ul className="space-y-1">
+        <ul className="space-y-0.5">
           {PINNED.map((key) => {
             const Icon = MODULE_ICONS[key] ?? Users
             return (
@@ -91,12 +87,14 @@ export default function ProfileCard() {
                 <Link
                   to={ROUTE_FOR[key]}
                   className={cn(
-                    'flex w-full items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold',
+                    'flex w-full items-center gap-2.5 rounded-[12px] px-2 py-2 text-[0.85rem] font-semibold',
                     tok.mid,
                     tok.hoverBg,
                   )}
                 >
-                  <Icon size={12} className="text-gold" aria-hidden="true" />
+                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[8px] bg-gold/15 text-gold-soft">
+                    <Icon size={14} aria-hidden="true" />
+                  </span>
                   {t(key)}
                 </Link>
               </li>
@@ -106,12 +104,12 @@ export default function ProfileCard() {
       </div>
 
       {/* Circles quick-switch */}
-      <div className={cn('rounded-card-lg p-3.5', tok.card)}>
-        <p className={cn('mb-2 text-[0.65rem] font-bold uppercase tracking-wider', tok.low)}>
+      <div className={cn('rounded-[20px] p-4', tok.card)}>
+        <p className="mono-data mb-3 text-[0.65rem] uppercase tracking-[0.14em] text-gold-soft">
           {t('circles')}
         </p>
         {(circles.data ?? []).length === 0 ? (
-          <Link to="/circles" className={cn('text-[0.7rem] hover:text-gold-soft', tok.low)}>
+          <Link to="/circles" className={cn('text-[0.8rem] hover:text-gold-soft', tok.low)}>
             No circles yet — create one
           </Link>
         ) : (
@@ -121,7 +119,7 @@ export default function ProfileCard() {
                 key={circle.id}
                 to={`/circles?open=${circle.id}`}
                 className={cn(
-                  'rounded-full px-2.5 py-1 text-[0.68rem] font-semibold',
+                  'rounded-full px-3 py-1.5 text-[0.75rem] font-semibold',
                   index === 0
                     ? 'bg-gold/15 text-gold-soft ring-1 ring-gold/40'
                     : cn(tok.subtleBg, tok.mid, tok.hoverBg),
@@ -138,7 +136,7 @@ export default function ProfileCard() {
           account actually holds it, so an empty row is the honest state for a
           new member rather than three grey trophies. */}
       {(user?.kyc_verified || (data?.followers_count ?? 0) > 0) && (
-        <div className={cn('flex items-center justify-around rounded-card-lg p-3', tok.card)}>
+        <div className={cn('flex items-center justify-around rounded-[20px] p-4', tok.card)}>
           {[
             { icon: Medal, label: 'Member', show: true },
             { icon: Award, label: 'Verified', show: Boolean(user?.kyc_verified) },
