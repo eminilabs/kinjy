@@ -33,7 +33,7 @@ import {
   ReactionList,
   StickerPicker,
 } from '@/components/social/MessageReactions'
-import { StickerButton } from '@/components/social/StickerPanel'
+import EmojiStickerButton from '@/components/social/EmojiStickerPanel'
 import { stickerUrl } from '@/lib/stickers'
 import {
   ReplyBanner,
@@ -802,6 +802,30 @@ export default function Messages() {
   }
 
   const recordingFor = recordingSince === null ? 0 : Math.floor((Date.now() - recordingSince) / 1000)
+
+  // Emoji go into the text at the caret. The caret is read from the field itself (it keeps
+  // its selection while the panel has focus) and put back after the render, just behind the
+  // new characters, so the member carries on typing where they were.
+  const draftRef = useRef(draft)
+  useLayoutEffect(() => {
+    draftRef.current = draft
+  })
+  const caretRef = useRef<number | null>(null)
+  const insertEmoji = (text: string) => {
+    const field = inputRef.current
+    const current = draftRef.current
+    const chained = caretRef.current !== null // another insertion in the same tick
+    const start = chained ? caretRef.current! : (field?.selectionStart ?? current.length)
+    const end = chained ? start : (field?.selectionEnd ?? start)
+    caretRef.current = start + text.length
+    draftRef.current = current.slice(0, start) + text + current.slice(end)
+    onDraftChange(draftRef.current)
+  }
+  useLayoutEffect(() => {
+    if (caretRef.current === null) return
+    inputRef.current?.setSelectionRange(caretRef.current, caretRef.current)
+    caretRef.current = null
+  }, [draft])
 
   const onDraftChange = (value: string) => {
     setDraft(value)
@@ -1831,7 +1855,7 @@ export default function Messages() {
                 ) : (
                   <>
                     <AttachmentMenu onFiles={stage} />
-                    <StickerButton catalogue={catalogue.data} onSend={sendSticker} />
+                    <EmojiStickerButton catalogue={catalogue.data} onEmoji={insertEmoji} onSticker={sendSticker} />
                     <input
                       ref={inputRef}
                       value={draft}
