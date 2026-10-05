@@ -77,6 +77,22 @@ def _slugify(value: str) -> str:
     return slug[:60] or new_id("c")[:12]
 
 
+def _resolve(db: OrmSession, handle: str) -> models.Community | None:
+    """A community by its id or by its slug.
+
+    Both, so a link can be /communities/lagos-hikers rather than
+    /communities/cmy_01M46... - a URL somebody can read, say aloud and
+    recognise before they click it.
+
+    The two cannot be confused: an id is prefixed `cmy_`, and a slug never
+    contains an underscore because _slugify turns every non-alphanumeric
+    character into a dash.
+    """
+    if handle.startswith("cmy_"):
+        return db.get(models.Community, handle)
+    return db.scalar(select(models.Community).where(models.Community.slug == handle))
+
+
 class CommunityIn(BaseModel):
     name: str = Field(min_length=2, max_length=140)
     description: str = ""
@@ -340,18 +356,18 @@ def _require_steward(db: OrmSession, community_id: str, user_id: str) -> models.
 
 @app.get("/communities/{community_id}", tags=["communities"])
 def get_community(community_id: str, principal: MaybeUser, db: OrmSession = Depends(get_db)):
-    """One community.
+    """One community, by id or by slug.
 
     A secret community is reachable by direct link *for its members only* —
     that is what makes it secret rather than merely unlisted. Everyone else
     gets a 404 rather than a 403: confirming that an id exists would leak the
     very fact the tier is meant to hide.
     """
-    community = db.get(models.Community, community_id)
+    community = _resolve(db, community_id)
     if community is None:
         raise HTTPException(status_code=404, detail="Community not found")
 
-    membership = _membership(db, community_id, principal.user_id) if principal else None
+    membership = _membership(db, community.id, principal.user_id) if principal else None
     if community.kind == "secret" and (membership is None or membership.status != "active"):
         raise HTTPException(status_code=404, detail="Community not found")
 

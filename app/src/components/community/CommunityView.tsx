@@ -30,18 +30,26 @@ const KIND_LABEL: Record<string, string> = {
  * so the page offers the join button instead of an error.
  */
 export default function CommunityView({
-  communityId,
+  handle,
   onBack,
   onChanged,
 }: {
-  communityId: string
+  /** The slug from the URL, or an id. The API resolves either. */
+  handle: string
   onBack: () => void
   /** The directory behind this shows member counts, so it reloads after a join or a leave. */
   onChanged?: () => void
 }) {
   const { user } = useAuth()
-  const detail = useApi(() => kaluta.communities.get(communityId), [communityId])
-  const feed = useApi(() => kaluta.communities.feed(communityId), [communityId])
+  const detail = useApi(() => kaluta.communities.get(handle), [handle])
+  // The posts are fetched by id rather than by the slug in the URL, because
+  // they are served by social-service, which knows ids and nothing about
+  // community naming. So this waits for the community to resolve.
+  const communityId = detail.data?.id ?? ''
+  const feed = useApi(
+    () => (communityId ? kaluta.communities.feed(communityId) : Promise.resolve(null)),
+    [communityId],
+  )
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<string | null>(null)
   const [fresh, setFresh] = useState<Post[]>([])

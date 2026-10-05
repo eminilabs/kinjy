@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router'
 import { Globe, Lock, Plus, Search, UsersRound } from 'lucide-react'
 import AppShell from '@/components/app/AppShell'
 import CommunityView from '@/components/community/CommunityView'
@@ -24,9 +25,11 @@ export default function Communities() {
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [managing, setManaging] = useState<string | null>(null)
-  // Which community is open. A URL would be better and is the obvious next
-  // step; this keeps the change to the directory rather than the route table.
-  const [open, setOpen] = useState<string | null>(null)
+  // Which community is open comes from the URL, not from state: a group you
+  // cannot link to is a group you cannot share, and the back button has to
+  // return to the directory rather than leave the page.
+  const { slug } = useParams()
+  const navigate = useNavigate()
 
   const create = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -60,15 +63,15 @@ export default function Communities() {
     }
   }
 
-  if (open) {
+  if (slug) {
     return (
       <AppShell
         title="Communities"
-        subtitle="A group you joined — what is posted here, and the box to add to it."
+        subtitle="A group — what is posted here, and the box to add to it."
       >
         <CommunityView
-          communityId={open}
-          onBack={() => setOpen(null)}
+          handle={slug}
+          onBack={() => navigate('/communities')}
           onChanged={() => list.reload()}
         />
       </AppShell>
@@ -168,7 +171,11 @@ export default function Communities() {
                   <UsersRound size={17} />
                 </span>
                 <div className="min-w-0">
-                  <h2 className="truncate text-sm font-semibold text-text-hi">{community.name}</h2>
+                  <h2 className="truncate text-sm font-semibold text-text-hi">
+                    <Link to={`/communities/${community.slug}`} className="hover:text-gold-soft">
+                      {community.name}
+                    </Link>
+                  </h2>
                   <p className={cn('caption inline-flex items-center gap-1.5', meta.tone)}>
                     <meta.icon size={11} aria-hidden="true" />
                     {meta.label}
@@ -182,13 +189,12 @@ export default function Communities() {
                 <p className="mt-3 line-clamp-2 text-sm text-text-mid">{community.description}</p>
               )}
               <div className="mt-4 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setOpen(community.id)}
+                <Link
+                  to={`/communities/${community.slug}`}
                   className="rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-2 text-xs font-bold text-ink"
                 >
                   Open
-                </button>
+                </Link>
                 <button
                   type="button"
                   onClick={() => join(community)}

@@ -8,6 +8,29 @@ import { ApiError } from '@/lib/api'
 import { OPEN_MODULES, spelled } from '@/lib/features'
 import { cn } from '@/lib/utils'
 
+/**
+ * Where to go after signing in.
+ *
+ * Only a path on this site. A `next` parameter that will follow anything is an
+ * open redirect, and an open redirect on a sign-in page is a phishing tool:
+ * the link really does come from kinjy.com, and really does hand the visitor
+ * to somebody else's page afterwards. So: must start with a single slash -
+ * "//evil.example" and "https://evil.example" are both refused - and must not
+ * be the sign-in page itself, which would loop.
+ */
+function safeNext(value: string | null): string {
+  if (!value) return '/dashboard'
+  let path: string
+  try {
+    path = decodeURIComponent(value)
+  } catch {
+    return '/dashboard'
+  }
+  if (!path.startsWith('/') || path.startsWith('//')) return '/dashboard'
+  if (path.startsWith('/join')) return '/dashboard'
+  return path
+}
+
 type Mode = 'signin' | 'signup'
 
 /** Mirrors auth-service's HANDLE_RE so the member is told before the round-trip. */
@@ -50,7 +73,7 @@ export default function SignIn() {
 
   // Already signed in? The sign-in page has nothing to offer.
   useEffect(() => {
-    if (user) navigate('/dashboard', { replace: true })
+    if (user) navigate(safeNext(params.get('next')), { replace: true })
   }, [user, navigate])
 
   // Keep the handle in step with the name until the member takes it over.
@@ -95,7 +118,7 @@ export default function SignIn() {
           referral_code: referral.trim() || undefined,
         })
       }
-      navigate('/dashboard', { replace: true })
+      navigate(safeNext(params.get('next')), { replace: true })
     } catch (err) {
       setError(
         err instanceof ApiError

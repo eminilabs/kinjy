@@ -93,6 +93,9 @@ export default function App() {
           <Route path="/circles" element={<Circles />} />
           <Route path="/connections" element={<Connections />} />
           <Route path="/communities" element={<Communities />} />
+          {/* One community, by slug. The directory and the community are the
+              same page so a join updates both without a refetch dance. */}
+          <Route path="/communities/:slug" element={<Communities />} />
           <Route path="/forums" element={<Forums />} />
           <Route path="/messages" element={<Messages />} />
           <Route path="/tree" element={gated('familyTree', <FamilyTreeApp />, '/hub')} />
