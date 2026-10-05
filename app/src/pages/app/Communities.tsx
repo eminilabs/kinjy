@@ -5,6 +5,7 @@ import AppShell from '@/components/app/AppShell'
 import CommunityView from '@/components/community/CommunityView'
 import MemberQueue from '@/components/community/MemberQueue'
 import { useApi } from '@/hooks/useApi'
+import { useAuth } from '@/hooks/useAuth'
 import { ApiError, kaluta, type Community } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -30,6 +31,7 @@ export default function Communities() {
   // return to the directory rather than leave the page.
   const { slug } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
 
   const create = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -64,16 +66,26 @@ export default function Communities() {
   }
 
   if (slug) {
+    const view = (
+      <CommunityView
+        handle={slug}
+        onBack={() => navigate('/communities')}
+        onChanged={() => list.reload()}
+      />
+    )
+    // A visitor gets the page without the member shell. The shell would either
+    // bounce them to sign in - which is what made "public" meaningless here -
+    // or show them a sidebar of their circles and pinned modules, which they
+    // do not have.
+    if (!user) {
+      return <section className="mx-auto w-full max-w-3xl px-6 py-12">{view}</section>
+    }
     return (
       <AppShell
         title="Communities"
         subtitle="A group — what is posted here, and the box to add to it."
       >
-        <CommunityView
-          handle={slug}
-          onBack={() => navigate('/communities')}
-          onChanged={() => list.reload()}
-        />
+        {view}
       </AppShell>
     )
   }

@@ -590,12 +590,11 @@ What the tests do not cover:
   and its own page, membership is checked before posting, and a member can
   leave. Communities have shareable URLs (`/communities/<slug>`), and the
   destination survives the sign-in door.
-- **A public community is readable by the API without signing in, but not in
-  the browser.** The page lives inside the signed-in shell, so a visitor is
-  redirected to sign in even for a community whose whole point is being public.
-  The backend already answers anonymously and the test covers it, so this is a
-  UI decision rather than a rule - but it means a public group cannot actually
-  be looked into before joining, which is what public was supposed to buy.
+- ~~A public community is readable by the API without signing in, but not in
+  the browser.~~ Opened on 05/10: a visitor reads a public community and its
+  posts with the marketing chrome rather than the member shell, and the join
+  button sends them to sign in and back. Private shows its name and description
+  but not its posts, so it can be asked to join; secret stays a 404.
 - **Nothing notifies a community when somebody posts in it.** Joining a group
   and then having to go and look at it is most of the way back to a forum. The
   notify helper is already used for join requests and could carry this.

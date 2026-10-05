@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link, useLocation } from 'react-router'
 import { ArrowLeft, Globe, Lock, LogOut, UsersRound } from 'lucide-react'
 import Composer from '@/components/social/Composer'
 import PostCard from '@/components/social/PostCard'
@@ -41,6 +42,7 @@ export default function CommunityView({
   onChanged?: () => void
 }) {
   const { user } = useAuth()
+  const location = useLocation()
   const detail = useApi(() => kaluta.communities.get(handle), [handle])
   // The posts are fetched by id rather than by the slug in the URL, because
   // they are served by social-service, which knows ids and nothing about
@@ -144,19 +146,31 @@ export default function CommunityView({
             </div>
 
             <div className="mt-4 flex flex-wrap items-center gap-2">
-              {!isMember && !isPending && (
-                <button
-                  type="button"
-                  onClick={join}
-                  disabled={busy}
-                  className="rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-2 text-xs font-bold text-ink disabled:opacity-40"
+              {!user ? (
+                // Not signed in. The link carries this page so they come back
+                // to the community they were reading, not to a dashboard.
+                <Link
+                  to={`/join?mode=signin&next=${encodeURIComponent(location.pathname)}`}
+                  className="rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-2 text-xs font-bold text-ink"
                 >
-                  {community.kind === 'private'
-                    ? 'Request to join'
-                    : community.kind === 'paid'
-                      ? 'Buy access'
-                      : 'Join'}
-                </button>
+                  Sign in to join
+                </Link>
+              ) : (
+                !isMember &&
+                !isPending && (
+                  <button
+                    type="button"
+                    onClick={join}
+                    disabled={busy}
+                    className="rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-2 text-xs font-bold text-ink disabled:opacity-40"
+                  >
+                    {community.kind === 'private'
+                      ? 'Request to join'
+                      : community.kind === 'paid'
+                        ? 'Buy access'
+                        : 'Join'}
+                  </button>
+                )
               )}
               {isPending && (
                 <span className="rounded-full border border-amber-400/30 px-4 py-2 text-xs font-semibold text-amber-200">
@@ -205,9 +219,11 @@ export default function CommunityView({
             />
           ) : (
             <p className="cloud-card p-4 text-sm text-text-mid">
-              {isPending
-                ? 'You can post here once your request is approved.'
-                : 'Join this community to post in it.'}
+              {!user
+                ? 'Sign in and join to post in this community.'
+                : isPending
+                  ? 'You can post here once your request is approved.'
+                  : 'Join this community to post in it.'}
             </p>
           )}
 
@@ -217,7 +233,9 @@ export default function CommunityView({
             <p className="cloud-card p-4 text-sm text-text-mid">
               {isMember
                 ? feed.error
-                : 'The posts in this community are for its members. Join to read them.'}
+                : !user
+                  ? 'The posts in this community are for its members. Sign in and join to read them.'
+                  : 'The posts in this community are for its members. Join to read them.'}
             </p>
           ) : feed.loading ? (
             <p className="caption">Loading posts…</p>
