@@ -6,6 +6,10 @@ export interface RealtimeEvent {
   /** chat */
   conversation_id?: string
   message_id?: string
+  /** chat: the message a new message answers (id only) */
+  reply_to_id?: string | null
+  /** chat: a reaction event; null means the member took it back */
+  sticker_id?: string | null
   sender_id?: string
   encrypted?: boolean
   body?: string | null
@@ -89,6 +93,9 @@ class Realtime {
   private listeners = new Map<string, Set<Listener>>()
   private statusListeners = new Set<(connected: boolean) => void>()
   private connected = false
+  /** Topics asked for since the last frame — sent together, see queueSubscribe. */
+  private pending = new Set<string>()
+  private flushQueued = false
 
   private topics(): string[] {
     return [...this.listeners.keys()].filter(Boolean)
@@ -106,6 +113,26 @@ class Realtime {
 
   /** Consecutive 4401 closes; a refresh that keeps failing must not spin. */
   private authFailures = 0
+
+  /**
+   * One frame for every topic asked for in the same tick.
+   *
+   * A feed mounts twenty cards at once and each wants its post's topic. The
+   * server checks every post topic against the member's audience before
+   * granting it (a circle post's topic is not for strangers), so twenty frames
+   * meant twenty checks; one frame is one check.
+   */
+  private queueSubscribe(topic: string) {
+    this.pending.add(topic)
+    if (this.flushQueued) return
+    this.flushQueued = true
+    queueMicrotask(() => {
+      this.flushQueued = false
+      const topics = [...this.pending].filter((t) => this.listeners.has(t))
+      this.pending.clear()
+      if (topics.length) this.send({ action: 'subscribe', topics })
+    })
+  }
 
   private connect() {
     const token = tokens.access
@@ -192,7 +219,7 @@ class Realtime {
 
     this.wanted = true
     if (!this.socket) this.connect()
-    else if (fresh && topic) this.send({ action: 'subscribe', topics: [topic] })
+    else if (fresh && topic) this.queueSubscribe(topic)
 
     return () => {
       const current = this.listeners.get(topic)

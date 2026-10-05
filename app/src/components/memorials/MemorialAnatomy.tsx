@@ -12,10 +12,10 @@ type Part = { title: string; body: string; icon: typeof BookOpen }
 
 const PARTS: Part[] = [
   { title: 'Biography & timeline', body: 'Life story told in dated chapters.', icon: BookOpen },
-  { title: 'Photos, videos & voice', body: 'Memorial audio with autoplay ON/OFF always visible — respect first.', icon: Image },
-  { title: 'Guest book & condolences', body: 'Every message is moderated before it appears.', icon: ShieldCheck },
-  { title: 'Digital flowers & candles', body: 'Free and paid tributes; paid support memorial upkeep.', icon: Flower2 },
-  { title: 'Grave location', body: 'Latitude/longitude captured on-site. Verified — never fabricated.', icon: MapPin },
+  { title: 'Portrait, cover & voice', body: 'A portrait, a cover image and a voice recording. Autoplay is the family’s choice — ON or OFF.', icon: Image },
+  { title: 'Guest book & condolences', body: 'By default, messages and photos wait for the family’s approval before they appear.', icon: ShieldCheck },
+  { title: 'Digital flowers & candles', body: 'Anyone can light a candle or leave a flower, free.', icon: Flower2 },
+  { title: 'Grave location', body: 'Latitude/longitude captured at the grave are marked confirmed; typed ones are marked not yet confirmed. Never fabricated.', icon: MapPin },
   { title: 'Faith style', body: 'Chosen only from documented wishes or by administrators. Never inferred by AI.', icon: Mic2 },
 ]
 

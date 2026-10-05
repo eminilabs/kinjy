@@ -11,7 +11,7 @@ export function GraveyardVisual() {
   return (
     <div className="mx-auto w-full max-w-sm overflow-hidden rounded-card-lg bg-paper text-paper-ink shadow-cloud">
       <div className="flex items-center gap-4 p-5">
-        <CandleFlowerWidget kind="candle" tier="premium" className="[&_.caption]:text-paper-ink/60" />
+        <CandleFlowerWidget kind="candle" tier="free" className="[&_.caption]:text-paper-ink/60" />
         <div>
           <p className="font-display text-xl font-medium">Mwalimu J. Mwangi</p>
           <p className="mono-data mt-1 text-xs text-paper-ink/60">1942 — 2021</p>

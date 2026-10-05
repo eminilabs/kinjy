@@ -70,7 +70,7 @@ class Message(Base):
     encrypted: Mapped[bool] = mapped_column(Boolean, default=True)
     ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary)
     body: Mapped[str | None] = mapped_column(Text)
-    kind: Mapped[str] = mapped_column(String(20), default="text")  # text|media|call_event
+    kind: Mapped[str] = mapped_column(String(20), default="text")  # text|media|sticker|call_event
     media_url: Mapped[str | None] = mapped_column(String(500))
     # Attachment facts as media-service recorded them at upload — never as the
     # sending client described them.
@@ -80,6 +80,16 @@ class Message(Base):
     media_type: Mapped[str | None] = mapped_column(String(100))
     media_size: Mapped[int | None] = mapped_column(BigInteger)
     lang: Mapped[str | None] = mapped_column(String(5))
+    # The message this one answers. Only the id is kept: the quoted text is
+    # built by the client from what it already holds, because in an end-to-end
+    # conversation the server cannot read it and must not copy it in the clear.
+    # No foreign key on purpose: an expired message is really deleted, and this
+    # id must outlive it so the API can say "the original is gone".
+    reply_to_id: Mapped[str | None] = mapped_column(String(40))
+    # A standalone sticker message (kind "sticker"): an id from stickers.py and
+    # nothing else, never a URL or an image. Public catalogue data, so it is
+    # stored as is in every conversation, end-to-end encrypted ones included.
+    sticker_id: Mapped[str | None] = mapped_column(String(64))
     # Chosen by the sending device before the request goes out. A retry after
     # a dropped response carries the same id, so it finds the message already
     # stored instead of sending it twice. Unique per sender (partial index in
@@ -97,6 +107,28 @@ class Message(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     delivered: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class MessageReaction(Base):
+    """One sticker a member put under one message.
+
+    One row per (message, member): choosing another sticker replaces the row,
+    choosing the same one removes it. The sticker is an id from ``stickers.py``,
+    never a URL or an image. No foreign key: an expired message is really
+    deleted by ``_purge_expired``, which deletes its reactions first.
+    """
+
+    __tablename__ = "message_reactions"
+    __table_args__ = (
+        UniqueConstraint("message_id", "user_id", name="uq_reaction_message_user"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    message_id: Mapped[str] = mapped_column(String(40), index=True)
+    user_id: Mapped[str] = mapped_column(String(40))
+    sticker_id: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
 class Notification(Base):

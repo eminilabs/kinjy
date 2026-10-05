@@ -28,6 +28,7 @@ from common.service import create_app
 import agecheck
 import agenotify
 import models
+import stickers
 
 log = logging.getLogger("messaging-service")
 USER_URL = "http://user-service:8000"
@@ -84,6 +85,10 @@ MIGRATIONS = [
     ),
     # A sealed name is longer than the name it hides.
     f"ALTER TABLE {models.SCHEMA}.messages ALTER COLUMN media_name TYPE TEXT",
+    # Replies: the id of the message being answered. Not a foreign key, see the model.
+    f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS reply_to_id VARCHAR(40)",
+    # Standalone stickers: the catalogue id, nothing else.
+    f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS sticker_id VARCHAR(64)",
 ]
 
 app = create_app(
@@ -115,6 +120,35 @@ app = create_app(
 # the other; one path is also the only place Redis fan-out has to be added when
 # this service runs more than one replica.
 _topics: dict[str, set[WebSocket]] = {}
+
+
+SOCIAL_URL = "http://social-service:8000"
+
+
+async def _readable_topics(user_id: str, topics: list[str]) -> list[str]:
+    """Drop ``post:<id>`` topics for posts this member may not read.
+
+    A post topic carries who commented and when. Subscribing used to be open to
+    anyone holding the id, so a member removed from a circle could keep
+    listening to its posts. social-service answers for the whole batch with the
+    same audience rule as every other read; if it cannot answer, the post
+    topics are dropped — live counters wait for a reload, nothing leaks.
+    """
+    post_ids = [t.split(":", 1)[1] for t in topics if t.startswith("post:")]
+    if not post_ids:
+        return topics
+    try:
+        async with httpx.AsyncClient(timeout=4) as client:
+            response = await client.post(
+                f"{SOCIAL_URL}/internal/readable-posts",
+                json={"viewer": user_id, "post_ids": post_ids[:200]},
+            )
+        response.raise_for_status()
+        allowed = set(response.json().get("post_ids", []))
+    except Exception as exc:
+        log.warning("post topic check failed for %s: %s", user_id, exc)
+        allowed = set()
+    return [t for t in topics if not t.startswith("post:") or t.split(":", 1)[1] in allowed]
 
 
 def _subscribe(socket: WebSocket, topics: list[str]) -> None:
@@ -265,7 +299,7 @@ class ConversationIn(BaseModel):
 class MessageIn(BaseModel):
     ciphertext_b64: str | None = None
     body: str | None = Field(default=None, max_length=10_000)
-    kind: str = Field(default="text", pattern="^(text|media|call_event)$")
+    kind: str = Field(default="text", pattern="^(text|media|sticker|call_event)$")
     # An uploaded asset's id. Its URL, type, name and size are looked up from
     # media-service, which is why no client-supplied URL is accepted: a message
     # must not be able to embed an arbitrary address as a "photo".
@@ -273,6 +307,10 @@ class MessageIn(BaseModel):
     lang: str | None = None
     # See models.Message.client_id: makes a retried send idempotent.
     client_id: str | None = Field(default=None, max_length=64)
+    # The message this one answers; must belong to the same conversation.
+    reply_to_id: str | None = Field(default=None, max_length=40)
+    # For kind "sticker" only: an id from the catalogue (stickers.py).
+    sticker_id: str | None = Field(default=None, max_length=64)
 
 
 def _purge_expired(db: OrmSession, conversation_id: str | None = None) -> int:
@@ -284,12 +322,19 @@ def _purge_expired(db: OrmSession, conversation_id: str | None = None) -> int:
     returned by the API. Deleting on the path that would otherwise serve it
     closes that window.
     """
+    expired = select(models.Message.id).where(
+        models.Message.expires_at.is_not(None),
+        models.Message.expires_at <= datetime.now(timezone.utc),
+    )
     stmt = delete(models.Message).where(
         models.Message.expires_at.is_not(None),
         models.Message.expires_at <= datetime.now(timezone.utc),
     )
     if conversation_id:
+        expired = expired.where(models.Message.conversation_id == conversation_id)
         stmt = stmt.where(models.Message.conversation_id == conversation_id)
+    # A reaction must not outlive the message it is under.
+    db.execute(delete(models.MessageReaction).where(models.MessageReaction.message_id.in_(expired)))
     removed = db.execute(stmt).rowcount or 0
     if removed:
         db.commit()
@@ -551,6 +596,57 @@ async def set_disappearing(
     return {"seconds": payload.seconds}
 
 
+def _unread_by_conversation(db: OrmSession, user_id: str, ids) -> dict[str, int]:
+    """Unread messages per conversation, for one member.
+
+    Unread = messages from someone else, newer than my last read — in one
+    grouped query. The cutoff differs per conversation, so it comes from the
+    join on my own participant row rather than from a Python loop issuing a
+    count per conversation. The conversation list and the unread badge both
+    read this, so the two can never disagree.
+    """
+    rows = db.execute(
+        select(models.Message.conversation_id, func.count())
+        .join(
+            models.Participant,
+            (models.Participant.conversation_id == models.Message.conversation_id)
+            & (models.Participant.user_id == user_id),
+        )
+        .where(
+            models.Message.conversation_id.in_(ids),
+            models.Message.sender_id != user_id,
+            or_(
+                models.Participant.last_read_at.is_(None),
+                models.Message.created_at > models.Participant.last_read_at,
+            ),
+            # A message that has expired is gone as far as the thread is
+            # concerned (it is purged on the next read or write), so it must not
+            # keep a badge lit that opening the thread could never explain.
+            or_(
+                models.Message.expires_at.is_(None),
+                models.Message.expires_at > datetime.now(timezone.utc),
+            ),
+        )
+        .group_by(models.Message.conversation_id)
+    ).all()
+    return {conversation_id: count for conversation_id, count in rows}
+
+
+@app.get("/conversations/unread-count", tags=["messages"])
+def unread_count(principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """What the Messages badge shows: unread messages, and in how many threads.
+
+    The badge refetches this when the socket says a message arrived or a thread
+    was read (in this tab or another), rather than keeping its own tally that
+    could drift from the conversation list.
+    """
+    ids = db.scalars(
+        select(models.Participant.conversation_id).where(models.Participant.user_id == principal.user_id)
+    ).all()
+    unread = _unread_by_conversation(db, principal.user_id, ids) if ids else {}
+    return {"messages": sum(unread.values()), "conversations": sum(1 for n in unread.values() if n)}
+
+
 @app.get("/conversations", tags=["messages"])
 def list_conversations(principal: CurrentUser, db: OrmSession = Depends(get_db)):
     ids = db.scalars(
@@ -576,28 +672,7 @@ def list_conversations(principal: CurrentUser, db: OrmSession = Depends(get_db))
 
     profiles = _profiles({uid for uids in members.values() for uid in uids})
 
-    # Unread = messages from someone else, newer than my last read — in one
-    # grouped query. The cutoff differs per conversation, so it comes from the
-    # join on my own participant row rather than from a Python loop issuing a
-    # count per conversation.
-    unread_rows = db.execute(
-        select(models.Message.conversation_id, func.count())
-        .join(
-            models.Participant,
-            (models.Participant.conversation_id == models.Message.conversation_id)
-            & (models.Participant.user_id == principal.user_id),
-        )
-        .where(
-            models.Message.conversation_id.in_(ids),
-            models.Message.sender_id != principal.user_id,
-            or_(
-                models.Participant.last_read_at.is_(None),
-                models.Message.created_at > models.Participant.last_read_at,
-            ),
-        )
-        .group_by(models.Message.conversation_id)
-    ).all()
-    unread = {conversation_id: count for conversation_id, count in unread_rows}
+    unread = _unread_by_conversation(db, principal.user_id, ids)
 
     # The newest message of each thread in one query (Postgres DISTINCT ON),
     # so the list can say what was last said rather than only when.
@@ -802,6 +877,9 @@ MEDIA_LABELS = {"image": "a photo", "video": "a video", "audio": "a voice or aud
 
 def _preview(message: models.Message) -> str:
     """One line for a notification or the conversation list — never ciphertext."""
+    if message.kind == "sticker":
+        # A public catalogue id: nothing to hide, in encrypted rooms either.
+        return "Sent a sticker"
     if message.encrypted:
         return "Encrypted message"
     text = (_plain(message)[0] or "").strip()
@@ -855,7 +933,18 @@ async def send_message(
                 "duplicate": True,
             }
 
-    if conversation.encrypted:
+    if payload.kind == "sticker":
+        # A sticker message is a catalogue id and nothing else: no text, no
+        # ciphertext, no attachment, no URL. That is what lets it be sent in an
+        # end-to-end encrypted room too - there is nothing private in it to
+        # protect, and nothing the client chose that the server has not checked.
+        if not stickers.is_valid(payload.sticker_id):
+            raise HTTPException(status_code=400, detail="Unknown sticker")
+        if payload.body or payload.ciphertext_b64 or payload.media_id:
+            raise HTTPException(status_code=400, detail="A sticker message carries only a sticker id")
+    elif payload.sticker_id:
+        raise HTTPException(status_code=400, detail="sticker_id is only for sticker messages")
+    elif conversation.encrypted:
         if payload.media_id:
             # The file would sit on the server in the clear, which is exactly
             # what an encrypted room promises will not happen.
@@ -876,11 +965,27 @@ async def send_message(
     elif not (payload.body and payload.body.strip()) and not payload.media_id:
         raise HTTPException(status_code=400, detail="A message needs text or an attachment")
 
+    if payload.reply_to_id:
+        # Looked up inside this conversation, never by id alone: a bare lookup
+        # would confirm that a message exists in a room the sender is not in.
+        # An expired message was purged above, so it is refused like any other
+        # id that is not here.
+        quoted = db.scalar(
+            select(models.Message.id).where(
+                models.Message.id == payload.reply_to_id,
+                models.Message.conversation_id == conversation_id,
+            )
+        )
+        if quoted is None:
+            raise HTTPException(status_code=400, detail="The message you are replying to is not in this conversation")
+
     attachment = await _attachment(payload.media_id, principal.user_id) if payload.media_id else None
 
     # Text first. An attachment sent before the other side accepted has already
     # been seen by the time anybody can report it.
-    if payload.media_id or payload.kind not in ("text", ""):
+    # A sticker is our own catalogue artwork, not a file the member supplied, so
+    # it is not held back like an attachment.
+    if payload.media_id or payload.kind not in ("text", "", "sticker"):
         media_ok, media_reason = agecheck.may_send_media(db, principal.user_id, conversation_id)
         if not media_ok:
             raise HTTPException(status_code=403, detail=media_reason)
@@ -903,6 +1008,8 @@ async def send_message(
         media_size=attachment["size_bytes"] if attachment else None,
         lang=payload.lang,
         client_id=payload.client_id,
+        reply_to_id=payload.reply_to_id,
+        sticker_id=payload.sticker_id,
         # The deadline is computed from the room's setting, not sent by the
         # client: letting the sender choose would let them set a shorter timer
         # than the room agreed to, or none at all.
@@ -959,6 +1066,10 @@ async def send_message(
             # plaintext to send and the client fetches the ciphertext.
             "body": None if message.encrypted else _plain(message)[0],
             "kind": message.kind,
+            # The id only. Whoever receives this already holds the original
+            # (or shows "older message"); the server never echoes its text.
+            "reply_to_id": message.reply_to_id,
+            "sticker_id": message.sticker_id,
             **_media_fields(message),
             "created_at": message.created_at.isoformat(),
         },
@@ -996,6 +1107,131 @@ async def send_message(
         db.commit()
 
     return {"id": message.id, "created_at": message.created_at, "client_id": message.client_id}
+
+
+# --- reactions -----------------------------------------------------------------
+#
+# One sticker per member per message, picked from the catalogue in stickers.py.
+# Members of the conversation only, for reading and for writing: a reaction is
+# a small piece of information about who is in the room and how they took a
+# message, so it is held to the same rule as the message itself.
+
+class ReactionIn(BaseModel):
+    sticker_id: str = Field(max_length=64)
+
+
+@app.get("/stickers", tags=["messages"])
+def sticker_catalogue(principal: CurrentUser):
+    return stickers.listing()
+
+
+async def _react_guard(
+    db: OrmSession, conversation_id: str, message_id: str, principal
+) -> models.Message:
+    """Membership, then that the message is in this room, then who may talk to whom."""
+    _member(db, conversation_id, principal.user_id)
+    conversation = db.get(models.Conversation, conversation_id)
+    _purge_expired(db, conversation_id)
+    message = db.scalar(
+        select(models.Message).where(
+            models.Message.id == message_id,
+            models.Message.conversation_id == conversation_id,
+        )
+    )
+    if message is None:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if conversation.kind == "direct":
+        # The same standing check as sending: a block, or "nobody can message
+        # me", ends reactions as much as it ends messages. Fails closed.
+        other = next(
+            (uid for uid in _participant_ids(db, conversation_id) if uid != principal.user_id), None
+        )
+        if other:
+            allowed, reason = await asyncio.to_thread(
+                permissions.check, principal.user_id, other, "can_message", "message this member"
+            )
+            if not allowed:
+                raise HTTPException(status_code=403, detail=reason)
+    return message
+
+
+async def _announce_reaction(
+    db: OrmSession, conversation_id: str, message_id: str, user_id: str, sticker_id: str | None
+) -> None:
+    await _publish_to_users(
+        _participant_ids(db, conversation_id),
+        {
+            "type": "reaction",
+            "conversation_id": conversation_id,
+            "message_id": message_id,
+            "user_id": user_id,
+            # None means this member took their reaction back.
+            "sticker_id": sticker_id,
+        },
+    )
+
+
+@app.put("/conversations/{conversation_id}/messages/{message_id}/reaction", tags=["messages"])
+async def react(
+    conversation_id: str,
+    message_id: str,
+    payload: ReactionIn,
+    principal: CurrentUser,
+    db: OrmSession = Depends(get_db),
+):
+    """Put a sticker under a message, replacing this member's previous one."""
+    await _react_guard(db, conversation_id, message_id, principal)
+    if not stickers.is_valid(payload.sticker_id):
+        # Anything that is not a catalogue id - a URL, a name, an image - ends here.
+        raise HTTPException(status_code=400, detail="Unknown sticker")
+    row = db.scalar(
+        select(models.MessageReaction).where(
+            models.MessageReaction.message_id == message_id,
+            models.MessageReaction.user_id == principal.user_id,
+        )
+    )
+    if row is None:
+        db.add(models.MessageReaction(
+            message_id=message_id, user_id=principal.user_id, sticker_id=payload.sticker_id
+        ))
+    else:
+        row.sticker_id = payload.sticker_id
+    try:
+        db.commit()
+    except IntegrityError:
+        # Two taps raced past the lookup; the unique constraint kept one row.
+        db.rollback()
+        row = db.scalar(
+            select(models.MessageReaction).where(
+                models.MessageReaction.message_id == message_id,
+                models.MessageReaction.user_id == principal.user_id,
+            )
+        )
+        row.sticker_id = payload.sticker_id
+        db.commit()
+    await _announce_reaction(db, conversation_id, message_id, principal.user_id, payload.sticker_id)
+    return {"message_id": message_id, "sticker_id": payload.sticker_id}
+
+
+@app.delete("/conversations/{conversation_id}/messages/{message_id}/reaction", tags=["messages"])
+async def unreact(
+    conversation_id: str,
+    message_id: str,
+    principal: CurrentUser,
+    db: OrmSession = Depends(get_db),
+):
+    """Take this member's reaction back. Idempotent."""
+    await _react_guard(db, conversation_id, message_id, principal)
+    removed = db.execute(
+        delete(models.MessageReaction).where(
+            models.MessageReaction.message_id == message_id,
+            models.MessageReaction.user_id == principal.user_id,
+        )
+    ).rowcount
+    db.commit()
+    if removed:
+        await _announce_reaction(db, conversation_id, message_id, principal.user_id, None)
+    return {"message_id": message_id, "sticker_id": None}
 
 
 @app.post("/conversations/{conversation_id}/read", tags=["messages"])
@@ -1065,6 +1301,31 @@ def list_messages(
             stmt.order_by(models.Message.created_at.desc()).limit(min(limit, 100))
         ).all()))
 
+    # One query for the whole page: which of the quoted messages still exist.
+    quoted_ids = {r.reply_to_id for r in rows if r.reply_to_id}
+    alive = (
+        set(db.scalars(
+            select(models.Message.id).where(
+                models.Message.id.in_(quoted_ids),
+                models.Message.conversation_id == conversation_id,
+            )
+        ).all())
+        if quoted_ids
+        else set()
+    )
+
+    # Who put which sticker under which message of this page, in one query.
+    reactions: dict[str, list[dict]] = {}
+    if rows:
+        for rx in db.scalars(
+            select(models.MessageReaction)
+            .where(models.MessageReaction.message_id.in_([r.id for r in rows]))
+            .order_by(models.MessageReaction.created_at)
+        ).all():
+            reactions.setdefault(rx.message_id, []).append(
+                {"user_id": rx.user_id, "sticker_id": rx.sticker_id}
+            )
+
     # Fetching is not reading. A catch-up in a background tab, or a page of
     # history, must not tell the other side "Seen": the client posts /read
     # when the thread is actually on screen.
@@ -1078,6 +1339,11 @@ def list_messages(
                 "ciphertext_b64": base64.b64encode(r.ciphertext).decode() if r.ciphertext else None,
                 "body": _plain(r)[0],
                 "kind": r.kind,
+                "reply_to_id": r.reply_to_id,
+                "sticker_id": r.sticker_id,
+                # Whether the original is gone (expired). Never its content.
+                "reply_to_deleted": bool(r.reply_to_id) and r.reply_to_id not in alive,
+                "reactions": reactions.get(r.id, []),
                 **_media_fields(r),
                 "created_at": r.created_at,
             }
@@ -1240,6 +1506,7 @@ async def websocket(socket: WebSocket):
             # A client may not subscribe to another member's private channel.
             topics = [t for t in topics if not (t.startswith("user:") and t != f"user:{user_id}")]
             if action == "subscribe":
+                topics = await _readable_topics(user_id, topics)
                 _subscribe(socket, topics)
                 await socket.send_json({"type": "subscribed", "topics": topics})
             elif action == "unsubscribe":

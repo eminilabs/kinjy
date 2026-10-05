@@ -11,7 +11,6 @@ import {
   Lock,
   MessageSquare,
   Mic,
-  Paperclip,
   Plus,
   Search,
   Send,
@@ -26,7 +25,23 @@ import {
 } from 'lucide-react'
 import AppShell from '@/components/app/AppShell'
 import { useAppTheme } from '@/components/appdemo/theme'
+import AttachmentMenu from '@/components/social/AttachmentMenu'
 import MediaLightbox from '@/components/social/MediaLightbox'
+import {
+  ReactButton,
+  ReactionChips,
+  ReactionList,
+  StickerPicker,
+} from '@/components/social/MessageReactions'
+import EmojiStickerButton from '@/components/social/EmojiStickerPanel'
+import { stickerUrl } from '@/lib/stickers'
+import {
+  ReplyBanner,
+  ReplyButton,
+  ReplyQuote,
+  SwipeToReply,
+  type QuoteTarget,
+} from '@/components/social/MessageReply'
 import MemberAvatar from '@/components/social/MemberAvatar'
 import { useApi } from '@/hooks/useApi'
 import { useRealtime } from '@/hooks/useRealtime'
@@ -361,6 +376,14 @@ export default function Messages() {
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [loadingThread, setLoadingThread] = useState(false)
   const [draft, setDraft] = useState('')
+  // The message the next send answers, and the one just jumped to from a quote.
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
+  const [highlightId, setHighlightId] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  // The sticker picker and the "who reacted" list, each anchored to a bubble.
+  const [picker, setPicker] = useState<{ id: string; rect: DOMRect; withReply: boolean } | null>(null)
+  const [reactionList, setReactionList] = useState<{ id: string; rect: DOMRect } | null>(null)
+  const catalogue = useApi(() => kaluta.messages.stickers(), [])
   const [peer, setPeer] = useState('')
   const [composing, setComposing] = useState(false)
   const [results, setResults] = useState<Array<PersonBrief & { user_id: string }>>([])
@@ -431,6 +454,7 @@ export default function Messages() {
     async (conversationId: string, how: 'user' | 'url' | 'auto' = 'user') => {
       setActiveId(conversationId)
       activeIdRef.current = conversationId
+      setReplyTo(null)
       if (how !== 'url') {
         const push = how === 'user' && !wideRef.current && !paramsRef.current.get('c')
         pushedThread.current = push
@@ -532,7 +556,14 @@ export default function Messages() {
    * after a lost response finds the stored message instead of sending it twice.
    */
   const deliver = useCallback(
-    async (conversationId: string, clientId: string, body: string | null, file?: File) => {
+    async (
+      conversationId: string,
+      clientId: string,
+      body: string | null,
+      file?: File,
+      replyToId?: string | null,
+      stickerId?: string | null,
+    ) => {
       try {
         let mediaId: string | undefined
         if (file) {
@@ -546,7 +577,7 @@ export default function Messages() {
           )
           mediaId = asset.id
         }
-        const created = await kaluta.messages.send(conversationId, { body, mediaId, clientId })
+        const created = await kaluta.messages.send(conversationId, { body, mediaId, clientId, replyToId, stickerId })
         filesRef.current.delete(clientId)
         if (activeIdRef.current !== conversationId) return
         // Usually the socket frame has already brought the full message; this
@@ -561,7 +592,9 @@ export default function Messages() {
               encrypted: false,
               ciphertext_b64: null,
               body,
-              kind: file ? 'media' : 'text',
+              kind: stickerId ? 'sticker' : file ? 'media' : 'text',
+              sticker_id: stickerId ?? null,
+              reply_to_id: replyToId ?? null,
               created_at: created.created_at,
             },
           ]),
@@ -591,6 +624,7 @@ export default function Messages() {
       const clientId = crypto.randomUUID()
       const body = index === 0 && caption ? caption : null
       filesRef.current.set(clientId, { file, body })
+      const replyToId = index === 0 ? replyTo?.id : null
       const kind = kindOf(file)
       const preview = ['image', 'video', 'audio'].includes(kind) ? URL.createObjectURL(file) : null
       if (preview) previewsRef.current.add(preview)
@@ -605,6 +639,7 @@ export default function Messages() {
         ciphertext_b64: null,
         body,
         kind: 'media',
+        reply_to_id: replyToId ?? null,
         media_kind: kind,
         media_name: file.name,
         media_type: file.type,
@@ -618,13 +653,12 @@ export default function Messages() {
     void (async () => {
       for (const message of pending) {
         const entry = filesRef.current.get(message.client_id!)
-        if (entry) await deliver(conversationId, message.client_id!, entry.body, entry.file)
+        if (entry) await deliver(conversationId, message.client_id!, entry.body, entry.file, message.reply_to_id)
       }
     })()
   }
 
   const [staged, setStaged] = useState<File[]>([])
-  const fileInput = useRef<HTMLInputElement>(null)
   const stage = (files: FileList | File[] | null) => {
     // Copied now, not inside the updater: a FileList is live, and the input
     // is cleared right after this call, which would empty it first.
@@ -642,9 +676,12 @@ export default function Messages() {
       sendFiles(staged, text)
       setStaged([])
       setDraft('')
+      setReplyTo(null)
       return
     }
     if (!text) return
+    const replyToId = replyTo?.id ?? null
+    setReplyTo(null)
     setDraft('')
     setError(null)
     const clientId = crypto.randomUUID()
@@ -660,22 +697,58 @@ export default function Messages() {
         ciphertext_b64: null,
         body: text,
         kind: 'text',
+        reply_to_id: replyToId,
         created_at: new Date().toISOString(),
       },
     ])
-    void deliver(conversationId, clientId, text)
+    void deliver(conversationId, clientId, text, undefined, replyToId)
   }
 
   const retry = (message: ChatMessage) => {
     const conversationId = activeIdRef.current
     if (!conversationId || !message.client_id) return
     const entry = filesRef.current.get(message.client_id)
-    if (!entry && !message.body) return
+    if (!entry && !message.body && !message.sticker_id) return
     setError(null)
     setMessages((current) =>
       current.map((m) => (m.client_id === message.client_id ? { ...m, status: 'sending', progress: 0 } : m)),
     )
-    void deliver(conversationId, message.client_id, entry ? entry.body : message.body, entry?.file)
+    void deliver(
+      conversationId,
+      message.client_id,
+      entry ? entry.body : message.body,
+      entry?.file,
+      message.reply_to_id,
+      message.sticker_id,
+    )
+  }
+
+  /** A sticker from the panel, sent as a message of its own (answering the message being replied to, if any). */
+  const sendSticker = (stickerId: string) => {
+    const conversationId = activeIdRef.current
+    if (!conversationId || !user) return
+    const replyToId = replyTo?.id ?? null
+    setReplyTo(null)
+    setError(null)
+    const clientId = crypto.randomUUID()
+    scrollMode.current = 'bottom'
+    setMessages((current) => [
+      ...current,
+      {
+        id: `local_${clientId}`,
+        client_id: clientId,
+        status: 'sending',
+        sender_id: user.id,
+        encrypted: false,
+        ciphertext_b64: null,
+        body: null,
+        kind: 'sticker',
+        sticker_id: stickerId,
+        reply_to_id: replyToId,
+        created_at: new Date().toISOString(),
+      },
+    ])
+    void deliver(conversationId, clientId, null, undefined, replyToId, stickerId)
   }
 
   // --- voice messages ------------------------------------------------------------
@@ -729,6 +802,30 @@ export default function Messages() {
   }
 
   const recordingFor = recordingSince === null ? 0 : Math.floor((Date.now() - recordingSince) / 1000)
+
+  // Emoji go into the text at the caret. The caret is read from the field itself (it keeps
+  // its selection while the panel has focus) and put back after the render, just behind the
+  // new characters, so the member carries on typing where they were.
+  const draftRef = useRef(draft)
+  useLayoutEffect(() => {
+    draftRef.current = draft
+  })
+  const caretRef = useRef<number | null>(null)
+  const insertEmoji = (text: string) => {
+    const field = inputRef.current
+    const current = draftRef.current
+    const chained = caretRef.current !== null // another insertion in the same tick
+    const start = chained ? caretRef.current! : (field?.selectionStart ?? current.length)
+    const end = chained ? start : (field?.selectionEnd ?? start)
+    caretRef.current = start + text.length
+    draftRef.current = current.slice(0, start) + text + current.slice(end)
+    onDraftChange(draftRef.current)
+  }
+  useLayoutEffect(() => {
+    if (caretRef.current === null) return
+    inputRef.current?.setSelectionRange(caretRef.current, caretRef.current)
+    caretRef.current = null
+  }, [draft])
 
   const onDraftChange = (value: string) => {
     setDraft(value)
@@ -853,6 +950,34 @@ export default function Messages() {
     })
   }, [sortedFriends, friendQuery, onlineOnly, presence])
 
+  // --- reactions -------------------------------------------------------------------
+  /** One reaction per member: replace theirs, or remove it when `stickerId` is null. */
+  const setReaction = useCallback((messageId: string, userId: string, stickerId: string | null) => {
+    setMessages((current) =>
+      current.map((m) => {
+        if (m.id !== messageId) return m
+        const others = (m.reactions ?? []).filter((r) => r.user_id !== userId)
+        return { ...m, reactions: stickerId ? [...others, { user_id: userId, sticker_id: stickerId }] : others }
+      }),
+    )
+  }, [])
+
+  /** Choosing your current sticker again takes it back; another one replaces it. */
+  const toggleReaction = (message: ChatMessage, stickerId: string) => {
+    const conversationId = activeIdRef.current
+    if (!conversationId || !user || message.status || message.id.startsWith('local_')) return
+    const previous = message.reactions?.find((r) => r.user_id === user.id)?.sticker_id ?? null
+    const next = previous === stickerId ? null : stickerId
+    setReaction(message.id, user.id, next)
+    const call = next
+      ? kaluta.messages.react(conversationId, message.id, next)
+      : kaluta.messages.unreact(conversationId, message.id)
+    call.catch((err) => {
+      setReaction(message.id, user.id, previous)
+      setError(err instanceof ApiError ? err.message : 'Could not react — check your connection.')
+    })
+  }
+
   // --- live events ---------------------------------------------------------------
   const { connected } = useRealtime((event) => {
     switch (event.type) {
@@ -868,6 +993,8 @@ export default function Messages() {
                 ciphertext_b64: null,
                 body: event.body ?? null,
                 kind: event.kind ?? 'text',
+                sticker_id: event.kind === 'sticker' ? (event.sticker_id ?? null) : null,
+                reply_to_id: event.reply_to_id ?? null,
                 media_url: event.media_url ?? null,
                 media_kind: event.media_kind ?? null,
                 media_name: event.media_name ?? null,
@@ -890,6 +1017,12 @@ export default function Messages() {
           })
         }
         conversations.reload()
+        break
+      }
+      case 'reaction': {
+        if (event.conversation_id === activeIdRef.current && event.message_id && event.user_id) {
+          setReaction(event.message_id, event.user_id, event.sticker_id ?? null)
+        }
         break
       }
       case 'read': {
@@ -970,6 +1103,32 @@ export default function Messages() {
 
   // The receipt goes under my latest stored message only — one "Seen" per
   // thread, where the eye lands, not a tick-mark on every bubble.
+  const nameOf = (message: ChatMessage) =>
+    message.sender_id === user?.id ? 'You' : (active?.profiles?.[message.sender_id]?.display_name ?? 'Member')
+
+  const startReply = (message: ChatMessage) => {
+    // A bubble still on its way has no id the server knows yet.
+    if (message.status || message.id.startsWith('local_')) return
+    setReplyTo(message)
+    inputRef.current?.focus()
+  }
+
+  /** The original is built from what the thread already holds; the server never sends its text. */
+  const quoteOf = (message: ChatMessage): QuoteTarget | null => {
+    if (!message.reply_to_id) return null
+    if (message.reply_to_deleted) return { state: 'deleted' }
+    const original = messages.find((m) => m.id === message.reply_to_id)
+    return original ? { state: 'found', name: nameOf(original), message: original } : { state: 'older' }
+  }
+
+  const jumpTo = (id: string) => {
+    const el = document.getElementById(`msg-${id}`)
+    if (!el) return
+    el.scrollIntoView({ block: 'center' })
+    setHighlightId(id)
+    window.setTimeout(() => setHighlightId((current) => (current === id ? null : current)), 1500)
+  }
+
   const lastMine = [...messages].reverse().find((m) => m.sender_id === user?.id && !m.status)
   const seenBy =
     active && lastMine
@@ -1467,6 +1626,13 @@ export default function Messages() {
                     new Date(message.created_at).getTime() - new Date(previous.created_at).getTime() < BURST_MS
                   const hasText = !message.encrypted && Boolean(message.body?.trim())
                   const mediaOnly = Boolean(message.media_kind) && !hasText
+                  // A sticker stands on its own, without a bubble, unless it answers a message
+                  // (then the quote needs one to sit in).
+                  const isSticker = message.kind === 'sticker' && Boolean(message.sticker_id)
+                  const bareSticker = isSticker && !message.reply_to_id
+                  const stickerSrc = isSticker ? stickerUrl(message.sticker_id!) : null
+                  const stickerName =
+                    catalogue.data?.items.find((s) => s.id === message.sticker_id)?.name ?? 'Sticker'
                   return (
                     <div key={message.client_id ?? message.id}>
                       {newDay && (
@@ -1478,19 +1644,70 @@ export default function Messages() {
                           <span className="h-px flex-1 bg-white/8" />
                         </div>
                       )}
-                      <div className={cn('flex flex-col', mine ? 'items-end' : 'items-start', burst ? 'mt-0.5' : 'mt-3')}>
+                      <div
+                        id={`msg-${message.id}`}
+                        className={cn(
+                          'flex flex-col rounded-card-md',
+                          mine ? 'items-end' : 'items-start',
+                          burst ? 'mt-0.5' : 'mt-3',
+                          highlightId === message.id && 'bg-gold/20',
+                        )}
+                      >
                         {!mine && active.kind === 'group' && !burst && (
                           <span className="caption mb-0.5 ms-1">{sender?.display_name ?? 'Member'}</span>
                         )}
+                        <div className="group/bubble relative flex max-w-[75%] items-stretch">
+                        {/* Beside the bubble, out of the flow: they must not widen it or push the reactions off its edge. */}
+                        <div className={cn('absolute inset-y-0 flex items-center', mine ? 'end-full' : 'start-full')}>
+                          <ReplyButton
+                            onClick={() => startReply(message)}
+                            label={`Reply to ${nameOf(message)}`}
+                          />
+                          {!message.status && !message.id.startsWith('local_') && (
+                            <ReactButton
+                              label={`React to ${nameOf(message)}`}
+                              onOpen={(rect) => setPicker({ id: message.id, rect, withReply: false })}
+                            />
+                          )}
+                        </div>
+                        <SwipeToReply
+                          onReply={() => startReply(message)}
+                          onLongPress={() => {
+                            const rect = document.getElementById(`msg-${message.id}`)?.getBoundingClientRect()
+                            if (rect) setPicker({ id: message.id, rect, withReply: true })
+                          }}
+                          disabled={Boolean(message.status)}
+                        >
                         <div
                           className={cn(
-                            'max-w-[75%] rounded-card-md',
-                            mediaOnly ? 'p-1.5' : 'px-3.5 py-2',
-                            mine ? 'bg-gold/15 text-text-hi' : 'border border-white/8 bg-white/[0.08] text-text-hi',
+                            'min-w-0 rounded-card-md',
+                            bareSticker ? 'p-0' : mediaOnly ? 'p-1.5' : 'px-3.5 py-2',
+                            bareSticker
+                              ? 'text-text-hi'
+                              : mine
+                                ? 'bg-gold/15 text-text-hi'
+                                : 'border border-white/8 bg-white/[0.08] text-text-hi',
                             message.status === 'sending' && 'opacity-80',
                             message.status === 'failed' && 'border border-red-400/40',
                           )}
                         >
+                          {quoteOf(message) && (
+                            <ReplyQuote
+                              target={quoteOf(message)!}
+                              mine={mine}
+                              onJump={() => message.reply_to_id && jumpTo(message.reply_to_id)}
+                            />
+                          )}
+                          {isSticker && stickerSrc && (
+                            <img
+                              src={stickerSrc}
+                              alt={stickerName}
+                              width={128}
+                              height={128}
+                              draggable={false}
+                              className="h-32 w-32 max-w-full object-contain"
+                            />
+                          )}
                           {message.media_kind && (
                             <div className={cn('relative', hasText && '-mx-2 -mt-0.5 mb-1.5')}>
                               <Attachment message={message} onOpenImage={setLightbox} dark={resolved !== 'light'} />
@@ -1504,7 +1721,7 @@ export default function Messages() {
                               )}
                             </div>
                           )}
-                          {(hasText || message.encrypted) && (
+                          {(hasText || (message.encrypted && !isSticker)) && (
                             <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
                               {message.encrypted ? (
                                 <span className="italic text-text-low">
@@ -1516,7 +1733,7 @@ export default function Messages() {
                             </p>
                           )}
                           <p
-                            className={cn('text-right text-[0.68rem] text-text-low', mediaOnly ? 'px-1.5 pt-1' : 'mt-0.5')}
+                            className={cn('text-right text-[0.68rem] text-text-low', mediaOnly || bareSticker ? 'px-1.5 pt-1' : 'mt-0.5')}
                             title={fullStamp(message.created_at, locale)}
                           >
                             {message.status === 'sending'
@@ -1526,6 +1743,14 @@ export default function Messages() {
                               : timeOf(message.created_at, locale)}
                           </p>
                         </div>
+                        </SwipeToReply>
+                        </div>
+                        <ReactionChips
+                          reactions={message.reactions ?? []}
+                          myId={user?.id}
+                          catalogue={catalogue.data?.items ?? []}
+                          onOpen={(rect) => setReactionList({ id: message.id, rect })}
+                        />
                         {message.status === 'failed' && (
                           <button
                             type="button"
@@ -1600,17 +1825,10 @@ export default function Messages() {
                   rests in the bottom-end corner (lib/floating.ts, slot 0) —
                   exactly where a full-height thread puts its composer. No
                   orb, no gap: Send keeps the full width. */}
+              {replyTo && (
+                <ReplyBanner name={nameOf(replyTo)} message={replyTo} onCancel={() => setReplyTo(null)} />
+              )}
               <form onSubmit={send} className={cn('mt-3 flex items-center gap-2 border-t border-white/8 pt-3', FEATURES.assistant && 'pe-14 lg:pe-12')}>
-                <input
-                  ref={fileInput}
-                  type="file"
-                  multiple
-                  hidden
-                  onChange={(e) => {
-                    stage(e.target.files)
-                    e.target.value = ''
-                  }}
-                />
                 {recordingSince !== null ? (
                   <>
                     <button
@@ -1636,18 +1854,18 @@ export default function Messages() {
                   </>
                 ) : (
                   <>
-                    <button
-                      type="button"
-                      onClick={() => fileInput.current?.click()}
-                      aria-label="Attach files"
-                      title="Photos, videos, audio, documents — any file up to 200 MB"
-                      className="shrink-0 rounded-full border border-white/12 p-2.5 text-text-mid hover:border-gold/40 hover:text-gold-soft"
-                    >
-                      <Paperclip size={15} aria-hidden="true" />
-                    </button>
+                    <AttachmentMenu onFiles={stage} />
+                    <EmojiStickerButton catalogue={catalogue.data} onEmoji={insertEmoji} onSticker={sendSticker} />
                     <input
+                      ref={inputRef}
                       value={draft}
                       onChange={(e) => onDraftChange(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape' && replyTo) {
+                          e.preventDefault()
+                          setReplyTo(null)
+                        }
+                      }}
                       onPaste={(e) => {
                         // A pasted screenshot is an attachment, not text.
                         if (e.clipboardData.files.length) {
@@ -1689,6 +1907,38 @@ export default function Messages() {
           )}
         </div>
       </div>
+      {picker && (() => {
+        const target = messages.find((m) => m.id === picker.id)
+        if (!target || !catalogue.data) return null
+        return (
+          <StickerPicker
+            anchor={picker.rect}
+            catalogue={catalogue.data}
+            current={target.reactions?.find((r) => r.user_id === user?.id)?.sticker_id}
+            onPick={(stickerId) => toggleReaction(target, stickerId)}
+            onReply={picker.withReply ? () => startReply(target) : undefined}
+            onClose={() => setPicker(null)}
+          />
+        )
+      })()}
+      {reactionList && (() => {
+        const target = messages.find((m) => m.id === reactionList.id)
+        if (!target?.reactions?.length) return null
+        return (
+          <ReactionList
+            anchor={reactionList.rect}
+            reactions={target.reactions}
+            catalogue={catalogue.data?.items ?? []}
+            nameOf={(id) => (id === user?.id ? 'You' : (active?.profiles?.[id]?.display_name ?? 'Member'))}
+            myId={user?.id}
+            onRemove={() => {
+              const mine = target.reactions?.find((r) => r.user_id === user?.id)
+              if (mine) toggleReaction(target, mine.sticker_id)
+            }}
+            onClose={() => setReactionList(null)}
+          />
+        )
+      })()}
       {lightbox && (
         <MediaLightbox
           media={[{ url: lightbox, kind: 'image', alt_text: null }]}

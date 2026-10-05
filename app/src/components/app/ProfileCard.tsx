@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Link } from 'react-router'
 import { Award, Crown, MapPin, Medal, Users } from 'lucide-react'
 import { VerifiedBadge } from '@/components/ui-kit'
@@ -10,7 +11,10 @@ import { useApi } from '@/hooks/useApi'
 import { useAuth } from '@/hooks/useAuth'
 import { kaluta } from '@/lib/api'
 import { isRouteAvailable } from '@/lib/features'
+import { onChange } from '@/lib/live'
 import { useMyProfile } from '@/hooks/useMyProfile'
+import { useUnreadMessages } from '@/hooks/useUnreadMessages'
+import UnreadBadge from './UnreadBadge'
 import { countryName } from '@/lib/profileOptions'
 import { cn } from '@/lib/utils'
 
@@ -19,7 +23,7 @@ import { cn } from '@/lib/utils'
  * its verification badge, handle, and place.
  */
 /** The shortcuts /app pins. Destinations, not feed modes — and only open ones. */
-const PINNED: ChromeKey[] = (['home', 'create', 'familyTree', 'messages'] as ChromeKey[]).filter(
+const PINNED: ChromeKey[] = (['home', 'create', 'familyTree', 'messages', 'connections'] as ChromeKey[]).filter(
   (key) => isRouteAvailable(ROUTE_FOR[key]),
 )
 
@@ -33,6 +37,15 @@ export default function ProfileCard() {
   // Shared with the top bar and the composer, and refreshed whenever the
   // profile changes (an edit, or following someone changing a count here).
   const data = useMyProfile()
+  // Only on this card, which nobody but the member sees: how many connections
+  // someone has — a teenager especially — is not for strangers on /u/:handle.
+  const connections = useApi(() => kaluta.connections.list(), [])
+  useEffect(() => onChange('connections', connections.reload), [connections.reload])
+  const unread = useUnreadMessages()
+
+  // A circle made, renamed or deleted anywhere in the app changes this rail.
+  // (The profile's own counts are refreshed by useMyProfile.)
+  useEffect(() => onChange('circles', circles.reload), [circles.reload])
 
   // The profile is what the editor changes; the account copy only stands in
   // until it has loaded.
@@ -71,6 +84,19 @@ export default function ProfileCard() {
             </dd>
             <dt className={cn('mt-1.5 text-[0.7rem]', tok.low)}>Following</dt>
           </div>
+          <div>
+            <dt className={cn('text-[0.65rem]', tok.low)}>
+              <Link to="/connections" className="hover:text-gold-soft">
+                {t('connections')}
+              </Link>
+            </dt>
+            <dd className="mono-data text-sm font-semibold text-gold-soft">
+              {/* The label is the link for assistive tech; the number is a bigger target for the pointer. */}
+              <Link to="/connections" tabIndex={-1} aria-hidden="true">
+                {connections.data ? connections.data.accepted.length : '–'}
+              </Link>
+            </dd>
+          </div>
         </dl>
       </div>
 
@@ -86,6 +112,7 @@ export default function ProfileCard() {
               <li key={key}>
                 <Link
                   to={ROUTE_FOR[key]}
+                  aria-label={key === 'messages' && unread > 0 ? `${t(key)}, ${unread} unread` : undefined}
                   className={cn(
                     'flex w-full items-center gap-2.5 rounded-[12px] px-2 py-2 text-[0.85rem] font-semibold',
                     tok.mid,
@@ -96,6 +123,7 @@ export default function ProfileCard() {
                     <Icon size={14} aria-hidden="true" />
                   </span>
                   {t(key)}
+                  {key === 'messages' && <UnreadBadge count={unread} className="ms-auto" />}
                 </Link>
               </li>
             )
@@ -121,7 +149,7 @@ export default function ProfileCard() {
                 className={cn(
                   'rounded-full px-3 py-1.5 text-[0.75rem] font-semibold',
                   index === 0
-                    ? 'bg-gold/15 text-gold-soft ring-1 ring-gold/40'
+                    ? cn('bg-gold/15 ring-1 ring-gold/40', tok.text)
                     : cn(tok.subtleBg, tok.mid, tok.hoverBg),
                 )}
               >

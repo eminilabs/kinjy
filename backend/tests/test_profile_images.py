@@ -176,6 +176,14 @@ def test_a_presigned_storage_url_may_be_uploaded_to():
     "https://user:secret@storage.example/file_1",
     "file:///etc/passwd",
     "https:///no-host",
+    "https://127.0.0.1/file_1",            # https does not make an address literal a storage host
+    "https://10.0.0.5:8443/file_1",
+    "https://[::1]/file_1",
+    "https://169.254.169.254/latest/meta-data/",
+    "https://localhost/file_1",            # a bare name resolves wherever the network says
+    "https://user-service/file_1",
+    "https://db.internal/file_1",
+    "https://printer.local/file_1",
     "",
     None,
 ])

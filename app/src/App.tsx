@@ -24,11 +24,13 @@ const SignIn = lazy(() => import('./pages/SignIn'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const SocialHub = lazy(() => import('./pages/SocialHub'))
 const Circles = lazy(() => import('./pages/app/Circles'))
+const Connections = lazy(() => import('./pages/app/Connections'))
 const Communities = lazy(() => import('./pages/app/Communities'))
 const Forums = lazy(() => import('./pages/app/Forums'))
 const Messages = lazy(() => import('./pages/app/Messages'))
 const FamilyTreeApp = lazy(() => import('./pages/app/FamilyTree'))
 const Graveyard = lazy(() => import('./pages/app/Graveyard'))
+const MemorialPublic = lazy(() => import('./pages/MemorialPublic'))
 const Marketplace = lazy(() => import('./pages/app/Marketplace'))
 const Explore = lazy(() => import('./pages/app/Explore'))
 const Live = lazy(() => import('./pages/app/Live'))
@@ -85,11 +87,15 @@ export default function App() {
           <Route path="/hub" element={<SocialHub />} />
           {/* Universal Navigation destinations, per the blueprint */}
           <Route path="/circles" element={<Circles />} />
+          <Route path="/connections" element={<Connections />} />
           <Route path="/communities" element={<Communities />} />
           <Route path="/forums" element={<Forums />} />
           <Route path="/messages" element={<Messages />} />
           <Route path="/tree" element={gated('familyTree', <FamilyTreeApp />, '/hub')} />
           <Route path="/graveyard" element={<Graveyard />} />
+          {/* Where a memorial's QR code leads. Public: whoever scans a headstone
+              usually has no account. */}
+          <Route path="/memorial/:code" element={<MemorialPublic />} />
           <Route path="/market" element={gated('marketplace', <Marketplace />, '/hub')} />
           <Route path="/explore" element={<Explore />} />
           <Route path="/live" element={gated('live', <Live />, '/hub')} />

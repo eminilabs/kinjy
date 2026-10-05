@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router'
 import {
   Clapperboard,
   FileText,
@@ -23,6 +24,7 @@ import { useAppTheme } from '@/components/appdemo/theme'
 import MemberAvatar from './MemberAvatar'
 import { ApiError, kaluta, type Post, type UploadedMedia } from '@/lib/api'
 import RichTextEditor from './RichTextEditor'
+import { onChange } from '@/lib/live'
 import { htmlToText } from '@/lib/richtext'
 import { LANGUAGES } from '@/i18n'
 import { cn } from '@/lib/utils'
@@ -111,7 +113,10 @@ export default function Composer({
   const [kind, setKind] = useState<Kind>('text')
   const [body, setBody] = useState('')
   const [headline, setHeadline] = useState('')
-  const [media, setMedia] = useState<UploadedMedia[]>([])
+  // previewUrl is local, made from the file the member picked. The server's own
+  // address cannot be the preview: an upload nobody has attached to a post yet is
+  // served only against a ticket, so it would show as a broken image until posted.
+  const [media, setMedia] = useState<Array<UploadedMedia & { previewUrl?: string }>>([])
   const [uploading, setUploading] = useState(false)
   const [visibility, setVisibility] = useState<string>('public')
   const [circleId, setCircleId] = useState('')
@@ -133,6 +138,8 @@ export default function Composer({
   const [note, setNote] = useState<string | null>(null)
 
   const circles = useApi(() => kaluta.circles.list(), [])
+  // A circle made on the Circles page is offered here without a reload.
+  useEffect(() => onChange('circles', circles.reload), [circles.reload])
 
   const audienceLabel =
     visibility === 'circle'
@@ -181,9 +188,9 @@ export default function Composer({
     setUploading(true)
     setError(null)
     try {
-      const uploaded: UploadedMedia[] = []
+      const uploaded: Array<UploadedMedia & { previewUrl?: string }> = []
       for (const file of Array.from(files).slice(0, 4)) {
-        uploaded.push(await kaluta.media.upload(file, provenance))
+        uploaded.push({ ...(await kaluta.media.upload(file, provenance)), previewUrl: URL.createObjectURL(file) })
       }
       setMedia((current) => [...current, ...uploaded].slice(0, 4))
     } catch (err) {
@@ -197,6 +204,7 @@ export default function Composer({
   const reset = () => {
     setBody('')
     setHeadline('')
+    for (const item of media) if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
     setMedia([])
     setTopics('')
     setCity('')
@@ -387,7 +395,11 @@ export default function Composer({
               <div className="mt-3">
                 {(circles.data ?? []).length === 0 ? (
                   <p className="rounded-card-sm border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-                    You have no circles yet — create one before posting to it.
+                    You have no circles yet —{' '}
+                    <Link to="/circles" className="font-semibold underline underline-offset-2">
+                      create one
+                    </Link>{' '}
+                    before posting to it.
                   </p>
                 ) : (
                   <select
@@ -403,6 +415,13 @@ export default function Composer({
                       </option>
                     ))}
                   </select>
+                )}
+                {/* Said before posting, not discovered afterwards: a circle that
+                    reaches nobody makes the post private to its author. */}
+                {(circles.data ?? []).find((c) => c.id === circleId)?.members_count === 0 && (
+                  <p className="mt-2 text-xs text-warning">
+                    Nobody is in this circle yet — only you will see this post.
+                  </p>
                 )}
               </div>
             )}
@@ -461,13 +480,16 @@ export default function Composer({
                 {media.map((item) => (
                   <li key={item.id} className="relative overflow-hidden rounded-card-sm border border-white/10">
                     {item.kind === 'video' ? (
-                      <video src={item.url} className="h-36 w-full object-cover" muted playsInline />
+                      <video src={item.previewUrl ?? item.url} className="h-36 w-full object-cover" muted playsInline />
                     ) : (
-                      <img src={item.url} alt="" className="h-36 w-full object-cover" />
+                      <img src={item.previewUrl ?? item.url} alt="" className="h-36 w-full object-cover" />
                     )}
                     <button
                       type="button"
-                      onClick={() => setMedia((c) => c.filter((m) => m.id !== item.id))}
+                      onClick={() => {
+                        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
+                        setMedia((c) => c.filter((m) => m.id !== item.id))
+                      }}
                       aria-label="Remove"
                       className="absolute end-1.5 top-1.5 rounded-full bg-ink/80 p-1 text-text-hi"
                     >

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
+import { Link } from 'react-router'
 import { BellRing, CalendarDays, Flame, Landmark, ShieldCheck, Smartphone, Users } from 'lucide-react'
 import { CandleFlowerWidget } from '@/components/ui-kit'
 import PublicShell from '@/components/landing/PublicShell'
@@ -85,6 +86,21 @@ function StewardshipRings() {
   )
 }
 
+/** Marks something the blueprint names that is not built yet — said plainly, not shown as if it worked. */
+function HorizonTag() {
+  const reduced = useReducedMotion()
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-sky/40 bg-sky/10 px-3 py-1 mono-data text-[0.62rem] tracking-[0.2em] text-sky">
+      <motion.span
+        className="h-1.5 w-1.5 rounded-full bg-sky"
+        animate={reduced ? undefined : { opacity: [0.4, 1, 0.4] }}
+        transition={{ duration: 2.4, repeat: Infinity }}
+      />
+      ON THE HORIZON
+    </span>
+  )
+}
+
 /** Six gold petals drifting gently (14s loops) over the AR phone silhouette. */
 function DriftingPetals() {
   const reduced = useReducedMotion()
@@ -167,15 +183,15 @@ export default function Memorials() {
               and flowers, visited from anywhere on Earth.
             </motion.p>
             <div className="mt-10 flex flex-wrap items-center gap-4">
-              <button
-                type="button"
+              <Link
+                to="/graveyard"
                 className="kl-sheen inline-flex items-center gap-[18px] rounded-[20px] py-[7px] pe-[7px] ps-[30px] text-[17px] font-semibold shadow-[0_14px_30px_-12px_rgba(169,118,28,.55)] transition-transform hover:-translate-y-0.5"
               >
                 Create a memorial
                 <span className="grid h-12 w-12 place-items-center rounded-full bg-white text-xl text-[var(--kl-night)]" aria-hidden="true">
                   →
                 </span>
-              </button>
+              </Link>
               <button
                 type="button"
                 onClick={() => setModalOpen(true)}
@@ -245,8 +261,8 @@ export default function Memorials() {
               grave, and for generations who never knew them in person.
             </p>
             <p className="mt-5 max-w-[460px] text-sm leading-relaxed text-[var(--kl-low)]">
-              Grave coordinates are captured on-site and verified. They are never
-              estimated, never fabricated.
+              Coordinates captured at the grave are marked confirmed. Typed ones are
+              marked not yet confirmed. They are never estimated, never fabricated.
             </p>
           </div>
           <QRScanDemo />
@@ -260,7 +276,7 @@ export default function Memorials() {
               {
                 icon: BellRing,
                 title: 'Anniversary reminders',
-                body: 'Gentle notifications at 10 days, 3 days, and 6 hours before — opt-in, per memorial, never insistent.',
+                body: 'Gentle notifications to each of the memorial’s administrators at 10 days, 3 days, and 6 hours before the anniversary.',
                 visual: <ReminderCalendar />,
               },
               {
@@ -272,7 +288,7 @@ export default function Memorials() {
               {
                 icon: ShieldCheck,
                 title: 'Content moderation',
-                body: 'Every guest contribution enters pending approval before it appears. The space stays sacred.',
+                body: 'By default, every message and photo waits for the family’s approval before it appears. The space stays sacred.',
                 visual: (
                   <div className="flex h-24 items-center gap-4">
                     <ShieldCheck size={44} className="text-[var(--kl-gold)]" />
@@ -327,13 +343,15 @@ export default function Memorials() {
             <div className="mb-7 grid h-[72px] w-[72px] place-items-center rounded-[10px] kl-sheen shadow-[0_14px_30px_-14px_rgba(169,118,28,.6)]" aria-hidden="true">
               <Landmark size={28} />
             </div>
-            <p className="kl-mono text-xs tracking-[.14em] text-[var(--kl-gold-deep)]">DIGITAL LEGACY CONTACTS</p>
+            <HorizonTag />
+            <p className="kl-mono mt-5 text-xs tracking-[.14em] text-[var(--kl-gold-deep)]">DIGITAL LEGACY CONTACTS</p>
             <h2 className="kl-h3 mt-4">Your wishes, honored after you.</h2>
             <p className="kl-lead mt-5">
-              Designate who manages your account and memorial wishes after you’re gone.
-              Wishes are stored and honored — including faith-style preferences, exactly
-              as you documented them.
+              Soon you will be able to name someone you trust to look after your account
+              and your memorial wishes when you are gone — faith-style preferences
+              included, exactly as you documented them, never inferred.
             </p>
+            <p className="mt-4 text-sm text-[var(--kl-low)]">Not available yet.</p>
           </motion.div>
 
           {/* stage: the three facts of a legacy plan, as glass cards */}
@@ -345,17 +363,17 @@ export default function Memorials() {
             <div className="relative mx-auto flex max-w-[400px] flex-col gap-3.5">
               {[
                 {
-                  icon: <span className="kl-serif text-lg font-semibold text-[var(--kl-on-pastel)]">ZM</span>,
+                  icon: <Users size={20} className="text-[var(--kl-on-pastel)]" />,
                   iconBg: '#F6EBD3',
                   label: 'LEGACY CONTACT',
-                  value: <strong className="font-semibold text-[var(--kl-ink)]">Zawadi M.</strong>,
+                  value: <strong className="font-semibold text-[var(--kl-ink)]">Someone you trust</strong>,
                   offset: 0,
                 },
                 {
                   icon: <Landmark size={20} className="text-[var(--kl-on-pastel)]" />,
                   iconBg: '#E3ECF7',
                   label: 'WISHES',
-                  value: 'Document on file',
+                  value: 'Your documented wishes',
                   offset: 32,
                 },
                 {
@@ -382,11 +400,6 @@ export default function Memorials() {
                     <span className="kl-mono block text-[10.5px] tracking-[0.16em] text-[var(--kl-gold-deep)]">{row.label}</span>
                     <span className="block text-[15px] text-[var(--kl-mid)]">{row.value}</span>
                   </span>
-                  {i === 0 && (
-                    <span className="mono-data ms-auto shrink-0 rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[0.58rem] tracking-widest text-success">
-                      ON FILE
-                    </span>
-                  )}
                 </motion.div>
               ))}
             </div>
@@ -426,14 +439,7 @@ export default function Memorials() {
             <div className="mb-7 grid h-[72px] w-[72px] place-items-center rounded-[10px] bg-[var(--kl-sky)] text-[var(--kl-night)] shadow-[0_14px_30px_-14px_rgba(143,184,232,.8)]" aria-hidden="true">
               <Smartphone size={28} />
             </div>
-            <span className="mono-data inline-flex items-center gap-2 rounded-full border border-sky/40 bg-sky/10 px-3 py-1 text-[0.62rem] tracking-[0.2em] text-sky">
-              <motion.span
-                className="h-1.5 w-1.5 rounded-full bg-sky"
-                animate={reduced ? undefined : { opacity: [0.4, 1, 0.4] }}
-                transition={{ duration: 2.4, repeat: Infinity }}
-              />
-              ON THE HORIZON
-            </span>
+            <HorizonTag />
             <h2 className="kl-h3 mt-5">Future: AR memorials</h2>
             <p className="kl-lead mt-5">
               Point a phone at the resting place and see flowers, candles and stories
@@ -468,12 +474,12 @@ export default function Memorials() {
               />
             </div>
           )}
-          <button
-            type="button"
-            className="kl-sheen rounded-[20px] px-8 py-4 text-[17px] font-semibold shadow-[0_14px_30px_-12px_rgba(169,118,28,.55)] transition-transform hover:-translate-y-0.5"
-          >
+          <Link
+                to="/graveyard"
+                className="inline-flex items-center justify-center kl-sheen rounded-[20px] px-8 py-4 text-[17px] font-semibold shadow-[0_14px_30px_-12px_rgba(169,118,28,.55)] transition-transform hover:-translate-y-0.5"
+              >
             Create a memorial
-          </button>
+          </Link>
           <button
             type="button"
             onClick={() => setModalOpen(true)}

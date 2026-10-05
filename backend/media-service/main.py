@@ -5,8 +5,10 @@ import hashlib
 import logging
 import math
 import os
+import re
 import shutil
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -27,6 +29,7 @@ from common.service import create_app
 
 import models
 import profileimages
+import signatures
 import uploadcenter
 
 log = logging.getLogger("media-service")
@@ -133,6 +136,14 @@ async def upload(
     with destination.open("wb") as out:
         sink = crypto.FileSealer(out, asset_id) if seal else out
         while chunk := await file.read(1024 * 1024):
+            if written == 0 and purpose != "chat" and not signatures.matches(content_type, chunk[: signatures.HEAD_BYTES]):
+                # Refused on the first chunk, before the rest is stored.
+                out.close()
+                destination.unlink(missing_ok=True)
+                raise HTTPException(
+                    status_code=415,
+                    detail=f"The file does not look like {content_type}: its first bytes say otherwise",
+                )
             written += len(chunk)
             if written > MAX_BYTES:
                 out.close()
@@ -142,6 +153,9 @@ async def upload(
             sink.write(chunk)
         if seal:
             sink.close()
+    if written == 0 and purpose != "chat":
+        destination.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="The file is empty")
 
     sha = crypto.private_fingerprint(digest.hexdigest()) if private else digest.hexdigest()
     # Same bytes already uploaded by this member: reuse instead of storing twice.
@@ -158,6 +172,24 @@ async def upload(
         destination.unlink(missing_ok=True)
         return {**_describe(existing), "deduplicated": True}
 
+    # Post media can live at UploadCenter instead of on the volume. It goes there
+    # as a *private* file and is read back only through media-service, after the
+    # viewer's ticket has been checked (see _serve_remote): no address that would
+    # work without that check is ever handed to anyone.
+    remote_id: str | None = None
+    if _stores_remotely(purpose):
+        if not _claim_remote_slot(principal.user_id):
+            destination.unlink(missing_ok=True)
+            raise HTTPException(status_code=503, detail="Too many uploads are in progress; try again in a moment")
+        try:
+            remote_id = await run_in_threadpool(_store_remotely, destination, written, content_type)
+        except uploadcenter.UploadCenterError as exc:
+            raise HTTPException(status_code=_remote_failure_status(exc), detail=_remote_failure_detail(exc)) from exc
+        finally:
+            _release_remote_slot(principal.user_id)
+            # Whatever happened, the local copy was only a staging file.
+            destination.unlink(missing_ok=True)
+
     asset = models.Asset(
         id=asset_id,
         owner_id=principal.user_id,
@@ -169,7 +201,7 @@ async def upload(
         content_type=content_type,
         size_bytes=written,
         sha256=sha,
-        storage_path=str(destination),
+        storage_path="" if remote_id else str(destination),
         url=f"{settings.MEDIA_PUBLIC_BASE}/{asset_id}",
         kind=kind,
         provenance=provenance,
@@ -178,14 +210,208 @@ async def upload(
         alt_text=alt_text,
         private=private,
         sealed_with=crypto.keyring().active_id if seal else None,
+        # Restricted from the first byte, not only once attached: the file has
+        # no public address to fall back on, and an upload nobody has attached
+        # yet has no business being served without a ticket.
+        **({"provider": "uploadcenter", "external_id": remote_id, "access": "restricted"} if remote_id else {}),
     )
     db.add(asset)
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        # Do not leave a file at UploadCenter that no row points to.
+        db.rollback()
+        if remote_id:
+            _discard_stored("uploadcenter", remote_id, None)
+        raise
 
     return {
         **_describe(asset),
         "note": "The provenance label is declared by the uploader. C2PA signing is not enabled yet.",
     }
+
+
+def _stores_remotely(purpose: str) -> bool:
+    """Whether a new upload goes to UploadCenter rather than the media volume."""
+    return purpose == "post" and settings.POST_MEDIA_PROVIDER == "uploadcenter" and uploadcenter.enabled()
+
+
+def _store_remotely(path: Path, size: int, content_type: str) -> str:
+    """Send a staged file to UploadCenter as private and wait for it to be ready.
+
+    Runs in a worker thread: all of it is blocking I/O, and a 200 MB file must
+    not hold the event loop. Returns UploadCenter's file id.
+    """
+    # The staging file's name is opaque; the member's own file name stays in our
+    # database and is not sent to a third party.
+    presigned = uploadcenter.presign(path.name, size, content_type, visibility="private")
+    file_id, upload_url = presigned.get("file_id"), presigned.get("upload_url")
+    if not file_id or not profileimages.upload_url_allowed(upload_url):
+        if file_id:
+            _discard_stored("uploadcenter", file_id, None)
+        raise uploadcenter.UploadCenterError("The file storage returned an unusable upload address")
+    try:
+        uploadcenter.put_file(upload_url, str(path), size, content_type)
+        uploadcenter.complete(file_id)
+        record = uploadcenter.wait_until_ready(file_id, size)
+        # Trust, then verify: if the service ignored "private" the file would have
+        # a public address while we go on believing it has none.
+        if record.get("visibility") != "private" or record.get("url") or record.get("trashed_at"):
+            log.error("uploadcenter file %s is not private as asked: visibility=%r", file_id, record.get("visibility"))
+            raise uploadcenter.UploadCenterError("The file storage did not keep the file private")
+        if record.get("size_bytes") not in (None, size):
+            raise uploadcenter.UploadCenterError("The file storage kept a different number of bytes")
+    except Exception:
+        # Nothing half-stored: a file that failed its scan, or never finished,
+        # is removed there rather than left to count against the quota.
+        _discard_stored("uploadcenter", file_id, None)
+        raise
+    return file_id
+
+
+# Each remote upload holds a worker thread for the whole exchange, up to minutes.
+# The pool is shared with every other synchronous route of this service, `serve()`
+# included, so a few members uploading at once must not be able to fill it.
+_REMOTE_SLOTS = 6
+_REMOTE_PER_MEMBER = 2
+_remote_slots = threading.BoundedSemaphore(_REMOTE_SLOTS)
+_remote_by_member: dict[str, int] = {}
+_remote_lock = threading.Lock()
+
+
+def _claim_remote_slot(member_id: str) -> bool:
+    with _remote_lock:
+        if _remote_by_member.get(member_id, 0) >= _REMOTE_PER_MEMBER:
+            return False
+        if not _remote_slots.acquire(blocking=False):
+            return False
+        _remote_by_member[member_id] = _remote_by_member.get(member_id, 0) + 1
+        return True
+
+
+def _release_remote_slot(member_id: str) -> None:
+    with _remote_lock:
+        left = _remote_by_member.get(member_id, 0) - 1
+        if left > 0:
+            _remote_by_member[member_id] = left
+        else:
+            _remote_by_member.pop(member_id, None)
+        _remote_slots.release()
+
+
+def _remote_failure_status(exc: uploadcenter.UploadCenterError) -> int:
+    return exc.status if exc.status in (422, 504) else 503
+
+
+def _remote_failure_detail(exc: uploadcenter.UploadCenterError) -> str:
+    # What the member may be told. UploadCenter's own wording and status codes
+    # stay in the log: they describe our vendor, not the member's problem.
+    if exc.status == 422:
+        return "The storage service's checks refused this file"
+    if exc.status == 504:
+        return "The storage service took too long to check this file; try again"
+    return "File storage is unavailable right now; try again"
+
+
+# --- reading post media back from UploadCenter ---------------------------------
+#
+# A signed link lasts 900 seconds, is usable by anyone who holds it, and cannot
+# be shortened (see uploadcenter.py). So it is used here and nowhere else: this
+# service fetches the bytes with it and relays them to a viewer whose ticket has
+# already been checked. The link is kept for a while, because asking UploadCenter
+# for a new one on every request of a video player would be one API call per
+# byte range.
+_LINK_MARGIN_SECONDS = 120
+_LINKS_MAX = 2000
+_links: dict[str, tuple[str, float]] = {}
+_links_lock = threading.Lock()
+
+
+def _remote_link(asset: models.Asset, fresh: bool = False) -> str:
+    key = asset.external_id or ""
+    now = time.monotonic()
+    if not fresh:
+        with _links_lock:
+            hit = _links.get(key)
+        if hit and hit[1] > now:
+            return hit[0]
+    url, lifetime = uploadcenter.signed_url(key)
+    if not profileimages.upload_url_allowed(url):
+        raise uploadcenter.UploadCenterError("The file storage returned an unusable link")
+    keep = lifetime - _LINK_MARGIN_SECONDS  # a link about to run out is not worth keeping
+    if keep > 0:
+        with _links_lock:
+            if len(_links) >= _LINKS_MAX:
+                for stale in sorted(_links, key=lambda k: _links[k][1])[: _LINKS_MAX // 4]:
+                    del _links[stale]
+            _links[key] = (url, now + keep)
+    return url
+
+
+def _forget_link(asset: models.Asset) -> None:
+    with _links_lock:
+        _links.pop(asset.external_id or "", None)
+
+
+def _relay_remote(client, response):
+    """The stored bytes, closing the connection to UploadCenter however this ends."""
+    try:
+        yield from response.iter_raw(1024 * 1024)
+    finally:
+        response.close()
+        client.close()
+
+
+def _serve_remote(asset: models.Asset, request: Request, media_type: str, inline: bool, headers: dict) -> Response:
+    """Relay a post asset from UploadCenter. Only reached after serve()'s ticket check.
+
+    Honours Range, which a video needs to play in Safari and to seek anywhere.
+    UploadCenter's own headers are not passed on: its link forces
+    ``Content-Disposition: attachment`` and names its storage host, neither of
+    which belongs in what a member sees.
+    """
+    # Chat attachments are sealed on this volume and never stored remotely.
+    if asset.private or not asset.external_id:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    wanted = request.headers.get("range", "").strip()
+    # One plain byte range, or none: a multi-range request would be answered with a
+    # multipart body this relay does not describe.
+    range_header = wanted if re.fullmatch(r"bytes=(\d+-\d*|-\d+)", wanted) else None
+    client = response = None
+    for attempt in (0, 1):
+        try:
+            client, response = uploadcenter.open_stream(_remote_link(asset, fresh=attempt == 1), range_header)
+        except uploadcenter.UploadCenterError as exc:
+            log.warning("media %s could not be read from UploadCenter: %s", asset.id, exc)
+            raise HTTPException(status_code=503, detail="The file is temporarily unavailable") from exc
+        if response.status_code in (200, 206, 416):
+            break
+        # An expired or withdrawn link: forget it and try once with a new one.
+        log.info("media %s: UploadCenter answered %s", asset.id, response.status_code)
+        response.close()
+        client.close()
+        _forget_link(asset)
+        client = response = None
+    if response is None or client is None:
+        raise HTTPException(status_code=502, detail="The file is temporarily unavailable")
+
+    if response.status_code == 416:
+        content_range = response.headers.get("content-range") or f"bytes */{asset.size_bytes}"
+        response.close()
+        client.close()
+        return Response(status_code=416, headers={"Content-Range": content_range})
+
+    out = {
+        **headers,
+        "Accept-Ranges": "bytes",
+        "Content-Disposition": f"{'inline' if inline else 'attachment'}; filename*=UTF-8''{quote(_filename(asset))}",
+    }
+    for name in ("content-length", "content-range"):
+        if name in response.headers:
+            out[name] = response.headers[name]
+    return StreamingResponse(
+        _relay_remote(client, response), status_code=response.status_code, media_type=media_type, headers=out,
+    )
 
 
 def _filename(asset: models.Asset) -> str:
@@ -262,7 +488,13 @@ def serve(
         if not profileimages.cdn_url_allowed(asset.url, uploadcenter.cdn_hosts()):
             raise HTTPException(status_code=404, detail="Asset not found")
         return RedirectResponse(asset.url, status_code=302)
-    if not os.path.exists(asset.storage_path):
+    remote = asset.provider == "uploadcenter"
+    if remote and asset.access != "restricted":
+        # Past the profile-image redirect above, a remote file is post media, and
+        # post media is never public. Whatever flipped this one, it is not served.
+        log.error("media %s is remote and %s: refused", asset_id, asset.access)
+        raise HTTPException(status_code=404, detail="Asset not found")
+    if not remote and not os.path.exists(asset.storage_path):
         raise HTTPException(status_code=404, detail="Asset not found")
 
     if asset.access == "restricted":
@@ -292,6 +524,8 @@ def serve(
         # Signed links are personal; no shared cache may keep one's response.
         headers["Cache-Control"] = "private, max-age=3600"
 
+    if remote:
+        return _serve_remote(asset, request, media_type, inline, headers)
     if not asset.sealed_with:
         return FileResponse(
             asset.storage_path,
@@ -879,18 +1113,59 @@ def discard_profile_image(asset_id: str, payload: DiscardIn, db: OrmSession = De
     db.commit()
 
 
+@app.post("/internal/media/{asset_id}/discard-post-media", status_code=204, tags=["internal"])
+def discard_post_media(asset_id: str, payload: DiscardIn, db: OrmSession = Depends(get_db)):
+    """Delete a post's media once its author has removed the post.
+
+    The counterpart of /discard for profile images, with the opposite scope: only
+    post media (no profile purpose, not a chat attachment, restricted), and only
+    for the owner the caller names. social-service decides *whether* a file may go
+    (it keeps the evidence of reported or reviewed posts); this only refuses
+    anything that is not post media, so a wrong id cannot delete an avatar or a
+    private attachment. Unknown or already deleted is not an error.
+    """
+    asset = db.get(models.Asset, asset_id)
+    if asset is None:
+        return
+    if (
+        asset.owner_id != payload.owner_id
+        or asset.purpose is not None
+        or asset.private
+        or asset.access != "restricted"
+    ):
+        raise HTTPException(status_code=404, detail="Asset not found")
+    _discard_bytes(asset)
+    db.delete(asset)
+    db.commit()
+
+
 @app.get("/internal/media/{asset_id}", tags=["internal"])
-def internal_profile_image(asset_id: str, db: OrmSession = Depends(get_db)):
-    """What user-service needs before putting an asset on a profile."""
+def internal_asset(asset_id: str, db: OrmSession = Depends(get_db)):
+    """Who uploaded an asset, and what it is — one answer for every service.
+
+    user-service reads ``purpose`` and ``status`` before putting an asset on a
+    profile. memorial-service and the others read ``owner_id`` and ``kind``
+    before letting a member attach a file they uploaded: otherwise anyone
+    holding somebody else's asset id could attach it to a public page and have
+    the service mint viewing tickets for it.
+
+    There is exactly one route on this path. FastAPI answers from whichever was
+    declared first, so a second one — with a different set of fields — would
+    silently starve the other service of the fields it reads.
+    """
     asset = db.get(models.Asset, asset_id)
     if asset is None:
         raise HTTPException(status_code=404, detail="Asset not found")
     return {
         "id": asset.id,
         "owner_id": asset.owner_id,
+        "kind": asset.kind,
+        "content_type": asset.content_type,
         "purpose": asset.purpose,
         "status": asset.status,
         "access": asset.access,
         "url": asset.url or None,
         "storage": asset.provider,
+        "kind": asset.kind,
+        "private": asset.private,
     }

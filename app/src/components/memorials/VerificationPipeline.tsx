@@ -6,9 +6,9 @@ const lineEase = [0.65, 0, 0.35, 1] as [number, number, number, number]
 
 const STEPS = [
   { id: 'unconfirmed', label: 'UNCONFIRMED', body: 'A memorial page may be created ahead of confirmation.', dot: 'border-text-low bg-transparent', text: 'text-text-mid' },
-  { id: 'reported', label: 'REPORTED', body: 'A family member reports the passing, with documentation.', dot: 'border-warning bg-warning/20', text: 'text-warning' },
-  { id: 'review', label: 'UNDER REVIEW', body: 'Documents are checked and family corroboration gathered.', dot: 'border-sky bg-sky/20', text: 'text-sky' },
-  { id: 'verified', label: 'VERIFIED', body: 'Confirmed through documentation and family corroboration.', dot: 'border-success bg-success/25', text: 'text-success' },
+  { id: 'reported', label: 'REPORTED', body: 'A member reports the passing, with evidence.', dot: 'border-warning bg-warning/20', text: 'text-warning' },
+  { id: 'review', label: 'UNDER REVIEW', body: 'Kinjy staff read the evidence.', dot: 'border-sky bg-sky/20', text: 'text-sky' },
+  { id: 'verified', label: 'VERIFIED', body: 'Confirmed by Kinjy staff from the evidence.', dot: 'border-success bg-success/25', text: 'text-success' },
 ]
 
 /**

@@ -115,6 +115,11 @@ UPLOADCENTER_PROJECT_ID = _str("UPLOADCENTER_PROJECT_ID")
 # Hosts a stored file URL may point at (comma-separated). Anything else is
 # neither redirected to nor fetched.
 UPLOADCENTER_CDN_HOSTS = _str("UPLOADCENTER_CDN_HOSTS", "cdn.uploadscenter.com")
+# Where new post media is stored: "local" (the media volume) or "uploadcenter"
+# (private files there, relayed by media-service after the age check). Anything
+# else, or UploadCenter being unconfigured, means local. Files already stored
+# stay where they are; each asset records its own provider.
+POST_MEDIA_PROVIDER = _str("POST_MEDIA_PROVIDER", "local")
 
 # --- Languages (platform-wide) ---------------------------------------------
 SUPPORTED_LANGS = ["en", "sw", "fr", "ar", "zh"]
