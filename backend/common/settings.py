@@ -48,6 +48,30 @@ WEBAUTHN_ORIGIN = _str("WEBAUTHN_ORIGIN", "http://localhost:3030")
 FRONTEND_URL = _str("FRONTEND_URL", "http://localhost:3030")
 GATEWAY_URL = _str("GATEWAY_URL", "http://localhost:8200")
 
+# --- Outgoing mail ----------------------------------------------------------
+# Plain SMTP rather than one provider's API, because every provider speaks it
+# and the choice then belongs in .env instead of in the code.
+#
+# Nothing is sent unless SMTP_HOST and SMTP_FROM are both set. A password reset
+# that cannot deliver its link is worse than one that is plainly switched off:
+# the member waits for mail that will never come, and support hears about it
+# instead of us. So the service reports itself unavailable rather than
+# accepting a request it cannot honour.
+SMTP_HOST = _str("SMTP_HOST")
+SMTP_PORT = _int("SMTP_PORT", 587)
+SMTP_USER = _str("SMTP_USER")
+SMTP_PASSWORD = _str("SMTP_PASSWORD")
+SMTP_FROM = _str("SMTP_FROM")
+SMTP_FROM_NAME = _str("SMTP_FROM_NAME", "Kinjy")
+# STARTTLS on the submission port is the common case; set SMTP_SSL=1 for an
+# implicit-TLS port (usually 465).
+SMTP_STARTTLS = _str("SMTP_STARTTLS", "1") not in ("0", "false", "no")
+SMTP_SSL = _str("SMTP_SSL", "0") not in ("0", "false", "no")
+
+
+def mail_configured() -> bool:
+    return bool(SMTP_HOST and SMTP_FROM)
+
 # --- Economy ----------------------------------------------------------------
 # Marketplace / agency: customer price = vendor price * (1 + markup). A vendor
 # listing at $100 with a 20% markup is sold at $120; Kinjy's *revenue* on that

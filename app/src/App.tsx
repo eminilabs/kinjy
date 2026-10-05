@@ -21,6 +21,7 @@ const Safety = lazy(() => import('./pages/Safety'))
 const Developers = lazy(() => import('./pages/Developers'))
 const AppDemo = lazy(() => import('./pages/AppDemo'))
 const SignIn = lazy(() => import('./pages/SignIn'))
+const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const SocialHub = lazy(() => import('./pages/SocialHub'))
 const Circles = lazy(() => import('./pages/app/Circles'))
@@ -82,6 +83,9 @@ export default function App() {
           <Route path="/app" element={<AppDemo />} />
           {/* /join is the public entry point; ?ref= carries the inviter's code. */}
           <Route path="/join" element={<SignIn />} />
+          {/* Both halves of a forgotten password: no token asks for a link,
+              ?token= from the mail sets the new password. */}
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/dashboard" element={<Dashboard />} />
           {/* The member's real feed. /feeds stays the public marketing page. */}
           <Route path="/hub" element={<SocialHub />} />

@@ -216,3 +216,25 @@ class PasswordChangeIn(BaseModel):
     @classmethod
     def _new_password(cls, value: str) -> str:
         return check_password_strength(value)
+
+
+class PasswordResetRequestIn(BaseModel):
+    """"I forgot my password." Nothing but the address.
+
+    The answer is the same whether or not the address belongs to anyone, so
+    this endpoint cannot be used to find out who has an account here.
+    """
+
+    email: EmailStr
+
+
+class PasswordResetConfirmIn(BaseModel):
+    """The link, and what to set."""
+
+    token: str = Field(min_length=20, max_length=200)
+    new_password: str = Field(min_length=PASSWORD_MIN, max_length=PASSWORD_MAX)
+
+    @field_validator("new_password")
+    @classmethod
+    def _new_password(cls, value: str) -> str:
+        return check_password_strength(value)

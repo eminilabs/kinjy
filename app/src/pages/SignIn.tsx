@@ -234,6 +234,14 @@ export default function SignIn() {
                 required
               />
               {passwordError && <span className="mt-1.5 block text-xs text-red-300">{passwordError}</span>}
+              {mode === 'signin' && (
+                <Link
+                  to="/reset-password"
+                  className="mt-2 inline-block text-xs text-text-mid hover:text-gold"
+                >
+                  {t('signin.forgotPassword')}
+                </Link>
+              )}
             </label>
 
             {mode === 'signup' && (

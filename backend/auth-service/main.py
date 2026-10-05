@@ -5,6 +5,7 @@ resolver every money service depends on.
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 
 import httpx
@@ -16,7 +17,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session as OrmSession
 
-from common import events, security, settings
+from common import events, mailer, security, settings
 from common.auth import AdminUser, CurrentUser, MaybeUser
 from common.database import get_db
 from common.ids import new_id
@@ -419,6 +420,178 @@ async def change_password(
         "sessions_ended": ended,
         "signed_out_here": keep_session_id is None,
     }
+
+
+# --- Forgotten passwords ------------------------------------------------------
+#
+# The one flow that has to reach somebody who cannot sign in, which is why it is
+# the only thing on the platform that sends mail.
+#
+# How long a link lives. Long enough to survive a slow mail server and somebody
+# reading their mail on the way home; short enough that a message left open on a
+# shared screen stops being a key fairly soon.
+RESET_TTL_MINUTES = 60
+# Per address and per asking IP, over the same window. Both cap how much mail
+# one source can cause: the address limit stops a member being mail-bombed
+# through our server, the IP limit stops one caller doing it to many members at
+# once. Neither limits probing for *unknown* addresses, because an address with
+# no account creates no row - that is what the identical answers are for.
+RESET_MAX_PER_EMAIL = 3
+RESET_MAX_PER_IP = 10
+RESET_WINDOW_MINUTES = 60
+
+
+def _reset_token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+@app.get("/auth/password/reset-available", tags=["auth"])
+def reset_available():
+    """Whether a reset can actually be delivered.
+
+    The sign-in page asks before offering the link. Without this it would offer
+    a form that can only ever answer "not set up", which reads as a fault on the
+    member's side. Says nothing about any account - only whether this
+    installation can send mail at all.
+    """
+    return {"available": mailer.configured()}
+
+
+@app.post("/auth/password/reset-request", status_code=202, tags=["auth"])
+def request_password_reset(
+    payload: schemas.PasswordResetRequestIn, request: Request, db: OrmSession = Depends(get_db),
+):
+    """Ask for a reset link.
+
+    Answers 202 whether or not the address belongs to an account, and whether or
+    not the send succeeded. That is the point: any difference - a status code, a
+    message, a noticeably faster reply - turns this into a way of asking "does
+    this person have a Kinjy account", which for some members is a dangerous
+    question to let a stranger answer.
+
+    The one thing it does not hide is whether the platform can send mail at all,
+    because that is true of everybody equally and a member deserves to know they
+    are waiting for nothing.
+    """
+    if not mailer.configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Password reset is not available on this installation yet.",
+        )
+
+    ip, agent = _client(request)
+    email = payload.email.lower().strip()
+    now = _now()
+    since = now - timedelta(minutes=RESET_WINDOW_MINUTES)
+
+    user = db.scalar(select(models.User).where(func.lower(models.User.email) == email))
+
+    # Counted before the account is known to exist, so a rate-limited address
+    # and an unknown one still answer the same way.
+    by_ip = 0
+    if ip:
+        by_ip = db.scalar(
+            select(func.count()).select_from(models.PasswordReset)
+            .where(models.PasswordReset.requested_ip == ip,
+                   models.PasswordReset.created_at >= since)
+        ) or 0
+
+    if user is not None and user.status != "deleted" and by_ip < RESET_MAX_PER_IP:
+        by_email = db.scalar(
+            select(func.count()).select_from(models.PasswordReset)
+            .where(models.PasswordReset.user_id == user.id, models.PasswordReset.created_at >= since)
+        ) or 0
+        if by_email < RESET_MAX_PER_EMAIL:
+            # A new link retires the ones before it: two live links are two
+            # chances for the wrong person, and the member is looking at the
+            # newest mail anyway.
+            for old in db.scalars(
+                select(models.PasswordReset).where(
+                    models.PasswordReset.user_id == user.id,
+                    models.PasswordReset.used_at.is_(None),
+                    models.PasswordReset.invalidated_at.is_(None),
+                )
+            ).all():
+                old.invalidated_at = now
+
+            token = secrets.token_urlsafe(32)
+            db.add(models.PasswordReset(
+                id=new_id("pwr"),
+                user_id=user.id,
+                token_hash=_reset_token_hash(token),
+                expires_at=now + timedelta(minutes=RESET_TTL_MINUTES),
+                requested_ip=ip,
+                requested_user_agent=agent,
+            ))
+            db.commit()
+
+            link = f"{settings.FRONTEND_URL.rstrip('/')}/reset-password?token={token}"
+            try:
+                mailer.send(user.email, "Reset your Kinjy password",
+                            mailer.password_reset_body(user.display_name, link))
+            except mailer.MailError:
+                # Already logged, without the address. The caller is told
+                # nothing: a failure that only happens for real accounts would
+                # be exactly the signal this endpoint refuses to give.
+                log.error("reset mail could not be sent for an account")
+
+    return {"status": "accepted",
+            "note": "If that address has an account, a link is on its way."}
+
+
+@app.post("/auth/password/reset", tags=["auth"])
+async def confirm_password_reset(
+    payload: schemas.PasswordResetConfirmIn, request: Request, db: OrmSession = Depends(get_db),
+):
+    """Set a new password from a link.
+
+    Every session goes, with no exception for the caller: whoever is doing this
+    could not sign in a minute ago, so there is no session of theirs worth
+    keeping, and any that exist belong to whoever had the account before.
+    """
+    row = db.scalar(
+        select(models.PasswordReset)
+        .where(models.PasswordReset.token_hash == _reset_token_hash(payload.token))
+    )
+    # One answer for every way of being wrong - unknown, used, expired,
+    # superseded - so a caller cannot sort real tokens from invented ones.
+    if row is None or not row.usable:
+        raise HTTPException(
+            status_code=400,
+            detail="This link has expired or has already been used. Ask for a new one.",
+        )
+
+    user = db.get(models.User, row.user_id)
+    if user is None or user.status == "deleted":
+        raise HTTPException(status_code=400, detail="This link is no longer valid.")
+
+    now = _now()
+    user.password_hash = security.hash_password(payload.new_password)
+    user.password_changed_at = now
+    row.used_at = now
+
+    ended = 0
+    for session in user.sessions:
+        if session.active:
+            session.revoked_at = now
+            ended += 1
+
+    # Signing in again cancels a pending deletion elsewhere in this service; a
+    # member recovering an account is doing the same thing by another door.
+    if user.status in ("deactivated", "pending_deletion"):
+        user.status = "active"
+        user.deactivated_at = None
+        user.deletion_requested_at = None
+        user.deletion_effective_at = None
+
+    _log_event(db, user.id, "password_reset", request)
+    db.commit()
+
+    await events.publish(
+        "user.password_reset", {"user_id": user.id, "sessions_ended": ended, "at": now.isoformat()},
+    )
+    return {"status": "reset", "sessions_ended": ended,
+            "note": "Sign in with your new password."}
 
 
 @app.get("/auth/passkeys", response_model=list[schemas.PasskeyOut], tags=["passkeys"])

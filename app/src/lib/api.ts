@@ -1870,6 +1870,35 @@ export const kaluta = {
       return result.user
     },
     me: () => api.get<AuthUser>('/auth/me'),
+
+    /**
+     * Whether a reset link can actually be delivered.
+     *
+     * Asked before the form is offered: an installation with no mail configured
+     * can only answer "not available", and finding that out after typing your
+     * address reads as a fault on your side.
+     */
+    resetAvailable: () =>
+      api.get<{ available: boolean }>('/auth/password/reset-available', { auth: false }),
+
+    /**
+     * Ask for a reset link. Succeeds whether or not the address has an account -
+     * the server will not say, and neither will this.
+     */
+    requestPasswordReset: (email: string) =>
+      api.post<{ status: string; note: string }>(
+        '/auth/password/reset-request', { email }, { auth: false },
+      ),
+
+    /** Set a new password from the link. Every session is signed out, this one included. */
+    async resetPassword(token: string, new_password: string) {
+      const result = await api.post<{ status: string; sessions_ended: number }>(
+        '/auth/password/reset', { token, new_password }, { auth: false },
+      )
+      // Whatever was stored belongs to the session the server has just revoked.
+      tokens.clear()
+      return result
+    },
     async logout() {
       const refresh_token = tokens.refresh
       // Revoke the session server-side so the device disappears from the
