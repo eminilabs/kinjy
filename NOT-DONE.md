@@ -555,15 +555,19 @@ What the tests do not cover:
   a one-hour single-use link, a new password, every session signed out. It is
   also what answers a legacy hash - a member whose imported hash cannot verify
   can get back in without anybody editing the database by hand.
-- **But nothing can be sent until SMTP is configured.** Production has no
-  SMTP_HOST or SMTP_FROM, so the endpoint reports itself unavailable and the
-  page says so rather than offering a form that cannot work. The flow is inert
-  on kinjy.com until those are in the server's .env, and until then the only
-  remedy for a member who cannot sign in is still setting a password by hand.
-- **No mail has ever been sent from production.** The whole path - DNS, SPF,
-  DKIM, whether the host is allowed to send, whether Gmail keeps it out of spam
-  - is untested outside a local sink. Expect the first real send to be the one
-  that finds the problem.
+- ~~But nothing can be sent until SMTP is configured.~~ Configured on 05/10:
+  Resend over SMTP, from no-reply@kinjy.com, on a key whose account has
+  kinjy.com verified. The flow is live on kinjy.com.
+- ~~No mail has ever been sent from production.~~ One real message was sent on
+  05/10 to the owner's own Gmail address and Resend reported it `delivered`. So
+  the path works end to end: DNS, DKIM and the handoff. What that single send
+  does *not* prove is which folder it landed in, or how other providers treat
+  it - one delivered message to one Gmail account is a working path, not a
+  reputation.
+- **The sending account is shared with Digital Shopping Mall.** Its reset mail
+  goes out on the same Resend key, so a bounce or spam complaint earned there
+  costs Kinjy reputation too, and one address was already in a suppressed state
+  on that account. Worth separating if either platform starts sending volume.
 - **No Kinjy address has ever been verified.** `email_verified` is on the model
   and is never set to true anywhere, so a reset link goes to whatever address
   was typed at registration or imported from DSM. That is the usual model and is
