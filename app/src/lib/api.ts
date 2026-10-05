@@ -155,6 +155,8 @@ export const api = {
     request<T>(path, { ...options, method: 'POST', body }),
   patch: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>(path, { ...options, method: 'PATCH', body }),
+  put: <T>(path: string, body?: unknown, options?: RequestOptions) =>
+    request<T>(path, { ...options, method: 'PUT', body }),
   delete: <T>(path: string, options?: RequestOptions) =>
     request<T>(path, { ...options, method: 'DELETE' }),
 }
@@ -730,7 +732,28 @@ export interface Message {
   reply_to_id?: string | null
   /** True when the original has expired. Its content is never sent. */
   reply_to_deleted?: boolean
+  /** Who put which catalogue sticker under this message. Members only. */
+  reactions?: Reaction[]
   created_at: string
+}
+
+export interface Reaction {
+  user_id: string
+  sticker_id: string
+}
+
+export interface Sticker {
+  /** `<pack>.<name>`; the image is /stickers/<pack>/<name>.svg, see lib/stickers.ts. */
+  id: string
+  pack: string
+  /** What a screen reader announces. */
+  name: string
+  keywords: string[]
+}
+
+export interface StickerCatalogue {
+  packs: { id: string; name: string }[]
+  items: Sticker[]
 }
 
 export interface Person {
@@ -1606,6 +1629,19 @@ export const kaluta = {
           client_id: message.clientId,
           reply_to_id: message.replyToId || undefined,
         },
+      ),
+    /** The sticker catalogue: the only ids the server accepts as a reaction. */
+    stickers: () => api.get<StickerCatalogue>('/stickers'),
+    /** Put a catalogue sticker under a message, replacing this member's previous one. */
+    react: (conversationId: string, messageId: string, stickerId: string) =>
+      api.put<{ message_id: string; sticker_id: string }>(
+        `/conversations/${conversationId}/messages/${messageId}/reaction`,
+        { sticker_id: stickerId },
+      ),
+    /** Take this member's reaction back. */
+    unreact: (conversationId: string, messageId: string) =>
+      api.delete<{ message_id: string; sticker_id: null }>(
+        `/conversations/${conversationId}/messages/${messageId}/reaction`,
       ),
     /** The thread is on screen: record it as read and tell the room. */
     markRead: (conversationId: string) =>

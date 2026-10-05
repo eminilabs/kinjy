@@ -8,6 +8,8 @@ export interface RealtimeEvent {
   message_id?: string
   /** chat: the message a new message answers (id only) */
   reply_to_id?: string | null
+  /** chat: a reaction event; null means the member took it back */
+  sticker_id?: string | null
   sender_id?: string
   encrypted?: boolean
   body?: string | null
