@@ -1,6 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Clock, Search, Smile } from 'lucide-react'
-import FloatingPanel from '@/components/social/FloatingPanel'
 import type { Sticker, StickerCatalogue } from '@/lib/api'
 import { loadRecents, matchesQuery, rememberRecent, stickerUrl } from '@/lib/stickers'
 import { cn } from '@/lib/utils'
@@ -208,52 +207,5 @@ export default function StickerPanel({
         })}
       </div>
     </div>
-  )
-}
-
-/**
- * The composer's sticker button: opens the panel above the message field and
- * sends the chosen sticker. Focus returns to the button when the panel closes.
- */
-export function StickerButton({
-  catalogue,
-  onSend,
-}: {
-  catalogue: StickerCatalogue | null
-  onSend: (stickerId: string) => void
-}) {
-  const [anchor, setAnchor] = useState<DOMRect | null>(null)
-  const button = useRef<HTMLButtonElement>(null)
-  const close = () => {
-    setAnchor(null)
-    button.current?.focus()
-  }
-  return (
-    <>
-      <button
-        ref={button}
-        type="button"
-        onClick={(e) => (anchor ? close() : setAnchor(e.currentTarget.getBoundingClientRect()))}
-        disabled={!catalogue}
-        aria-label="Stickers"
-        aria-haspopup="dialog"
-        aria-expanded={Boolean(anchor)}
-        title={catalogue ? 'Stickers' : 'Stickers are unavailable right now'}
-        className="shrink-0 rounded-full border border-white/12 p-2.5 text-text-mid hover:border-gold/40 hover:text-gold-soft disabled:opacity-40"
-      >
-        <Smile size={15} aria-hidden="true" />
-      </button>
-      {anchor && catalogue && (
-        <FloatingPanel anchor={anchor} label="Choose a sticker" onClose={close}>
-          <StickerPanel
-            catalogue={catalogue}
-            onPick={(id) => {
-              onSend(id)
-              close()
-            }}
-          />
-        </FloatingPanel>
-      )}
-    </>
   )
 }
