@@ -112,10 +112,20 @@ export default function Composer({
   /** Hide the inline card — the feed shows a floating button instead once scrolled. */
   collapsed = false,
   openSignal = 0,
+  community,
 }: {
   onPosted: (post: Post) => void
   collapsed?: boolean
   openSignal?: number
+  /**
+   * Post into this community instead of choosing an audience.
+   *
+   * Inside a group the audience is not a question: the post goes to the group.
+   * So the selector is replaced by the group's name, which also tells the
+   * member where what they are writing will land - the one thing worth saying
+   * when the same composer serves several places.
+   */
+  community?: { id: string; name: string }
 }) {
   const { i18n } = useTranslation()
   const { user } = useAuth()
@@ -131,7 +141,7 @@ export default function Composer({
   // served only against a ticket, so it would show as a broken image until posted.
   const [media, setMedia] = useState<Array<UploadedMedia & { previewUrl?: string }>>([])
   const [uploading, setUploading] = useState(false)
-  const [visibility, setVisibility] = useState<string>('public')
+  const [visibility, setVisibility] = useState<string>(community ? 'community' : 'public')
   const [circleId, setCircleId] = useState('')
   const [extras, setExtras] = useState<string[]>([])
   const [provenance, setProvenance] = useState<string>('original')
@@ -154,8 +164,12 @@ export default function Composer({
   // A circle made on the Circles page is offered here without a reload.
   useEffect(() => onChange('circles', circles.reload), [circles.reload])
 
-  const audienceLabel =
-    visibility === 'circle'
+  // In a community the button has to name the community. Left to the audience
+  // state it read "Post to Anyone" on a post going to one group, which is both
+  // wrong and the kind of wrong that costs somebody their privacy once.
+  const audienceLabel = community
+    ? community.name
+    : visibility === 'circle'
       ? (circles.data ?? []).find((c) => c.id === circleId)?.name ?? 'a circle'
       : visibility === 'followers'
         ? 'Followers'
@@ -238,7 +252,7 @@ export default function Composer({
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!canPost) return
-    if (visibility === 'circle' && !circleId) {
+    if (!community && visibility === 'circle' && !circleId) {
       setError('Pick which circle this goes to.')
       return
     }
@@ -261,8 +275,11 @@ export default function Composer({
             ? `<h2>${headline.trim().replace(/[<>&]/g, '')}</h2>${body}`
             : body.trim(),
         format: kind,
-        visibility,
-        circle_id: visibility === 'circle' ? circleId : undefined,
+        // In a community the target is fixed and is not the member's to change:
+        // whatever the audience state happens to hold, this post belongs here.
+        visibility: community ? 'community' : visibility,
+        community_id: community?.id,
+        circle_id: !community && visibility === 'circle' ? circleId : undefined,
         provenance,
         mature,
         lang,
@@ -386,25 +403,32 @@ export default function Composer({
               <div className="min-w-0">
                 <p className={cn('truncate text-sm font-semibold', tok.text)}>{user?.display_name}</p>
                 <div className="mt-1 flex flex-wrap gap-1">
-                  {VISIBILITY.map((v) => (
-                    <button
-                      key={v.id}
-                      type="button"
-                      onClick={() => setVisibility(v.id)}
-                      className={cn(
-                        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.68rem] font-semibold',
-                        visibility === v.id ? 'bg-gold/15 text-gold-soft' : cn(tok.low, tok.hoverBg),
-                      )}
-                    >
-                      <v.icon size={10} aria-hidden="true" />
-                      {v.label}
-                    </button>
-                  ))}
+                  {community ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 px-2 py-0.5 text-[0.68rem] font-semibold text-gold-soft">
+                      <Users size={10} aria-hidden="true" />
+                      Posting in {community.name}
+                    </span>
+                  ) : (
+                    VISIBILITY.map((v) => (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => setVisibility(v.id)}
+                        className={cn(
+                          'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.68rem] font-semibold',
+                          visibility === v.id ? 'bg-gold/15 text-gold-soft' : cn(tok.low, tok.hoverBg),
+                        )}
+                      >
+                        <v.icon size={10} aria-hidden="true" />
+                        {v.label}
+                      </button>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
 
-            {visibility === 'circle' && (
+            {!community && visibility === 'circle' && (
               <div className="mt-3">
                 {(circles.data ?? []).length === 0 ? (
                   <p className="rounded-card-sm border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">

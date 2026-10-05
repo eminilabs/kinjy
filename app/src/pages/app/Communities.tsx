@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Globe, Lock, Plus, Search, UsersRound } from 'lucide-react'
 import AppShell from '@/components/app/AppShell'
+import CommunityView from '@/components/community/CommunityView'
 import MemberQueue from '@/components/community/MemberQueue'
 import { useApi } from '@/hooks/useApi'
 import { ApiError, kaluta, type Community } from '@/lib/api'
@@ -23,6 +24,9 @@ export default function Communities() {
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [managing, setManaging] = useState<string | null>(null)
+  // Which community is open. A URL would be better and is the obvious next
+  // step; this keeps the change to the directory rather than the route table.
+  const [open, setOpen] = useState<string | null>(null)
 
   const create = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -54,6 +58,21 @@ export default function Communities() {
       // A paid community answers 402; that is information, not a failure.
       setNote(err instanceof ApiError ? err.message : 'Could not join')
     }
+  }
+
+  if (open) {
+    return (
+      <AppShell
+        title="Communities"
+        subtitle="A group you joined — what is posted here, and the box to add to it."
+      >
+        <CommunityView
+          communityId={open}
+          onBack={() => setOpen(null)}
+          onChanged={() => list.reload()}
+        />
+      </AppShell>
+    )
   }
 
   return (
@@ -163,6 +182,13 @@ export default function Communities() {
                 <p className="mt-3 line-clamp-2 text-sm text-text-mid">{community.description}</p>
               )}
               <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setOpen(community.id)}
+                  className="rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-2 text-xs font-bold text-ink"
+                >
+                  Open
+                </button>
                 <button
                   type="button"
                   onClick={() => join(community)}

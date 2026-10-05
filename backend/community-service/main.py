@@ -275,6 +275,42 @@ def join(community_id: str, principal: CurrentUser, db: OrmSession = Depends(get
     return {"joined": status == "active", "status": status}
 
 
+@app.post("/communities/{community_id}/leave", tags=["communities"])
+def leave(community_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """Leave a community.
+
+    A group you can join and not leave is not a group. There was no way out
+    short of asking an owner to ban you, which is a humiliating way to express
+    "this is not for me".
+
+    The owner cannot leave: the community would be left with nobody answerable
+    for it, and the honest options are handing it to somebody else or deleting
+    it, neither of which this pretends to do. Leaving also withdraws a pending
+    request, because changing your mind before the answer comes is the same
+    act.
+    """
+    community = db.get(models.Community, community_id)
+    if community is None:
+        raise HTTPException(status_code=404, detail="Community not found")
+    membership = _membership(db, community_id, principal.user_id)
+    if membership is None:
+        return {"left": True, "already": True}
+    if membership.role == "owner":
+        raise HTTPException(
+            status_code=403,
+            detail="The owner cannot leave. Hand the community to someone else first.",
+        )
+    # A ban is not a membership to resign from - letting someone leave would
+    # clear the row and let them walk back in.
+    if membership.status == "banned":
+        raise HTTPException(status_code=403, detail="You are banned from this community")
+    if membership.status == "active":
+        community.members_count = max(0, community.members_count - 1)
+    db.delete(membership)
+    db.commit()
+    return {"left": True}
+
+
 # --- governance ------------------------------------------------------------
 #
 # "Real governance" was a promise with no mechanism: a private community turned
@@ -831,3 +867,59 @@ def knowledge(forum_id: str, q: str | None = None, limit: int = 20, db: OrmSessi
             for r in rows
         ]
     }
+
+
+# ---------------------------------------------------------------------------
+# Internal — consumed by social-service, never exposed through the gateway
+# ---------------------------------------------------------------------------
+#
+# Posts live in social-service and membership lives here, so the two have to
+# talk for a community to behave like a group at all: social-service cannot
+# decide who may read a community post without knowing who is in the community,
+# and it must not keep its own copy of that - a stale copy of a membership list
+# is somebody reading a group they were removed from.
+
+@app.get("/internal/member-communities/{user_id}", tags=["internal"])
+def member_communities(user_id: str, db: OrmSession = Depends(get_db)):
+    """Every community this member actually belongs to.
+
+    Active memberships only. A pending request is not membership - that is the
+    whole point of a private community - and a banned row is the opposite of it.
+    """
+    ids = db.scalars(
+        select(models.Membership.community_id).where(
+            models.Membership.user_id == user_id,
+            models.Membership.status == "active",
+        )
+    ).all()
+    return {"communities": list(ids)}
+
+
+@app.get("/internal/communities/{community_id}", tags=["internal"])
+def community_summary(community_id: str, db: OrmSession = Depends(get_db)):
+    """What another service needs to judge access: the kind, and who runs it.
+
+    No member list: a caller that wants to know whether one person is in one
+    community should ask that, not receive everybody's name to search through.
+    """
+    community = db.get(models.Community, community_id)
+    if community is None:
+        raise HTTPException(status_code=404, detail="Community not found")
+    return {
+        "id": community.id,
+        "slug": community.slug,
+        "name": community.name,
+        "kind": community.kind,
+        "owner_id": community.owner_id,
+        "members_count": community.members_count,
+    }
+
+
+@app.get("/internal/membership/{community_id}/{user_id}", tags=["internal"])
+def membership_of(community_id: str, user_id: str, db: OrmSession = Depends(get_db)):
+    """One person, one community. Answers for a community that does not exist
+    too, so a caller cannot tell a missing community from a non-membership."""
+    row = _membership(db, community_id, user_id)
+    if row is None:
+        return {"member": False, "role": None, "status": None}
+    return {"member": row.status == "active", "role": row.role, "status": row.status}

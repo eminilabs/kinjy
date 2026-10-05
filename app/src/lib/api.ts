@@ -503,6 +503,8 @@ export interface NewPost {
   format?: string
   visibility?: string
   circle_id?: string
+  /** Required when visibility is 'community'; the server checks you are a member. */
+  community_id?: string
   topics?: string[]
   lang?: string
   country?: string
@@ -1534,6 +1536,22 @@ export const kaluta = {
     create: (input: { name: string; description?: string; kind?: string; price_usd?: number; country?: string }) =>
       api.post<{ id: string; slug: string; kind: string }>('/communities', { kind: 'public', ...input }),
     join: (id: string) => api.post<{ joined: boolean; status: string }>(`/communities/${id}/join`),
+    /** Leave, or withdraw a request that has not been answered. */
+    leave: (id: string) => api.post<{ left: boolean }>(`/communities/${id}/leave`),
+    /**
+     * What has been posted inside a community.
+     *
+     * Served by social-service, where posts live, which is why the path is
+     * under /feed rather than /communities: the gateway sends /communities to
+     * community-service, and membership and posts are owned by different
+     * services on purpose.
+     */
+    feed: (id: string, limit = 20, offset = 0) =>
+      api.get<{
+        community: { id: string; name: string; slug: string; kind: string; members_count: number }
+        total: number
+        items: Post[]
+      }>(`/feed/community/${id}?limit=${limit}&offset=${offset}`, { auth: false }),
   },
 
   forums: {

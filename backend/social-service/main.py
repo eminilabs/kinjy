@@ -31,6 +31,7 @@ log = logging.getLogger("social-service")
 USER_URL = "http://user-service:8000"
 MEDIA_URL = "http://media-service:8000"
 MESSAGING_URL = "http://messaging-service:8000"
+COMMUNITY_URL = "http://community-service:8000"
 
 
 def live(_topic: str, _event: str, **data) -> None:
@@ -615,8 +616,10 @@ def _context(db: OrmSession, principal) -> ranking.Context:
 async def create_post(payload: PostIn, principal: CurrentUser, db: OrmSession = Depends(get_db)):
     if payload.visibility == "circle":
         _require_own_circle(principal.user_id, payload.circle_id)
-    if payload.visibility == "community" and not payload.community_id:
-        raise HTTPException(status_code=400, detail="A community post needs community_id")
+    if payload.visibility == "community":
+        if not payload.community_id:
+            raise HTTPException(status_code=400, detail="A community post needs community_id")
+        _require_membership(principal.user_id, payload.community_id)
     if not payload.body.strip() and not payload.media:
         raise HTTPException(status_code=400, detail="A post needs a body or media")
 
@@ -626,6 +629,11 @@ async def create_post(payload: PostIn, principal: CurrentUser, db: OrmSession = 
     # a stray pointer the audience rule might one day read.
     if payload.visibility != "circle":
         data["circle_id"] = None
+    # Same reasoning for the community pointer: left on a public post it is a
+    # stray id the audience rule might one day read, and a post that is public
+    # has no business claiming to belong to a group.
+    if payload.visibility != "community":
+        data["community_id"] = None
     post = models.Post(
         id=new_id("pst"),
         author_id=principal.user_id,
@@ -1463,16 +1471,19 @@ def delete_post(
 
 @dataclass(frozen=True)
 class Audience:
-    """Whose restricted posts a viewer may read, as user-service answers it.
+    """Whose restricted posts a viewer may read, as the other services answer it.
 
-    ``following`` opens followers-only posts and ``circles`` opens posts shared
-    to those circles. Empty for a visitor — and empty when user-service cannot
-    be reached, so an outage hides restricted posts instead of showing them.
+    ``following`` opens followers-only posts, ``circles`` opens posts shared to
+    those circles, and ``communities`` opens the posts written inside groups
+    this member has joined. Empty for a visitor — and empty when the service
+    that owns the answer cannot be reached, so an outage hides restricted posts
+    instead of showing them.
     """
 
     viewer: str | None = None
     following: frozenset[str] = frozenset()
     circles: frozenset[str] = frozenset()
+    communities: frozenset[str] = frozenset()
 
 
 def _viewer_audience(viewer: str | None) -> Audience:
@@ -1483,14 +1494,36 @@ def _viewer_audience(viewer: str | None) -> Audience:
     """
     if not viewer:
         return Audience()
+    following: frozenset[str] = frozenset()
+    circles: frozenset[str] = frozenset()
     try:
         response = httpx.get(f"{USER_URL}/internal/viewer-audience/{viewer}", timeout=4)
         response.raise_for_status()
         data = response.json()
-        return Audience(viewer, frozenset(data.get("following", [])), frozenset(data.get("circles", [])))
+        following = frozenset(data.get("following", []))
+        circles = frozenset(data.get("circles", []))
     except Exception as exc:
         log.warning("audience lookup failed for %s: %s", viewer, exc)
-        return Audience(viewer)
+    # Asked separately, and allowed to fail on its own: a community-service
+    # outage should cost this member their group posts, not their whole feed.
+    # Either failure narrows what is shown; neither widens it.
+    return Audience(viewer, following, circles, _viewer_communities(viewer))
+
+
+def _viewer_communities(viewer: str) -> frozenset[str]:
+    """The communities this member belongs to, from the service that owns them.
+
+    Not cached and not copied into this service's tables. A membership list
+    that lags is somebody still reading a group they were removed from, which
+    is the failure a group must not have.
+    """
+    try:
+        response = httpx.get(f"{COMMUNITY_URL}/internal/member-communities/{viewer}", timeout=4)
+        response.raise_for_status()
+        return frozenset(response.json().get("communities", []))
+    except Exception as exc:
+        log.warning("community lookup failed for %s: %s", viewer, exc)
+        return frozenset()
 
 
 def _can_see(post: models.Post, audience: Audience) -> bool:
@@ -1498,8 +1531,12 @@ def _can_see(post: models.Post, audience: Audience) -> bool:
 
     The single-post form of :func:`_audience_clause`. The two are one rule
     spelled twice — once for Python, once for SQL — and sit side by side so
-    they cannot drift. Community posts are read through their community, not
-    here, so outside it only their author sees them.
+    they cannot drift.
+
+    A community post is readable by the members of that community, which is
+    what makes a community a group rather than a mailing list nobody receives:
+    before this, such a post was addressed to a community and then visible to
+    its author alone.
     """
     if post.visibility == "public":
         return True
@@ -1511,6 +1548,8 @@ def _can_see(post: models.Post, audience: Audience) -> bool:
         return post.author_id in audience.following
     if post.visibility == "circle":
         return post.circle_id in audience.circles
+    if post.visibility == "community":
+        return post.community_id in audience.communities
     return False
 
 
@@ -1525,7 +1564,56 @@ def _audience_clause(audience: Audience):
         )
     if audience.circles:
         clauses.append(and_(models.Post.visibility == "circle", models.Post.circle_id.in_(audience.circles)))
+    if audience.communities:
+        clauses.append(
+            and_(models.Post.visibility == "community",
+                 models.Post.community_id.in_(audience.communities))
+        )
     return or_(*clauses)
+
+
+def _require_membership(author_id: str, community_id: str) -> None:
+    """A post may only be addressed to a community its author has joined.
+
+    Asked of community-service, which owns membership. Fails closed for the
+    same reason the circle check does: without this, `community_id` was a free
+    text field and anybody could write into any group - including a private one
+    they had been refused, or a secret one whose id they guessed.
+
+    A pending request is not membership. That distinction is the only thing a
+    private community has.
+    """
+    try:
+        response = httpx.get(
+            f"{COMMUNITY_URL}/internal/membership/{community_id}/{author_id}", timeout=4)
+    except Exception as exc:
+        log.warning("membership lookup failed for %s in %s: %s", author_id, community_id, exc)
+        raise HTTPException(
+            status_code=503, detail="Could not check that community right now. Try again.")
+    if response.status_code != 200:
+        raise HTTPException(status_code=404, detail="Community not found")
+    row = response.json()
+    if not row.get("member"):
+        if row.get("status") == "pending":
+            raise HTTPException(
+                status_code=403, detail="Your request to join is still waiting to be answered")
+        if row.get("status") == "banned":
+            raise HTTPException(status_code=403, detail="You cannot post in this community")
+        # Not a member and never asked. Says "join first" rather than "no such
+        # community", because a public community is not a secret.
+        raise HTTPException(status_code=403, detail="Join this community before posting in it")
+
+
+def _community_summary(community_id: str) -> dict:
+    try:
+        response = httpx.get(f"{COMMUNITY_URL}/internal/communities/{community_id}", timeout=4)
+    except Exception as exc:
+        log.warning("community lookup failed for %s: %s", community_id, exc)
+        raise HTTPException(
+            status_code=503, detail="Could not reach that community right now. Try again.")
+    if response.status_code != 200:
+        raise HTTPException(status_code=404, detail="Community not found")
+    return response.json()
 
 
 def _require_own_circle(author_id: str, circle_id: str | None) -> None:
@@ -1580,6 +1668,73 @@ def _visible_posts(principal, age, audience: Audience):
     # so restricted rows are never candidates in the first place.
     stmt = agefilter.restrict_query(stmt, age)
     return stmt.where(_audience_clause(audience))
+
+
+@app.get("/feed/community/{community_id}", tags=["feed"])
+def community_feed(
+    community_id: str,
+    principal: MaybeUser,
+    limit: int = 20,
+    offset: int = 0,
+    db: OrmSession = Depends(get_db),
+):
+    """What has been posted inside one community.
+
+    Lives here rather than in community-service because posts live here, and
+    under /feed because the gateway sends /api/communities to the other
+    service. It is the surface a group needs and did not have: posts addressed
+    to a community were excluded from every feed and listed by nothing, so they
+    went in and were seen by their author alone.
+
+    Who may read it follows the kind of community, which is the promise its
+    members joined under:
+
+    * **public** - anyone, signed in or not. That is what public means, and a
+      public group nobody can read before joining cannot be judged worth
+      joining.
+    * **private, secret, paid** - active members only. A pending request is not
+      membership, which is the one thing a private community has.
+
+    Age filtering is applied exactly as on every other surface, before paging.
+    A community is not a way around it.
+    """
+    viewer = principal.user_id if principal else None
+    community = _community_summary(community_id)
+
+    if community["kind"] != "public":
+        if viewer is None:
+            # 404, not 403: for a secret community, "you may not read this"
+            # confirms it exists to whoever guessed the id.
+            raise HTTPException(status_code=404, detail="Community not found")
+        if community_id not in _viewer_communities(viewer):
+            raise HTTPException(status_code=404, detail="Community not found")
+
+    prefs = _viewer_prefs(viewer)
+    age = _viewer_age(viewer)
+    stmt = select(models.Post).where(
+        models.Post.community_id == community_id,
+        models.Post.visibility == "community",
+        models.Post.status == "published",
+    )
+    stmt = agefilter.restrict_query(stmt, age)
+
+    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    rows = db.scalars(
+        stmt.order_by(models.Post.created_at.desc()).limit(min(limit, 50)).offset(offset)
+    ).all()
+    authors = _resolve_authors(_author_ids(db, list(rows)))
+    reposted = _reposted_by(db, viewer, list(rows))
+    items = [
+        _apply_prefs(_post_out(p, db, viewer=viewer, authors=authors, reposted=reposted), prefs)
+        for p in rows
+    ]
+    return {
+        "community": {"id": community["id"], "name": community["name"],
+                      "slug": community["slug"], "kind": community["kind"],
+                      "members_count": community["members_count"]},
+        "total": total,
+        "items": agefilter.filter_items(db, age, items),
+    }
 
 
 class ReadableIn(BaseModel):
