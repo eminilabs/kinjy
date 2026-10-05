@@ -548,3 +548,25 @@ What the tests do not cover:
   `up -d --build media-service` recreated its dependencies too, so the whole
   platform took a short database blip for a one-service fix. Everything came
   back healthy (13/13), but a targeted restart is not as targeted as it looks.
+
+## Changing a password is not recovering one (05/10)
+
+- **There is still no "forgot password" flow.** A member can now change a
+  password they know; a member who has forgotten theirs has no way back in and
+  no email reset to ask for. That gap matters more than it did yesterday,
+  because 14,791 imported members have never typed their Kinjy password and
+  some will not remember a DSM one.
+- **It is also the only answer for a legacy hash.** If any imported hash turns
+  out not to be bcrypt, those members cannot sign in *and* cannot use the change
+  form, which requires the current password. Until a reset exists, the only
+  remedy is setting a password for them by hand.
+- **An access token outlives the change by up to 30 minutes.** Revoking the
+  sessions stops renewal, but a token already issued keeps working until it
+  expires, so somebody who had the account is out within the half hour rather
+  than at the moment the member presses the button. Closing that properly means
+  checking `password_changed_at` against the token's `iat` on each request.
+- **Nobody is told their password changed.** There is no email or notification,
+  so a change made by somebody else passes unannounced. The endpoint publishes
+  `user.password_changed` for a notifier that does not exist yet.
+- **The new panel is in English only**, like the rest of the security screen.
+  It joins the pages still waiting on the translation pass.
