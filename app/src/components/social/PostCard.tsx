@@ -27,8 +27,8 @@ import Comments from './Comments'
 import MemberAvatar from './MemberAvatar'
 import KnownActors from './KnownActors'
 import LinkPreview, { firstLink } from './LinkPreview'
+import MediaGrid from './MediaGrid'
 import MediaLightbox from './MediaLightbox'
-import VideoPlayer from './VideoPlayer'
 import Reactions from './Reactions'
 import {
   Dialog,
@@ -553,67 +553,16 @@ export default function PostCard({
 
       <KnownActors actors={target.known_actors} />
 
-      {/* Attached media — one full-width, several in a grid, videos playable. */}
+      {/* Attached media. The layout follows the count - see MediaGrid: a
+          single picture is never cropped, a grid is. */}
       {media.length > 0 && (
-        <ul
-          className={cn(
-            '-mx-5 mt-3 grid gap-0.5 border-y border-white/8',
-            media.length === 1 ? 'grid-cols-1' : 'grid-cols-2',
-          )}
-        >
-          {media.map((item, index) => (
-            <li key={item.url ?? `deferred-${index}`} className="relative bg-ink">
-              {/* An image tile is one big button into the viewer. A video
-                  cannot be, or every tap on the scrubber would open the
-                  lightbox instead of seeking - it carries its own expand
-                  control into the same viewer. */}
-              {item.url === null ? (
-                /* Data saver: the server never sent this URL, so nothing has
-                   downloaded. The tap is what asks for it. */
-                <button
-                  type="button"
-                  onClick={loadMedia}
-                  disabled={loadingMedia}
-                  className="flex w-full flex-col items-center justify-center gap-1 bg-white/4 py-10 hover:bg-white/8 disabled:opacity-60"
-                >
-                  <span className="text-sm text-text-hi">
-                    {loadingMedia ? 'Loading…' : `Tap to load ${item.kind}`}
-                  </span>
-                  <span className="caption text-text-low">
-                    Data saver is on — nothing downloaded yet
-                  </span>
-                </button>
-              ) : item.kind === 'video' ? (
-                // Starts muted: a browser blocks unmuted autoplay anyway, and
-                // sound starting by itself in a feed is nobody's setting. The
-                // player stops it when it scrolls out of view.
-                <VideoPlayer
-                  src={item.url}
-                  autoplay={post.autoplay !== false}
-                  onExpand={() => setPreview(index)}
-                  className="w-full"
-                />
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setPreview(index)}
-                  aria-label={item.alt_text || 'Open image'}
-                  className="block w-full"
-                >
-                  <img
-                    src={item.url}
-                    alt={item.alt_text ?? ''}
-                    loading="lazy"
-                    className={cn(
-                      'w-full cursor-zoom-in object-cover hover:opacity-95',
-                      media.length === 1 ? 'max-h-[460px]' : 'h-44',
-                    )}
-                  />
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
+        <MediaGrid
+          media={media}
+          onOpen={setPreview}
+          onLoadDeferred={loadMedia}
+          loadingDeferred={loadingMedia}
+          autoplay={post.autoplay !== false}
+        />
       )}
 
       {translation && (

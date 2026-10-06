@@ -107,6 +107,37 @@ const KINDS: Array<{ id: Kind; label: string; icon: typeof ImageIcon; accept?: s
  * Collapsed, the feed stays a feed; opened, the form has room to be explicit
  * about visibility and provenance.
  */
+/**
+ * The real pixel size of a picked file.
+ *
+ * Returned as {} rather than thrown when it cannot be read - a file the browser
+ * will not decode is a problem for the upload to report, not for the measuring
+ * step, and a post without dimensions still works (the feed falls back to a
+ * reserved box).
+ */
+async function measure(file: File): Promise<{ width?: number; height?: number }> {
+  const url = URL.createObjectURL(file)
+  try {
+    if (file.type.startsWith('video/')) {
+      return await new Promise((resolve) => {
+        const video = document.createElement('video')
+        video.preload = 'metadata'
+        video.onloadedmetadata = () => resolve({ width: video.videoWidth, height: video.videoHeight })
+        video.onerror = () => resolve({})
+        video.src = url
+      })
+    }
+    return await new Promise((resolve) => {
+      const image = new Image()
+      image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight })
+      image.onerror = () => resolve({})
+      image.src = url
+    })
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
 export default function Composer({
   onPosted,
   /** Hide the inline card — the feed shows a floating button instead once scrolled. */
@@ -217,7 +248,8 @@ export default function Composer({
     try {
       const uploaded: Array<UploadedMedia & { previewUrl?: string }> = []
       for (const file of Array.from(files).slice(0, 4)) {
-        uploaded.push({ ...(await kaluta.media.upload(file, provenance)), previewUrl: URL.createObjectURL(file) })
+        const [asset, size] = await Promise.all([kaluta.media.upload(file, provenance), measure(file)])
+        uploaded.push({ ...asset, ...size, previewUrl: URL.createObjectURL(file) })
       }
       setMedia((current) => [...current, ...uploaded].slice(0, 4))
     } catch (err) {
@@ -288,7 +320,16 @@ export default function Composer({
           .map((t) => t.trim().toLowerCase())
           .filter(Boolean),
         city: city.trim() || undefined,
-        media: media.map((m) => ({ media_id: m.id, url: m.url, kind: m.kind, alt_text: m.alt_text })),
+        media: media.map((m) => ({
+          media_id: m.id,
+          url: m.url,
+          kind: m.kind,
+          alt_text: m.alt_text,
+          // Lets the feed reserve the right box before the picture arrives,
+          // instead of collapsing and then jumping when it does.
+          width: m.width,
+          height: m.height,
+        })),
       })
       // One-to-Many, after the post exists. Deliberately *after*: the post is
       // the thing the member asked for, and a publishing engine that is down
