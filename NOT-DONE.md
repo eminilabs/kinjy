@@ -631,3 +631,30 @@ What the tests do not cover:
   media of its own.
 - **Nothing refreshes a link card.** A page that changes its title keeps the
   old one for seven days, and a dead link keeps its card until then too.
+
+## Layout, cards and the black /hub (06/10)
+
+- ~~`/hub` went black on refresh.~~ Fixed on 06/10: three paging hooks sat
+  after SocialHub's `if (authLoading)` return, so the first render ran fewer
+  hooks than the second — React error #310, unmounted tree. It only ever showed
+  on a *fresh* load, because that is the only time auth starts in a loading
+  state; reaching /hub from inside the app had auth already resolved and looked
+  fine. Verified on production by hard-refreshing /hub signed in.
+- ~~The feed card was see-through and the columns wasted a third of the
+  screen.~~ Fixed: `--cloud` is opaque `#1C1F2D` under `[data-theme='cloud']`,
+  the shell is `max-w-app` (1600px), and the right rail scrolls on its own.
+- **The opaque card depends on `.force-dark` / `.twilight-field` being on every
+  section that paints its own background.** Those classes redeclare `--cloud`,
+  which is the only reason the marketing heroes keep their glass — the
+  `[data-theme]` selector scopes nothing, since AppThemeProvider wraps the
+  whole tree from main.tsx. A new dark section without one of those classes
+  will get opaque cards against its background and look wrong. Verified on
+  /creators, not on every marketing page.
+- **The layout, dialog and push-toggle work was verified on production, not
+  locally.** `app/node_modules` was empty for part of this session, so the
+  local dev server could not be trusted; it has since been reinstalled (253
+  packages) and `tsc -b` is clean.
+- **`demo.diag.fbirbgei@example.com` is a real account on production**, created
+  for these checks. It should be removed.
+- **The imported `$2y$` hash prefixes still have not been verified against a
+  real production row.** One query; it has been blocked twice.
