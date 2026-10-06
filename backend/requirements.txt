@@ -27,3 +27,8 @@ aio-pika>=9.5.0
 python-dotenv>=1.0.1
 webauthn>=2.5.0
 websockets>=13.1
+# Web Push (RFC 8030/8291/8292). Used rather than hand-rolled because the
+# payload encryption is ECDH + HKDF + AES128GCM and the VAPID header is a
+# signed JWT - security-critical code with a tested implementation already in
+# the ecosystem. Encrypting it ourselves would be the riskiest file here.
+pywebpush>=2.0.0

@@ -72,6 +72,28 @@ SMTP_SSL = _str("SMTP_SSL", "0") not in ("0", "false", "no")
 def mail_configured() -> bool:
     return bool(SMTP_HOST and SMTP_FROM)
 
+
+# --- Web Push ---------------------------------------------------------------
+# VAPID identifies this server to the push services (Google's, Mozilla's,
+# Apple's) so they will accept pushes addressed to their subscriptions. The
+# private key is a credential: anyone holding it can push to every member who
+# subscribed to this site, so it lives in .env and nowhere else.
+#
+# The public key is not secret - the browser needs it to create a subscription,
+# and it is served to anybody who asks.
+#
+# Nothing is sent unless both are set, and the subscribe endpoint says so
+# rather than taking subscriptions it can never use.
+VAPID_PUBLIC_KEY = _str("VAPID_PUBLIC_KEY")
+VAPID_PRIVATE_KEY = _str("VAPID_PRIVATE_KEY")
+# A contact the push service can use if this server misbehaves. Required by the
+# spec; a mailto: that nobody reads is worse than one that works.
+VAPID_SUBJECT = _str("VAPID_SUBJECT", "mailto:support@kinjy.com")
+
+
+def push_configured() -> bool:
+    return bool(VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY)
+
 # --- Economy ----------------------------------------------------------------
 # Marketplace / agency: customer price = vendor price * (1 + markup). A vendor
 # listing at $100 with a 20% markup is sold at $120; Kinjy's *revenue* on that

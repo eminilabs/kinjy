@@ -181,3 +181,37 @@ class MessageReaction(Base):
     user_id: Mapped[str] = mapped_column(String(40), index=True)
     emoji: Mapped[str] = mapped_column(String(16))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class PushSubscription(Base):
+    """One browser that has agreed to receive notifications.
+
+    A member has as many of these as they have devices, and each is an opaque
+    endpoint at the browser vendor's push service plus the two keys that
+    message is encrypted to. Those keys are what make Web Push private: the
+    payload is sealed to this subscription, so Google or Mozilla relay it
+    without being able to read it.
+
+    `failures` is kept because a subscription does not announce that it is
+    dead. A browser that is uninstalled, or permission that is revoked, shows
+    up as a 404 or 410 from the push service, and those are deleted at once -
+    but a run of softer failures means the same thing more slowly, and pushing
+    forever to an endpoint that never answers is how a sending reputation is
+    spent.
+    """
+
+    __tablename__ = "push_subscriptions"
+    __table_args__ = {"schema": SCHEMA}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(40), index=True)
+    # The push service's URL for this browser. Unique: re-subscribing the same
+    # browser must update the row rather than add a second one, or every
+    # notification arrives twice.
+    endpoint: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    p256dh: Mapped[str] = mapped_column(String(255), nullable=False)
+    auth: Mapped[str] = mapped_column(String(255), nullable=False)
+    user_agent: Mapped[str | None] = mapped_column(Text)
+    failures: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

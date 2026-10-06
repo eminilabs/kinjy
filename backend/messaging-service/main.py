@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 import logging
 
 import httpx
-from fastapi import Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import BackgroundTasks, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, or_, select, true
 from sqlalchemy.exc import IntegrityError
@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session as OrmSession
 
 import threading
 
-from common import crypto, permissions
+from common import crypto, permissions, settings
 from common.auth import AdminUser, CurrentUser
 from common.database import SessionLocal, get_db
 from common.ids import new_id
@@ -29,6 +29,7 @@ import agecheck
 import agenotify
 import models
 import stickers
+import webpush
 
 log = logging.getLogger("messaging-service")
 USER_URL = "http://user-service:8000"
@@ -1667,9 +1668,132 @@ def mark_read(principal: CurrentUser, db: OrmSession = Depends(get_db)):
     return {"read": True}
 
 
+class PushSubscriptionIn(BaseModel):
+    endpoint: str = Field(min_length=10, max_length=2000)
+    p256dh: str = Field(min_length=10, max_length=255)
+    auth: str = Field(min_length=4, max_length=255)
+
+
+@app.get("/push/key", tags=["push"])
+def push_public_key():
+    """The VAPID public key, which a browser needs to create a subscription.
+
+    Not a secret - it identifies this server to the push services and nothing
+    else. `available` lets the client ask once rather than offer a switch that
+    cannot work: an installation with no keys configured should say so, not
+    collect subscriptions it can never send to.
+    """
+    return {
+        "available": webpush.available(),
+        "public_key": settings.VAPID_PUBLIC_KEY if webpush.available() else None,
+    }
+
+
+@app.post("/push/subscribe", status_code=201, tags=["push"])
+def push_subscribe(
+    payload: PushSubscriptionIn,
+    principal: CurrentUser,
+    request: Request,
+    db: OrmSession = Depends(get_db),
+):
+    """Remember this browser so it can be reached when the app is closed.
+
+    Keyed on the endpoint, which is the browser's own identifier for the
+    subscription. Re-subscribing the same browser updates the row rather than
+    adding one, because two rows for one browser is every notification arriving
+    twice.
+
+    An endpoint that already belongs to somebody else is reassigned, not
+    refused: it means this browser was signed in as another member and is now
+    signed in as this one, and the notifications must follow who is actually
+    using it.
+    """
+    if not webpush.available():
+        raise HTTPException(
+            status_code=503, detail="Push notifications are not available on this installation")
+
+    existing = db.scalar(
+        select(models.PushSubscription).where(models.PushSubscription.endpoint == payload.endpoint)
+    )
+    if existing is None:
+        existing = models.PushSubscription(endpoint=payload.endpoint)
+        db.add(existing)
+    existing.user_id = principal.user_id
+    existing.p256dh = payload.p256dh
+    existing.auth = payload.auth
+    existing.user_agent = request.headers.get("user-agent")
+    existing.failures = 0
+    db.commit()
+    return {"subscribed": True}
+
+
+@app.delete("/push/subscribe", status_code=204, tags=["push"])
+def push_unsubscribe(
+    endpoint: str,
+    principal: CurrentUser,
+    db: OrmSession = Depends(get_db),
+):
+    """Forget this browser.
+
+    Only your own: the endpoint is not a secret worth relying on, so the
+    member is checked rather than the string.
+    """
+    db.execute(
+        delete(models.PushSubscription).where(
+            models.PushSubscription.endpoint == endpoint,
+            models.PushSubscription.user_id == principal.user_id,
+        )
+    )
+    db.commit()
+
+
+def _push_to_member(user_id: str, payload: dict) -> None:
+    """Send one notification to every browser this member has registered.
+
+    Runs in a background task with its own session: it talks to three or four
+    external services over the network, and a notification must never be what
+    makes storing a message slow.
+
+    A subscription the push service calls gone is deleted at once. Anything
+    else is counted, and counted enough times it is deleted too - a browser
+    that was uninstalled looks exactly like one that is briefly unreachable,
+    and the only difference is how long it keeps failing.
+    """
+    if not webpush.available():
+        return
+    session = SessionLocal()
+    try:
+        rows = session.scalars(
+            select(models.PushSubscription).where(models.PushSubscription.user_id == user_id)
+        ).all()
+        for row in rows:
+            subscription = {
+                "endpoint": row.endpoint,
+                "keys": {"p256dh": row.p256dh, "auth": row.auth},
+            }
+            try:
+                webpush.send(subscription, payload)
+                row.failures = 0
+                row.last_sent_at = datetime.now(timezone.utc)
+            except webpush.Gone:
+                session.delete(row)
+            except Exception as exc:
+                row.failures += 1
+                log.info("push failed for a subscription (%s): %s", row.failures, type(exc).__name__)
+                if row.failures >= webpush.MAX_FAILURES:
+                    session.delete(row)
+        session.commit()
+    except Exception as exc:
+        log.warning("push delivery failed: %s", exc)
+        session.rollback()
+    finally:
+        session.close()
+
+
 @app.post("/internal/notify", status_code=201, tags=["internal"])
 async def internal_notify(
     user_id: str,
+    background: BackgroundTasks,
     kind: str,
     title: str,
     body: str | None = None,
@@ -1717,6 +1841,25 @@ async def internal_notify(
             "link": link,
             "unread": unread,
             "created_at": notification.created_at.isoformat(),
+        },
+    )
+    # And to the devices that are not looking. Queued rather than awaited: this
+    # reaches out to the browser vendors' push services, and the caller is a
+    # service that has already committed the thing being announced.
+    #
+    # The screened title and body, not the originals - a notification that
+    # arrives on a lock screen must not carry what the age gate removed from
+    # the one in the app.
+    background.add_task(
+        _push_to_member,
+        user_id,
+        {
+            "title": title,
+            "body": body or "",
+            "link": link or "/",
+            "kind": kind,
+            "unread": unread,
+            "tag": f"{kind}:{notification.id}",
         },
     )
     return {"id": notification.id, "unread": unread, "redacted": redacted}
