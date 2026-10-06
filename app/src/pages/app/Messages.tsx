@@ -1163,8 +1163,8 @@ export default function Messages() {
       {/* One workspace, as Messenger draws it: the chats on the left, the open
           conversation on the right, in a single card. On a phone the open
           thread is the whole screen. */}
-      <div className="cloud-card grid h-[calc(100dvh-236px)] min-h-[420px] min-w-0 grid-cols-[minmax(0,1fr)] overflow-hidden !p-0 lg:h-[calc(100dvh-196px)] lg:min-h-[520px] lg:grid-cols-[340px_minmax(0,1fr)]">
-        <div className={cn('flex min-h-0 min-w-0 flex-col lg:border-e lg:border-[var(--cloud-border)]', showThread && 'hidden lg:flex')}>
+      <div className="grid h-[calc(100dvh-236px)] min-h-[420px] min-w-0 grid-cols-[minmax(0,1fr)] gap-4 lg:h-[calc(100dvh-196px)] lg:min-h-[520px] lg:grid-cols-[360px_minmax(0,1fr)] lg:gap-5">
+        <div className={cn('cloud-card flex min-h-0 min-w-0 flex-col overflow-hidden', showThread && 'hidden lg:flex')}>
           <div className="space-y-3 px-4 pb-2 pt-4">
             <div className="flex items-center gap-2">
               <h1 className="text-[26px] font-bold leading-none tracking-[-0.03em] text-text-hi">Chats</h1>
@@ -1582,7 +1582,7 @@ export default function Messages() {
         {/* Thread */}
         <div
           className={cn(
-            'relative flex min-h-0 min-w-0 flex-col',
+            'cloud-card relative flex min-h-0 min-w-0 flex-col overflow-hidden',
             !showThread && 'hidden',
             dragging && 'ring-2 ring-inset ring-gold/50',
           )}
