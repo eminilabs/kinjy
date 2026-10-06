@@ -29,6 +29,7 @@ from common.service import create_app
 
 import models
 import profileimages
+import imagesize
 import signatures
 import uploadcenter
 
@@ -79,6 +80,10 @@ MIGRATIONS = [
     f"ALTER TABLE {models.SCHEMA}.assets ADD COLUMN IF NOT EXISTS private BOOLEAN NOT NULL DEFAULT FALSE",
     f"ALTER TABLE {models.SCHEMA}.assets ADD COLUMN IF NOT EXISTS sealed_with VARCHAR(16)",
     f"ALTER TABLE {models.SCHEMA}.assets ALTER COLUMN filename TYPE TEXT",
+    # The picture's shape, read at upload. Null for everything already stored,
+    # which keeps being measured in the browser as it was.
+    f"ALTER TABLE {models.SCHEMA}.assets ADD COLUMN IF NOT EXISTS width INTEGER",
+    f"ALTER TABLE {models.SCHEMA}.assets ADD COLUMN IF NOT EXISTS height INTEGER",
 ]
 
 app = create_app(
@@ -149,9 +154,15 @@ async def upload(
 
     digest = hashlib.sha256()
     written = 0
+    # The start of the file, kept to read the picture's shape from. Taken from
+    # the first chunk, which is a megabyte - far more than imagesize needs - so
+    # this costs a slice and no extra read.
+    head = b""
     with destination.open("wb") as out:
         sink = crypto.FileSealer(out, asset_id) if seal else out
         while chunk := await file.read(1024 * 1024):
+            if written == 0:
+                head = chunk[: imagesize.HEAD_BYTES]
             if written == 0 and purpose != "chat" and not signatures.matches(content_type, chunk[: signatures.HEAD_BYTES]):
                 # Refused on the first chunk, before the rest is stored.
                 out.close()
@@ -206,6 +217,11 @@ async def upload(
             # Whatever happened, the local copy was only a staging file.
             destination.unlink(missing_ok=True)
 
+    # Read from the header, never decoded. None for video, audio, a format
+    # with no reader, or a header that does not parse - the browser measures
+    # those as it did before.
+    size = imagesize.read(content_type, head)
+
     asset = models.Asset(
         id=asset_id,
         owner_id=principal.user_id,
@@ -224,6 +240,8 @@ async def upload(
         provenance_signed=False,
         derived_from=derived_from,
         alt_text=alt_text,
+        width=size[0] if size else None,
+        height=size[1] if size else None,
         private=private,
         sealed_with=crypto.keyring().active_id if seal else None,
         # Restricted from the first byte, not only once attached: the file has
@@ -452,6 +470,10 @@ def _describe(asset: models.Asset) -> dict:
         "size_bytes": asset.size_bytes,
         "provenance": asset.provenance,
         "provenance_signed": asset.provenance_signed,
+        # Null for video, audio and everything uploaded before the size was
+        # read; the client measures those itself as it always did.
+        "width": asset.width,
+        "height": asset.height,
     }
 
 
@@ -1186,4 +1208,10 @@ def internal_asset(asset_id: str, db: OrmSession = Depends(get_db)):
         "storage": asset.provider,
         "kind": asset.kind,
         "private": asset.private,
+        # Read off the file's header at upload. social-service stores these on
+        # the post rather than the numbers the client sent, so the feed reserves
+        # a box from a measurement instead of a claim. Null for video and audio,
+        # and for everything uploaded before this was read.
+        "width": asset.width,
+        "height": asset.height,
     }

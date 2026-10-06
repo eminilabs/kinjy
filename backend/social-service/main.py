@@ -346,7 +346,27 @@ def _verified_media(items: list[dict], author_id: str) -> list[dict]:
             # The same answer whether it is missing or somebody else's: telling
             # them apart would confirm which ids exist.
             raise HTTPException(status_code=400, detail=NOT_YOUR_MEDIA)
-        checked.append({**item, "media_id": asset["id"], "url": asset["url"], "kind": asset.get("kind") or "image"})
+        # width and height come from the asset for the same reason url and kind
+        # do: media-service read them off the file's own header, so they are a
+        # measurement rather than a claim. A client's numbers decide how much
+        # room the feed reserves for a picture, and a wrong pair - careless or
+        # deliberate - is a post that reserves a screen and a half.
+        #
+        # Only when the asset actually has them: nothing was measured before
+        # this existed, and video and audio have no header to read, so the
+        # client's value is still better than dropping to none.
+        measured = {
+            key: asset[key]
+            for key in ("width", "height")
+            if isinstance(asset.get(key), int) and asset[key] > 0
+        }
+        checked.append({
+            **item,
+            "media_id": asset["id"],
+            "url": asset["url"],
+            "kind": asset.get("kind") or "image",
+            **measured,
+        })
     return checked
 
 
