@@ -234,15 +234,10 @@ export default function SocialHub() {
   }, [user, defaultsReady, load])
   useEffect(() => () => inFlight.current?.abort(), [])
 
-  if (authLoading) {
-    return (
-      <div className="flex min-h-[60svh] items-center justify-center" role="status" aria-label="Loading">
-        <div className="h-12 w-12 rounded-full animate-orb-breathe" style={{ background: 'var(--grad-orb)' }} />
-      </div>
-    )
-  }
-  if (!user) return <Navigate to="/join?mode=signin" replace />
-
+  // These three sit above the early returns below, and must stay there.
+  // A hook after a conditional return runs on some renders and not others,
+  // which is React error #310 and an unmounted tree - /hub went black on
+  // refresh for exactly this reason.
   /**
    * The next page, appended.
    *
@@ -310,6 +305,15 @@ export default function SocialHub() {
   )
 
   useEffect(() => () => observer.current?.disconnect(), [])
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-[60svh] items-center justify-center" role="status" aria-label="Loading">
+        <div className="h-12 w-12 rounded-full animate-orb-breathe" style={{ background: 'var(--grad-orb)' }} />
+      </div>
+    )
+  }
+  if (!user) return <Navigate to="/join?mode=signin" replace />
 
   const prepend = (post: Post) => setFeed((f) => (f ? { ...f, items: [post, ...f.items] } : f))
   const drop = (postId: string) =>
