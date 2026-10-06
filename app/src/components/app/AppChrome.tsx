@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import {
@@ -79,21 +79,6 @@ export function AppTopBar() {
 
   const me = useMyProfile()
 
-  // ⌘K / Ctrl+K jumps to the search box, as the hint in it promises.
-  const searchRef = useRef<HTMLInputElement>(null)
-  const shortcutHint = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘ K' : 'Ctrl K'
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault()
-        searchRef.current?.focus()
-        searchRef.current?.select()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
-
   return (
     <div className={cn('border-x-0 border-t-0 border-b', tok.card)}>
     <div className="mx-auto flex h-[64px] w-full max-w-[1320px] items-center gap-3 px-4 md:h-[72px] md:gap-6 md:px-6">
@@ -112,7 +97,6 @@ export function AppTopBar() {
         <label className={cn('relative flex items-center rounded-full px-3.5 py-2', tok.input)}>
           <Search size={15} className={cn('shrink-0', tok.low)} aria-hidden="true" />
           <input
-            ref={searchRef}
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -120,13 +104,6 @@ export function AppTopBar() {
             aria-label={t('search')}
             className={cn('min-w-0 flex-1 bg-transparent px-2.5 text-sm outline-none placeholder:opacity-70', tok.text)}
           />
-          {/* Only where the shortcut exists: a hint for a key that does nothing is a lie. */}
-          <kbd
-            aria-hidden="true"
-            className={cn('mono-data ms-1 hidden shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] lg:inline', tok.low, 'border-current/20')}
-          >
-            {shortcutHint}
-          </kbd>
         </label>
       </form>
 

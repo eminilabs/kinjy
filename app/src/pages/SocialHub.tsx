@@ -148,8 +148,6 @@ export default function SocialHub() {
   // list while somebody is reading moves the text under their eyes; a banner
   // lets them choose the moment.
   const [pending, setPending] = useState(0)
-  // When the feed was last brought up to date: an honest stand-in for a 'live' badge.
-  const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   useTopic('feed', (event) => {
     if (event.type !== 'post') return
     if (event.author_id === user?.id) return
@@ -223,7 +221,6 @@ export default function SocialHub() {
       // what arrives next, and clearing on success wiped the explanation before
       // it could be read. It is cleared when the member picks a mode instead.
       setFeed(page)
-      setUpdatedAt(new Date())
     } catch (err) {
       if (controller.signal.aborted) return
       setError(err instanceof ApiError ? err.message : 'Could not load the feed')
@@ -457,15 +454,8 @@ export default function SocialHub() {
             </button>
           </header>
 
-          {/* Mode, and when the feed was last brought up to date */}
-          <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="mb-4">
             <FeedModeMenu modes={catalog.modes} active={mode} onSelect={setMode} />
-            {updatedAt && (
-              <span className="flex shrink-0 items-center gap-2 text-xs text-text-low" aria-live="polite">
-                <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-success" />
-                Updated {updatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            )}
           </div>
 
           {/* The place or topic the geographic/topic modes filter on */}
