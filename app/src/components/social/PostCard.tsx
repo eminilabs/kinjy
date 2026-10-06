@@ -13,14 +13,22 @@ import {
   Repeat2,
   SlidersHorizontal,
   Trash2,
+  Link2,
+  Check,
+  Share2,
 } from 'lucide-react'
 import { ApiError, kaluta, type Post, type WhyFactor } from '@/lib/api'
 import { useTopic } from '@/hooks/useRealtime'
 import { htmlToText, looksLikeHtml, sanitizeHtml } from '@/lib/richtext'
+import { useAuth } from '@/hooks/useAuth'
+import { postUrl, shareLink } from '@/lib/share'
 import { cn } from '@/lib/utils'
 import Comments from './Comments'
 import MemberAvatar from './MemberAvatar'
+import KnownActors from './KnownActors'
+import LinkPreview, { firstLink } from './LinkPreview'
 import MediaLightbox from './MediaLightbox'
+import VideoPlayer from './VideoPlayer'
 import Reactions from './Reactions'
 import {
   Dialog,
@@ -54,20 +62,44 @@ const PROVENANCE_LABEL: Record<string, string> = {
  */
 function withHashtags(text: string) {
   return text
-    .split(/(#[\wÀ-ÿ؀-ۿ一-鿿][\wÀ-ÿ؀-ۿ一-鿿-]{1,49})/g)
-    .map((part, index) =>
-      part.startsWith('#') ? (
-        <Link
-          key={index}
-          to={`/hub?mode=topics&topic=${encodeURIComponent(part.slice(1).toLowerCase())}`}
-          className="font-medium text-gold-soft hover:underline"
-        >
-          {part}
-        </Link>
-      ) : (
-        part
-      ),
-    )
+    // One split over both, so a hashtag inside a URL's fragment is not turned
+    // into a topic link in the middle of an address.
+    .split(/(https?:\/\/[^\s<>"']+|#[\wÀ-ÿ؀-ۿ一-鿿][\wÀ-ÿ؀-ۿ一-鿿-]{1,49})/g)
+    .map((part, index) => {
+      if (/^https?:\/\//i.test(part)) {
+        // Trailing punctuation belongs to the sentence, not the address.
+        const trailing = part.match(/[.,;:!?)\]]+$/)?.[0] ?? ''
+        const href = trailing ? part.slice(0, -trailing.length) : part
+        return (
+          <span key={index}>
+            <a
+              href={href}
+              target="_blank"
+              // noreferrer as well as noopener: otherwise the destination
+              // learns which Kinjy page the reader came from, which for a
+              // private post is its address.
+              rel="noopener noreferrer nofollow"
+              className="font-medium text-sky hover:underline"
+            >
+              {href}
+            </a>
+            {trailing}
+          </span>
+        )
+      }
+      if (part.startsWith('#')) {
+        return (
+          <Link
+            key={index}
+            to={`/hub?mode=topics&topic=${encodeURIComponent(part.slice(1).toLowerCase())}`}
+            className="font-medium text-gold-soft hover:underline"
+          >
+            {part}
+          </Link>
+        )
+      }
+      return part
+    })
 }
 
 function ago(iso: string): string {
@@ -175,6 +207,8 @@ export default function PostCard({
   currentUserId,
   onHidden,
   onChangeAlgorithm,
+  commentsAlwaysOpen = false,
+  onOpen,
 }: {
   post: Post
   algorithmId: string
@@ -184,16 +218,33 @@ export default function PostCard({
   currentUserId: string
   onHidden: (postId: string) => void
   onChangeAlgorithm: () => void
+  /** In the post dialog the comments are the point: open, and no toggle. */
+  commentsAlwaysOpen?: boolean
+  /**
+   * Open this post in a dialog. Given by the feed; absent inside the dialog
+   * itself, where the card must not be able to open another copy of itself.
+   */
+  onOpen?: () => void
 }) {
   const { i18n } = useTranslation()
   const target = post.repost_of ?? post
   const [reactions, setReactions] = useState(target.reactions ?? { counts: {}, total: 0, mine: null })
   const [comments, setComments] = useState(target.comments_count)
-  const [showComments, setShowComments] = useState(false)
+  const [showComments, setShowComments] = useState(commentsAlwaysOpen)
   const [preview, setPreview] = useState<number | null>(null)
   // Reporting. Held open as a small inline panel rather than a modal: a report
   // is a judgement about the thing you are looking at, and a dialog that
   // covers the post asks you to make it from memory.
+  // Sharing outside Kinjy. `withRef` is the member's choice about whether the
+  // link carries their invitation code; it is on by default because the whole
+  // point of sharing a post is that somebody might join from it, but it is
+  // shown rather than hidden, and it can be turned off - a code is a claim on
+  // whoever signs up, and a member is entitled to pass something on without
+  // making that claim.
+  const { user: me } = useAuth()
+  const [shareOpen, setShareOpen] = useState(false)
+  const [withRef, setWithRef] = useState(true)
+  const [shareNote, setShareNote] = useState<string | null>(null)
   const [reporting, setReporting] = useState(false)
   const [reported, setReported] = useState(false)
   const [reportFailed, setReportFailed] = useState(false)
@@ -231,6 +282,29 @@ export default function PostCard({
   })
 
   /** Share to your own followers, or take it back. */
+  // Only a public post has a link worth giving away: everything else answers
+  // 404 to the person who receives it, which is a worse experience than not
+  // offering the button.
+  const shareable = target.visibility === 'public'
+  const myRef = withRef ? me?.referral_code ?? null : null
+  const shareUrl = postUrl(target.id, myRef)
+
+  const doShare = async () => {
+    // The author can be null when the profile lookup did not resolve. That is
+    // a reason for a plainer share title, not for the share to fail.
+    const who = source.author?.display_name
+    const result = await shareLink(shareUrl, who ? `${who} on Kinjy` : 'A post on Kinjy')
+    setShareNote(
+      result === 'shared'
+        ? null
+        : result === 'copied'
+          ? 'Link copied.'
+          : result === 'cancelled'
+            ? null
+            : 'Could not copy — select the link and copy it by hand.',
+    )
+  }
+
   const toggleRepost = async () => {
     setBusy(true)
     setNote(null)
@@ -329,6 +403,11 @@ export default function PostCard({
   const body = translation && !sideBySide ? translation.text : source.body
   /** Text without the tags — for translation, and for the side-by-side column. */
   const plainBody = looksLikeHtml(source.body) ? htmlToText(source.body) : source.body
+  // The first link in the body is the one worth unfurling; a post full of
+  // links is a list, and five cards under it is not a post any more. Declared
+  // after plainBody, which it reads - a const used above its declaration is a
+  // crash, not a hoist.
+  const bodyLink = firstLink(plainBody)
 
   return (
     <article className="cloud-card p-5" data-post-id={post.id}>
@@ -445,10 +524,34 @@ export default function PostCard({
           dangerouslySetInnerHTML={{ __html: sanitizeHtml(body) }}
         />
       ) : (
-        <p className="mt-3 whitespace-pre-wrap text-[0.95rem] leading-relaxed text-text-hi">
+        /* The body opens the post. Not a <button>: the text contains links and
+           hashtags that must stay clickable in their own right, and nesting
+           interactive elements inside a button is invalid and unreadable to a
+           screen reader. A plain click handler leaves them alone, and the
+           header already offers a keyboard route to the same place. */
+        <p
+          onClick={(event) => {
+            if (!onOpen) return
+            // A click that landed on a link, a hashtag or a text selection is
+            // not a request to open the post.
+            if ((event.target as HTMLElement).closest('a,button')) return
+            if (window.getSelection()?.toString()) return
+            onOpen()
+          }}
+          className={cn(
+            'mt-3 whitespace-pre-wrap text-[0.95rem] leading-relaxed text-text-hi',
+            onOpen && 'cursor-pointer',
+          )}
+        >
           {withHashtags(body)}
         </p>
       )}
+
+      {/* Only when the post has no media of its own: a post with a photo and a
+          link does not need two pictures competing for the same glance. */}
+      {media.length === 0 && bodyLink && <LinkPreview url={bodyLink} />}
+
+      <KnownActors actors={target.known_actors} />
 
       {/* Attached media — one full-width, several in a grid, videos playable. */}
       {media.length > 0 && (
@@ -460,8 +563,10 @@ export default function PostCard({
         >
           {media.map((item, index) => (
             <li key={item.url ?? `deferred-${index}`} className="relative bg-ink">
-              {/* The whole tile opens the viewer; the video keeps its own
-                  controls, so only images get the button treatment. */}
+              {/* An image tile is one big button into the viewer. A video
+                  cannot be, or every tap on the scrubber would open the
+                  lightbox instead of seeking - it carries its own expand
+                  control into the same viewer. */}
               {item.url === null ? (
                 /* Data saver: the server never sent this URL, so nothing has
                    downloaded. The tap is what asks for it. */
@@ -479,16 +584,14 @@ export default function PostCard({
                   </span>
                 </button>
               ) : item.kind === 'video' ? (
-                <video
+                // Starts muted: a browser blocks unmuted autoplay anyway, and
+                // sound starting by itself in a feed is nobody's setting. The
+                // player stops it when it scrolls out of view.
+                <VideoPlayer
                   src={item.url}
-                  controls
-                  // Muted because a browser blocks unmuted autoplay anyway, and
-                  // sound starting by itself in a feed is nobody's setting.
-                  autoPlay={post.autoplay !== false}
-                  muted={post.autoplay !== false}
-                  preload={post.autoplay === false ? 'none' : 'metadata'}
-                  playsInline
-                  className="max-h-[420px] w-full bg-black object-contain"
+                  autoplay={post.autoplay !== false}
+                  onExpand={() => setPreview(index)}
+                  className="w-full"
                 />
               ) : (
                 <button
@@ -535,7 +638,7 @@ export default function PostCard({
 
         <button
           type="button"
-          onClick={() => setShowComments(true)}
+          onClick={() => (onOpen ? onOpen() : setShowComments(true))}
           className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-text-mid hover:text-text-hi"
         >
           <MessageCircle size={13} aria-hidden="true" />
@@ -563,6 +666,25 @@ export default function PostCard({
         >
           <Repeat2 size={14} aria-hidden="true" />
           {reposts}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setShareNote(null)
+            setShareOpen((open) => !open)
+          }}
+          disabled={!shareable}
+          aria-expanded={shareOpen}
+          title={
+            shareable
+              ? 'Share this outside Kinjy'
+              : 'Only a public post can be shared outside Kinjy'
+          }
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-text-mid hover:text-text-hi disabled:opacity-40"
+        >
+          <Share2 size={13} aria-hidden="true" />
+          Share
         </button>
 
         {views > 0 && (
@@ -622,6 +744,54 @@ export default function PostCard({
           </button>
         )}
       </footer>
+
+      {shareOpen && shareable && (
+        <div className="mt-2 rounded-xl border border-text-low/25 p-3">
+          <p className="text-xs font-semibold text-text-hi">Share this outside Kinjy</p>
+
+          {/* The link is shown rather than only copied. A member about to put
+              their name on something in a group chat should be able to read
+              what they are about to send, including the code on the end. */}
+          <p className="mt-2 break-all rounded-lg bg-ink-2/50 px-2.5 py-2 text-[0.7rem] text-text-mid">
+            {shareUrl}
+          </p>
+
+          {me?.referral_code && (
+            <label className="mt-2.5 flex items-start gap-2 text-xs text-text-mid">
+              <input
+                type="checkbox"
+                checked={withRef}
+                onChange={(e) => setWithRef(e.target.checked)}
+                className="mt-0.5 accent-gold"
+              />
+              <span>
+                Include my invitation code
+                <span className="ms-1 font-mono text-text-low">{me.referral_code}</span>
+                <span className="mt-0.5 block text-text-low">
+                  Anyone who joins from this link is credited to you.
+                </span>
+              </span>
+            </label>
+          )}
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={doShare}
+              className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-gold-soft to-gold px-3.5 py-1.5 text-xs font-bold text-ink"
+            >
+              <Link2 size={12} aria-hidden="true" />
+              Copy link
+            </button>
+            {shareNote && (
+              <span role="status" className="inline-flex items-center gap-1 text-xs text-text-mid">
+                <Check size={12} aria-hidden="true" />
+                {shareNote}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {reporting && !reported && (
         <div className="mt-2 rounded-xl border border-text-low/25 p-3">

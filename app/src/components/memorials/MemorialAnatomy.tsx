@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { BookOpen, Check, Clock, Flower2, Image, MapPin, Mic2, Play, ShieldCheck, Volume2 } from 'lucide-react'
 import { CandleFlowerWidget, ProvenanceTag, VerifiedBadge } from '@/components/ui-kit'
@@ -224,6 +225,7 @@ function Faith() {
  * picks a part, and never for visitors who asked for less motion.
  */
 export default function MemorialAnatomy() {
+  const { t } = useTranslation()
   const reduced = useReducedMotion()
   const [active, setActive] = useState(0)
   const [manual, setManual] = useState(false)
@@ -253,8 +255,8 @@ export default function MemorialAnatomy() {
   return (
     <div className="kl-split items-start gap-[clamp(40px,6vw,96px)]">
       <div>
-        <p className="kl-mono text-xs tracking-[.14em] text-[var(--kl-gold-deep)]">ANATOMY</p>
-        <h2 className="kl-h2 mt-4">A memorial, complete.</h2>
+        <p className="kl-mono text-xs tracking-[.14em] text-[var(--kl-gold-deep)]">{t('memorials.anatomy').toUpperCase()}</p>
+        <h2 className="kl-h2 mt-4">{t('memorials.aMemorialComplete')}</h2>
         <p className="kl-lead mt-5">
           Every memorial is a whole life, carefully kept. Select each element to see where it lives.
         </p>

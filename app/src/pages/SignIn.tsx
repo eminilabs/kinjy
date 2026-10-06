@@ -1,12 +1,37 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { AlertCircle, Fingerprint, Loader2, ShieldCheck } from 'lucide-react'
 import PublicShell from '@/components/landing/PublicShell'
 import { Eyebrow, KlButton, Stage } from '@/components/landing/PageKit'
 import { useAuth } from '@/hooks/useAuth'
 import { ApiError } from '@/lib/api'
+import { clearPendingRef, pendingRef } from '@/lib/share'
 import { OPEN_MODULES, spelled } from '@/lib/features'
 import { cn } from '@/lib/utils'
+
+/**
+ * Where to go after signing in.
+ *
+ * Only a path on this site. A `next` parameter that will follow anything is an
+ * open redirect, and an open redirect on a sign-in page is a phishing tool:
+ * the link really does come from kinjy.com, and really does hand the visitor
+ * to somebody else's page afterwards. So: must start with a single slash -
+ * "//evil.example" and "https://evil.example" are both refused - and must not
+ * be the sign-in page itself, which would loop.
+ */
+function safeNext(value: string | null): string {
+  if (!value) return '/dashboard'
+  let path: string
+  try {
+    path = decodeURIComponent(value)
+  } catch {
+    return '/dashboard'
+  }
+  if (!path.startsWith('/') || path.startsWith('//')) return '/dashboard'
+  if (path.startsWith('/join')) return '/dashboard'
+  return path
+}
 
 type Mode = 'signin' | 'signup'
 
@@ -32,6 +57,7 @@ function passwordProblem(value: string): string | null {
 }
 
 export default function SignIn() {
+  const { t } = useTranslation()
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const { user, signIn, signUp } = useAuth()
@@ -43,13 +69,21 @@ export default function SignIn() {
   const [handle, setHandle] = useState('')
   const [birthDate, setBirthDate] = useState('')
   const [handleEdited, setHandleEdited] = useState(false)
-  const [referral, setReferral] = useState(params.get('ref') ?? '')
+  // The code on this URL wins, then one remembered from a shared link opened
+  // earlier. Without the second, somebody who arrived on a shared post and
+  // read two more pages before signing up credited nobody - the code lived in
+  // the URL of the first page and died with it.
+  const [referral, setReferral] = useState(params.get('ref') ?? pendingRef())
+  // Whether that code is one this browser remembered rather than one the
+  // person in front of us typed. It decides what happens when the server does
+  // not recognise it.
+  const referralWasRemembered = !params.get('ref') && Boolean(pendingRef())
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Already signed in? The sign-in page has nothing to offer.
   useEffect(() => {
-    if (user) navigate('/dashboard', { replace: true })
+    if (user) navigate(safeNext(params.get('next')), { replace: true })
   }, [user, navigate])
 
   // Keep the handle in step with the name until the member takes it over.
@@ -85,16 +119,34 @@ export default function SignIn() {
       if (mode === 'signin') {
         await signIn(email.trim(), password)
       } else {
-        await signUp({
-          email: email.trim(),
-          password,
-          display_name: displayName.trim(),
-          handle,
-          date_of_birth: birthDate,
-          referral_code: referral.trim() || undefined,
-        })
+        const register = (code?: string) =>
+          signUp({
+            email: email.trim(),
+            password,
+            display_name: displayName.trim(),
+            handle,
+            date_of_birth: birthDate,
+            referral_code: code,
+          })
+        try {
+          await register(referral.trim() || undefined)
+        } catch (err) {
+          const unknownCode =
+            err instanceof ApiError && /referral code/i.test(err.message)
+          if (!unknownCode || !referralWasRemembered) throw err
+          // A code this browser remembered, which the server does not know.
+          // Dropping it is better than refusing somebody an account over a
+          // link they followed last week.
+          clearPendingRef()
+          setReferral('')
+          await register(undefined)
+        }
+        // Spent. Leaving it would credit the same sharer again if this browser
+        // ever creates a second account, which is not a referral but a bug
+        // that pays.
+        clearPendingRef()
       }
-      navigate('/dashboard', { replace: true })
+      navigate(safeNext(params.get('next')), { replace: true })
     } catch (err) {
       setError(
         err instanceof ApiError
@@ -118,7 +170,7 @@ export default function SignIn() {
         <div className="grid grid-cols-[minmax(0,1fr)] items-center gap-[clamp(40px,6vw,96px)] lg:grid-cols-[minmax(0,1fr)_minmax(0,480px)]">
           {/* Left: promise */}
           <div className="hidden min-w-0 lg:block">
-            <Eyebrow>Your society awaits</Eyebrow>
+            <Eyebrow>{t('signin.yourSocietyAwaits')}</Eyebrow>
             <h1 className="kl-serif mt-6 max-w-[620px] text-balance text-[clamp(44px,5.4vw,80px)] font-semibold leading-[0.98] tracking-[-0.02em]">
               One account.{' '}
               <span className="text-[var(--kl-gold-deep)]">{spelled(OPEN_MODULES)} modules.</span>
@@ -129,8 +181,7 @@ export default function SignIn() {
                   <Fingerprint size={18} aria-hidden="true" />
                 </span>
                 <span className="text-[16px] leading-relaxed text-[var(--kl-mid)]">
-                  <strong className="text-[var(--kl-ink)]">Passkeys, not a biometric database.</strong> Your
-                  fingerprint or face unlocks your device locally — Kinjy never stores it.
+                  <strong className="text-[var(--kl-ink)]">{t('signin.passkeysNotABiometric')}</strong> {t('signin.yourFingerprintOrFace')}
                 </span>
               </li>
               <li className="flex items-start gap-4 border-b border-[var(--kl-paper-2)] py-5">
@@ -138,8 +189,7 @@ export default function SignIn() {
                   <ShieldCheck size={18} aria-hidden="true" />
                 </span>
                 <span className="text-[16px] leading-relaxed text-[var(--kl-mid)]">
-                  <strong className="text-[var(--kl-ink)]">Leave whenever you want.</strong> Deactivate or
-                  delete from your settings, with no justification asked and a cooling period you choose.
+                  <strong className="text-[var(--kl-ink)]">{t('signin.leaveWheneverYouWant')}</strong> {t('signin.deactivateOrDeleteFrom')}
                 </span>
               </li>
             </ul>
@@ -171,17 +221,17 @@ export default function SignIn() {
                 {mode === 'signup' && (
                   <>
                     <label className="block">
-                      <span className={label}>Your name</span>
+                      <span className={label}>{t('signin.yourName')}</span>
                       <input
                         className={field}
                         value={displayName}
                         onChange={(e) => setDisplayName(e.target.value)}
-                        placeholder="Your full name"
+                        placeholder={t('signin.yourFullName')}
                         autoComplete="name"
                       />
                     </label>
                     <label className="block">
-                      <span className={label}>Date of birth</span>
+                      <span className={label}>{t('signin.dateOfBirth')}</span>
                       <input
                         type="date"
                         className={field}
@@ -195,12 +245,11 @@ export default function SignIn() {
                           Telling someone the minimum age is telling them which date
                           to type instead. */}
                       <span id="dob-why" className={hint}>
-                        We use this to give you the right experience for your age. It is not shown on
-                        your profile.
+                        {t('signin.weUseThisTo')}
                       </span>
                     </label>
                     <label className="block">
-                      <span className={label}>Handle</span>
+                      <span className={label}>{t('signin.handle')}</span>
                       <div className="flex items-center gap-2">
                         <span className="text-[var(--kl-low)]">@</span>
                         <input
@@ -221,7 +270,7 @@ export default function SignIn() {
                 )}
 
                 <label className="block">
-                  <span className={label}>Email</span>
+                  <span className={label}>{t('signin.email')}</span>
                   <input
                     className={field}
                     type="email"
@@ -234,7 +283,7 @@ export default function SignIn() {
                 </label>
 
                 <label className="block">
-                  <span className={label}>Password</span>
+                  <span className={label}>{t('signin.password')}</span>
                   <input
                     className={field}
                     type="password"
@@ -246,11 +295,19 @@ export default function SignIn() {
                     required
                   />
                   {passwordError && <span className={fieldError}>{passwordError}</span>}
+                  {mode === 'signin' && (
+                    <Link
+                      to="/reset-password"
+                      className="mt-2 inline-block text-[13px] text-[var(--kl-mid)] hover:text-[var(--kl-gold-deep)]"
+                    >
+                      {t('signin.forgotPassword')}
+                    </Link>
+                  )}
                 </label>
 
                 {mode === 'signup' && (
                   <label className="block">
-                    <span className={label}>Referral code — optional</span>
+                    <span className={label}>{t('signin.referralCodeOptional')}</span>
                     <input
                       className={field}
                       value={referral}
@@ -258,7 +315,7 @@ export default function SignIn() {
                       placeholder="ABCD1234"
                     />
                     <span className={hint}>
-                      Credits whoever invited you — one level, 20% of our revenue on what you do.
+                      {t('signin.creditsWhoeverInvitedYou')}
                     </span>
                   </label>
                 )}
@@ -284,14 +341,14 @@ export default function SignIn() {
                   <>
                     No account yet?{' '}
                     <button type="button" onClick={() => setMode('signup')} className="font-semibold text-[var(--kl-gold-deep)] hover:underline">
-                      Create one
+                      {t('signin.createOne')}
                     </button>
                   </>
                 ) : (
                   <>
                     By creating an account you accept the{' '}
                     <Link to="/safety" className="font-semibold text-[var(--kl-gold-deep)] hover:underline">
-                      community standards
+                      {t('signin.communityStandards')}
                     </Link>
                     .
                   </>

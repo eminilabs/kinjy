@@ -1,6 +1,8 @@
 """Kinjy · social-service — posts, feed modes, algorithm marketplace, reactions."""
 from __future__ import annotations
 
+import hashlib
+import html as html_module
 import json
 import logging
 import re
@@ -8,12 +10,13 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import httpx
-from fastapi import BackgroundTasks, Depends, HTTPException, Query
+from fastapi import BackgroundTasks, Depends, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.orm import Session as OrmSession
 
-from common import events, notify
+from common import events, notify, settings
 from common.auth import AdminUser, CurrentUser, MaybeUser
 from common.database import SessionLocal, get_db
 from common.ids import new_id
@@ -23,6 +26,7 @@ from common import ageclient, classifier, mediasign
 from common.agesafety import engine as age_engine, rating_strictness
 
 import agefilter
+import linkpreview
 import moderation
 import models
 import ranking
@@ -31,6 +35,7 @@ log = logging.getLogger("social-service")
 USER_URL = "http://user-service:8000"
 MEDIA_URL = "http://media-service:8000"
 MESSAGING_URL = "http://messaging-service:8000"
+COMMUNITY_URL = "http://community-service:8000"
 
 
 def live(_topic: str, _event: str, **data) -> None:
@@ -379,6 +384,19 @@ def _post_out(
     signed_media = {
         m.media_id: mediasign.sign_url(m.url, m.media_id, viewer) for m in media
     }
+    # A feed passes the batch it resolved for the whole page. A single-post
+    # response - creating one, editing one, opening one by link - passed
+    # nothing, so `author` came back null and the card had no name to show
+    # until something refetched it. Whoever posted saw the wrong name on their
+    # own post until they reloaded. Resolving it here rather than at each call
+    # site, because four of them had already forgotten.
+    if authors is None:
+        wanted = {post.author_id}
+        if post.repost_of:
+            original = db.get(models.Post, post.repost_of)
+            if original is not None:
+                wanted.add(original.author_id)
+        authors = _resolve_authors(wanted)
     return {
         "id": post.id,
         "author_id": post.author_id,
@@ -452,6 +470,109 @@ def _author_ids(db: OrmSession, posts: list[models.Post]) -> set[str]:
     return ids
 
 
+def _with_actors(item: dict, actors: dict[str, dict]) -> dict:
+    """Attach "people you follow who were here" to a post on its way out.
+
+    Read from the post the card actually shows: on a repost that is the
+    original, which is where the reactions and comments live.
+    """
+    source = item.get("repost_of") or item
+    found = actors.get(source.get("id") or "")
+    if found:
+        item["known_actors"] = found
+    return item
+
+
+def _known_actors(
+    db: OrmSession,
+    viewer: str | None,
+    following: set[str] | frozenset[str],
+    posts: list[models.Post],
+    per_post: int = 3,
+) -> dict[str, dict]:
+    """People this viewer follows who have reacted to or commented on each post.
+
+    "Three people liked this" is noise; "Ama and two others liked this" is a
+    reason to look. So only people the viewer actually follows are named, and
+    the rest are a count.
+
+    One query for reactions and one for comments across the whole page, rather
+    than two per post: a feed of twenty was forty round trips the moment this
+    was written per-card.
+
+    Returns {post_id: {"people": [{id, name, avatar, action}], "others": n}}.
+    `others` counts everybody else who acted, so a post can say "Ama and 40
+    others" without naming forty strangers.
+    """
+    if not posts:
+        return {}
+    ids = [p.id for p in posts] + [p.repost_of for p in posts if p.repost_of]
+    ids = list(dict.fromkeys(i for i in ids if i))
+    if not ids:
+        return {}
+
+    # Totals first, for everyone - the "and N others" part does not depend on
+    # who the viewer knows.
+    totals: dict[str, set[str]] = {}
+    for post_id, user_id in db.execute(
+        select(models.Reaction.post_id, models.Reaction.user_id)
+        .where(models.Reaction.post_id.in_(ids))
+    ).all():
+        totals.setdefault(post_id, set()).add(user_id)
+    for post_id, user_id in db.execute(
+        select(models.Comment.post_id, models.Comment.author_id)
+        .where(models.Comment.post_id.in_(ids), models.Comment.status == "published")
+    ).all():
+        totals.setdefault(post_id, set()).add(user_id)
+
+    known = set(following)
+    named: dict[str, list[tuple[str, str]]] = {}
+    if known:
+        for post_id, user_id in db.execute(
+            select(models.Reaction.post_id, models.Reaction.user_id)
+            .where(models.Reaction.post_id.in_(ids), models.Reaction.user_id.in_(known))
+            .order_by(models.Reaction.created_at.desc())
+        ).all():
+            bucket = named.setdefault(post_id, [])
+            if len(bucket) < per_post and user_id not in [u for u, _ in bucket]:
+                bucket.append((user_id, "reacted"))
+        for post_id, user_id in db.execute(
+            select(models.Comment.post_id, models.Comment.author_id)
+            .where(
+                models.Comment.post_id.in_(ids),
+                models.Comment.author_id.in_(known),
+                models.Comment.status == "published",
+            )
+            .order_by(models.Comment.created_at.desc())
+        ).all():
+            bucket = named.setdefault(post_id, [])
+            if len(bucket) < per_post and user_id not in [u for u, _ in bucket]:
+                bucket.append((user_id, "commented"))
+
+    profiles = _resolve_authors({u for bucket in named.values() for u, _ in bucket})
+    out: dict[str, dict] = {}
+    for post_id in ids:
+        bucket = named.get(post_id, [])
+        everyone = totals.get(post_id, set())
+        # The viewer's own action is not news to them.
+        everyone = {u for u in everyone if u != viewer}
+        if not bucket and not everyone:
+            continue
+        people = []
+        for user_id, action in bucket:
+            profile = profiles.get(user_id)
+            people.append({
+                "id": user_id,
+                "name": (profile or {}).get("display_name") or (profile or {}).get("handle") or "Someone",
+                "handle": (profile or {}).get("handle"),
+                "avatar_url": (profile or {}).get("avatar_url"),
+                "action": action,
+            })
+        named_ids = {u for u, _ in bucket}
+        out[post_id] = {"people": people, "others": max(0, len(everyone - named_ids))}
+    return out
+
+
 def _reposted_by(db: OrmSession, viewer: str | None, posts: list[models.Post]) -> set[str]:
     """Which of these posts the viewer has already reposted — in one query.
 
@@ -493,6 +614,22 @@ def _resolve_authors(ids: set[str]) -> dict[str, dict]:
     except Exception as exc:
         log.warning("could not resolve post authors: %s", exc)
         return {}
+
+
+def _refuse_or_404(profile, detail: str = "Post not found") -> None:
+    """Raise for a viewer who may not see something.
+
+    Fails closed either way; only the explanation differs. A degraded age
+    lookup is a fault on our side and is retryable, so it must not be dressed
+    up as a missing post - a member sent looking for content that is in front
+    of them learns to distrust the whole surface.
+    """
+    if getattr(profile, "degraded", False):
+        raise HTTPException(
+            status_code=503,
+            detail="We could not check your account just now. Please try again.",
+        )
+    raise HTTPException(status_code=404, detail=detail)
 
 
 def _viewer_age(user_id: str | None):
@@ -586,8 +723,10 @@ def _context(db: OrmSession, principal) -> ranking.Context:
 async def create_post(payload: PostIn, principal: CurrentUser, db: OrmSession = Depends(get_db)):
     if payload.visibility == "circle":
         _require_own_circle(principal.user_id, payload.circle_id)
-    if payload.visibility == "community" and not payload.community_id:
-        raise HTTPException(status_code=400, detail="A community post needs community_id")
+    if payload.visibility == "community":
+        if not payload.community_id:
+            raise HTTPException(status_code=400, detail="A community post needs community_id")
+        _require_membership(principal.user_id, payload.community_id)
     if not payload.body.strip() and not payload.media:
         raise HTTPException(status_code=400, detail="A post needs a body or media")
 
@@ -597,6 +736,11 @@ async def create_post(payload: PostIn, principal: CurrentUser, db: OrmSession = 
     # a stray pointer the audience rule might one day read.
     if payload.visibility != "circle":
         data["circle_id"] = None
+    # Same reasoning for the community pointer: left on a public post it is a
+    # stray id the audience rule might one day read, and a post that is public
+    # has no business claiming to belong to a group.
+    if payload.visibility != "community":
+        data["community_id"] = None
     post = models.Post(
         id=new_id("pst"),
         author_id=principal.user_id,
@@ -661,6 +805,152 @@ async def create_post(payload: PostIn, principal: CurrentUser, db: OrmSession = 
 
 # Declared before /posts/{post_id}: FastAPI matches in order, and the
 # parameterised route would otherwise read "by" as a post id.
+@app.get("/link-preview", tags=["posts"])
+def link_preview(url: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """The card for a link somebody pasted into a post.
+
+    Signed in only. An endpoint that fetches an arbitrary URL on request is a
+    small open proxy if anybody may call it: the request would come from this
+    server's address, with this server's reputation attached.
+
+    Answers are cached, successes and failures alike. Without caching the
+    failure, a link to a site that is down is re-fetched by every viewer of
+    that post, every time - this platform pointing a crowd at somebody else's
+    server.
+    """
+    key = hashlib.sha256(url.strip().encode("utf-8")).hexdigest()
+    cached = db.get(models.LinkPreview, key)
+    now = datetime.now(timezone.utc)
+    if cached:
+        age = now - cached.fetched_at
+        fresh_for = timedelta(hours=1) if cached.failed_at else timedelta(days=7)
+        if age < fresh_for:
+            if cached.failed_at:
+                raise HTTPException(status_code=422, detail="That link has no preview")
+            return {
+                "url": cached.url, "title": cached.title, "description": cached.description,
+                "image": cached.image_url, "site_name": cached.site_name, "cached": True,
+            }
+
+    try:
+        card = linkpreview.fetch(url)
+    except linkpreview.UnsafeURL as exc:
+        # The reason is not returned. "That link points inside a private
+        # network" is a yes/no oracle for what exists on the private network,
+        # answered one guess at a time.
+        log.info("link preview refused: %s", exc)
+        row = cached or models.LinkPreview(url_hash=key, url=url[:2000])
+        row.failed_at = now
+        row.fetched_at = now
+        db.merge(row)
+        db.commit()
+        raise HTTPException(status_code=422, detail="That link has no preview")
+
+    row = cached or models.LinkPreview(url_hash=key, url=url[:2000])
+    row.url = card["url"][:2000]
+    row.title = card["title"]
+    row.description = card["description"]
+    row.image_url = card["image"]
+    row.site_name = card["site_name"]
+    row.failed_at = None
+    row.fetched_at = now
+    db.merge(row)
+    db.commit()
+    return {**card, "cached": False}
+
+
+@app.get("/share/p/{post_id}", response_class=HTMLResponse, tags=["posts"])
+def post_share_card(post_id: str, request: Request, db: OrmSession = Depends(get_db)):
+    """The page a link unfurler sees for a shared post.
+
+    The app is a single-page build: one index.html with one set of meta tags,
+    written before any post existed. A crawler does not run JavaScript, so
+    every shared post previewed as the same generic Kinjy card no matter what
+    was in it.
+
+    This renders the tags for one post. Caddy sends crawler requests for /p/<id>
+    here and everyone else to the app, so a person still gets the real page.
+
+    Only a public post gets a card, and only one that a signed-out visitor could
+    read anyway. A crawler has no account and no age, so it is treated exactly
+    as the most restricted visitor: anything else would turn a preview into a
+    way of reading a post the link's recipient could not open - and would put
+    the first line of a followers-only post into a chat app's preview.
+    """
+    post = db.get(models.Post, post_id)
+    fallback = f"{settings.FRONTEND_URL.rstrip('/')}/og-image.png"
+    site = settings.FRONTEND_URL.rstrip("/")
+
+    title, description, image = "Kinjy", DEFAULT_SHARE_DESCRIPTION, fallback
+    if (
+        post is not None
+        and post.status == "published"
+        and post.visibility == "public"
+        and agefilter.visible_to(db, _viewer_age(None), post.id)
+    ):
+        author = _resolve_authors({post.author_id}).get(post.author_id) or {}
+        who = author.get("display_name") or author.get("handle") or "Someone"
+        title = f"{who} on Kinjy"
+        body = htmlish_to_text(post.body).strip()
+        description = (body[:197] + "…") if len(body) > 200 else (body or DEFAULT_SHARE_DESCRIPTION)
+        # The post's own picture if it has one, Kinjy's otherwise - a card with
+        # no image is a grey rectangle in every chat app.
+        shot = db.scalar(
+            select(models.PostMedia)
+            .where(models.PostMedia.post_id == post.id, models.PostMedia.kind == "image")
+            .order_by(models.PostMedia.position)
+        )
+        if shot is not None and shot.url:
+            # Signed, like every other read of post media. A bare media URL is
+            # a 404: the bytes are served against a ticket, so an unsigned
+            # og:image is a blank rectangle in every chat app. `sign_url` binds
+            # an absent viewer as the literal "anon", which is exactly what a
+            # crawler is. Long-lived because an unfurler may come back to the
+            # link days later - it is a public post's picture either way.
+            image = mediasign.sign_url(shot.url, shot.media_id, None, ttl=60 * 60 * 24 * 14)
+
+    url = f"{site}/p/{post_id}"
+    return HTMLResponse(_share_html(title, description, image, url))
+
+
+DEFAULT_SHARE_DESCRIPTION = (
+    "Social, forums, family trees, memorials, commerce and AI agents — in one elegant ecosystem."
+)
+
+
+def htmlish_to_text(body: str) -> str:
+    """An article body is HTML; a preview description is not."""
+    return html_module.unescape(re.sub(r"<[^>]+>", " ", body or "")).replace("\xa0", " ")
+
+
+def _share_html(title: str, description: str, image: str, url: str) -> str:
+    """The smallest page that previews correctly and still works if a person
+    lands on it - a crawler that passes the link to a human must not leave them
+    staring at a blank document."""
+    esc = html_module.escape
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{esc(title)}</title>
+<meta name="description" content="{esc(description)}">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Kinjy">
+<meta property="og:title" content="{esc(title)}">
+<meta property="og:description" content="{esc(description)}">
+<meta property="og:url" content="{esc(url)}">
+<meta property="og:image" content="{esc(image)}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{esc(title)}">
+<meta name="twitter:description" content="{esc(description)}">
+<meta name="twitter:image" content="{esc(image)}">
+<link rel="canonical" href="{esc(url)}">
+<meta http-equiv="refresh" content="0; url={esc(url)}">
+</head>
+<body><p><a href="{esc(url)}">{esc(title)}</a></p></body>
+</html>"""
+
+
 @app.get("/posts/by/{author_id}", tags=["posts"])
 def posts_by_author(
     author_id: str,
@@ -1275,7 +1565,7 @@ def get_post(post_id: str, principal: MaybeUser, db: OrmSession = Depends(get_db
     # 404 rather than 403: confirming that a post exists but is out of reach
     # tells somebody exactly which links are worth passing to a minor.
     if not agefilter.visible_to(db, age, post.id):
-        raise HTTPException(status_code=404, detail="Post not found")
+        _refuse_or_404(age)
     post.views_count += 1
     db.commit()
     return _apply_prefs(_post_out(post, db, viewer=viewer), prefs)
@@ -1296,8 +1586,9 @@ def get_post_media(post_id: str, principal: MaybeUser, db: OrmSession = Depends(
     # The bytes themselves. Withholding the URL is the only protection that
     # actually works - a client told "do not display this" has already
     # downloaded it.
-    if not agefilter.visible_to(db, _viewer_age(viewer_id), post.id):
-        raise HTTPException(status_code=404, detail="Post not found")
+    viewer_age = _viewer_age(viewer_id)
+    if not agefilter.visible_to(db, viewer_age, post.id):
+        _refuse_or_404(viewer_age)
     rows = db.scalars(
         select(models.PostMedia)
         .where(models.PostMedia.post_id == post.id)
@@ -1433,16 +1724,19 @@ def delete_post(
 
 @dataclass(frozen=True)
 class Audience:
-    """Whose restricted posts a viewer may read, as user-service answers it.
+    """Whose restricted posts a viewer may read, as the other services answer it.
 
-    ``following`` opens followers-only posts and ``circles`` opens posts shared
-    to those circles. Empty for a visitor — and empty when user-service cannot
-    be reached, so an outage hides restricted posts instead of showing them.
+    ``following`` opens followers-only posts, ``circles`` opens posts shared to
+    those circles, and ``communities`` opens the posts written inside groups
+    this member has joined. Empty for a visitor — and empty when the service
+    that owns the answer cannot be reached, so an outage hides restricted posts
+    instead of showing them.
     """
 
     viewer: str | None = None
     following: frozenset[str] = frozenset()
     circles: frozenset[str] = frozenset()
+    communities: frozenset[str] = frozenset()
 
 
 def _viewer_audience(viewer: str | None) -> Audience:
@@ -1453,14 +1747,36 @@ def _viewer_audience(viewer: str | None) -> Audience:
     """
     if not viewer:
         return Audience()
+    following: frozenset[str] = frozenset()
+    circles: frozenset[str] = frozenset()
     try:
         response = httpx.get(f"{USER_URL}/internal/viewer-audience/{viewer}", timeout=4)
         response.raise_for_status()
         data = response.json()
-        return Audience(viewer, frozenset(data.get("following", [])), frozenset(data.get("circles", [])))
+        following = frozenset(data.get("following", []))
+        circles = frozenset(data.get("circles", []))
     except Exception as exc:
         log.warning("audience lookup failed for %s: %s", viewer, exc)
-        return Audience(viewer)
+    # Asked separately, and allowed to fail on its own: a community-service
+    # outage should cost this member their group posts, not their whole feed.
+    # Either failure narrows what is shown; neither widens it.
+    return Audience(viewer, following, circles, _viewer_communities(viewer))
+
+
+def _viewer_communities(viewer: str) -> frozenset[str]:
+    """The communities this member belongs to, from the service that owns them.
+
+    Not cached and not copied into this service's tables. A membership list
+    that lags is somebody still reading a group they were removed from, which
+    is the failure a group must not have.
+    """
+    try:
+        response = httpx.get(f"{COMMUNITY_URL}/internal/member-communities/{viewer}", timeout=4)
+        response.raise_for_status()
+        return frozenset(response.json().get("communities", []))
+    except Exception as exc:
+        log.warning("community lookup failed for %s: %s", viewer, exc)
+        return frozenset()
 
 
 def _can_see(post: models.Post, audience: Audience) -> bool:
@@ -1468,8 +1784,12 @@ def _can_see(post: models.Post, audience: Audience) -> bool:
 
     The single-post form of :func:`_audience_clause`. The two are one rule
     spelled twice — once for Python, once for SQL — and sit side by side so
-    they cannot drift. Community posts are read through their community, not
-    here, so outside it only their author sees them.
+    they cannot drift.
+
+    A community post is readable by the members of that community, which is
+    what makes a community a group rather than a mailing list nobody receives:
+    before this, such a post was addressed to a community and then visible to
+    its author alone.
     """
     if post.visibility == "public":
         return True
@@ -1481,6 +1801,8 @@ def _can_see(post: models.Post, audience: Audience) -> bool:
         return post.author_id in audience.following
     if post.visibility == "circle":
         return post.circle_id in audience.circles
+    if post.visibility == "community":
+        return post.community_id in audience.communities
     return False
 
 
@@ -1495,7 +1817,56 @@ def _audience_clause(audience: Audience):
         )
     if audience.circles:
         clauses.append(and_(models.Post.visibility == "circle", models.Post.circle_id.in_(audience.circles)))
+    if audience.communities:
+        clauses.append(
+            and_(models.Post.visibility == "community",
+                 models.Post.community_id.in_(audience.communities))
+        )
     return or_(*clauses)
+
+
+def _require_membership(author_id: str, community_id: str) -> None:
+    """A post may only be addressed to a community its author has joined.
+
+    Asked of community-service, which owns membership. Fails closed for the
+    same reason the circle check does: without this, `community_id` was a free
+    text field and anybody could write into any group - including a private one
+    they had been refused, or a secret one whose id they guessed.
+
+    A pending request is not membership. That distinction is the only thing a
+    private community has.
+    """
+    try:
+        response = httpx.get(
+            f"{COMMUNITY_URL}/internal/membership/{community_id}/{author_id}", timeout=4)
+    except Exception as exc:
+        log.warning("membership lookup failed for %s in %s: %s", author_id, community_id, exc)
+        raise HTTPException(
+            status_code=503, detail="Could not check that community right now. Try again.")
+    if response.status_code != 200:
+        raise HTTPException(status_code=404, detail="Community not found")
+    row = response.json()
+    if not row.get("member"):
+        if row.get("status") == "pending":
+            raise HTTPException(
+                status_code=403, detail="Your request to join is still waiting to be answered")
+        if row.get("status") == "banned":
+            raise HTTPException(status_code=403, detail="You cannot post in this community")
+        # Not a member and never asked. Says "join first" rather than "no such
+        # community", because a public community is not a secret.
+        raise HTTPException(status_code=403, detail="Join this community before posting in it")
+
+
+def _community_summary(community_id: str) -> dict:
+    try:
+        response = httpx.get(f"{COMMUNITY_URL}/internal/communities/{community_id}", timeout=4)
+    except Exception as exc:
+        log.warning("community lookup failed for %s: %s", community_id, exc)
+        raise HTTPException(
+            status_code=503, detail="Could not reach that community right now. Try again.")
+    if response.status_code != 200:
+        raise HTTPException(status_code=404, detail="Community not found")
+    return response.json()
 
 
 def _require_own_circle(author_id: str, circle_id: str | None) -> None:
@@ -1550,6 +1921,73 @@ def _visible_posts(principal, age, audience: Audience):
     # so restricted rows are never candidates in the first place.
     stmt = agefilter.restrict_query(stmt, age)
     return stmt.where(_audience_clause(audience))
+
+
+@app.get("/feed/community/{community_id}", tags=["feed"])
+def community_feed(
+    community_id: str,
+    principal: MaybeUser,
+    limit: int = 20,
+    offset: int = 0,
+    db: OrmSession = Depends(get_db),
+):
+    """What has been posted inside one community.
+
+    Lives here rather than in community-service because posts live here, and
+    under /feed because the gateway sends /api/communities to the other
+    service. It is the surface a group needs and did not have: posts addressed
+    to a community were excluded from every feed and listed by nothing, so they
+    went in and were seen by their author alone.
+
+    Who may read it follows the kind of community, which is the promise its
+    members joined under:
+
+    * **public** - anyone, signed in or not. That is what public means, and a
+      public group nobody can read before joining cannot be judged worth
+      joining.
+    * **private, secret, paid** - active members only. A pending request is not
+      membership, which is the one thing a private community has.
+
+    Age filtering is applied exactly as on every other surface, before paging.
+    A community is not a way around it.
+    """
+    viewer = principal.user_id if principal else None
+    community = _community_summary(community_id)
+
+    if community["kind"] != "public":
+        if viewer is None:
+            # 404, not 403: for a secret community, "you may not read this"
+            # confirms it exists to whoever guessed the id.
+            raise HTTPException(status_code=404, detail="Community not found")
+        if community_id not in _viewer_communities(viewer):
+            raise HTTPException(status_code=404, detail="Community not found")
+
+    prefs = _viewer_prefs(viewer)
+    age = _viewer_age(viewer)
+    stmt = select(models.Post).where(
+        models.Post.community_id == community_id,
+        models.Post.visibility == "community",
+        models.Post.status == "published",
+    )
+    stmt = agefilter.restrict_query(stmt, age)
+
+    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    rows = db.scalars(
+        stmt.order_by(models.Post.created_at.desc()).limit(min(limit, 50)).offset(offset)
+    ).all()
+    authors = _resolve_authors(_author_ids(db, list(rows)))
+    reposted = _reposted_by(db, viewer, list(rows))
+    items = [
+        _apply_prefs(_post_out(p, db, viewer=viewer, authors=authors, reposted=reposted), prefs)
+        for p in rows
+    ]
+    return {
+        "community": {"id": community["id"], "name": community["name"],
+                      "slug": community["slug"], "kind": community["kind"],
+                      "members_count": community["members_count"]},
+        "total": total,
+        "items": agefilter.filter_items(db, age, items),
+    }
 
 
 class ReadableIn(BaseModel):
@@ -1677,38 +2115,71 @@ def feed(
             # Saying "you follow nobody" would be a lie the member cannot see
             # through; an error they can retry is the honest answer.
             raise HTTPException(status_code=503, detail="Your feed could not be loaded right now. Please try again.")
-        if not following:
+        # Your own posts belong in your own feed. They were excluded because the
+        # audience was exactly the set of people you follow, and nobody follows
+        # themselves - so a member could publish something, reload, and find the
+        # feed empty, which is what this looked like from the outside: posting
+        # into a void.
+        audience = set(following) | ({viewer} if viewer else set())
+        if not audience:
             return {"mode": mode, "algorithm": "chronological", "items": [],
                     "age_tier": agefilter.tier_of(age), "degraded": age.degraded,
                     "empty_reason": "not_following_anyone"}
         rows = db.scalars(
-            stmt.where(models.Post.author_id.in_(following))
+            stmt.where(models.Post.author_id.in_(audience))
             .order_by(models.Post.created_at.desc())
             .limit(limit)
             .offset(offset)
         ).all()
+        if not rows and not following:
+            # Still empty, and the reason is the one the member can act on.
+            return {"mode": mode, "algorithm": "chronological", "items": [],
+                    "age_tier": agefilter.tier_of(age), "degraded": age.degraded,
+                    "empty_reason": "not_following_anyone"}
         authors = _resolve_authors(_author_ids(db, list(rows)))
         reposted = _reposted_by(db, viewer, list(rows))
+        actors = _known_actors(db, viewer, following, list(rows))
         return {
             "mode": mode,
             "algorithm": "chronological",
             "ranked": False,
             "age_tier": agefilter.tier_of(age),
             "degraded": age.degraded,
-            "items": [_apply_prefs(_post_out(p, db, viewer=viewer, authors=authors, reposted=reposted), prefs) for p in rows],
+            # A full page means there is probably another; the next request
+            # settles it by coming back empty. Cheaper than counting the table
+            # on every scroll.
+            "has_more": len(rows) == limit,
+            "items": [
+                _with_actors(
+                    _apply_prefs(_post_out(p, db, viewer=viewer, authors=authors, reposted=reposted), prefs),
+                    actors,
+                )
+                for p in rows
+            ],
         }
 
     if mode == "new":
         rows = db.scalars(stmt.order_by(models.Post.created_at.desc()).limit(limit).offset(offset)).all()
         authors = _resolve_authors(_author_ids(db, list(rows)))
         reposted = _reposted_by(db, viewer, list(rows))
+        actors = _known_actors(db, viewer, following, list(rows))
         return {
             "mode": mode,
             "algorithm": "chronological",
             "ranked": False,
             "age_tier": agefilter.tier_of(age),
             "degraded": age.degraded,
-            "items": [_apply_prefs(_post_out(p, db, viewer=viewer, authors=authors, reposted=reposted), prefs) for p in rows],
+            # A full page means there is probably another; the next request
+            # settles it by coming back empty. Cheaper than counting the table
+            # on every scroll.
+            "has_more": len(rows) == limit,
+            "items": [
+                _with_actors(
+                    _apply_prefs(_post_out(p, db, viewer=viewer, authors=authors, reposted=reposted), prefs),
+                    actors,
+                )
+                for p in rows
+            ],
         }
 
     if mode == "local" and city:
@@ -1744,6 +2215,7 @@ def feed(
     page = scored[offset : offset + limit]
     ranked_authors = _resolve_authors(_author_ids(db, [item.post for item in page]))
     reposted = _reposted_by(db, viewer, [item.post for item in page])
+    actors = _known_actors(db, viewer, following, [item.post for item in page])
 
     return {
         "mode": mode,
@@ -1759,9 +2231,15 @@ def feed(
             "data_saver": bool(prefs.get("data_saver")),
             "degraded": bool(prefs.get("degraded")) or age.degraded,
         },
+        # Exact here: the whole candidate pool was scored, so we know.
+        "has_more": offset + limit < len(scored),
         "items": [
-            _apply_prefs(
-                _post_out(item.post, db, why=item.why(), viewer=viewer, authors=ranked_authors, reposted=reposted), prefs
+            _with_actors(
+                _apply_prefs(
+                    _post_out(item.post, db, why=item.why(), viewer=viewer, authors=ranked_authors, reposted=reposted),
+                    prefs,
+                ),
+                actors,
             )
             for item in page
         ],
@@ -2266,7 +2744,7 @@ def add_comment(post_id: str, payload: CommentIn, principal: CurrentUser, db: Or
     # comment would then carry their handle into a thread they cannot see.
     commenter = _viewer_age(principal.user_id)
     if not agefilter.visible_to(db, commenter, post.id):
-        raise HTTPException(status_code=404, detail="Post not found")
+        _refuse_or_404(commenter)
 
     parent = db.get(models.Comment, payload.parent_id) if payload.parent_id else None
     if payload.parent_id and (parent is None or parent.post_id != post_id):
@@ -2419,7 +2897,7 @@ def list_comments(
     # yours to read either — by audience, then by age.
     _readable_post(db, post_id, principal.user_id if principal else None)
     if not agefilter.visible_to(db, age, post_id):
-        raise HTTPException(status_code=404, detail="Post not found")
+        _refuse_or_404(age)
 
     stmt = select(models.Comment).where(
         models.Comment.post_id == post_id, models.Comment.status == "published"

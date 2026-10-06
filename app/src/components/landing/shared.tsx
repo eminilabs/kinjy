@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { Link } from 'react-router'
-import { ChevronDown, Menu, Moon, Sun, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { ChevronDown, Globe, Menu, Moon, Sun, X } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { LANGUAGES, setLanguage } from '@/i18n'
 import { NAV_MORE, NAV_PRIMARY, STORE_LINKS } from './data'
 import { useLandingTheme } from './useLandingTheme'
 
@@ -38,16 +40,16 @@ function PlayMark() {
  * buttons that lead nowhere.
  */
 export function StoreBadges({ framed = false }: { framed?: boolean }) {
+  const { t } = useTranslation()
   const badges = [
-    { href: STORE_LINKS.appStore, mark: <AppleMark />, small: 'Télécharger sur', big: 'App Store' },
-    { href: STORE_LINKS.googlePlay, mark: <PlayMark />, small: 'Disponible sur', big: 'Google Play' },
+    { href: STORE_LINKS.appStore, mark: <AppleMark />, small: t('landing.stores.appleSmall'), big: 'App Store' },
+    { href: STORE_LINKS.googlePlay, mark: <PlayMark />, small: t('landing.stores.playSmall'), big: 'Google Play' },
   ].filter((b) => b.href)
 
   if (!badges.length) {
     return (
       <p className={framed ? 'text-[15px] text-[var(--kl-night-mid)]' : 'text-[15px] text-[var(--kl-low)]'}>
-        Applications iOS et Android bientôt disponibles. Kinjy fonctionne dès maintenant dans votre navigateur, sur
-        téléphone comme sur ordinateur.
+        {t('landing.stores.soon')}
       </p>
     )
   }
@@ -98,6 +100,7 @@ function MoreMenu() {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const close = useCallback(() => setOpen(false), [])
+  const { t } = useTranslation()
   useDismiss(open, close, ref)
   return (
     <div ref={ref} className="relative">
@@ -108,7 +111,7 @@ function MoreMenu() {
         aria-controls="kl-more"
         className={`flex items-center gap-1 ${linkHover}`}
       >
-        Plus
+        {t('nav.more')}
         <ChevronDown size={15} className={open ? 'rotate-180 transition-transform' : 'transition-transform'} aria-hidden="true" />
       </button>
       {open && (
@@ -119,7 +122,7 @@ function MoreMenu() {
           {NAV_MORE.map((l) => (
             <li key={l.to}>
               <Link to={l.to} onClick={close} className="block rounded-[10px] px-3.5 py-2.5 hover:bg-[var(--kl-paper)]">
-                {l.label}
+                {t(l.label)}
               </Link>
             </li>
           ))}
@@ -131,6 +134,7 @@ function MoreMenu() {
 
 function AccountLinks({ stacked = false }: { stacked?: boolean }) {
   const { user } = useAuth()
+  const { t } = useTranslation()
   const pill =
     'kl-sheen rounded-[20px] px-[26px] py-[13px] text-center text-[15px] font-semibold shadow-[0_8px_20px_-8px_rgba(169,118,28,.5)]'
   return (
@@ -138,19 +142,19 @@ function AccountLinks({ stacked = false }: { stacked?: boolean }) {
       {user ? (
         <>
           <Link to="/dashboard" className={`text-[15px] font-medium ${linkHover}`}>
-            Tableau de bord
+            {t('nav.dashboard')}
           </Link>
           <Link to="/hub" className={pill}>
-            Ouvrir Kinjy
+            {t('nav.openApp')}
           </Link>
         </>
       ) : (
         <>
           <Link to="/join?mode=signin" className={`text-[15px] font-medium ${linkHover}`}>
-            Se connecter
+            {t('nav.signIn')}
           </Link>
           <Link to="/join?mode=signup" className={pill}>
-            S’inscrire
+            {t('nav.signUp')}
           </Link>
         </>
       )}
@@ -160,13 +164,14 @@ function AccountLinks({ stacked = false }: { stacked?: boolean }) {
 
 function ThemeToggle() {
   const { theme, toggle } = useLandingTheme()
+  const { t } = useTranslation()
   const toDark = theme === 'light'
   return (
     <button
       type="button"
       onClick={toggle}
-      aria-label={toDark ? 'Passer en mode sombre' : 'Passer en mode clair'}
-      title={toDark ? 'Mode sombre' : 'Mode clair'}
+      aria-label={toDark ? t('nav.toDark') : t('nav.toLight')}
+      title={toDark ? t('nav.dark') : t('nav.light')}
       className="grid h-11 w-11 place-items-center rounded-full border border-[var(--kl-paper-2)] transition-colors hover:border-[var(--kl-gold)] hover:text-[var(--kl-gold-deep)]"
     >
       {toDark ? <Moon size={17} aria-hidden="true" /> : <Sun size={17} aria-hidden="true" />}
@@ -174,15 +179,75 @@ function ThemeToggle() {
   )
 }
 
+/**
+ * The language switcher.
+ *
+ * The landing page had none: it rendered one language, hard-coded, under
+ * `<html lang="en">`, and a visitor who read any of the other four had no way
+ * to say so. Translating the copy without this would have changed nothing
+ * anybody could see.
+ */
+function LanguageMenu() {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const close = useCallback(() => setOpen(false), [])
+  const { t, i18n } = useTranslation()
+  useDismiss(open, close, ref)
+
+  const current = LANGUAGES.find((l) => l.code === i18n.language) ?? LANGUAGES[0]
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-controls="kl-lang"
+        aria-label={t('nav.chooseLanguage')}
+        title={t('nav.language')}
+        className="grid h-11 w-11 place-items-center rounded-full border border-[var(--kl-paper-2)] transition-colors hover:border-[var(--kl-gold)] hover:text-[var(--kl-gold-deep)]"
+      >
+        <Globe size={17} aria-hidden="true" />
+      </button>
+      {open && (
+        <ul
+          id="kl-lang"
+          className="absolute end-0 top-[calc(100%+12px)] z-30 min-w-[180px] rounded-2xl border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] p-2 shadow-[0_24px_48px_-24px_var(--kl-shadow)]"
+        >
+          {LANGUAGES.map((l) => (
+            <li key={l.code}>
+              <button
+                type="button"
+                lang={l.code}
+                aria-current={l.code === current.code}
+                onClick={() => {
+                  setLanguage(l.code)
+                  close()
+                }}
+                className={`block w-full rounded-[10px] px-3.5 py-2.5 text-start hover:bg-[var(--kl-paper)] ${
+                  l.code === current.code ? 'font-semibold text-[var(--kl-gold-deep)]' : ''
+                }`}
+              >
+                {l.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 export function LandingNav() {
   const [menuOpen, setMenuOpen] = useState(false)
+  const { t } = useTranslation()
   const ref = useRef<HTMLElement>(null)
   const close = useCallback(() => setMenuOpen(false), [])
   useDismiss(menuOpen, close, ref)
 
   return (
-    <nav ref={ref} className="kl-pad-x relative z-10 flex items-center justify-between gap-6 py-[26px]" aria-label="Navigation principale">
-      <Link to="/" aria-label="Kinjy, accueil">
+    <nav ref={ref} className="kl-pad-x relative z-10 flex items-center justify-between gap-6 py-[26px]" aria-label={t('nav.menu', 'Navigation')}>
+      <Link to="/" aria-label={t('nav.home')}>
         <Brand />
       </Link>
 
@@ -190,12 +255,13 @@ export function LandingNav() {
       <div className="hidden items-center gap-8 text-[15px] font-medium lg:flex">
         {NAV_PRIMARY.map((l) => (
           <Link key={l.to} to={l.to} className={linkHover}>
-            {l.label}
+            {t(l.label)}
           </Link>
         ))}
         <MoreMenu />
       </div>
       <div className="flex items-center gap-3">
+        <LanguageMenu />
         <ThemeToggle />
         <div className="hidden lg:block">
           <AccountLinks />
@@ -207,7 +273,7 @@ export function LandingNav() {
         onClick={() => setMenuOpen((v) => !v)}
         aria-expanded={menuOpen}
         aria-controls="kl-menu"
-        aria-label={menuOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
+        aria-label={menuOpen ? t('nav.closeMenu') : t('nav.openMenu')}
         className="grid h-11 w-11 place-items-center rounded-full border border-[var(--kl-paper-2)] lg:hidden"
       >
         {menuOpen ? <X size={18} aria-hidden="true" /> : <Menu size={18} aria-hidden="true" />}
@@ -222,7 +288,7 @@ export function LandingNav() {
             {[...NAV_PRIMARY, ...NAV_MORE].map((l) => (
               <li key={l.to}>
                 <Link to={l.to} onClick={close} className="block rounded-[10px] px-3 py-2.5 hover:bg-[var(--kl-paper)]">
-                  {l.label}
+                  {t(l.label)}
                 </Link>
               </li>
             ))}

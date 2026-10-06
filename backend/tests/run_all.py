@@ -48,6 +48,9 @@ BACKEND = HERE.parent
 
 BASE = os.environ.get("KINJY_API", "http://localhost:8200/api")
 
+# Scratch space for pytest, inside the repo and git-ignored.
+PYTEST_TMP = BACKEND / ".pytest-tmp"
+
 # Per-suite timeout. Generous - some of these register a dozen members and wait
 # on classification - but finite, because a hung suite that never returns is
 # indistinguishable from a slow one until the day it never returns at all.
@@ -164,16 +167,58 @@ def classify(code: int, out: str) -> tuple[str, str]:
     return "FAIL", f"exit {code} - {tail[0].strip()[:80]}"
 
 
+def subprocess_env() -> dict:
+    """The environment a suite gets: this shell's, plus what a container gives.
+
+    Two things the host does not provide and `/app` inside a container does:
+
+    * `backend` on the import path. A script's `sys.path[0]` is its own
+      directory, so a suite in `tests/` cannot `from common import security`
+      however the working directory is set. One suite does exactly that and
+      failed on the host while passing in the container.
+    * the service configuration. A suite that mints a token with
+      `common.security` has to sign it with the same `JWT_SECRET` the services
+      verify with, or the gateway rejects it and the suite fails somewhere far
+      away from the cause - as a `KeyError` on a response body, in that case.
+
+    Values already set in the environment win, so `KINJY_API=... run_all.py`
+    still points the run wherever it was told to.
+    """
+    env = dict(os.environ)
+    existing = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = str(BACKEND) + (os.pathsep + existing if existing else "")
+
+    dotenv = BACKEND.parent / ".env"
+    if dotenv.exists():
+        for raw in dotenv.read_text(encoding="utf-8", errors="replace").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            if key and key not in env:
+                env[key] = value.split(" #")[0].strip().strip('"').strip("'")
+    return env
+
+
 def run_one(path: Path) -> tuple[str, str, float, str]:
     started = time.monotonic()
     if path.name.startswith("test_"):
-        cmd = [sys.executable, "-m", "pytest", str(path), "-q"]
+        # pytest is given a temp directory inside the repository rather than
+        # the one it picks under the OS temp. On at least one machine here that
+        # default is not writable - every test using `tmp_path` failed with
+        # WinError 5 while the code was fine - and an environment that fails 24
+        # tests for a reason that has nothing to do with the code is worse than
+        # no signal, because the first instinct is to go looking in the code.
+        PYTEST_TMP.mkdir(parents=True, exist_ok=True)
+        cmd = [sys.executable, "-m", "pytest", str(path), "-q",
+               "--basetemp", str(PYTEST_TMP)]
     else:
         cmd = [sys.executable, str(path)]
     try:
         proc = subprocess.run(
             cmd, cwd=BACKEND, capture_output=True, text=True,
-            timeout=TIMEOUT, errors="replace",
+            timeout=TIMEOUT, errors="replace", env=subprocess_env(),
         )
         out = (proc.stdout or "") + (proc.stderr or "")
         code = proc.returncode

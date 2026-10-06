@@ -116,7 +116,23 @@ async def upload(
     else:
         kind = ALLOWED.get(content_type)
         if kind is None:
-            raise HTTPException(status_code=415, detail=f"Unsupported content type: {file.content_type}")
+            # Named, with the way out. HEIC is the common case by a distance -
+            # it is what an iPhone produces by default, no browser displays it,
+            # and "Unsupported content type: image/heic" tells the member
+            # nothing they can act on.
+            if content_type in ("image/heic", "image/heif"):
+                raise HTTPException(
+                    status_code=415,
+                    detail=(
+                        "This photo is in Apple's HEIC format, which browsers cannot show. "
+                        "On iPhone: Settings > Camera > Formats > Most Compatible, or share "
+                        "the photo as JPEG."
+                    ),
+                )
+            raise HTTPException(
+                status_code=415,
+                detail=f"{file.content_type} files are not supported here. Use JPEG, PNG, WebP or GIF.",
+            )
 
     asset_id = new_id("mda")
     folder = ROOT / principal.user_id[:12]
@@ -308,6 +324,8 @@ def _remote_failure_detail(exc: uploadcenter.UploadCenterError) -> str:
     # stay in the log: they describe our vendor, not the member's problem.
     if exc.status == 422:
         return "The storage service's checks refused this file"
+    if isinstance(exc, uploadcenter.UploadTooSlow):
+        return "The file took too long to upload; check your connection and try again"
     if exc.status == 504:
         return "The storage service took too long to check this file; try again"
     return "File storage is unavailable right now; try again"

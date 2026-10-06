@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Fingerprint, Monitor, Plus, ShieldCheck } from 'lucide-react'
+import { Fingerprint, KeyRound, Monitor, Plus, ShieldCheck } from 'lucide-react'
 import { useApi } from '@/hooks/useApi'
+import { useAuth } from '@/hooks/useAuth'
 import { ApiError, kaluta, passkeysSupported, type DeviceSession, type Passkey } from '@/lib/api'
-import { Badge, Panel, PanelState } from './primitives'
+import { Badge, Panel, PanelState, inputClass } from './primitives'
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
@@ -27,6 +28,169 @@ function describeDevice(session: DeviceSession): string {
   return `${browser} on ${os}`
 }
 
+/** The same rule the server enforces, so the form can say so before sending. */
+const PASSWORD_MIN = 10
+const weakBecause = (value: string): string | null => {
+  if (value.length < PASSWORD_MIN) return `Use at least ${PASSWORD_MIN} characters.`
+  // Mirrors the server: letters alone or digits alone are refused.
+  if (/^\d+$/.test(value) || /^[A-Za-z]+$/.test(value))
+    return 'Mix letters with digits or symbols.'
+  return null
+}
+
+/**
+ * Change the password.
+ *
+ * The current password is asked for even though the member is already signed
+ * in, because being signed in is not the same as being the member - and the
+ * panel says why rather than looking like a pointless extra field.
+ *
+ * It also says, before the member commits, that the other devices will be
+ * signed out. That is the behaviour and not an option, so leaving it to be
+ * discovered afterwards would be a surprise rather than a feature.
+ */
+function PasswordPanel({ onChanged }: { onChanged: () => void }) {
+  const { user, signOut } = useAuth()
+  const [current, setCurrent] = useState('')
+  const [next, setNext] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [done, setDone] = useState<string | null>(null)
+
+  const weak = next ? weakBecause(next) : null
+  const mismatch = Boolean(confirm) && next !== confirm
+  const same = Boolean(current) && current === next
+  const ready = Boolean(current && next && confirm) && !weak && !mismatch && !same
+
+  const submit = async () => {
+    setBusy(true)
+    setError(null)
+    setDone(null)
+    try {
+      const result = await kaluta.account.changePassword(current, next)
+      setCurrent('')
+      setNext('')
+      setConfirm('')
+      setDone(
+        result.sessions_ended > 0
+          ? `Password changed. ${result.sessions_ended} other ${
+              result.sessions_ended === 1 ? 'device was' : 'devices were'
+            } signed out.`
+          : 'Password changed. No other device was signed in.',
+      )
+      // This device was not kept - the only honest thing left is to send them
+      // back to sign in with the password they just set.
+      if (result.signed_out_here) {
+        await signOut()
+        return
+      }
+      onChanged()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not change your password')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (user && !user.has_password) {
+    return (
+      <Panel title="Password" subtitle="This account signs in with a passkey.">
+        <p className="text-sm leading-relaxed text-text-mid">
+          There is no password on this account, so there is none to change. You sign in with a
+          passkey held on your own device.
+        </p>
+      </Panel>
+    )
+  }
+
+  return (
+    <Panel
+      title="Password"
+      subtitle="Changing it signs out every other device."
+      action={
+        user?.password_changed_at ? (
+          <Badge tone="neutral">Changed {when(user.password_changed_at)}</Badge>
+        ) : null
+      }
+    >
+      <div className="space-y-3.5">
+        <label className="block">
+          <span className="caption mb-1.5 block">Current password</span>
+          <input
+            className={inputClass}
+            type="password"
+            value={current}
+            onChange={(e) => setCurrent(e.target.value)}
+            autoComplete="current-password"
+          />
+        </label>
+
+        <label className="block">
+          <span className="caption mb-1.5 block">New password</span>
+          <input
+            className={inputClass}
+            type="password"
+            value={next}
+            onChange={(e) => setNext(e.target.value)}
+            autoComplete="new-password"
+            aria-describedby="password-rule"
+          />
+          <span id="password-rule" className={`caption mt-1.5 block ${weak ? 'text-amber-200' : ''}`}>
+            {weak ?? `At least ${PASSWORD_MIN} characters, mixing letters with digits or symbols.`}
+          </span>
+        </label>
+
+        <label className="block">
+          <span className="caption mb-1.5 block">New password again</span>
+          <input
+            className={inputClass}
+            type="password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            autoComplete="new-password"
+          />
+          {mismatch && (
+            <span className="caption mt-1.5 block text-amber-200">These two do not match.</span>
+          )}
+        </label>
+
+        {same && (
+          <p className="caption text-amber-200">
+            That is the password you already have &mdash; choose a different one.
+          </p>
+        )}
+
+        {error && (
+          <p role="alert" className="text-sm text-red-200">
+            {error}
+          </p>
+        )}
+        {done && (
+          <p role="status" className="text-sm text-emerald-200">
+            {done}
+          </p>
+        )}
+
+        <button
+          type="button"
+          onClick={submit}
+          disabled={!ready || busy}
+          className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-2 text-xs font-bold text-ink disabled:opacity-40"
+        >
+          <KeyRound size={13} aria-hidden="true" />
+          {busy ? 'Changing…' : 'Change password'}
+        </button>
+
+        <p className="caption">
+          Every other signed-in device is signed out, including your phone. This one stays signed
+          in.
+        </p>
+      </div>
+    </Panel>
+  )
+}
+
 /**
  * Security — device management and passkeys (blueprint §5).
  *
@@ -35,6 +199,7 @@ function describeDevice(session: DeviceSession): string {
  * the biometric never leaves the member's device.
  */
 export default function Security() {
+  const auth = useAuth()
   const sessions = useApi<DeviceSession[]>(() => kaluta.account.sessions(), [])
   const passkeys = useApi<Passkey[]>(() => kaluta.account.passkeys(), [])
   const [busy, setBusy] = useState<string | null>(null)
@@ -78,6 +243,16 @@ export default function Security() {
 
   return (
     <div className="grid gap-5 lg:grid-cols-2">
+      <PasswordPanel
+        onChanged={() => {
+          // The change revoked the other sessions, and refreshed the account's
+          // password date. Without both reloads the screen would go on showing
+          // devices that are already out and a stale "changed" badge.
+          sessions.reload()
+          void auth.refresh()
+        }}
+      />
+
       <Panel
         title="Devices"
         subtitle="Every place you are signed in. Revoking one does not touch the others."

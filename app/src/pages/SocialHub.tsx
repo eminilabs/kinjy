@@ -8,6 +8,7 @@ import Composer from '@/components/social/Composer'
 import FeedModeMenu from '@/components/social/FeedModeMenu'
 import Suggestions from '@/components/social/Suggestions'
 import PostCard from '@/components/social/PostCard'
+import PostDialog from '@/components/social/PostDialog'
 import { ApiError, kaluta, type Algorithm, type FeedMode, type FeedPage, type Post } from '@/lib/api'
 import { FEATURES } from '@/lib/features'
 import { slotAboveOrb } from '@/lib/floating'
@@ -48,7 +49,9 @@ export default function SocialHub() {
     setParams(next, { replace: true })
   }
   const setMode = (next: string) => {
-    // Switching mode drops a filter that belonged to the previous one.
+    // Switching mode drops a filter that belonged to the previous one, and
+    // retires the "showing New instead" notice: the member has chosen.
+    setFellBackFrom(null)
     const params = next === 'new' ? new URLSearchParams() : new URLSearchParams({ mode: next })
     setParams(params, { replace: true })
   }
@@ -124,12 +127,23 @@ export default function SocialHub() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const [feed, setFeed] = useState<FeedPage | null>(null)
+  // The post opened over the feed, and the paging state for scroll-to-load.
+  const [openPost, setOpenPost] = useState<Post | null>(null)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const observer = useRef<IntersectionObserver | null>(null)
   // Cards report themselves as seen from here rather than each card firing its
   // own request — one observer, one batched call.
   const feedRef = useRef<HTMLDivElement>(null)
   useViewTracking(feedRef, Boolean(feed))
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Set when Following turned out to be empty and New was shown instead, so
+  // the switch is explained to the member rather than silent.
+  const [fellBackFrom, setFellBackFrom] = useState<string | null>(null)
+  // A mode the member asked for after being shown the fallback. Without this,
+  // "Show Following anyway" is undone by the very fallback that offered it: the
+  // feed comes back empty, falls back again, and the button does nothing.
+  const insistedOn = useRef<string | null>(null)
   // New posts are announced, not injected. Splicing a stranger's post into the
   // list while somebody is reading moves the text under their eyes; a banner
   // lets them choose the moment.
@@ -185,7 +199,28 @@ export default function SocialHub() {
         },
         { signal: controller.signal },
       )
-      if (!controller.signal.aborted) setFeed(page)
+      if (controller.signal.aborted) return
+      // A Following feed with nobody followed is empty by construction, and a
+      // member who opens the app to a blank screen reads it as their posts
+      // having gone, not as a mode behaving exactly as specified. Changing the
+      // stored default fixes new accounts; this fixes the ones already carrying
+      // "following", whose stored preference cannot be told apart from a
+      // deliberate choice - so rather than overwrite it, the feed falls back
+      // for this visit and says why.
+      if (
+        page.items.length === 0 &&
+        page.empty_reason === 'not_following_anyone' &&
+        mode !== 'new' &&
+        insistedOn.current !== mode
+      ) {
+        setFellBackFrom(mode)
+        setParams(new URLSearchParams(), { replace: true })
+        return
+      }
+      // Deliberately not cleared here: the fallback's own successful load is
+      // what arrives next, and clearing on success wiped the explanation before
+      // it could be read. It is cleared when the member picks a mode instead.
+      setFeed(page)
     } catch (err) {
       if (controller.signal.aborted) return
       setError(err instanceof ApiError ? err.message : 'Could not load the feed')
@@ -207,6 +242,74 @@ export default function SocialHub() {
     )
   }
   if (!user) return <Navigate to="/join?mode=signin" replace />
+
+  /**
+   * The next page, appended.
+   *
+   * Guarded on `loadingMore` as well as `has_more` because the sentinel can
+   * cross the viewport several times in one flick, and without the guard a
+   * fast scroll fires four identical requests and shows each page twice.
+   *
+   * Posts are deduplicated on the way in: a ranked feed re-scores a moving
+   * candidate pool, so the same post can legitimately appear in two pages, and
+   * React would then warn about duplicate keys and render it twice.
+   */
+  const loadMore = useCallback(async () => {
+    if (!feed || loadingMore || !feed.has_more) return
+    setLoadingMore(true)
+    try {
+      const page = await kaluta.feeds.page({
+        mode,
+        algorithm_id: algorithmId,
+        city: mode === 'local' ? city || undefined : undefined,
+        country: mode === 'country' ? country || undefined : undefined,
+        topic: mode === 'topics' ? topic || undefined : undefined,
+        offset: feed.items.length,
+      })
+      setFeed((current) => {
+        if (!current) return current
+        const seen = new Set(current.items.map((item) => item.id))
+        const fresh = page.items.filter((item) => !seen.has(item.id))
+        return { ...current, items: [...current.items, ...fresh], has_more: page.has_more }
+      })
+    } catch (err) {
+      // A failed page is not a failed feed: what is already on screen stays,
+      // and the next scroll tries again. Logged rather than swallowed - a
+      // silent catch here is how a broken "load more" looks exactly like a
+      // feed that has ended.
+      console.warn('could not load the next page of the feed', err)
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [feed, loadingMore, mode, algorithmId, city, country, topic])
+
+  /**
+   * Watch the end of the feed.
+   *
+   * A callback ref rather than an effect over a ref: the sentinel is rendered
+   * conditionally, so the moment it exists is not the moment any dependency
+   * list changes. Keyed on `loadMore` so the observer always closes over the
+   * current page offset.
+   *
+   * rootMargin starts the fetch before the member reaches the end, so the next
+   * page is usually already there when they get to it.
+   */
+  const watchEnd = useCallback(
+    (node: HTMLDivElement | null) => {
+      observer.current?.disconnect()
+      if (!node) return
+      observer.current = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) void loadMore()
+        },
+        { rootMargin: '600px' },
+      )
+      observer.current.observe(node)
+    },
+    [loadMore],
+  )
+
+  useEffect(() => () => observer.current?.disconnect(), [])
 
   const prepend = (post: Post) => setFeed((f) => (f ? { ...f, items: [post, ...f.items] } : f))
   const drop = (postId: string) =>
@@ -434,6 +537,26 @@ export default function SocialHub() {
               </div>
             )}
 
+            {fellBackFrom && !loading && (
+              <p className="cloud-card mb-3 p-3 text-sm text-text-mid">
+                You are not following anyone yet, so this is the New feed.{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Clearing the marker first, so asking for Following again
+                    // is not immediately undone by the fallback that brought
+                    // this notice up.
+                    insistedOn.current = fellBackFrom
+                    setFellBackFrom(null)
+                    setMode(fellBackFrom)
+                  }}
+                  className="underline hover:text-text-hi"
+                >
+                  Show Following anyway
+                </button>
+              </p>
+            )}
+
             {!loading && !error && feed?.items.length === 0 && (
               <div className="cloud-card p-10 text-center">
                 <span className="mx-auto grid h-12 w-12 place-items-center rounded-[14px] bg-gold/15 text-gold-soft">
@@ -451,17 +574,45 @@ export default function SocialHub() {
                   key={post.id}
                   post={post}
                   algorithmId={feed.algorithm}
-                mode={feed.mode}
+                  mode={feed.mode}
                   isOwn={post.author_id === user.id}
                   currentUserId={user.id}
                   onHidden={drop}
+                  onOpen={() => setOpenPost(post)}
                   onChangeAlgorithm={() =>
                     document.getElementById('algorithm-picker')?.focus({ preventScroll: false })
                   }
                 />
               ))}
+
+            {/* What the observer watches. Rendered only while there is more,
+                so reaching the real end stops the requests rather than leaving
+                a sentinel sitting at the bottom firing forever. */}
+            {!loading && feed?.has_more && (
+              <div ref={watchEnd} className="py-6 text-center" aria-hidden="true">
+                {loadingMore && (
+                  <span className="inline-flex items-center gap-2 text-sm text-text-low" role="status">
+                    <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                    Loading more…
+                  </span>
+                )}
+              </div>
+            )}
+
+            {!loading && feed && !feed.has_more && feed.items.length > 0 && (
+              <p className="py-6 text-center text-xs text-text-low">You are all caught up.</p>
+            )}
           </div>
       </div>
+
+      {openPost && (
+        <PostDialog
+          post={openPost}
+          currentUserId={user.id}
+          onClose={() => setOpenPost(null)}
+          onHidden={drop}
+        />
+      )}
 
       {/* Compose stays one tap away once the card has scrolled off. */}
       {scrolled && (

@@ -3,7 +3,7 @@ import { Link, NavLink, useLocation } from 'react-router'
 import { ChevronDown, Globe, Menu, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
-import { LANGUAGES } from '@/i18n'
+import { LANGUAGES, setLanguage } from '@/i18n'
 import { useAuth } from '@/hooks/useAuth'
 import { isRouteAvailable } from '@/lib/features'
 import { useMyProfile } from '@/hooks/useMyProfile'
@@ -75,7 +75,10 @@ export default function Navbar() {
   }, [i18n.language])
 
   const switchLanguage = (code: string) => {
-    void i18n.changeLanguage(code)
+    // Through the shared helper, so this menu and the landing page's switcher
+    // agree and the choice survives a reload. They used to disagree: this one
+    // changed the language for the visit and forgot it.
+    setLanguage(code)
     setLangOpen(false)
   }
 

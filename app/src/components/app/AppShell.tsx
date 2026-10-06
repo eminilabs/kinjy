@@ -58,7 +58,13 @@ export default function AppShell({
       </div>
     )
   }
-  if (!user) return <Navigate to="/join?mode=signin" replace />
+  if (!user) {
+    // Carry the destination so a link somebody was sent opens after they sign
+    // in, rather than dropping them on their dashboard wondering what they
+    // clicked.
+    const next = encodeURIComponent(location.pathname + location.search)
+    return <Navigate to={`/join?mode=signin&next=${next}`} replace />
+  }
 
   // `noise-overlay` is the project's dithering: a very dark gradient across a
   // whole viewport has too few 8-bit steps to be smooth, and the grain breaks

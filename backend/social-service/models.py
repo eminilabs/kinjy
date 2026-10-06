@@ -364,3 +364,27 @@ class ModerationAppeal(Base):
     due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
     answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class LinkPreview(Base):
+    """One unfurled link, kept so the same URL is not fetched again.
+
+    Keyed on a hash of the URL rather than the URL itself: a URL can be longer
+    than an index allows, and the hash makes the key a fixed size.
+
+    `failed_at` is as useful as a success. Without it, a link to a site that is
+    down or refuses us is re-fetched by every viewer of that post, every time -
+    which is this platform pointing a crowd at somebody else's server.
+    """
+
+    __tablename__ = "link_previews"
+    __table_args__ = {"schema": SCHEMA}
+
+    url_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str] = mapped_column(Text, default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    image_url: Mapped[str | None] = mapped_column(Text)
+    site_name: Mapped[str] = mapped_column(String(120), default="")
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

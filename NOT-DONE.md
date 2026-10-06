@@ -489,3 +489,145 @@ What the tests do not cover:
   the navigation needed to remount the route discards the patch; stopping the
   service is both simpler and closer to the real failure.
 
+## Deploying leaves deleted files behind (02/10)
+
+- **`deploy.sh` copies but never deletes, and it finally cost a deploy.** The
+  tree ships as a tar extracted over the top of the last one, so a file removed
+  from the repository lives on the server forever. Merging develop deleted four
+  unused shadcn components whose packages had also been dropped from
+  `package.json`; the stale copies on the server were still in the build
+  context, so `npm run build` type-checked files that no longer exist here and
+  failed on four modules nobody imports. Nine stale files were found in all,
+  dating back to 16 August, including `backend/social-service/classifier.py` -
+  moved to `common/` on 25/09 and still sitting in production a week later.
+  They have been removed by hand. The fix belongs in `deploy.sh`: extract into
+  a fresh directory and swap, or carry a manifest and delete what is not in it.
+  Until then every deploy inherits whatever the last one left.
+- **Nothing was lost by it this time** - the deploy failed at the build step,
+  before production was touched, which is the behaviour you want. But the
+  failure pointed at files that do not exist in the repository, which is a
+  confusing place to start debugging.
+
+
+## The imported members have not signed in yet (05/10)
+
+- **Nobody has verified that DSM's password hashes authenticate here.** The
+  library half is settled: passlib's bcrypt accepts a PHP-style `$2y$` hash
+  with the same cost and salt, verifies the right password and rejects a wrong
+  one, and the `error reading bcrypt version` line in the logs is trapped and
+  harmless. An earlier run that raised `UnknownHashError` proved nothing - the
+  test string had been mangled by shell quoting, not by passlib.
+- **What is still unknown is the shape of the 14,791 hashes now in production.**
+  All 14,791 rows have *a* hash, but their prefixes were never counted. If any
+  of them are legacy MD5 or SHA rather than bcrypt, those members cannot sign
+  in and will get "wrong password" rather than anything that explains itself.
+  The check is one query - the prefix and length distribution of
+  `auth.users.password_hash` - and it was not run because reading production
+  was refused at the time. **Run it before telling anyone their account is
+  ready.** A non-bcrypt hash is not a disaster: it means a forced password
+  reset for those members, which is a decision to take knowingly rather than
+  discover from support messages.
+- **No imported member has actually logged in end to end.** Hash shape aside,
+  the sign-in path for these accounts - no `users.profiles` row until it is
+  materialised on demand, no age profile for the 7,484 without a usable birth
+  date - has not been exercised once against production.
+
+## A 200 MB limit nobody could reach (05/10)
+
+- ~~Large photo and video posts fail against UploadCenter.~~ Fixed and deployed
+  on 05/10: the client that sends the file had a flat 15-second timeout, which
+  httpx also applies to the write phase, so that was the budget for pushing the
+  whole body to R2 on a service advertising a 200 MB limit. The send now has
+  its own budget scaled to the file.
+- **The suite had been green through all of it.** Its large-file check uploaded
+  an mp4 header followed by 8 MB of random bytes; local storage never looked
+  inside a file, so it passed, and UploadCenter - which decodes what it is
+  given - refused it for being a fake, hiding the timeout underneath. A test
+  fixture that no real storage would accept is not a test of storage.
+- **The deploy restarted postgres and rabbitmq, not only media-service.**
+  `up -d --build media-service` recreated its dependencies too, so the whole
+  platform took a short database blip for a one-service fix. Everything came
+  back healthy (13/13), but a targeted restart is not as targeted as it looks.
+
+## Changing a password is not recovering one (05/10)
+
+- ~~There is still no "forgot password" flow.~~ Built on 05/10: ask by email,
+  a one-hour single-use link, a new password, every session signed out. It is
+  also what answers a legacy hash - a member whose imported hash cannot verify
+  can get back in without anybody editing the database by hand.
+- ~~But nothing can be sent until SMTP is configured.~~ Configured on 05/10:
+  Resend over SMTP, from no-reply@kinjy.com, on a key whose account has
+  kinjy.com verified. The flow is live on kinjy.com.
+- ~~No mail has ever been sent from production.~~ One real message was sent on
+  05/10 to the owner's own Gmail address and Resend reported it `delivered`. So
+  the path works end to end: DNS, DKIM and the handoff. What that single send
+  does *not* prove is which folder it landed in, or how other providers treat
+  it - one delivered message to one Gmail account is a working path, not a
+  reputation.
+- **The sending account is shared with Digital Shopping Mall.** Its reset mail
+  goes out on the same Resend key, so a bounce or spam complaint earned there
+  costs Kinjy reputation too, and one address was already in a suppressed state
+  on that account. Worth separating if either platform starts sending volume.
+- **No Kinjy address has ever been verified.** `email_verified` is on the model
+  and is never set to true anywhere, so a reset link goes to whatever address
+  was typed at registration or imported from DSM. That is the usual model and is
+  not wrong, but it is worth knowing it is unchecked.
+- **An access token outlives the change by up to 30 minutes.** Revoking the
+  sessions stops renewal, but a token already issued keeps working until it
+  expires, so somebody who had the account is out within the half hour rather
+  than at the moment the member presses the button. Closing that properly means
+  checking `password_changed_at` against the token's `iat` on each request.
+- **Nobody is told their password changed.** There is no email or notification,
+  so a change made by somebody else passes unannounced. The endpoint publishes
+  `user.password_changed` for a notifier that does not exist yet.
+- **The new panel is in English only**, like the rest of the security screen.
+  It joins the pages still waiting on the translation pass.
+
+## Communities became groups (05/10)
+
+- ~~A post addressed to a community was visible to nobody.~~ Fixed and deployed
+  on 05/10: members post into a community, its posts reach its members' feeds
+  and its own page, membership is checked before posting, and a member can
+  leave. Communities have shareable URLs (`/communities/<slug>`), and the
+  destination survives the sign-in door.
+- ~~A public community is readable by the API without signing in, but not in
+  the browser.~~ Opened on 05/10: a visitor reads a public community and its
+  posts with the marketing chrome rather than the member shell, and the join
+  button sends them to sign in and back. Private shows its name and description
+  but not its posts, so it can be asked to join; secret stays a 404.
+- **Nothing notifies a community when somebody posts in it.** Joining a group
+  and then having to go and look at it is most of the way back to a forum. The
+  notify helper is already used for join requests and could carry this.
+- **The community page is English**, like the rest of the app pages, while the
+  landing, sign-in and reset pages are in five languages.
+- **No pagination on a community's posts.** The endpoint takes limit and offset
+  and the page asks for the first twenty, so a busy group silently stops at
+  twenty until somebody wires the rest.
+
+## Feed, video and link previews (06/10)
+
+- ~~A post could not be opened without leaving the feed, video used the
+  browser's own player, and there was no scroll-to-load.~~ Built on 06/10:
+  post dialog with comments, "people you follow who were here", scroll-to-load,
+  a custom video player that follows the viewport, and link unfurling.
+- **Scroll-to-load and video play-on-scroll were never seen working in a
+  browser.** Both depend on IntersectionObserver, which delivers no callbacks
+  while the page is hidden — and the test pane runs hidden, confirmed by
+  `document.hidden === true` and by a hand-made observer on the same node also
+  never firing. The data path underneath was checked instead (six pages, 120
+  posts, no overlap), and the attach bug that *was* found came from reading the
+  code, not from the browser. Somebody should scroll a real feed before this is
+  called done.
+- **A photo post previews as the generic Kinjy card until it is classified.**
+  The share card only describes a post a signed-out visitor could read, and a
+  freshly posted image is UNCLASSIFIED, which fails closed. That is the right
+  call for safety and the wrong experience for somebody sharing a photo the
+  moment they post it. Measured in the local stack only — nobody has timed how
+  long classification takes in production.
+- **The unfurler list in the Caddyfile is a list.** An unfurler not on it gets
+  the app and therefore the generic card. That is the safe failure, but it does
+  mean the list needs revisiting when a messenger matters enough.
+- **Only the first link in a post is unfurled**, and only when the post has no
+  media of its own.
+- **Nothing refreshes a link card.** A page that changes its title keeps the
+  old one for seven days, and a dead link keeps its card until then too.

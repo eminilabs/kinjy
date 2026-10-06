@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { useLocation } from 'react-router'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
+import { useAuth } from '@/hooks/useAuth'
 import Navbar from './Navbar'
 import Footer from './Footer'
 import LiveAssistant from './assistant/LiveAssistant'
@@ -54,7 +55,13 @@ export function isAppRoute(pathname: string): boolean {
  */
 export default function Layout({ children }: { children: ReactNode }) {
   const location = useLocation()
-  const inApp = isAppRoute(location.pathname)
+  const { user } = useAuth()
+  // An app route brings its own chrome *when there is somebody signed in to
+  // show it to*. AppShell's sidebar is a profile card, pinned modules and a
+  // circles list - nothing a visitor has. The pages a visitor can actually
+  // reach (a public community) would otherwise render with no header at all,
+  // and no way back to the rest of the site.
+  const inApp = isAppRoute(location.pathname) && Boolean(user)
   // The landing page brings its own navigation, footer and paper palette (the
   // "Kinjy Landing" design); the dark marketing chrome around it would frame
   // a light page in a second, different header.

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { FEATURES } from '@/lib/features'
 import { CHAT, COMMUNITIES, COMPOSER_TOOLS } from './data'
 
@@ -26,22 +27,21 @@ function Stage({ gradient, glow, children }: { gradient: string; glow: ReactNode
 const iconBox = 'mb-7 grid h-[72px] w-[72px] place-items-center rounded-[10px]'
 
 /** Calls are named only while they are switched on (lib/features.ts). */
-const TALK_CHANNELS = FEATURES.calls
-  ? 'Messages privés en temps réel, salons en direct et appels en tête-à-tête.'
-  : 'Messages privés et salons en direct, en temps réel.'
+const TALK_CHANNELS = FEATURES.calls ? 'landing.features.talkCalls' : 'landing.features.talk'
 
 export default function LandingFeatures() {
+  const { t } = useTranslation()
   return (
     <>
       <section className="kl-pad-x pb-10 pt-[120px] text-center">
         <h2 className="kl-h2 mx-auto max-w-[820px]" style={{ fontSize: 'clamp(40px, 5.4vw, 68px)' }}>
-          Un réseau pensé pour les gens, pas pour le scroll.
+          {t('landing.features.title')}
         </h2>
       </section>
 
       <section id="commus" className="kl-split kl-pad-x gap-14 py-[60px]">
         <FeatureText
-          title="Trouvez votre tribu."
+          title={t('landing.features.t1')}
           icon={
             <div className={`${iconBox} kl-sheen shadow-[0_14px_30px_-14px_rgba(169,118,28,.6)]`} aria-hidden="true">
               <div className="flex">
@@ -51,8 +51,7 @@ export default function LandingFeatures() {
             </div>
           }
         >
-          Cuisine, escalade, vinyles, code : rejoignez des communautés qui partagent vos passions, ou lancez la vôtre en
-          deux minutes.
+          {t('landing.features.communities')}
         </FeatureText>
         <Stage
           gradient="linear-gradient(160deg, var(--kl-stage-a), var(--kl-stage-b))"
@@ -75,7 +74,7 @@ export default function LandingFeatures() {
                     {g.meta}
                   </div>
                 </div>
-                <span className="rounded-[20px] border border-[var(--kl-invert-border)] bg-[var(--kl-invert)] px-4 py-[9px] text-[13px] font-semibold text-[var(--kl-invert-ink)]">Rejoindre</span>
+                <span className="rounded-[20px] border border-[var(--kl-invert-border)] bg-[var(--kl-invert)] px-4 py-[9px] text-[13px] font-semibold text-[var(--kl-invert-ink)]">{t('landing.features.join')}</span>
               </div>
             ))}
           </div>
@@ -88,12 +87,12 @@ export default function LandingFeatures() {
           glow={<div className="absolute -bottom-[60px] -left-10 h-[240px] w-[240px] rounded-full bg-[var(--kl-coral)] opacity-35 blur-[80px]" />}
         >
           <div className="kl-glass relative mx-auto max-w-[380px] rounded-2xl p-[18px] shadow-[0_30px_50px_-28px_var(--kl-shadow)]">
-            <div className="mb-3 text-[15px] font-bold">Nouvelle publication</div>
+            <div className="mb-3 text-[15px] font-bold">{t('landing.features.newPost')}</div>
             <div
               className="kl-mono grid h-[170px] place-items-center rounded-[10px] text-[11px] text-[var(--kl-low)]"
               style={{ background: 'repeating-linear-gradient(45deg, var(--kl-paper-2) 0 8px, var(--kl-paper) 8px 16px)' }}
             >
-              3 photos
+              {t('landing.features.photos')}
             </div>
             <div className="mb-1.5 mt-4 h-2 overflow-hidden rounded-[9px] bg-[var(--kl-paper-2)]">
               <div className="kl-grow h-full rounded-[9px]" style={{ background: 'linear-gradient(90deg, #F0C878, #D9A648, #8FB8E8)', ['--kl-dur' as string]: '4s' }} />
@@ -106,34 +105,33 @@ export default function LandingFeatures() {
               ))}
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-[13px] text-[var(--kl-low)]">Partager dans · Photo argentique</span>
-              <span className="rounded-[20px] bg-[var(--kl-coral)] px-5 py-2.5 text-sm font-bold text-white">Publier</span>
+              <span className="text-[13px] text-[var(--kl-low)]">{t('landing.features.shareIn')}</span>
+              <span className="rounded-[20px] bg-[var(--kl-coral)] px-5 py-2.5 text-sm font-bold text-white">{t('landing.features.publish')}</span>
             </div>
           </div>
         </Stage>
         <FeatureText
-          title="Publiez ce qui compte."
+          title={t('landing.features.t2')}
           icon={
             <div className={`${iconBox} bg-[var(--kl-coral)] shadow-[0_14px_30px_-14px_rgba(224,120,86,.6)]`} aria-hidden="true">
               <span className="h-6 w-6 rotate-45 rounded bg-white" />
             </div>
           }
         >
-          Photos, vidéos et articles mis en page. Des outils simples pour partager du contenu soigné avec les bonnes
-          personnes, et choisir qui le voit.
+          {t('landing.features.publishText')}
         </FeatureText>
       </section>
 
       <section id="echanges" className="kl-split kl-pad-x gap-14 pb-[120px] pt-[60px]">
         <FeatureText
-          title="Parlez pour de vrai."
+          title={t('landing.features.t3')}
           icon={
             <div className={`${iconBox} bg-[var(--kl-sky)] shadow-[0_14px_30px_-14px_rgba(143,184,232,.8)]`} aria-hidden="true">
               <span className="h-6 w-[30px] bg-[var(--kl-night)]" style={{ borderRadius: '10px 10px 10px 2px' }} />
             </div>
           }
         >
-          {TALK_CHANNELS} Organisez la prochaine sortie sans quitter votre communauté.
+          {t(TALK_CHANNELS)} {t('landing.features.talkTail')}
         </FeatureText>
         <Stage
           gradient="linear-gradient(150deg, var(--kl-stage-a), var(--kl-stage-b))"
@@ -143,13 +141,13 @@ export default function LandingFeatures() {
             <div className="kl-glass mb-1.5 flex items-center gap-2.5 rounded-[10px] px-3.5 py-2.5">
               <div className="grid h-[34px] w-[34px] place-items-center rounded-[10px] bg-[var(--kl-gold-soft)] text-sm font-extrabold text-[var(--kl-on-pastel)]">R</div>
               <div className="leading-[1.2]">
-                <div className="text-sm font-bold">Rando Vercors</div>
-                <div className="text-xs text-[var(--kl-low)]">6 membres en ligne</div>
+                <div className="text-sm font-bold">{t('landing.features.group')}</div>
+                <div className="text-xs text-[var(--kl-low)]">{t('landing.features.online')}</div>
               </div>
             </div>
             {CHAT.map((c) => (
               <div
-                key={c.text}
+                key={t(c.text)}
                 className="kl-rise max-w-[78%] px-4 py-3 text-[15px] leading-[1.4] shadow-[0_12px_24px_-16px_rgba(0,0,0,.3)]"
                 style={{
                   alignSelf: c.mine ? 'flex-end' : 'flex-start',
@@ -159,7 +157,7 @@ export default function LandingFeatures() {
                   ['--kl-delay' as string]: c.delay,
                 }}
               >
-                {c.text}
+                {t(c.text)}
               </div>
             ))}
             <div className="flex gap-[5px] self-start bg-[var(--kl-bubble)] px-[18px] py-3.5" style={{ borderRadius: '20px 20px 20px 6px' }}>

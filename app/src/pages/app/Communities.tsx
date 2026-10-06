@@ -1,8 +1,11 @@
 import { useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router'
 import { Globe, Lock, Plus, Search, UsersRound } from 'lucide-react'
 import AppShell from '@/components/app/AppShell'
+import CommunityView from '@/components/community/CommunityView'
 import MemberQueue from '@/components/community/MemberQueue'
 import { useApi } from '@/hooks/useApi'
+import { useAuth } from '@/hooks/useAuth'
 import { ApiError, kaluta, type Community } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -23,6 +26,12 @@ export default function Communities() {
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [managing, setManaging] = useState<string | null>(null)
+  // Which community is open comes from the URL, not from state: a group you
+  // cannot link to is a group you cannot share, and the back button has to
+  // return to the directory rather than leave the page.
+  const { slug } = useParams()
+  const navigate = useNavigate()
+  const { user } = useAuth()
 
   const create = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -54,6 +63,31 @@ export default function Communities() {
       // A paid community answers 402; that is information, not a failure.
       setNote(err instanceof ApiError ? err.message : 'Could not join')
     }
+  }
+
+  if (slug) {
+    const view = (
+      <CommunityView
+        handle={slug}
+        onBack={() => navigate('/communities')}
+        onChanged={() => list.reload()}
+      />
+    )
+    // A visitor gets the page without the member shell. The shell would either
+    // bounce them to sign in - which is what made "public" meaningless here -
+    // or show them a sidebar of their circles and pinned modules, which they
+    // do not have.
+    if (!user) {
+      return <section className="mx-auto w-full max-w-3xl px-6 py-12">{view}</section>
+    }
+    return (
+      <AppShell
+        title="Communities"
+        subtitle="A group — what is posted here, and the box to add to it."
+      >
+        {view}
+      </AppShell>
+    )
   }
 
   return (
@@ -149,7 +183,11 @@ export default function Communities() {
                   <UsersRound size={17} />
                 </span>
                 <div className="min-w-0">
-                  <h2 className="truncate text-sm font-semibold text-text-hi">{community.name}</h2>
+                  <h2 className="truncate text-sm font-semibold text-text-hi">
+                    <Link to={`/communities/${community.slug}`} className="hover:text-gold-soft">
+                      {community.name}
+                    </Link>
+                  </h2>
                   <p className={cn('caption inline-flex items-center gap-1.5', meta.tone)}>
                     <meta.icon size={11} aria-hidden="true" />
                     {meta.label}
@@ -163,6 +201,12 @@ export default function Communities() {
                 <p className="mt-3 line-clamp-2 text-sm text-text-mid">{community.description}</p>
               )}
               <div className="mt-4 flex flex-wrap gap-2">
+                <Link
+                  to={`/communities/${community.slug}`}
+                  className="rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-2 text-xs font-bold text-ink"
+                >
+                  Open
+                </Link>
                 <button
                   type="button"
                   onClick={() => join(community)}

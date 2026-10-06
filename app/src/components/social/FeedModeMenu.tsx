@@ -52,6 +52,11 @@ export default function FeedModeMenu({
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           aria-haspopup="listbox"
+          // Named, because the button shows the current feed and nothing else:
+          // it was being read as a label rather than a chooser, and a member
+          // reported having "only one feed" while ten sat behind it.
+          aria-label={`${current?.label ?? 'Feed'} — choose a feed (${modes.length} available)`}
+          title={`Choose a feed (${modes.length} available)`}
           className={cn(
             'flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-semibold',
             tok.subtleBg,

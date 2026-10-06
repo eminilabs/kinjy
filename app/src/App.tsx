@@ -21,6 +21,8 @@ const Safety = lazy(() => import('./pages/Safety'))
 const Developers = lazy(() => import('./pages/Developers'))
 const AppDemo = lazy(() => import('./pages/AppDemo'))
 const SignIn = lazy(() => import('./pages/SignIn'))
+const ResetPassword = lazy(() => import('./pages/ResetPassword'))
+const PostPage = lazy(() => import('./pages/PostPage'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const SocialHub = lazy(() => import('./pages/SocialHub'))
 const Circles = lazy(() => import('./pages/app/Circles'))
@@ -82,6 +84,13 @@ export default function App() {
           <Route path="/app" element={<AppDemo />} />
           {/* /join is the public entry point; ?ref= carries the inviter's code. */}
           <Route path="/join" element={<SignIn />} />
+          {/* Both halves of a forgotten password: no token asks for a link,
+              ?token= from the mail sets the new password. */}
+          <Route path="/reset-password" element={<ResetPassword />} />
+          {/* Where a post shared outside Kinjy lands. Public to a visitor:
+              a link that demands a sign-in before showing anything is a link
+              nobody forwards. ?ref= carries the sharer's invitation. */}
+          <Route path="/p/:postId" element={<PostPage />} />
           <Route path="/dashboard" element={<Dashboard />} />
           {/* The member's real feed. /feeds stays the public marketing page. */}
           <Route path="/hub" element={<SocialHub />} />
@@ -89,6 +98,9 @@ export default function App() {
           <Route path="/circles" element={<Circles />} />
           <Route path="/connections" element={<Connections />} />
           <Route path="/communities" element={<Communities />} />
+          {/* One community, by slug. The directory and the community are the
+              same page so a join updates both without a refetch dance. */}
+          <Route path="/communities/:slug" element={<Communities />} />
           <Route path="/forums" element={<Forums />} />
           <Route path="/messages" element={<Messages />} />
           <Route path="/tree" element={gated('familyTree', <FamilyTreeApp />, '/hub')} />
