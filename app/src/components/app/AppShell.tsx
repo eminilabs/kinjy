@@ -136,9 +136,15 @@ export default function AppShell({
             {/* Scrolls on its own. Sticky alone meant a rail taller than the
                 window had its bottom permanently out of reach - which is what
                 happens to anybody who zooms, and to anybody on a short laptop
-                screen. The gutter is hidden until it is needed so the column
-                does not carry a permanent scrollbar. */}
-            <div className="sticky top-[140px] max-h-[calc(100svh-160px)] space-y-3 overflow-y-auto overscroll-contain pe-1 [scrollbar-width:thin]">
+                screen.
+
+                No visible scrollbar: the base layer hides them everywhere, and
+                this used to opt back in with scrollbar-width:thin, which put a
+                track down the side of the rail. The scrolling itself is
+                untouched - wheel, trackpad, touch and keyboard all still move
+                it, which is the whole point of hiding the chrome rather than
+                setting overflow:hidden. */}
+            <div className="sticky top-[140px] max-h-[calc(100svh-160px)] space-y-3 overflow-y-auto overscroll-contain">
               {aside}
             </div>
           </aside>

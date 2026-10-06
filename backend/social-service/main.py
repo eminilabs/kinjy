@@ -3001,3 +3001,71 @@ def stats(db: OrmSession = Depends(get_db)):
         "comments": db.scalar(select(func.count()).select_from(models.Comment)) or 0,
         "algorithms": db.scalar(select(func.count()).select_from(models.Algorithm)) or 0,
     }
+
+
+@app.post("/internal/posts/backfill-media-dimensions", tags=["internal"])
+def backfill_media_dimensions(limit: int = 200, dry_run: bool = True, db: OrmSession = Depends(get_db)):
+    """Copy sizes media-service has measured onto the post media that lack them.
+
+    The feed lays a picture out from what is stored on the post, not from the
+    asset, so backfilling media-service alone changes nothing a reader sees.
+    This is the second half: for every post image with no size, ask
+    media-service what it now knows and write it down.
+
+    Asked rather than joined across the schema, for the same reason attaching
+    does: what the size is, is media-service's answer to give.
+
+    Only rows with no size, so running it again finds nothing left to do.
+    Reaching this needs access to the container; /internal is not routed
+    through the gateway.
+    """
+    rows = db.scalars(
+        select(models.PostMedia)
+        .where(models.PostMedia.kind == "image", models.PostMedia.width.is_(None))
+        .limit(max(1, min(limit, 1000)))
+    ).all()
+
+    # One call per distinct asset: a picture posted twice is one question.
+    wanted = {row.media_id for row in rows if row.media_id}
+    sizes: dict[str, tuple[int, int]] = {}
+    unknown = 0
+    for media_id in wanted:
+        try:
+            response = httpx.get(f"{MEDIA_URL}/internal/media/{media_id}", timeout=5)
+        except httpx.HTTPError as exc:
+            log.warning("backfill could not ask about media %s: %s", media_id, exc)
+            continue
+        if response.status_code != 200:
+            unknown += 1
+            continue
+        asset = response.json()
+        width, height = asset.get("width"), asset.get("height")
+        if isinstance(width, int) and isinstance(height, int) and width > 0 and height > 0:
+            sizes[media_id] = (width, height)
+        else:
+            unknown += 1
+
+    updated = 0
+    for row in rows:
+        size = sizes.get(row.media_id or "")
+        if size is None:
+            continue
+        if not dry_run:
+            row.width, row.height = size
+        updated += 1
+    if not dry_run:
+        db.commit()
+
+    remaining = db.scalar(
+        select(func.count())
+        .select_from(models.PostMedia)
+        .where(models.PostMedia.kind == "image", models.PostMedia.width.is_(None))
+    )
+    return {
+        "dry_run": dry_run,
+        "examined": len(rows),
+        "assets_asked": len(wanted),
+        "updated": updated,
+        "asset_had_no_size": unknown,
+        "still_without_size": remaining,
+    }

@@ -1215,3 +1215,114 @@ def internal_asset(asset_id: str, db: OrmSession = Depends(get_db)):
         "width": asset.width,
         "height": asset.height,
     }
+
+
+@app.post("/internal/media/backfill-dimensions", tags=["internal"])
+def backfill_dimensions(limit: int = 100, dry_run: bool = True, db: OrmSession = Depends(get_db)):
+    """Read the size of images uploaded before the size was being read.
+
+    Everything stored before imagesize.py existed has no width or height, so
+    the feed cannot reserve a box for it and measures it in the browser
+    instead - which works, but costs a layout jump on first view. The files are
+    still here and their headers still say how big they are, so this reads them.
+
+    Nothing is downloaded whole: local files are read to the header length, and
+    an UploadCenter file is fetched with a Range request for the same.
+
+    Only images, and only rows that have no size yet - so it is safe to run
+    again, and a second run finds nothing left to do. Sealed attachments are
+    skipped: they are chat files, encrypted on disk, and no feed lays them out.
+
+    dry_run is the default on purpose. Reaching this needs access to the
+    container, since /internal is not routed through the gateway.
+    """
+    assets = db.scalars(
+        select(models.Asset)
+        .where(
+            models.Asset.kind == "image",
+            models.Asset.width.is_(None),
+            models.Asset.private.is_(False),
+        )
+        .limit(max(1, min(limit, 500)))
+    ).all()
+
+    read = failed = 0
+    reasons: dict[str, int] = {}
+    samples: list[dict] = []
+
+    def note(reason: str) -> None:
+        reasons[reason] = reasons.get(reason, 0) + 1
+
+    for asset in assets:
+        head = b""
+        try:
+            if asset.provider == "uploadcenter" and asset.external_id:
+                client = response = None
+                try:
+                    client, response = uploadcenter.open_stream(
+                        _remote_link(asset), f"bytes=0-{imagesize.HEAD_BYTES - 1}"
+                    )
+                    if response.status_code not in (200, 206):
+                        note(f"remote http {response.status_code}")
+                        failed += 1
+                        continue
+                    for chunk in response.iter_bytes():
+                        head += chunk
+                        if len(head) >= imagesize.HEAD_BYTES:
+                            break
+                finally:
+                    if response is not None:
+                        response.close()
+                    if client is not None:
+                        client.close()
+            elif asset.storage_path:
+                path = Path(asset.storage_path)
+                if not path.exists():
+                    note("file missing")
+                    failed += 1
+                    continue
+                with path.open("rb") as handle:
+                    head = handle.read(imagesize.HEAD_BYTES)
+            else:
+                note("nowhere to read from")
+                failed += 1
+                continue
+        except Exception as exc:  # noqa: BLE001 - one bad file must not stop the run
+            log.warning("backfill could not read %s: %s", asset.id, exc)
+            note("read failed")
+            failed += 1
+            continue
+
+        size = imagesize.read(asset.content_type, head[: imagesize.HEAD_BYTES])
+        if size is None:
+            note(f"unreadable header ({asset.content_type})")
+            failed += 1
+            continue
+
+        if not dry_run:
+            asset.width, asset.height = size
+        read += 1
+        if len(samples) < 5:
+            samples.append({"id": asset.id, "content_type": asset.content_type, "size": list(size)})
+
+    if not dry_run:
+        db.commit()
+
+    remaining = db.scalar(
+        select(func.count())
+        .select_from(models.Asset)
+        .where(
+            models.Asset.kind == "image",
+            models.Asset.width.is_(None),
+            models.Asset.private.is_(False),
+        )
+    )
+    return {
+        "dry_run": dry_run,
+        "examined": len(assets),
+        "read": read,
+        "failed": failed,
+        "reasons": reasons,
+        "samples": samples,
+        "still_without_size": remaining,
+    }
