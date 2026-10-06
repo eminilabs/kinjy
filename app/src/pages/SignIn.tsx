@@ -5,6 +5,7 @@ import { AlertCircle, Fingerprint, Loader2, ShieldCheck } from 'lucide-react'
 import ArcButton from '@/components/ui-kit/ArcButton'
 import { useAuth } from '@/hooks/useAuth'
 import { ApiError } from '@/lib/api'
+import { clearPendingRef, pendingRef } from '@/lib/share'
 import { OPEN_MODULES, spelled } from '@/lib/features'
 import { cn } from '@/lib/utils'
 
@@ -67,7 +68,15 @@ export default function SignIn() {
   const [handle, setHandle] = useState('')
   const [birthDate, setBirthDate] = useState('')
   const [handleEdited, setHandleEdited] = useState(false)
-  const [referral, setReferral] = useState(params.get('ref') ?? '')
+  // The code on this URL wins, then one remembered from a shared link opened
+  // earlier. Without the second, somebody who arrived on a shared post and
+  // read two more pages before signing up credited nobody - the code lived in
+  // the URL of the first page and died with it.
+  const [referral, setReferral] = useState(params.get('ref') ?? pendingRef())
+  // Whether that code is one this browser remembered rather than one the
+  // person in front of us typed. It decides what happens when the server does
+  // not recognise it.
+  const referralWasRemembered = !params.get('ref') && Boolean(pendingRef())
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -109,14 +118,32 @@ export default function SignIn() {
       if (mode === 'signin') {
         await signIn(email.trim(), password)
       } else {
-        await signUp({
-          email: email.trim(),
-          password,
-          display_name: displayName.trim(),
-          handle,
-          date_of_birth: birthDate,
-          referral_code: referral.trim() || undefined,
-        })
+        const register = (code?: string) =>
+          signUp({
+            email: email.trim(),
+            password,
+            display_name: displayName.trim(),
+            handle,
+            date_of_birth: birthDate,
+            referral_code: code,
+          })
+        try {
+          await register(referral.trim() || undefined)
+        } catch (err) {
+          const unknownCode =
+            err instanceof ApiError && /referral code/i.test(err.message)
+          if (!unknownCode || !referralWasRemembered) throw err
+          // A code this browser remembered, which the server does not know.
+          // Dropping it is better than refusing somebody an account over a
+          // link they followed last week.
+          clearPendingRef()
+          setReferral('')
+          await register(undefined)
+        }
+        // Spent. Leaving it would credit the same sharer again if this browser
+        // ever creates a second account, which is not a referral but a bug
+        // that pays.
+        clearPendingRef()
       }
       navigate(safeNext(params.get('next')), { replace: true })
     } catch (err) {

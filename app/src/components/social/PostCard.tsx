@@ -13,10 +13,15 @@ import {
   Repeat2,
   SlidersHorizontal,
   Trash2,
+  Link2,
+  Check,
+  Share2,
 } from 'lucide-react'
 import { ApiError, kaluta, type Post, type WhyFactor } from '@/lib/api'
 import { useTopic } from '@/hooks/useRealtime'
 import { htmlToText, looksLikeHtml, sanitizeHtml } from '@/lib/richtext'
+import { useAuth } from '@/hooks/useAuth'
+import { postUrl, shareLink } from '@/lib/share'
 import { cn } from '@/lib/utils'
 import Comments from './Comments'
 import MemberAvatar from './MemberAvatar'
@@ -194,6 +199,16 @@ export default function PostCard({
   // Reporting. Held open as a small inline panel rather than a modal: a report
   // is a judgement about the thing you are looking at, and a dialog that
   // covers the post asks you to make it from memory.
+  // Sharing outside Kinjy. `withRef` is the member's choice about whether the
+  // link carries their invitation code; it is on by default because the whole
+  // point of sharing a post is that somebody might join from it, but it is
+  // shown rather than hidden, and it can be turned off - a code is a claim on
+  // whoever signs up, and a member is entitled to pass something on without
+  // making that claim.
+  const { user: me } = useAuth()
+  const [shareOpen, setShareOpen] = useState(false)
+  const [withRef, setWithRef] = useState(true)
+  const [shareNote, setShareNote] = useState<string | null>(null)
   const [reporting, setReporting] = useState(false)
   const [reported, setReported] = useState(false)
   const [reportFailed, setReportFailed] = useState(false)
@@ -231,6 +246,29 @@ export default function PostCard({
   })
 
   /** Share to your own followers, or take it back. */
+  // Only a public post has a link worth giving away: everything else answers
+  // 404 to the person who receives it, which is a worse experience than not
+  // offering the button.
+  const shareable = target.visibility === 'public'
+  const myRef = withRef ? me?.referral_code ?? null : null
+  const shareUrl = postUrl(target.id, myRef)
+
+  const doShare = async () => {
+    // The author can be null when the profile lookup did not resolve. That is
+    // a reason for a plainer share title, not for the share to fail.
+    const who = source.author?.display_name
+    const result = await shareLink(shareUrl, who ? `${who} on Kinjy` : 'A post on Kinjy')
+    setShareNote(
+      result === 'shared'
+        ? null
+        : result === 'copied'
+          ? 'Link copied.'
+          : result === 'cancelled'
+            ? null
+            : 'Could not copy — select the link and copy it by hand.',
+    )
+  }
+
   const toggleRepost = async () => {
     setBusy(true)
     setNote(null)
@@ -565,6 +603,25 @@ export default function PostCard({
           {reposts}
         </button>
 
+        <button
+          type="button"
+          onClick={() => {
+            setShareNote(null)
+            setShareOpen((open) => !open)
+          }}
+          disabled={!shareable}
+          aria-expanded={shareOpen}
+          title={
+            shareable
+              ? 'Share this outside Kinjy'
+              : 'Only a public post can be shared outside Kinjy'
+          }
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-text-mid hover:text-text-hi disabled:opacity-40"
+        >
+          <Share2 size={13} aria-hidden="true" />
+          Share
+        </button>
+
         {views > 0 && (
           <span
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-text-low"
@@ -622,6 +679,54 @@ export default function PostCard({
           </button>
         )}
       </footer>
+
+      {shareOpen && shareable && (
+        <div className="mt-2 rounded-xl border border-text-low/25 p-3">
+          <p className="text-xs font-semibold text-text-hi">Share this outside Kinjy</p>
+
+          {/* The link is shown rather than only copied. A member about to put
+              their name on something in a group chat should be able to read
+              what they are about to send, including the code on the end. */}
+          <p className="mt-2 break-all rounded-lg bg-ink-2/50 px-2.5 py-2 text-[0.7rem] text-text-mid">
+            {shareUrl}
+          </p>
+
+          {me?.referral_code && (
+            <label className="mt-2.5 flex items-start gap-2 text-xs text-text-mid">
+              <input
+                type="checkbox"
+                checked={withRef}
+                onChange={(e) => setWithRef(e.target.checked)}
+                className="mt-0.5 accent-gold"
+              />
+              <span>
+                Include my invitation code
+                <span className="ms-1 font-mono text-text-low">{me.referral_code}</span>
+                <span className="mt-0.5 block text-text-low">
+                  Anyone who joins from this link is credited to you.
+                </span>
+              </span>
+            </label>
+          )}
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={doShare}
+              className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-gold-soft to-gold px-3.5 py-1.5 text-xs font-bold text-ink"
+            >
+              <Link2 size={12} aria-hidden="true" />
+              Copy link
+            </button>
+            {shareNote && (
+              <span role="status" className="inline-flex items-center gap-1 text-xs text-text-mid">
+                <Check size={12} aria-hidden="true" />
+                {shareNote}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {reporting && !reported && (
         <div className="mt-2 rounded-xl border border-text-low/25 p-3">
