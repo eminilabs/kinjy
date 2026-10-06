@@ -14,6 +14,11 @@ export interface RealtimeEvent {
   media_name?: string | null
   media_type?: string | null
   media_size?: number | null
+  /** Set on a message_edited frame: when the text was changed. */
+  edited_at?: string | null
+  /** Set on a new message that is a sticker, so the bubble can draw it at once. */
+  sticker?: { id: string; glyph: string; label: string; image_url: string | null } | null
+  reply_to_id?: string | null
   created_at?: string
   /** engagement */
   post_id?: string

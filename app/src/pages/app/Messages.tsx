@@ -25,6 +25,9 @@ import {
   CornerUpLeft,
   Volume2,
   VolumeX,
+  Pencil,
+  SmilePlus,
+  Sticker,
 } from 'lucide-react'
 import AppShell from '@/components/app/AppShell'
 import { useAppTheme } from '@/components/appdemo/theme'
@@ -45,6 +48,7 @@ import {
 import { FEATURES } from '@/lib/features'
 import { realtime } from '@/lib/realtime'
 import { playMessageChime, primeSound, setSoundEnabled, soundEnabled } from '@/lib/chime'
+import { MESSAGE_REACTIONS, type StickerPack } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 function useMediaQuery(query: string): boolean {
@@ -652,6 +656,14 @@ export default function Messages() {
   // The message being answered, if any. Held as the message rather than its
   // id so the composer can show the quoted line without searching the thread.
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
+  // The message being edited, and the text so far. Separate from the composer
+  // draft: abandoning an edit must not swallow what was already typed below.
+  const [editing, setEditing] = useState<ChatMessage | null>(null)
+  const [editDraft, setEditDraft] = useState('')
+  // Which message's reaction row is open, and the sticker tray.
+  const [reactingTo, setReactingTo] = useState<string | null>(null)
+  const [stickersOpen, setStickersOpen] = useState(false)
+  const [packs, setPacks] = useState<StickerPack[] | null>(null)
   const [sound, setSound] = useState(soundEnabled())
   const [staged, setStaged] = useState<File[]>([])
   const stage = (files: FileList | File[] | null) => {
@@ -708,6 +720,111 @@ export default function Messages() {
     setReplyTo(null)
     void deliver(conversationId, clientId, text, undefined, answering?.id ?? null)
   }
+
+  /** Save an edit. The thread updates from the server's answer, not the draft. */
+  const saveEdit = async () => {
+    const conversationId = activeIdRef.current
+    const target = editing
+    const text = editDraft.trim()
+    if (!conversationId || !target) return
+    if (!text || text === (target.body ?? '')) {
+      setEditing(null)
+      return
+    }
+    setEditing(null)
+    try {
+      const saved = await kaluta.messages.edit(conversationId, target.id, text)
+      setMessages((current) =>
+        current.map((m) =>
+          m.id === target.id ? { ...m, body: saved.body, edited_at: saved.edited_at } : m,
+        ),
+      )
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not save that edit.')
+    }
+  }
+
+  /**
+   * Delete a message.
+   *
+   * Confirmed first: there is no undo, by design - the words are removed from
+   * the database rather than hidden, so "are you sure" is the only chance
+   * anybody gets.
+   */
+  const removeMessage = async (message: ChatMessage) => {
+    const conversationId = activeIdRef.current
+    if (!conversationId) return
+    if (!window.confirm('Delete this message? The text is removed for everyone and cannot be recovered.')) return
+    try {
+      await kaluta.messages.remove(conversationId, message.id)
+      setMessages((current) =>
+        current.map((m) =>
+          m.id === message.id
+            ? { ...m, deleted: true, body: null, media_kind: null, media_url: null, reactions: {} }
+            : m,
+        ),
+      )
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not delete that message.')
+    }
+  }
+
+  /** React, swap, or take it back - the server decides which from what is there. */
+  const react = async (message: ChatMessage, emoji: string) => {
+    const conversationId = activeIdRef.current
+    if (!conversationId) return
+    setReactingTo(null)
+    try {
+      const result = await kaluta.messages.react(conversationId, message.id, emoji)
+      setMessages((current) =>
+        current.map((m) =>
+          m.id === message.id ? { ...m, reactions: result.counts, my_reaction: result.mine } : m,
+        ),
+      )
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not react to that message.')
+    }
+  }
+
+  /** Send a sticker. It is the whole message, so there is nothing else to clear. */
+  const sendSticker = (stickerId: string) => {
+    const conversationId = activeIdRef.current
+    if (!conversationId || !user) return
+    setStickersOpen(false)
+    const clientId = crypto.randomUUID()
+    const answering = replyTo
+    scrollMode.current = 'bottom'
+    setReplyTo(null)
+    void (async () => {
+      try {
+        await kaluta.messages.send(conversationId, {
+          stickerId,
+          clientId,
+          replyToId: answering?.id ?? null,
+        })
+        // No optimistic bubble: the sticker's picture comes from the server's
+        // catalogue, and the socket frame carries it a moment later. Drawing a
+        // guess first would flicker.
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : 'Could not send that sticker.')
+      }
+    })()
+  }
+
+  useEffect(() => {
+    // Fetched on first use rather than on mount: most visits to Messages never
+    // open the tray, and the catalogue is not worth a request they did not ask
+    // for.
+    if (!stickersOpen || packs) return
+    let alive = true
+    kaluta.messages
+      .stickers()
+      .then((r) => alive && setPacks(r.packs))
+      .catch(() => alive && setPacks([]))
+    return () => {
+      alive = false
+    }
+  }, [stickersOpen, packs])
 
   const retry = (message: ChatMessage) => {
     const conversationId = activeIdRef.current
@@ -946,6 +1063,46 @@ export default function Messages() {
           })
         }
         conversations.reload()
+        break
+      }
+      case 'message_edited': {
+        if (!event.message_id) break
+        const { message_id: edited } = event
+        setMessages((current) =>
+          current.map((m) =>
+            m.id === edited
+              ? { ...m, body: (event.body as string) ?? m.body, edited_at: (event.edited_at as string) ?? new Date().toISOString() }
+              : m,
+          ),
+        )
+        break
+      }
+      case 'message_deleted': {
+        if (!event.message_id) break
+        const { message_id: removed } = event
+        // The bubble stays and empties, rather than vanishing: a message
+        // disappearing out of the middle of a thread somebody is reading
+        // resequences the conversation under them.
+        setMessages((current) =>
+          current.map((m) =>
+            m.id === removed
+              ? { ...m, deleted: true, body: null, media_kind: null, media_url: null, reactions: {}, my_reaction: null }
+              : m,
+          ),
+        )
+        conversations.reload()
+        break
+      }
+      case 'message_reaction': {
+        if (!event.message_id) break
+        const { message_id: reacted } = event
+        setMessages((current) =>
+          current.map((m) =>
+            m.id === reacted
+              ? { ...m, reactions: (event.counts as Record<string, number>) ?? {} }
+              : m,
+          ),
+        )
         break
       }
       case 'read': {
@@ -1631,7 +1788,35 @@ export default function Messages() {
                               )}
                             </div>
                           )}
-                          {(hasText || message.encrypted) && (
+                          {message.deleted && (
+                            <p className="text-sm italic leading-relaxed text-text-low">
+                              This message was deleted
+                            </p>
+                          )}
+
+                          {/* A sticker is the message: no bubble chrome around
+                              it, because a frame on a sticker makes it look
+                              like a failed image. */}
+                          {!message.deleted && message.sticker && (
+                            <span
+                              role="img"
+                              aria-label={message.sticker.label}
+                              title={message.sticker.label}
+                              className="block select-none text-[3.25rem] leading-none"
+                            >
+                              {message.sticker.image_url ? (
+                                <img
+                                  src={message.sticker.image_url}
+                                  alt={message.sticker.label}
+                                  className="h-28 w-28 object-contain"
+                                />
+                              ) : (
+                                message.sticker.glyph
+                              )}
+                            </span>
+                          )}
+
+                          {!message.deleted && (hasText || message.encrypted) && (
                             <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
                               {message.encrypted ? (
                                 <span className="italic text-text-low">
@@ -1651,22 +1836,106 @@ export default function Messages() {
                                 ? `Uploading ${Math.round((message.progress ?? 0) * 100)}%`
                                 : 'Sending…'
                               : timeOf(message.created_at, locale)}
+                            {/* Said, not hidden: an edit nobody can see is a
+                                way to change what somebody appears to have
+                                agreed to after they agreed to it. */}
+                            {message.edited_at && !message.deleted && ' · edited'}
                           </p>
                         </div>
+
+                        {/* What the room thought of it. Counts, not names:
+                            naming everyone who reacted turns a quiet
+                            acknowledgement into a scoreboard. */}
+                        {!message.deleted && Object.keys(message.reactions ?? {}).length > 0 && (
+                          <div className="mt-0.5 flex flex-wrap gap-1">
+                            {Object.entries(message.reactions ?? {}).map(([emoji, count]) => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                onClick={() => react(message, emoji)}
+                                className={cn(
+                                  'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[0.7rem]',
+                                  message.my_reaction === emoji
+                                    ? 'border-gold/50 bg-gold/15 text-text-hi'
+                                    : 'border-white/10 bg-white/[0.06] text-text-mid hover:border-white/20',
+                                )}
+                              >
+                                <span aria-hidden="true">{emoji}</span>
+                                {count}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* The emoji row, opened from the action below. */}
+                        {reactingTo === message.id && !message.deleted && (
+                          <div className="mt-1 flex flex-wrap gap-1 rounded-full border border-white/10 bg-ink-2 px-1.5 py-1 shadow-cloud">
+                            {MESSAGE_REACTIONS.map((emoji) => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                onClick={() => react(message, emoji)}
+                                aria-label={`React ${emoji}`}
+                                className="rounded-full px-1 text-base hover:scale-110"
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+                        )}
 
                         {/* Reply. Shown on hover on a pointer device and always
                             on a touch one, where there is no hover to reveal it.
                             Not offered for a message still being sent: it has no
                             server id yet, so the reply would point at nothing. */}
-                        {!message.status && (
-                          <button
-                            type="button"
-                            onClick={() => setReplyTo(message)}
-                            className="mt-0.5 inline-flex items-center gap-1 px-1 text-[0.68rem] text-text-low opacity-100 hover:text-gold-soft md:opacity-0 md:group-hover/msg:opacity-100"
-                          >
-                            <CornerUpLeft size={11} aria-hidden="true" />
-                            Reply
-                          </button>
+                        {!message.status && !message.deleted && (
+                          <div className="mt-0.5 flex items-center gap-2 opacity-100 md:opacity-0 md:group-hover/msg:opacity-100">
+                            <button
+                              type="button"
+                              onClick={() => setReplyTo(message)}
+                              className="inline-flex items-center gap-1 px-1 text-[0.68rem] text-text-low hover:text-gold-soft"
+                            >
+                              <CornerUpLeft size={11} aria-hidden="true" />
+                              Reply
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setReactingTo((current) => (current === message.id ? null : message.id))}
+                              aria-expanded={reactingTo === message.id}
+                              className="inline-flex items-center gap-1 px-1 text-[0.68rem] text-text-low hover:text-gold-soft"
+                            >
+                              <SmilePlus size={11} aria-hidden="true" />
+                              React
+                            </button>
+                            {/* Only your own, and only text: a sticker has
+                                nothing to edit, and an end-to-end encrypted
+                                message is ciphertext the server cannot
+                                replace. The server refuses both anyway; the
+                                point here is not to offer what will fail. */}
+                            {mine && !message.sticker && !message.encrypted && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditing(message)
+                                  setEditDraft(message.body ?? '')
+                                }}
+                                className="inline-flex items-center gap-1 px-1 text-[0.68rem] text-text-low hover:text-gold-soft"
+                              >
+                                <Pencil size={11} aria-hidden="true" />
+                                Edit
+                              </button>
+                            )}
+                            {mine && (
+                              <button
+                                type="button"
+                                onClick={() => removeMessage(message)}
+                                className="inline-flex items-center gap-1 px-1 text-[0.68rem] text-text-low hover:text-red-200"
+                              >
+                                <Trash2 size={11} aria-hidden="true" />
+                                Delete
+                              </button>
+                            )}
+                          </div>
                         )}
 
                         {message.status === 'failed' && (
@@ -1743,6 +2012,80 @@ export default function Messages() {
                   rests in the bottom-end corner (lib/floating.ts, slot 0) —
                   exactly where a full-height thread puts its composer. No
                   orb, no gap: Send keeps the full width. */}
+              {/* Editing happens where the message is read, not in a dialog
+                  over it: the point of an edit is the words around it. */}
+              {editing && (
+                <div className="mt-3 rounded-card-sm border border-gold/35 bg-gold/[0.07] px-3 py-2">
+                  <p className="caption mb-1.5 inline-flex items-center gap-1">
+                    <Pencil size={11} aria-hidden="true" />
+                    Editing a message
+                  </p>
+                  <input
+                    value={editDraft}
+                    onChange={(e) => setEditDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        void saveEdit()
+                      }
+                      if (e.key === 'Escape') setEditing(null)
+                    }}
+                    autoFocus
+                    aria-label="Edit message"
+                    className="w-full rounded-card-sm border border-white/10 bg-ink-2/70 px-3 py-2 text-sm text-text-hi focus:border-gold/50 focus:outline-none"
+                  />
+                  <div className="mt-2 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void saveEdit()}
+                      className="rounded-full bg-gradient-to-br from-gold-soft to-gold px-3 py-1 text-xs font-bold text-ink"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditing(null)}
+                      className="rounded-full border border-white/12 px-3 py-1 text-xs font-semibold text-text-mid hover:text-text-hi"
+                    >
+                      Cancel
+                    </button>
+                    <span className="caption">Everyone will see it was edited.</span>
+                  </div>
+                </div>
+              )}
+
+              {/* The sticker tray. Opens above the box so a thumb on a phone
+                  is already where the stickers are. */}
+              {stickersOpen && (
+                <div className="mt-3 max-h-56 overflow-y-auto rounded-card-sm border border-white/10 bg-ink-2/70 p-3">
+                  {packs === null && <p className="caption">Loading stickers…</p>}
+                  {packs?.length === 0 && <p className="caption">No stickers available.</p>}
+                  {packs?.map((pack) => (
+                    <div key={pack.id} className="mb-3 last:mb-0">
+                      <p className="caption mb-1.5">{pack.name}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {pack.stickers.map((sticker) => (
+                          <button
+                            key={sticker.id}
+                            type="button"
+                            onClick={() => sendSticker(sticker.id)}
+                            title={sticker.label}
+                            aria-label={sticker.label}
+                            className="rounded-card-sm px-2 py-1 text-3xl leading-none hover:bg-white/[0.08]"
+                          >
+                            {sticker.image_url ? (
+                              <img src={sticker.image_url} alt={sticker.label} className="h-10 w-10 object-contain" />
+                            ) : (
+                              sticker.glyph
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* What is being answered, above the box. Shown rather than
                   implied: a reply sent to the wrong message is a small
                   humiliation, and the only moment to prevent it is before
@@ -1774,6 +2117,24 @@ export default function Messages() {
               )}
 
               <form onSubmit={send} className={cn('mt-3 flex items-center gap-2 border-t border-white/8 pt-3', FEATURES.assistant && 'pe-14 lg:pe-12')}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Opening the tray is a gesture, so it is also a fine
+                    // moment to unlock audio for the reply that follows.
+                    primeSound()
+                    setStickersOpen((open) => !open)
+                  }}
+                  aria-expanded={stickersOpen}
+                  aria-label="Stickers"
+                  title="Stickers"
+                  className={cn(
+                    'shrink-0 rounded-full p-2',
+                    stickersOpen ? 'text-gold' : 'text-text-low hover:text-text-hi',
+                  )}
+                >
+                  <Sticker size={17} aria-hidden="true" />
+                </button>
                 {recordingSince !== null ? (
                   <>
                     <button

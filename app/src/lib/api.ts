@@ -500,6 +500,9 @@ export interface UploadedMedia {
   provenance_signed: boolean
   alt_text?: string | null
   deduplicated?: boolean
+  /** Measured in the browser when the file is picked, so the feed can reserve its box. */
+  width?: number
+  height?: number
 }
 
 export interface LinkCard {
@@ -777,8 +780,36 @@ export interface Message {
     preview: string
     media_kind?: string | null
   } | null
+  /** Resolved by the server from its catalogue; a message only stores the id. */
+  sticker?: Sticker | null
+  /** Set when the text has been changed. Shown, never silent. */
+  edited_at?: string | null
+  /** The message was deleted: it keeps its place and has lost its words. */
+  deleted?: boolean
+  /** Emoji to count, across everyone in the room. */
+  reactions?: Record<string, number>
+  /** Which one is mine, if any. */
+  my_reaction?: string | null
   created_at: string
 }
+
+export interface Sticker {
+  id: string
+  glyph: string
+  label: string
+  pack?: string
+  /** Real artwork when there is some; the client draws the glyph large when not. */
+  image_url: string | null
+}
+
+export interface StickerPack {
+  id: string
+  name: string
+  stickers: Sticker[]
+}
+
+/** The reactions a message may carry. The server refuses anything else. */
+export const MESSAGE_REACTIONS = ['👍', '👎', '❤️', '😂', '😮', '😢', '🙏', '🔥'] as const
 
 export interface Person {
   id: string
@@ -1680,6 +1711,8 @@ export const kaluta = {
         clientId?: string
         /** The message being answered. The server ignores an id from another thread. */
         replyToId?: string | null
+        /** A sticker from the catalogue. The whole message; no text needed. */
+        stickerId?: string | null
       },
     ) =>
       api.post<{
@@ -1694,7 +1727,34 @@ export const kaluta = {
         media_id: message.mediaId,
         client_id: message.clientId,
         reply_to_id: message.replyToId ?? null,
+        sticker_id: message.stickerId ?? null,
       }),
+
+    /** The sticker packs, as the server curates them. */
+    stickers: () => api.get<{ packs: StickerPack[] }>('/stickers'),
+
+    /** Change the text of your own message. The result is marked as edited. */
+    edit: (conversationId: string, messageId: string, body: string) =>
+      api.patch<{ id: string; body: string; edited_at: string }>(
+        `/conversations/${conversationId}/messages/${messageId}`,
+        { body },
+      ),
+
+    /** Delete your own message. The row stays, the words go. */
+    remove: (conversationId: string, messageId: string) =>
+      api.delete<{ id: string; deleted: boolean }>(
+        `/conversations/${conversationId}/messages/${messageId}`,
+      ),
+
+    /**
+     * React, swap the reaction, or take it back - the server decides which,
+     * from what is already there. One per person per message.
+     */
+    react: (conversationId: string, messageId: string, emoji: string) =>
+      api.post<{ message_id: string; counts: Record<string, number>; mine: string | null }>(
+        `/conversations/${conversationId}/messages/${messageId}/reactions`,
+        { emoji },
+      ),
     /** The thread is on screen: record it as read and tell the room. */
     markRead: (conversationId: string) =>
       api.post<{ read_at: string }>(`/conversations/${conversationId}/read`),

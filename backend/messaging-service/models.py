@@ -99,6 +99,19 @@ class Message(Base):
     # database has not disappeared, it has only stopped being shown — which is
     # the opposite of what the promise means to the people in the room.
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    # An edit keeps the message and replaces its text, and says so. A silently
+    # edited message is a way to change what somebody appears to have agreed
+    # to after they agreed to it.
+    edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # A deleted message keeps its row and loses its words. The row is what lets
+    # the thread say "this was deleted" instead of silently resequencing a
+    # conversation; the words are gone from the database, not merely hidden,
+    # which is the same promise `expires_at` makes above.
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # A sticker from the server's catalogue. Only the id is stored: the picture
+    # is the server's, so a message cannot point at an arbitrary image, and a
+    # sticker withdrawn from the catalogue stops rendering everywhere at once.
+    sticker_id: Mapped[str | None] = mapped_column(String(40))
     delivered: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
 
@@ -146,3 +159,25 @@ class ContactAttempt(Base):
     sender_tier: Mapped[str] = mapped_column(String(30), default="")
     recipient_tier: Mapped[str] = mapped_column(String(30), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class MessageReaction(Base):
+    """One person's reaction to one message.
+
+    One per person per message, enforced by the constraint rather than by the
+    client: tapping a second emoji replaces the first. Letting somebody stack
+    reactions turns a quiet acknowledgement into a way to flood a thread.
+    """
+
+    __tablename__ = "message_reactions"
+    __table_args__ = (
+        UniqueConstraint("message_id", "user_id", name="uq_message_reaction"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    message_id: Mapped[str] = mapped_column(String(40), index=True)
+    conversation_id: Mapped[str] = mapped_column(String(40), index=True)
+    user_id: Mapped[str] = mapped_column(String(40), index=True)
+    emoji: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

@@ -28,6 +28,7 @@ from common.service import create_app
 import agecheck
 import agenotify
 import models
+import stickers
 
 log = logging.getLogger("messaging-service")
 USER_URL = "http://user-service:8000"
@@ -62,6 +63,9 @@ MIGRATIONS = [
     "ADD COLUMN IF NOT EXISTS disappear_after_seconds INTEGER DEFAULT 0",
     f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ",
     f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS reply_to_id VARCHAR(40)",
+    f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ",
+    f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ",
+    f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS sticker_id VARCHAR(40)",
     # Conversations that already exist predate the request model, so everyone
     # in them is treated as having accepted. Retro-fitting a request state onto
     # live threads would silently block attachments between people who have
@@ -295,7 +299,10 @@ class ConversationIn(BaseModel):
 class MessageIn(BaseModel):
     ciphertext_b64: str | None = None
     body: str | None = Field(default=None, max_length=10_000)
-    kind: str = Field(default="text", pattern="^(text|media|call_event)$")
+    kind: str = Field(default="text", pattern="^(text|media|call_event|sticker)$")
+    # From the server's catalogue. An id it does not know is refused rather
+    # than stored, so a message can never carry a picture nobody curated.
+    sticker_id: str | None = Field(default=None, max_length=40)
     # An uploaded asset's id. Its URL, type, name and size are looked up from
     # media-service, which is why no client-supplied URL is accepted: a message
     # must not be able to embed an arbitrary address as a "photo".
@@ -921,6 +928,195 @@ def _reply_target(db: OrmSession, conversation_id: str, reply_to_id: str | None)
     return exists or None
 
 
+async def _tell_room(db: OrmSession, conversation_id: str, payload: dict) -> None:
+    """Tell everyone in the room, the actor included.
+
+    Their other tabs and devices have the same thread open and must not keep
+    showing a message that has just been edited, deleted or reacted to.
+    """
+    await _publish_to_users(_participant_ids(db, conversation_id), payload)
+
+
+class MessageEditIn(BaseModel):
+    body: str = Field(min_length=1, max_length=10_000)
+
+
+class ReactionIn(BaseModel):
+    # A short allowlist rather than "any string": an emoji field that accepts
+    # arbitrary text is a second message box with no length limit and no
+    # moderation, sitting under every message.
+    emoji: str = Field(pattern="^(\U0001F44D|\U0001F44E|\u2764\ufe0f|\U0001F602|\U0001F62E|\U0001F622|\U0001F64F|\U0001F525)$")
+
+
+@app.get("/stickers", tags=["messages"])
+def sticker_catalogue(principal: CurrentUser):
+    """The sticker packs. Signed in only, like everything else in here."""
+    return {"packs": stickers.catalogue()}
+
+
+@app.patch("/conversations/{conversation_id}/messages/{message_id}", tags=["messages"])
+async def edit_message(
+    conversation_id: str,
+    message_id: str,
+    payload: MessageEditIn,
+    principal: CurrentUser,
+    db: OrmSession = Depends(get_db),
+):
+    """Change the text of a message you sent.
+
+    Only your own, only text, and never silently: `edited_at` is returned with
+    the message and the client marks it. An edit nobody can see is a way to
+    change what somebody appears to have agreed to after they agreed to it.
+
+    An end-to-end encrypted message cannot be edited here - the server holds
+    ciphertext it cannot open, so there is nothing to replace. Saying so is
+    better than appearing to accept the edit and discarding it.
+    """
+    _member(db, conversation_id, principal.user_id)
+    message = db.get(models.Message, message_id)
+    if message is None or message.conversation_id != conversation_id or message.deleted_at:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if message.sender_id != principal.user_id:
+        raise HTTPException(status_code=403, detail="You can only edit your own messages")
+    if message.encrypted:
+        raise HTTPException(
+            status_code=409, detail="An end-to-end encrypted message cannot be edited")
+    if message.kind == "sticker":
+        raise HTTPException(status_code=409, detail="A sticker has no text to edit")
+
+    _seal(message, payload.body, None)
+    message.edited_at = datetime.now(timezone.utc)
+    db.commit()
+
+    await _tell_room(db, conversation_id, {
+        "type": "message_edited", "conversation_id": conversation_id,
+        "message_id": message.id, "body": payload.body,
+        "edited_at": message.edited_at.isoformat(),
+    })
+    return {"id": message.id, "body": payload.body, "edited_at": message.edited_at}
+
+
+@app.delete("/conversations/{conversation_id}/messages/{message_id}", tags=["messages"])
+async def delete_message(
+    conversation_id: str,
+    message_id: str,
+    principal: CurrentUser,
+    db: OrmSession = Depends(get_db),
+):
+    """Delete a message you sent.
+
+    The row stays and the words go. The row is what lets the thread say "this
+    was deleted" rather than silently resequencing a conversation somebody is
+    reading - but the text, the ciphertext and the attachment reference are
+    cleared from the database, not merely hidden, which is the same promise
+    disappearing messages make a few lines up. A message that vanishes from the
+    screen while sitting in the database has not been deleted.
+
+    Reactions to it go too: a row of thumbs-ups attached to nothing is a
+    reminder of what was there, which is the opposite of deleting it.
+    """
+    _member(db, conversation_id, principal.user_id)
+    message = db.get(models.Message, message_id)
+    if message is None or message.conversation_id != conversation_id:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if message.sender_id != principal.user_id:
+        raise HTTPException(status_code=403, detail="You can only delete your own messages")
+    if message.deleted_at:
+        return {"id": message.id, "deleted": True, "already": True}
+
+    message.deleted_at = datetime.now(timezone.utc)
+    message.body = None
+    message.ciphertext = None
+    message.media_url = None
+    message.media_id = None
+    message.media_kind = None
+    message.media_name = None
+    message.media_type = None
+    message.media_size = None
+    message.sticker_id = None
+    message.sealed_with = None
+    db.execute(delete(models.MessageReaction).where(models.MessageReaction.message_id == message.id))
+    db.commit()
+
+    await _tell_room(db, conversation_id, {
+        "type": "message_deleted", "conversation_id": conversation_id, "message_id": message.id,
+    })
+    return {"id": message.id, "deleted": True}
+
+
+@app.post("/conversations/{conversation_id}/messages/{message_id}/reactions", tags=["messages"])
+async def react_to_message(
+    conversation_id: str,
+    message_id: str,
+    payload: ReactionIn,
+    principal: CurrentUser,
+    db: OrmSession = Depends(get_db),
+):
+    """React, change the reaction, or take it back.
+
+    Tapping the one already there removes it; tapping a different one replaces
+    it. One per person per message, so a reaction stays a quiet acknowledgement
+    rather than a way to fill somebody's thread.
+    """
+    _member(db, conversation_id, principal.user_id)
+    message = db.get(models.Message, message_id)
+    if message is None or message.conversation_id != conversation_id or message.deleted_at:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    existing = db.scalar(
+        select(models.MessageReaction).where(
+            models.MessageReaction.message_id == message_id,
+            models.MessageReaction.user_id == principal.user_id,
+        )
+    )
+    mine: str | None = payload.emoji
+    if existing and existing.emoji == payload.emoji:
+        db.delete(existing)
+        mine = None
+    elif existing:
+        existing.emoji = payload.emoji
+    else:
+        db.add(models.MessageReaction(
+            message_id=message_id, conversation_id=conversation_id,
+            user_id=principal.user_id, emoji=payload.emoji,
+        ))
+    db.commit()
+
+    counts = _reaction_counts(db, [message_id]).get(message_id, {})
+    await _tell_room(db, conversation_id, {
+        "type": "message_reaction", "conversation_id": conversation_id,
+        "message_id": message_id, "counts": counts,
+    })
+    return {"message_id": message_id, "counts": counts, "mine": mine}
+
+
+def _reaction_counts(db: OrmSession, message_ids: list[str]) -> dict[str, dict[str, int]]:
+    """How many of each emoji, per message, in one query for the page."""
+    if not message_ids:
+        return {}
+    rows = db.execute(
+        select(models.MessageReaction.message_id, models.MessageReaction.emoji, func.count())
+        .where(models.MessageReaction.message_id.in_(message_ids))
+        .group_by(models.MessageReaction.message_id, models.MessageReaction.emoji)
+    ).all()
+    out: dict[str, dict[str, int]] = {}
+    for message_id, emoji, count in rows:
+        out.setdefault(message_id, {})[emoji] = count
+    return out
+
+
+def _my_reactions(db: OrmSession, viewer: str, message_ids: list[str]) -> dict[str, str]:
+    if not message_ids:
+        return {}
+    rows = db.execute(
+        select(models.MessageReaction.message_id, models.MessageReaction.emoji).where(
+            models.MessageReaction.message_id.in_(message_ids),
+            models.MessageReaction.user_id == viewer,
+        )
+    ).all()
+    return {message_id: emoji for message_id, emoji in rows}
+
+
 @app.post("/conversations/{conversation_id}/messages", status_code=201, tags=["messages"])
 async def send_message(
     conversation_id: str,
@@ -983,8 +1179,11 @@ async def send_message(
                 status_code=400,
                 detail="Refusing to store plaintext in an encrypted conversation.",
             )
-    elif not (payload.body and payload.body.strip()) and not payload.media_id:
-        raise HTTPException(status_code=400, detail="A message needs text or an attachment")
+    elif not (payload.body and payload.body.strip()) and not payload.media_id and not payload.sticker_id:
+        # A sticker is the whole message: it carries no text and needs none,
+        # which is the point of sending one.
+        raise HTTPException(
+            status_code=400, detail="A message needs text, an attachment or a sticker")
 
     attachment = await _attachment(payload.media_id, principal.user_id) if payload.media_id else None
 
@@ -999,19 +1198,27 @@ async def send_message(
     # than any button, and it is what people actually do.
     _accept(db, conversation_id, principal.user_id)
 
+    # An id the catalogue does not know is refused rather than ignored: storing
+    # it would leave a message that renders as nothing, and ignoring it would
+    # silently send an empty message instead of the sticker somebody picked.
+    chosen_sticker = stickers.get(payload.sticker_id)
+    if payload.sticker_id and chosen_sticker is None:
+        raise HTTPException(status_code=400, detail="Unknown sticker")
+
     message = models.Message(
         id=new_id("msg"),
         conversation_id=conversation_id,
         sender_id=principal.user_id,
         encrypted=conversation.encrypted,
         ciphertext=base64.b64decode(payload.ciphertext_b64) if payload.ciphertext_b64 else None,
-        kind="media" if attachment else payload.kind,
+        kind="media" if attachment else ("sticker" if chosen_sticker else payload.kind),
         media_url=attachment["url"] if attachment else None,
         media_id=attachment["id"] if attachment else None,
         media_kind=attachment["kind"] if attachment else None,
         media_type=attachment["content_type"] if attachment else None,
         media_size=attachment["size_bytes"] if attachment else None,
         lang=payload.lang,
+        sticker_id=chosen_sticker["id"] if chosen_sticker else None,
         # Resolved against this conversation; an id from another thread becomes
         # None rather than a quote of a message these people cannot read.
         reply_to_id=_reply_target(db, conversation_id, payload.reply_to_id),
@@ -1073,6 +1280,8 @@ async def send_message(
             "body": None if message.encrypted else _plain(message)[0],
             "kind": message.kind,
             **_media_fields(message),
+            "sticker": chosen_sticker,
+            "reply_to_id": message.reply_to_id,
             "created_at": message.created_at.isoformat(),
         },
     )
@@ -1185,6 +1394,9 @@ def list_messages(
     # The quoted messages, in one query for the page. Only ones from this same
     # conversation are fetched, so a reply cannot carry a line out of a thread
     # the reader is not in.
+    ids = [r.id for r in rows]
+    counts = _reaction_counts(db, ids)
+    mine = _my_reactions(db, principal.user_id, ids)
     quoted_ids = {r.reply_to_id for r in rows if r.reply_to_id}
     quoted: dict[str, models.Message] = {}
     if quoted_ids:
@@ -1206,11 +1418,18 @@ def list_messages(
                 "encrypted": r.encrypted,
                 # The server hands back what it stored; only the client can decrypt.
                 "ciphertext_b64": base64.b64encode(r.ciphertext).decode() if r.ciphertext else None,
-                "body": _plain(r)[0],
+                "body": None if r.deleted_at else _plain(r)[0],
                 "kind": r.kind,
                 **_media_fields(r),
                 "reply_to_id": r.reply_to_id,
                 "reply_to": _quoted(quoted.get(r.reply_to_id or "")),
+                "sticker": stickers.get(r.sticker_id),
+                "edited_at": r.edited_at,
+                # A deleted message keeps its place in the thread and loses its
+                # words; the client draws the tombstone.
+                "deleted": bool(r.deleted_at),
+                "reactions": counts.get(r.id, {}),
+                "my_reaction": mine.get(r.id),
                 "created_at": r.created_at,
             }
             for r in rows
