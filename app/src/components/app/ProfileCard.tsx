@@ -1,6 +1,12 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router'
-import { Award, Crown, MapPin, Medal, Users } from 'lucide-react'
+import { Award, Crown, MapPin, Medal, Users,
+  LifeBuoy,
+  LayoutGrid,
+  Tag,
+  Wallet,
+  Code2,
+} from 'lucide-react'
 import { VerifiedBadge } from '@/components/ui-kit'
 import { MODULE_ICONS } from '@/components/appdemo/Chrome'
 import { ROUTE_FOR } from './navigation'
@@ -26,6 +32,21 @@ import { cn } from '@/lib/utils'
 const PINNED: ChromeKey[] = (['home', 'create', 'familyTree', 'messages', 'connections'] as ChromeKey[]).filter(
   (key) => isRouteAvailable(ROUTE_FOR[key]),
 )
+
+/**
+ * The public pages worth reaching from inside the app.
+ *
+ * Deliberately short. The whole marketing navbar in a sidebar is a second
+ * menu competing with the real one; these are the ones a member actually goes
+ * looking for - what it costs, what the rules are, and where to get help.
+ */
+const PUBLIC_PAGES: Array<{ to: string; label: string; icon: typeof LifeBuoy }> = [
+  { to: '/safety', label: 'Help & safety', icon: LifeBuoy },
+  { to: '/platform', label: 'All modules', icon: LayoutGrid },
+  { to: '/pricing', label: 'Pricing', icon: Tag },
+  { to: '/payments', label: 'Payments', icon: Wallet },
+  { to: '/developers', label: 'Developers', icon: Code2 },
+]
 
 export default function ProfileCard() {
   const { user } = useAuth()
@@ -130,6 +151,34 @@ export default function ProfileCard() {
               </li>
             )
           })}
+        </ul>
+      </div>
+
+      {/* The public pages, from inside the app.
+
+          The app chrome replaces the marketing navbar, which left a signed-in
+          member with no route to the terms they accepted, what a plan costs,
+          or where to ask for help - short of signing out or typing a URL. */}
+      <div className={cn('rounded-card-lg p-3.5', tok.card)}>
+        <p className={cn('mb-2 text-[0.65rem] font-bold uppercase tracking-wider', tok.low)}>
+          Spaces &amp; help
+        </p>
+        <ul className="space-y-1">
+          {PUBLIC_PAGES.filter((page) => isRouteAvailable(page.to)).map((page) => (
+            <li key={page.to}>
+              <Link
+                to={page.to}
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold',
+                  tok.mid,
+                  tok.hoverBg,
+                )}
+              >
+                <page.icon size={12} className="text-gold" aria-hidden="true" />
+                {page.label}
+              </Link>
+            </li>
+          ))}
         </ul>
       </div>
 

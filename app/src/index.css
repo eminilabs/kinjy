@@ -154,8 +154,13 @@
     --text-mid: #5C5344;
     --text-low: #6E6555;
     /* An opaque card on paper. The translucent white of the dark theme has
-       nothing to sit against here and simply disappears. */
-    --cloud: rgba(255, 255, 255, 0.92);
+       nothing to sit against here and simply disappears.
+
+       Fully opaque, not 0.92: eight percent is enough to let whatever sits
+       behind the page show faintly through every card, which on a light theme
+       reads as a dirty screen rather than as depth. The shadow and the border
+       carry the lift; the fill does not need to. */
+    --cloud: #FFFFFF;
     --cloud-border: rgba(36, 31, 22, 0.12);
     /* The gold that reads on dark is far too pale on paper. */
     --gold: #A9761C;

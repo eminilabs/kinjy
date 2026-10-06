@@ -82,10 +82,15 @@ export default function AppShell({
 
       <div
         className={cn(
-          'mx-auto grid max-w-container gap-4 px-3 pb-24 pt-4 md:px-4 lg:pb-8',
+          // max-w-app rather than max-w-container: the marketing container is
+          // 1240px, which is right for a page of prose and leaves a third of a
+          // modern desktop empty here. The app is three columns of dense
+          // content and should use the screen it is given - members were
+          // zooming the browser to 150% to get it back.
+          'mx-auto grid w-full max-w-app gap-4 px-3 pb-24 pt-4 md:px-4 lg:pb-8',
           aside
-            ? 'lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_290px]'
-            : 'lg:grid-cols-[220px_minmax(0,1fr)]',
+            ? 'lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_320px]'
+            : 'lg:grid-cols-[240px_minmax(0,1fr)]',
         )}
       >
         {/* Left rail — identity and shortcuts */}
@@ -118,7 +123,14 @@ export default function AppShell({
         {/* Right rail */}
         {aside && (
           <aside className="hidden xl:block">
-            <div className="sticky top-[140px] space-y-3">{aside}</div>
+            {/* Scrolls on its own. Sticky alone meant a rail taller than the
+                window had its bottom permanently out of reach - which is what
+                happens to anybody who zooms, and to anybody on a short laptop
+                screen. The gutter is hidden until it is needed so the column
+                does not carry a permanent scrollbar. */}
+            <div className="sticky top-[140px] max-h-[calc(100svh-160px)] space-y-3 overflow-y-auto overscroll-contain pe-1 [scrollbar-width:thin]">
+              {aside}
+            </div>
           </aside>
         )}
       </div>

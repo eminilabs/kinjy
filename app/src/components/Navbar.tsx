@@ -20,7 +20,10 @@ import MemberAvatar from '@/components/social/MemberAvatar'
  */
 const PRIMARY_LINKS = [
   { to: '/platform', key: 'nav.platform', fallback: 'Platform' },
-  { to: '/feeds', key: 'nav.feeds', fallback: 'Feeds' },
+  // '/feeds' is the marketing page about feeds; a signed-in member who
+  // clicks "Feeds" wants their actual feed. Swapped below rather than
+  // listed twice, so the label and translation stay in one place.
+  { to: '/feeds', key: 'nav.feeds', fallback: 'Feeds', appTo: '/hub' },
   { to: '/family', key: 'nav.family', fallback: 'Family' },
   { to: '/creators', key: 'nav.creators', fallback: 'Creators' },
   { to: '/pricing', key: 'nav.pricing', fallback: 'Pricing' },
@@ -102,7 +105,9 @@ export default function Navbar() {
             {PRIMARY_LINKS.map((l) => (
               <NavLink
                 key={l.to}
-                to={l.to}
+                // A signed-in member clicking "Feeds" wants their feed, not the
+                // page explaining what feeds are.
+                to={user && 'appTo' in l && l.appTo ? l.appTo : l.to}
                 className={({ isActive }) =>
                   cn(
                     'relative rounded-full px-3 py-2 text-sm font-medium',
@@ -275,10 +280,23 @@ export default function Navbar() {
               </button>
             </div>
             <nav className="flex flex-col gap-1 px-8 pt-8" aria-label="Mobile">
-              {[{ to: '/', label: 'Home' }, ...NAV_LINKS.map((l) => ({ to: l.to, label: t(l.key, { defaultValue: l.fallback }) })), { to: '/assistant', label: 'Kinjy Assistant' }, { to: '/admin', label: 'Admin Console' }, { to: '/app', label: 'The App' },
-              user
-                ? { to: '/dashboard', label: t('nav.dashboard', { defaultValue: 'Dashboard' }) }
-                : { to: '/join?mode=signup', label: t('nav.join', { defaultValue: 'Join Kinjy' }) }].filter((l) => isRouteAvailable(l.to)).map((l) => (
+              {([
+                { to: '/', label: 'Home' },
+                ...NAV_LINKS.map((l) => ({
+                  // Signed in, "Feeds" means the member's own feed.
+                  to: 'appTo' in l && l.appTo && user ? l.appTo : l.to,
+                  label: t(l.key, { defaultValue: l.fallback }),
+                })),
+                { to: '/assistant', label: 'Kinjy Assistant' },
+                { to: '/admin', label: 'Admin Console' },
+                { to: '/app', label: 'The App' },
+                user
+                  ? { to: '/dashboard', label: t('nav.dashboard', { defaultValue: 'Dashboard' }) }
+                  : { to: '/join?mode=signup', label: t('nav.join', { defaultValue: 'Join Kinjy' }) },
+                // Typed explicitly: the entries have different shapes, and
+                // without this TypeScript widens the union to {} and the list
+                // loses both `to` and `label`.
+              ] as Array<{ to: string; label: string }>).filter((l) => isRouteAvailable(l.to)).map((l) => (
                 <div key={l.to}>
                   <NavLink
                     to={l.to}
