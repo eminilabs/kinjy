@@ -199,6 +199,14 @@ const REPORT_REASONS = [
   { id: 'other', label: 'Something else' },
 ] as const
 
+/** Terracotta, sage and blue: a stable choice per author from the three. */
+const ACCENTS = ['#C47A5C', '#6FA087', '#6B88B8']
+function accentFor(authorId: string): string {
+  let h = 0
+  for (let i = 0; i < authorId.length; i++) h = (h * 31 + authorId.charCodeAt(i)) >>> 0
+  return ACCENTS[h % ACCENTS.length]
+}
+
 export default function PostCard({
   post,
   algorithmId,
@@ -410,7 +418,13 @@ export default function PostCard({
   const bodyLink = firstLink(plainBody)
 
   return (
-    <article className="cloud-card p-5" data-post-id={post.id}>
+    <article className="cloud-card relative overflow-hidden p-5 ps-6" data-post-id={post.id}>
+      {/* A quiet colour per author, so a long feed has a rhythm without a label. */}
+      <span
+        aria-hidden="true"
+        className="absolute inset-y-5 start-0 w-1 rounded-e-full"
+        style={{ background: accentFor(source.author_id) }}
+      />
       {shared && (
         <p className="caption mb-2.5 flex items-center gap-1.5 border-b border-white/8 pb-2.5">
           <Repeat2 size={13} aria-hidden="true" className="text-success" />

@@ -81,11 +81,13 @@ const TOKENS: Record<ResolvedMode, AppTheme['tok']> = {
     text: 'text-text-hi',
     mid: 'text-text-mid',
     low: 'text-text-low',
-    card: 'border border-[var(--cloud-border)] bg-white shadow-cloud',
-    cardSolid: 'border border-[var(--cloud-border)] bg-paper',
-    divider: 'divide-[var(--cloud-border)]',
+    // Warm paper, not white: a cream page with slightly lighter cards and a
+    // long, faint drop, the way the feed's design is drawn.
+    card: 'border border-[#e7e1d7] bg-[#fffdfa] shadow-[0_15px_35px_rgba(76,62,43,0.07)]',
+    cardSolid: 'border border-[#e7e1d7] bg-[#fffdfa]',
+    divider: 'divide-[#ebe6de]',
     hoverBg: 'hover:bg-black/5',
-    input: 'border border-black/15 bg-black/[0.04]',
+    input: 'border border-[#e6dfd3] bg-[#f8f5ef]',
     subtleBg: 'bg-black/[0.04]',
   },
   dark: {

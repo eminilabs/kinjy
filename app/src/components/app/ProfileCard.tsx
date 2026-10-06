@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router'
-import { Award, Crown, MapPin, Medal, Users } from 'lucide-react'
+import { Award, ChevronRight, Crown, MapPin, Medal, Users } from 'lucide-react'
 import { VerifiedBadge } from '@/components/ui-kit'
 import { MODULE_ICONS } from '@/components/appdemo/Chrome'
 import { ROUTE_FOR } from './navigation'
@@ -63,7 +63,7 @@ export default function ProfileCard() {
           {displayName}
           {user?.kyc_verified && <VerifiedBadge size={15} />}
         </p>
-        <p className={cn('mono-data mt-1 truncate text-xs', tok.mid)}>@{user?.handle}</p>
+        <p className={cn('mono-data mt-1 truncate text-xs', tok.low)}>@{user?.handle}</p>
         {place && (
           <p className={cn('mt-1.5 flex items-center justify-center gap-1 text-[0.72rem]', tok.low)}>
             <MapPin size={11} aria-hidden="true" />
@@ -71,38 +71,39 @@ export default function ProfileCard() {
           </p>
         )}
 
-        <dl className="mt-4 grid grid-cols-2 divide-x divide-[var(--cloud-border)] border-t border-[var(--cloud-border)] pt-4">
+        <hr className="my-5 border-0 border-t border-[var(--cloud-border)]" />
+
+        <dl className="grid grid-cols-2 divide-x divide-[var(--cloud-border)]">
           <div>
-            <dd className={cn('text-2xl font-bold leading-none tracking-[-0.03em] tabular-nums', tok.text)}>
+            <dd className={cn('text-[22px] font-bold leading-none tabular-nums', tok.text)}>
               {data?.followers_count ?? 0}
             </dd>
-            <dt className={cn('mt-1.5 text-[0.7rem]', tok.low)}>Followers</dt>
+            <dt className={cn('mt-1.5 text-xs', tok.low)}>Followers</dt>
           </div>
           <div>
-            <dd className={cn('text-2xl font-bold leading-none tracking-[-0.03em] tabular-nums', tok.text)}>
+            <dd className={cn('text-[22px] font-bold leading-none tabular-nums', tok.text)}>
               {data?.following_count ?? 0}
             </dd>
-            <dt className={cn('mt-1.5 text-[0.7rem]', tok.low)}>Following</dt>
-          </div>
-          <div>
-            <dt className={cn('text-[0.65rem]', tok.low)}>
-              <Link to="/connections" className="hover:text-gold-soft">
-                {t('connections')}
-              </Link>
-            </dt>
-            <dd className="mono-data text-sm font-semibold text-gold-soft">
-              {/* The label is the link for assistive tech; the number is a bigger target for the pointer. */}
-              <Link to="/connections" tabIndex={-1} aria-hidden="true">
-                {connections.data ? connections.data.accepted.length : '–'}
-              </Link>
-            </dd>
+            <dt className={cn('mt-1.5 text-xs', tok.low)}>Following</dt>
           </div>
         </dl>
+
+        {/* Connections: a row of its own, so it no longer wraps under the two counts. */}
+        <Link
+          to="/connections"
+          className={cn('mt-5 flex items-center gap-2 text-xs transition-colors hover:text-gold-soft', tok.mid)}
+        >
+          <Users size={14} className="shrink-0 text-gold" aria-hidden="true" />
+          <span>{t('connections')}</span>
+          <strong className="mono-data ms-auto text-sm font-bold text-gold-soft">
+            {connections.data ? connections.data.accepted.length : '–'}
+          </strong>
+        </Link>
       </div>
 
       {/* Pinned modules */}
       <div className={cn('rounded-[20px] p-4', tok.card)}>
-        <p className="mono-data mb-3 text-[0.65rem] uppercase tracking-[0.14em] text-gold-soft">
+        <p className="mono-data mb-3 text-[0.7rem] font-bold uppercase tracking-[0.15em] text-gold-soft">
           {t('pinned')}
         </p>
         <ul className="space-y-0.5">
@@ -123,7 +124,10 @@ export default function ProfileCard() {
                     <Icon size={14} aria-hidden="true" />
                   </span>
                   {t(key)}
-                  {key === 'messages' && <UnreadBadge count={unread} className="ms-auto" />}
+                  <span className="ms-auto flex items-center gap-2">
+                    {key === 'messages' && <UnreadBadge count={unread} />}
+                    <ChevronRight size={13} className={tok.low} aria-hidden="true" />
+                  </span>
                 </Link>
               </li>
             )
@@ -133,12 +137,13 @@ export default function ProfileCard() {
 
       {/* Circles quick-switch */}
       <div className={cn('rounded-[20px] p-4', tok.card)}>
-        <p className="mono-data mb-3 text-[0.65rem] uppercase tracking-[0.14em] text-gold-soft">
+        <p className="mono-data mb-3 text-[0.7rem] font-bold uppercase tracking-[0.15em] text-gold-soft">
           {t('circles')}
         </p>
         {(circles.data ?? []).length === 0 ? (
-          <Link to="/circles" className={cn('text-[0.8rem] hover:text-gold-soft', tok.low)}>
+          <Link to="/circles" className={cn('flex items-center gap-1 text-xs leading-relaxed hover:text-gold-soft', tok.low)}>
             No circles yet — create one
+            <ChevronRight size={13} className="shrink-0" aria-hidden="true" />
           </Link>
         ) : (
           <div className="flex flex-wrap gap-1.5">

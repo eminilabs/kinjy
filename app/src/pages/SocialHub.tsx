@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Navigate, Link, useSearchParams } from 'react-router'
-import { Loader2, PenLine, Sparkles, TrendingUp } from 'lucide-react'
+import { Loader2, PenLine, RefreshCw, Sparkles, TrendingUp } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import AppShell, { RailCard } from '@/components/app/AppShell'
 import { useViewTracking } from '@/hooks/useViewTracking'
@@ -148,6 +148,8 @@ export default function SocialHub() {
   // list while somebody is reading moves the text under their eyes; a banner
   // lets them choose the moment.
   const [pending, setPending] = useState(0)
+  // When the feed was last brought up to date: an honest stand-in for a 'live' badge.
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   useTopic('feed', (event) => {
     if (event.type !== 'post') return
     if (event.author_id === user?.id) return
@@ -221,6 +223,7 @@ export default function SocialHub() {
       // what arrives next, and clearing on success wiped the explanation before
       // it could be read. It is cleared when the member picks a mode instead.
       setFeed(page)
+      setUpdatedAt(new Date())
     } catch (err) {
       if (controller.signal.aborted) return
       setError(err instanceof ApiError ? err.message : 'Could not load the feed')
@@ -335,8 +338,8 @@ export default function SocialHub() {
           the *feed* lives here, and each card keeps its own Why? button for the
           explanation of that post. */}
       <div className="rounded-[20px] cloud-glass p-5">
-        <p className="mono-data text-[0.7rem] uppercase tracking-[0.14em] text-gold-soft">Why am I seeing this?</p>
-        <p className="mt-2 text-xs leading-relaxed text-text-mid">
+        <p className="mono-data text-[0.72rem] font-bold uppercase tracking-[0.15em] text-gold-soft">Why am I seeing this?</p>
+        <p className="mt-3 text-[0.85rem] leading-relaxed text-text-mid">
           Your feed is currently ranked by{' '}
           <span className="font-bold text-text-hi">
             {feed?.algorithm_name ?? feed?.algorithm ?? 'chronological order'}
@@ -350,13 +353,13 @@ export default function SocialHub() {
           ).map((reason) => (
             <li
               key={reason}
-              className="rounded-full border border-sky/30 bg-sky/10 px-2.5 py-1 text-[0.65rem] font-semibold text-sky"
+              className="rounded-md bg-sky/10 px-2.5 py-1.5 text-xs font-semibold text-sky"
             >
               {reason}
             </li>
           ))}
         </ul>
-        <p className="mt-2.5 text-[0.65rem] text-text-low">
+        <p className="mt-3 text-xs leading-relaxed text-text-low">
           Every post carries its own Why? button.
         </p>
       </div>
@@ -432,24 +435,38 @@ export default function SocialHub() {
     <AppShell aside={rail}>
       <div className="min-w-0">
           {/* Header: which feed this is, and what it promises */}
-          <header className="mb-5">
-            <p className="mono-data text-[0.7rem] uppercase tracking-[0.14em] text-gold-soft">Your feed</p>
-            <h1 className="mt-2 text-[clamp(32px,4.4vw,52px)] font-bold leading-[1.02] tracking-[-0.04em] text-text-hi">
-              {catalog.modes.find((m) => m.id === mode)?.label ?? 'Feed'}
-            </h1>
-            {catalog.modes.find((m) => m.id === mode)?.description && (
-              <p className="mt-2.5 max-w-xl text-sm leading-relaxed text-text-low">
-                {catalog.modes.find((m) => m.id === mode)?.description}
-              </p>
-            )}
+          <header className="mb-5 flex items-end justify-between gap-4">
+            <div className="min-w-0">
+              <p className="mono-data text-[0.72rem] font-bold uppercase tracking-[0.15em] text-gold-soft">Your feed</p>
+              <h1 className="mt-2 text-[clamp(38px,5vw,56px)] font-bold leading-[1.02] tracking-[-0.045em] text-text-hi">
+                {catalog.modes.find((m) => m.id === mode)?.label ?? 'Feed'}
+              </h1>
+              {catalog.modes.find((m) => m.id === mode)?.description && (
+                <p className="mt-3 max-w-xl text-[0.9rem] leading-relaxed text-text-low">
+                  {catalog.modes.find((m) => m.id === mode)?.description}
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => void load()}
+              aria-label="Refresh the feed"
+              className="mb-1 grid h-9 w-9 shrink-0 place-items-center rounded-full text-text-mid transition-colors hover:bg-text-hi/5"
+            >
+              <RefreshCw size={17} className={cn(loading && 'animate-spin')} aria-hidden="true" />
+            </button>
           </header>
-          <FeedModeMenu
-            modes={catalog.modes}
-            active={mode}
-            onSelect={setMode}
-            onRefresh={() => void load()}
-            loading={loading}
-          />
+
+          {/* Mode, and when the feed was last brought up to date */}
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <FeedModeMenu modes={catalog.modes} active={mode} onSelect={setMode} />
+            {updatedAt && (
+              <span className="flex shrink-0 items-center gap-2 text-xs text-text-low" aria-live="polite">
+                <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-success" />
+                Updated {updatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+          </div>
 
           {/* The place or topic the geographic/topic modes filter on */}
           {(mode === 'local' || mode === 'country' || mode === 'topics') && (
