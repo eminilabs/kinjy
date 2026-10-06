@@ -9,13 +9,26 @@ from common.textclean import clean_display_name
 
 HANDLE_RE = re.compile(r"^[a-z0-9](?:[a-z0-9_.]{1,38}[a-z0-9])$")
 
+# The minimum a password has to clear, wherever one is set. Registration and a
+# later change have to agree on this: if a change accepted something
+# registration would refuse, the weaker of the two rules is the real policy.
+PASSWORD_MIN = 10
+PASSWORD_MAX = 128
+
+
+def check_password_strength(value: str) -> str:
+    # Length is the strongest single signal; require a little variety on top.
+    if value.isdigit() or value.isalpha():
+        raise ValueError("password must mix letters with digits or symbols")
+    return value
+
 
 class RegisterIn(BaseModel):
     email: EmailStr
     # Required. The tier it produces is decided by the server; the member never
     # picks whether they are a teenager or an adult.
     date_of_birth: date
-    password: str = Field(min_length=10, max_length=128)
+    password: str = Field(min_length=PASSWORD_MIN, max_length=PASSWORD_MAX)
     display_name: str = Field(min_length=2, max_length=120)
     handle: str = Field(min_length=3, max_length=40)
     lang: str = "en"
@@ -33,10 +46,7 @@ class RegisterIn(BaseModel):
     @field_validator("password")
     @classmethod
     def _password(cls, value: str) -> str:
-        # Length is the strongest single signal; require a little variety on top.
-        if value.isdigit() or value.isalpha():
-            raise ValueError("password must mix letters with digits or symbols")
-        return value
+        return check_password_strength(value)
 
     @field_validator("display_name")
     @classmethod
@@ -98,6 +108,10 @@ class UserOut(BaseModel):
     invited_by: str | None
     status: str
     created_at: datetime
+    # Null means never changed since the account was made, which is what the
+    # security screen shows rather than guessing a date.
+    password_changed_at: datetime | None = None
+    has_password: bool = True
 
     model_config = {"from_attributes": True}
 
@@ -177,3 +191,50 @@ class DobCorrectionIn(BaseModel):
     """A member correcting a birth date they entered wrongly."""
 
     date_of_birth: date
+
+
+class PasswordChangeIn(BaseModel):
+    """A member changing their own password.
+
+    The current one is required even though the caller already holds a valid
+    access token. A token is not proof that the person at the keyboard is the
+    member: an unlocked laptop is enough to get one, and the whole value of a
+    password change is that it locks the account against whoever had it before.
+
+    ``refresh_token`` is optional and names the session to keep. Changing a
+    password signs the other devices out - that is the point when the reason is
+    that somebody else had it - and without this the caller is signed out too
+    and has to log back in. It is the member's own token either way; the server
+    checks it belongs to them.
+    """
+
+    current_password: str = Field(min_length=1, max_length=PASSWORD_MAX)
+    new_password: str = Field(min_length=PASSWORD_MIN, max_length=PASSWORD_MAX)
+    refresh_token: str | None = None
+
+    @field_validator("new_password")
+    @classmethod
+    def _new_password(cls, value: str) -> str:
+        return check_password_strength(value)
+
+
+class PasswordResetRequestIn(BaseModel):
+    """"I forgot my password." Nothing but the address.
+
+    The answer is the same whether or not the address belongs to anyone, so
+    this endpoint cannot be used to find out who has an account here.
+    """
+
+    email: EmailStr
+
+
+class PasswordResetConfirmIn(BaseModel):
+    """The link, and what to set."""
+
+    token: str = Field(min_length=20, max_length=200)
+    new_password: str = Field(min_length=PASSWORD_MIN, max_length=PASSWORD_MAX)
+
+    @field_validator("new_password")
+    @classmethod
+    def _new_password(cls, value: str) -> str:
+        return check_password_strength(value)

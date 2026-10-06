@@ -40,6 +40,11 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
     handle: Mapped[str] = mapped_column(String(40), unique=True, nullable=False)
     password_hash: Mapped[str | None] = mapped_column(String(255))
+    # Null for an account whose password has never been changed, including every
+    # member imported from DSM - absent is not the same as "changed at import
+    # time", and a member asking when they last changed it deserves the
+    # difference.
+    password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
 
     role: Mapped[str] = mapped_column(String(20), default="member")  # member|creator|admin|superadmin
@@ -68,6 +73,15 @@ class User(Base):
 
     sessions: Mapped[list["Session"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     passkeys: Mapped[list["Passkey"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+
+    @property
+    def has_password(self) -> bool:
+        """Whether there is a password to change at all.
+
+        Read by the security screen so it can say so, rather than offering a
+        form that can only ever be refused.
+        """
+        return bool(self.password_hash)
 
 
 class Session(Base):
@@ -145,7 +159,8 @@ class LoginEvent(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[str] = mapped_column(String(40), index=True)
-    kind: Mapped[str] = mapped_column(String(30))  # password|passkey|otp|refresh|logout|failed
+    # password|passkey|otp|refresh|logout|failed|password_change|password_reset
+    kind: Mapped[str] = mapped_column(String(30))
     ip: Mapped[str | None] = mapped_column(String(45))
     user_agent: Mapped[str | None] = mapped_column(Text)
     succeeded: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -356,3 +371,40 @@ class JurisdictionPolicy(Base):
     status: Mapped[str] = mapped_column(String(20), default="active")  # active|draft|superseded
     updated_by: Mapped[str | None] = mapped_column(String(40))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class PasswordReset(Base):
+    """One "I forgot my password" link.
+
+    What is stored is a SHA-256 of the token, never the token. The token is a
+    credential for the hour it lives: anybody holding it can take the account,
+    so a copy of this table must not be enough to do that. The member's own
+    copy, in their mail, is the only one that exists.
+
+    `used_at` makes it single-use, and `invalidated_at` lets a newer request -
+    or the member changing their password by other means - retire the older
+    links without deleting the row, so the history of what was issued survives.
+    """
+
+    __tablename__ = "password_resets"
+    __table_args__ = (
+        Index("ix_auth_reset_user_time", "user_id", "created_at"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("pwr"))
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey(f"{SCHEMA}.users.id", ondelete="CASCADE"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    invalidated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Who asked. Kept so a member who reports "I never asked for this" can be
+    # told where it came from.
+    requested_ip: Mapped[str | None] = mapped_column(String(45))
+    requested_user_agent: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+    @property
+    def usable(self) -> bool:
+        return self.used_at is None and self.invalidated_at is None and self.expires_at > _now()

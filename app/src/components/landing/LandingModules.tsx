@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { FEATURES } from '@/lib/features'
-import { MODULES, MODULE_COUNT_WORD } from './data'
+import { MODULES, MODULE_COUNT_KEY } from './data'
 
 const PALETTES = [
   ['#8A6414', '#F6EBD3'],
@@ -30,6 +31,7 @@ const prefersReducedMotion = () =>
   typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 export default function LandingModules() {
+  const { t } = useTranslation()
   const [active, setActive] = useState(0)
   // Turning on its own until the visitor picks one: from then on the page
   // stays where they put it. Never for visitors who asked for less motion.
@@ -53,10 +55,10 @@ export default function LandingModules() {
   return (
     <section id="modules" className="kl-split kl-pad-x gap-[72px] pb-[100px] pt-16">
       <div>
-        <h2 className="kl-h2 mb-6 mt-4">{MODULE_COUNT_WORD} usages, un seul compte.</h2>
+        <h2 className="kl-h2 mb-6 mt-4">{t('landing.modules.title', { count: t(MODULE_COUNT_KEY) })}</h2>
         <p className="kl-lead">
-          {FEATURES.marketplace ? 'Publier, discuter, apprendre, vendre, transmettre.' : 'Publier, discuter, apprendre, transmettre.'}{' '}
-          Kinjy rassemble ce qui était éparpillé entre dix applications.
+          {FEATURES.marketplace ? t('landing.modules.verbsMarket') : t('landing.modules.verbs')}{' '}
+          {t('landing.modules.lead')}
         </p>
 
         <div
@@ -142,13 +144,13 @@ export default function LandingModules() {
           </div>
         ))}
 
-        <ul aria-label={`Les ${MODULE_COUNT_WORD.toLowerCase()} modules`}>
+        <ul aria-label={t('landing.modules.listLabel')}>
           {MODULES.map((m, i) => {
             const on = i === active
             const [fg, bg] = PALETTES[i % 4]
             return (
               <li
-                key={m.name}
+                key={t(m.name)}
                 className="absolute z-[3]"
                 style={{
                   left: `${points[i].x}%`,
@@ -175,7 +177,7 @@ export default function LandingModules() {
                   >
                     {m.name.charAt(0)}
                   </span>
-                  {m.name}
+                  {t(m.name)}
                 </button>
               </li>
             )

@@ -16,6 +16,7 @@ import { FEATURES, isRouteAvailable, type Feature } from '@/lib/features'
 /** A link that is only listed while its page is open. */
 interface PageLink {
   to: string
+  /** An i18n key, not words: this file is read in five languages. */
   label: string
 }
 
@@ -41,50 +42,46 @@ export interface LandingModule {
 
 /** The modules of the orbit, fifteen when all are open. The sample people are illustrations. */
 const ALL_MODULES: LandingModule[] = [
-  { name: 'Fil', desc: 'Ce que publient vos proches et vos communautés, dans l’ordre que vous choisissez.', a: 'LM', b: 'SK', who: 'Léa et Samir l’ouvrent chaque matin' },
-  { name: 'Messages', desc: 'Discussions privées en temps réel, avec photos, fichiers et messages vocaux.', a: 'JN', b: 'TB', who: 'Jade écrit à Théo tous les jours' },
-  { name: 'Commu’s', desc: 'Des groupes autour d’une passion, d’un quartier ou d’un projet.', a: 'SK', b: 'AO', who: 'Samir anime Running Paris' },
+  { name: 'landing.modules.feed.name', desc: 'landing.modules.feed.desc', a: 'LM', b: 'SK', who: 'landing.modules.feed.who' },
+  { name: 'landing.modules.messages.name', desc: 'landing.modules.messages.desc', a: 'JN', b: 'TB', who: 'landing.modules.messages.who' },
+  { name: 'landing.modules.communities.name', desc: 'landing.modules.communities.desc', a: 'SK', b: 'AO', who: 'landing.modules.communities.who' },
   // "Stories" in the design: Kinjy has none. Forums are one of its modules.
-  { name: 'Forums', desc: 'Des discussions par sujet et par lieu, où les bonnes réponses restent.', a: 'LM', b: 'JN', who: 'Léa répond aux débutants en escalade' },
-  { name: 'Vidéos', desc: 'Vidéos courtes en format vertical, publiées et regardées au même endroit.', a: 'AO', b: 'DS', who: 'Awa filme ses recettes' },
-  { name: 'Audio', desc: 'Notes vocales et contenus audio à partager.', a: 'AO', b: 'VS', who: 'Awa enregistre ses recettes à voix haute' },
-  { name: 'Articles', desc: 'Des textes longs, mis en page sans effort.', a: 'JN', b: 'MA', who: 'Jade tient son carnet de potager' },
-  { name: 'Événements', desc: 'Sorties, ateliers et anniversaires, avec invitations et réponses.', a: 'TB', b: 'SK', who: 'Théo organise son anniversaire' },
-  { name: 'Marché', desc: 'Achetez et vendez entre membres, l’argent bloqué jusqu’à la réception.', a: 'VS', b: 'LM', who: 'Les vinyles de Vinyles & soul', feature: 'marketplace' },
-  { name: 'Arbre familial', desc: 'Votre famille sur plusieurs générations, construite et vérifiée à plusieurs.', a: 'MA', b: 'EM', who: 'Maman et Esi complètent l’arbre', feature: 'familyTree' },
-  { name: 'Mémoriaux', desc: 'Un lieu pour se souvenir de ceux qui sont partis.', a: 'MA', b: 'YM', who: '142 souvenirs pour Rose' },
-  { name: 'Traduction', desc: 'Chaque publication traduisible dans la langue de celui qui la lit.', a: 'LC', b: 'JN', who: 'Lucía et Jade se comprennent' },
-  { name: 'Assistant', desc: 'Il répond à vos questions sur Kinjy, dans votre langue.', a: 'DS', b: 'LM', who: 'Dev du soir prépare ses ateliers', feature: 'assistant' },
-  { name: 'Gains', desc: '20 % de ce que Kinjy gagne sur l’activité de vos filleuls.', a: 'AO', b: 'SK', who: 'Awa a parrainé 12 membres' },
+  { name: 'landing.modules.forums.name', desc: 'landing.modules.forums.desc', a: 'LM', b: 'JN', who: 'landing.modules.forums.who' },
+  { name: 'landing.modules.videos.name', desc: 'landing.modules.videos.desc', a: 'AO', b: 'DS', who: 'landing.modules.videos.who' },
+  { name: 'landing.modules.audio.name', desc: 'landing.modules.audio.desc', a: 'AO', b: 'VS', who: 'landing.modules.audio.who' },
+  { name: 'landing.modules.articles.name', desc: 'landing.modules.articles.desc', a: 'JN', b: 'MA', who: 'landing.modules.articles.who' },
+  { name: 'landing.modules.events.name', desc: 'landing.modules.events.desc', a: 'TB', b: 'SK', who: 'landing.modules.events.who' },
+  { name: 'landing.modules.market.name', desc: 'landing.modules.market.desc', a: 'VS', b: 'LM', who: 'landing.modules.market.who', feature: 'marketplace' },
+  { name: 'landing.modules.tree.name', desc: 'landing.modules.tree.desc', a: 'MA', b: 'EM', who: 'landing.modules.tree.who', feature: 'familyTree' },
+  { name: 'landing.modules.memorials.name', desc: 'landing.modules.memorials.desc', a: 'MA', b: 'YM', who: 'landing.modules.memorials.who' },
+  { name: 'landing.modules.translation.name', desc: 'landing.modules.translation.desc', a: 'LC', b: 'JN', who: 'landing.modules.translation.who' },
+  { name: 'landing.modules.assistant.name', desc: 'landing.modules.assistant.desc', a: 'DS', b: 'LM', who: 'landing.modules.assistant.who', feature: 'assistant' },
+  { name: 'landing.modules.earn.name', desc: 'landing.modules.earn.desc', a: 'AO', b: 'SK', who: 'landing.modules.earn.who' },
   // The design said "seul ou en groupe": group calls need a media server Kinjy does not run.
-  { name: 'Appels', desc: 'Appels audio et vidéo en tête-à-tête.', a: 'YM', b: 'KO', who: 'Yaw appelle Kwame le dimanche', feature: 'calls' },
+  { name: 'landing.modules.calls.name', desc: 'landing.modules.calls.desc', a: 'YM', b: 'KO', who: 'landing.modules.calls.who', feature: 'calls' },
 ]
 
 export const MODULES = ALL_MODULES.filter((m) => !m.feature || FEATURES[m.feature])
 
-const COUNT_WORDS = [
-  'Zéro', 'Un', 'Deux', 'Trois', 'Quatre', 'Cinq', 'Six', 'Sept', 'Huit', 'Neuf', 'Dix',
-  'Onze', 'Douze', 'Treize', 'Quatorze', 'Quinze',
-]
-
-/** "Onze": the number of open modules, spelled out for the headline. */
-export const MODULE_COUNT_WORD = COUNT_WORDS[MODULES.length] ?? String(MODULES.length)
+/** The count spelled out for the headline, as an i18n key: every language
+ *  writes its own numerals, and some do not spell them at all. */
+export const MODULE_COUNT_KEY = `landing.count.${MODULES.length}`
 
 export const COMMUNITIES = [
-  { i: 'E', name: 'Escalade Lyon', meta: '2 340 membres · 18 en ligne', bg: '#D9A648', offset: 0, dur: '6s' },
-  { i: 'V', name: 'Vinyles & soul', meta: '980 membres · 7 en ligne', bg: '#F0C878', offset: 36, dur: '7s' },
-  { i: 'C', name: 'Cuisine veggie', meta: '5 120 membres · 42 en ligne', bg: '#F0C2B0', offset: 8, dur: '6.5s' },
-  { i: 'D', name: 'Dev du soir', meta: '1 460 membres · 23 en ligne', bg: '#C9DCF2', offset: 52, dur: '7.5s' },
+  { i: 'E', name: 'landing.commu.climb.name', meta: 'landing.commu.climb.meta', bg: '#D9A648', offset: 0, dur: '6s' },
+  { i: 'V', name: 'landing.commu.vinyl.name', meta: 'landing.commu.vinyl.meta', bg: '#F0C878', offset: 36, dur: '7s' },
+  { i: 'C', name: 'landing.commu.veggie.name', meta: 'landing.commu.veggie.meta', bg: '#F0C2B0', offset: 8, dur: '6.5s' },
+  { i: 'D', name: 'landing.commu.dev.name', meta: 'landing.commu.dev.meta', bg: '#C9DCF2', offset: 52, dur: '7.5s' },
 ]
 
 /** What the composer offers today. The design listed polls and carousels, which do not exist. */
-export const COMPOSER_TOOLS = ['Photo', 'Vidéo', 'Article']
+export const COMPOSER_TOOLS = ['landing.composer.photo', 'landing.composer.video', 'landing.composer.article']
 
 export const CHAT = [
-  { text: 'Qui est chaud pour dimanche ?', mine: false, delay: '.1s' },
-  { text: 'Moi ! Départ 8h au parking ?', mine: true, delay: '.4s' },
-  { text: 'Je ramène le café', mine: false, delay: '.7s' },
-  { text: 'Parfait, je crée l’événement', mine: true, gold: true, delay: '1s' },
+  { text: 'landing.chat.1', mine: false, delay: '.1s' },
+  { text: 'landing.chat.2', mine: true, delay: '.4s' },
+  { text: 'landing.chat.3', mine: false, delay: '.7s' },
+  { text: 'landing.chat.4', mine: true, gold: true, delay: '1s' },
 ]
 
 /**
@@ -94,43 +91,43 @@ export const CHAT = [
  */
 export const ALGORITHMS = [
   {
-    name: 'Nouveautés', mark: 'PAR DÉFAUT',
-    desc: 'Les publications les plus récentes, sans classement.',
+    name: 'landing.algo.new.name', mark: 'landing.algo.new.mark',
+    desc: 'landing.algo.new.desc',
     posts: [
-      { i: 'LM', who: 'Léa M.', what: 'a publié 6 photos de la falaise', tag: 'IL Y A 2 MIN', bg: '#F6EBD3' },
-      { i: 'SK', who: 'Samir K.', what: 'a rejoint Running Paris', tag: '12 MIN', bg: '#E3ECF7' },
-      { i: 'JN', who: 'Jade N.', what: 'a partagé un article', tag: '40 MIN', bg: '#F7E1D8' },
+      { i: 'LM', who: 'Léa M.', what: 'landing.post.cliff', tag: 'landing.tag.2min', bg: '#F6EBD3' },
+      { i: 'SK', who: 'Samir K.', what: 'landing.post.joined', tag: 'landing.tag.12min', bg: '#E3ECF7' },
+      { i: 'JN', who: 'Jade N.', what: 'landing.post.article', tag: 'landing.tag.40min', bg: '#F7E1D8' },
     ],
   },
   {
-    name: 'Abonnements', mark: 'CHRONOLOGIQUE',
-    desc: 'Uniquement les personnes que vous suivez, de la plus récente à la plus ancienne.',
+    name: 'landing.algo.following.name', mark: 'landing.algo.following.mark',
+    desc: 'landing.algo.following.desc',
     posts: [
-      { i: 'TB', who: 'Théo B.', what: 'vous a invité à son anniversaire', tag: '5 MIN', bg: '#E3ECF7' },
-      { i: 'LM', who: 'Léa M.', what: 'a publié 6 photos de la falaise', tag: '2 H', bg: '#F6EBD3' },
-      { i: 'SK', who: 'Samir K.', what: 'Sortie longue dimanche, qui vient ?', tag: 'HIER', bg: '#F7E1D8' },
+      { i: 'TB', who: 'Théo B.', what: 'landing.post.invite', tag: 'landing.tag.5min', bg: '#E3ECF7' },
+      { i: 'LM', who: 'Léa M.', what: 'landing.post.cliff', tag: 'landing.tag.2h', bg: '#F6EBD3' },
+      { i: 'SK', who: 'Samir K.', what: 'landing.post.longrun', tag: 'landing.tag.yesterday', bg: '#F7E1D8' },
     ],
   },
   {
-    name: 'Famille d’abord', mark: 'FAMILLE · AMIS',
-    desc: 'Votre famille et vos proches passent avant le reste.',
+    name: 'landing.algo.family.name', mark: 'landing.algo.family.mark',
+    desc: 'landing.algo.family.desc',
     posts: [
       {
         i: 'MA', who: 'Maman',
-        what: FEATURES.familyTree ? 'a ajouté une photo à l’arbre familial' : 'a partagé les photos du baptême',
-        tag: 'FAMILLE', bg: '#F6EBD3',
+        what: FEATURES.familyTree ? 'landing.post.treePhoto' : 'landing.post.christening',
+        tag: 'landing.tag.family', bg: '#F6EBD3',
       },
-      { i: 'TB', who: 'Théo B.', what: 'vous a invité à son anniversaire', tag: 'AMI', bg: '#E3ECF7' },
-      { i: 'LM', who: 'Léa M.', what: 'a publié 6 photos de la falaise', tag: 'AMIE', bg: '#F7E1D8' },
+      { i: 'TB', who: 'Théo B.', what: 'landing.post.invite', tag: 'landing.tag.friendM', bg: '#E3ECF7' },
+      { i: 'LM', who: 'Léa M.', what: 'landing.post.cliff', tag: 'landing.tag.friendF', bg: '#F7E1D8' },
     ],
   },
   {
-    name: 'Découverte', mark: 'NOUVEAUX CRÉATEURS',
-    desc: 'Des communautés et créateurs proches de vos centres d’intérêt.',
+    name: 'landing.algo.discover.name', mark: 'landing.algo.discover.mark',
+    desc: 'landing.algo.discover.desc',
     posts: [
-      { i: 'VS', who: 'Vinyles & soul', what: 'Écoute collective ce soir à 21 h', tag: 'COMMU', bg: '#F6EBD3' },
-      { i: 'AO', who: 'Awa O.', what: 'Cuisiner sans gaspiller, en vidéo', tag: 'VIDÉO', bg: '#F7E1D8' },
-      { i: 'DS', who: 'Dev du soir', what: 'Atelier débutants samedi', tag: 'ÉVÉNEMENT', bg: '#E3ECF7' },
+      { i: 'VS', who: 'Vinyles & soul', what: 'landing.post.listen', tag: 'landing.tag.commu', bg: '#F6EBD3' },
+      { i: 'AO', who: 'Awa O.', what: 'landing.post.cook', tag: 'landing.tag.video', bg: '#F7E1D8' },
+      { i: 'DS', who: 'Dev du soir', what: 'landing.post.workshop', tag: 'landing.tag.event', bg: '#E3ECF7' },
     ],
   },
 ]
@@ -141,17 +138,17 @@ export const ALGORITHMS = [
  * yet, so they are marked as coming rather than promised.
  */
 export const FORMATS = [
-  { name: 'Article', meta: '1 200 mots', ready: true },
-  { name: 'Newsletter', meta: 'Envoi aux abonnés', ready: true },
-  { name: 'Traductions', meta: '5 langues', ready: true },
-  { name: 'Vidéo', meta: 'Bientôt', ready: false },
-  { name: 'Audio', meta: 'Bientôt', ready: false },
+  { name: 'landing.format.article', meta: 'landing.format.articleMeta', ready: true },
+  { name: 'landing.format.newsletter', meta: 'landing.format.newsletterMeta', ready: true },
+  { name: 'landing.format.translations', meta: 'landing.format.translationsMeta', ready: true },
+  { name: 'landing.format.video', meta: 'landing.soon', ready: false },
+  { name: 'landing.format.audio', meta: 'landing.soon', ready: false },
 ]
 
 export const FAMILY_TREE = [
   [{ i: 'KM', n: 'Kofi', y: '1935 – 2010', bg: '#E3ECF7' }, { i: 'RM', n: 'Rose', y: '1938 – 2024', bg: '#F6EBD3' }],
   [{ i: 'AM', n: 'Ama', y: '1964', bg: '#F7E1D8' }, { i: 'YM', n: 'Yaw', y: '1967', bg: '#E3ECF7' }],
-  [{ i: 'VO', n: 'Vous', y: '1994', bg: '#F0C878' }, { i: 'EM', n: 'Esi', y: '1997', bg: '#F6EBD3' }, { i: 'KO', n: 'Kwame', y: '2001', bg: '#F7E1D8' }],
+  [{ i: 'VO', n: 'landing.tree.you', y: '1994', bg: '#F0C878' }, { i: 'EM', n: 'Esi', y: '1997', bg: '#F6EBD3' }, { i: 'KO', n: 'Kwame', y: '2001', bg: '#F7E1D8' }],
 ]
 
 /**
@@ -161,22 +158,22 @@ export const FAMILY_TREE = [
  * that revenue is the 20 % markup, never the seller's price.
  */
 export const ECONOMY_STEPS = [
-  { n: '01', t: 'Invitez vos proches', d: 'Partagez votre lien de parrainage. Chaque inscription faite avec lui vous est rattachée.' },
+  { n: '01', t: 'landing.econ.1t', d: 'landing.econ.1d' },
   FEATURES.marketplace
-    ? { n: '02', t: 'Ils utilisent Kinjy', d: 'Achats sur le Marché, publicités, abonnements : ce que Kinjy gagne sur leur activité est suivi dans votre tableau de bord.' }
-    : { n: '02', t: 'Ils utilisent Kinjy', d: 'Publicités, abonnements : ce que Kinjy gagne sur leur activité est suivi dans votre tableau de bord.' },
+    ? { n: '02', t: 'landing.econ.2t', d: 'landing.econ.2market' }
+    : { n: '02', t: 'landing.econ.2t', d: 'landing.econ.2plain' },
   // The worked example is a marketplace sale; without the marketplace the
   // step states the rate alone rather than invent another example.
   FEATURES.marketplace
-    ? { n: '03', t: 'Vous percevez 20 %', d: 'Exemple : votre filleule achète un objet à 100 $. Kinjy ajoute 20 $ au prix du vendeur, et vous en recevez 4 $.' }
-    : { n: '03', t: 'Vous percevez 20 %', d: 'Sur chaque dollar que Kinjy gagne grâce à leur activité, 20 cents vous reviennent.' },
+    ? { n: '03', t: 'landing.econ.3t', d: 'landing.econ.3market' }
+    : { n: '03', t: 'landing.econ.3t', d: 'landing.econ.3plain' },
 ]
 
 export const ASSISTANT_SKILLS = [
-  'Comment marche mon fil ?',
-  'Comment suis-je payé ?',
-  'Qui peut voir mon arbre ?',
-  'Créer un mémorial',
+  'landing.ask.feed',
+  'landing.ask.paid',
+  'landing.ask.tree',
+  'landing.ask.memorial',
 ]
 
 /**
@@ -185,17 +182,17 @@ export const ASSISTANT_SKILLS = [
  */
 export const PLANS = [
   {
-    name: 'Gratuit', price: '0 $', cta: 'S’inscrire', tone: 'plain' as const,
-    features: ['Tous les modules', 'Un algorithme de fil', 'Avec publicité'],
+    name: 'landing.plan.free', price: '0 $', cta: 'nav.signUp', tone: 'plain' as const,
+    features: ['landing.plan.free1', 'landing.plan.free2', 'landing.plan.free3'],
   },
   {
-    name: 'Basic', price: '3,99 $', cta: 'Choisir Basic', tone: 'paper' as const,
-    features: ['Tout le Gratuit', 'Trois algorithmes de fil', 'Traduction prioritaire', 'Sans publicité'],
+    name: 'landing.plan.basic', price: '3,99 $', cta: 'landing.plan.basicCta', tone: 'paper' as const,
+    features: ['landing.plan.basic1', 'landing.plan.basic2', 'landing.plan.basic3', 'landing.plan.basic4'],
   },
   {
-    name: 'Premium', price: '9,99 $', cta: 'Choisir Premium', tone: 'night' as const,
+    name: 'landing.plan.premium', price: '9,99 $', cta: 'landing.plan.premiumCta', tone: 'night' as const,
     // Heritage AI belongs to the family tree; the same swap as PricingTeaser.
-    features: ['Tout le Basic', 'Les 15 algorithmes', FEATURES.familyTree ? 'Heritage AI' : 'Vidéo 4K', 'Creator Studio Pro'],
+    features: ['landing.plan.premium1', 'landing.plan.premium2', FEATURES.familyTree ? 'landing.plan.premium3a' : 'landing.plan.premium3b', 'landing.plan.premium4'],
   },
 ]
 
@@ -207,16 +204,16 @@ export const PLANS = [
  */
 export const TRUST = [
   {
-    n: '01', title: 'Vos messages, chiffrés sur nos serveurs',
-    text: 'Messages et fichiers sont stockés chiffrés : une copie de la base ne révèle rien. Vous décidez qui peut vous écrire, vous inviter ou vous ajouter à sa famille.',
+    n: '01', title: 'landing.trust.1title',
+    text: 'landing.trust.1text',
   },
   {
-    n: '02', title: 'Partir quand vous voulez',
-    text: 'Désactivez ou supprimez votre compte depuis vos réglages, sans justification à donner.',
+    n: '02', title: 'landing.trust.2title',
+    text: 'landing.trust.2text',
   },
   {
-    n: '03', title: 'Un fil que vous comprenez',
-    text: 'Chaque publication indique pourquoi elle vous est montrée, et le mode Abonnements reste strictement chronologique.',
+    n: '03', title: 'landing.trust.3title',
+    text: 'landing.trust.3text',
   },
 ]
 
@@ -236,21 +233,21 @@ export const TESTIMONIALS: Testimonial[] = []
 
 /** The site's pages, as the previous marketing navigation listed them. */
 export const NAV_PRIMARY = openLinks([
-  { to: '/platform', label: 'Plateforme' },
-  { to: '/feeds', label: 'Fils' },
-  { to: '/family', label: 'Famille' },
-  { to: '/creators', label: 'Créateurs' },
-  { to: '/pricing', label: 'Tarifs' },
+  { to: '/platform', label: 'nav.platform' },
+  { to: '/feeds', label: 'nav.feeds' },
+  { to: '/family', label: 'nav.family' },
+  { to: '/creators', label: 'nav.creators' },
+  { to: '/pricing', label: 'nav.pricing' },
 ])
 
 export const NAV_MORE = openLinks([
-  { to: '/memorials', label: 'Mémoriaux' },
-  { to: '/commerce', label: 'Commerce' },
-  { to: '/payments', label: 'Paiements' },
-  { to: '/safety', label: 'Sécurité' },
-  { to: '/developers', label: 'Développeurs' },
-  { to: '/assistant', label: 'Assistant Kinjy' },
-  { to: '/app', label: 'L’application' },
+  { to: '/memorials', label: 'nav.memorials' },
+  { to: '/commerce', label: 'nav.commerce' },
+  { to: '/payments', label: 'nav.payments' },
+  { to: '/safety', label: 'nav.safety' },
+  { to: '/developers', label: 'nav.developers' },
+  { to: '/assistant', label: 'nav.assistant' },
+  { to: '/app', label: 'nav.app' },
 ])
 
 const ALL_FOOTER_COLUMNS: { title: string; links: PageLink[] }[] = [

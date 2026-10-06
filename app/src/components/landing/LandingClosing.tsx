@@ -1,4 +1,5 @@
 import { Link } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { ASSISTANT_SKILLS, FOOTER_COLUMNS, PLANS, TESTIMONIALS, TRUST } from './data'
 import { Brand, StoreBadges } from './shared'
 import { useJoinTarget } from './useJoinTarget'
@@ -6,6 +7,7 @@ import { useJoinTarget } from './useJoinTarget'
 const NIGHT_FIELD = 'radial-gradient(120% 120% at 20% 0%, #242142 0%, #0B0E1D 65%)'
 
 export function LandingAssistant() {
+  const { t: tr } = useTranslation()
   return (
     <section
       id="assistant"
@@ -18,10 +20,9 @@ export function LandingAssistant() {
           <div className="kl-orb-ring kl-spin absolute inset-0 rounded-full" style={{ ['--kl-dur' as string]: '6s' }} />
           <div className="absolute inset-2.5 rounded-full" style={{ background: 'radial-gradient(circle at 35% 30%, #8FB8E8, #4A52E0 55%, #242142)' }} />
         </div>
-        <h2 className="kl-h2 mb-6 text-[var(--kl-night-text)]">Un assistant qui parle votre langue.</h2>
+        <h2 className="kl-h2 mb-6 text-[var(--kl-night-text)]">{tr('landing.assistant.title')}</h2>
         <p className="mb-8 max-w-[460px] text-lg leading-[1.6] text-[var(--kl-night-mid)]">
-          Posez-lui une question sur Kinjy, par écrit ou à voix haute. Il répond en français, anglais, swahili, arabe ou
-          chinois, et cite d’où vient sa réponse.
+          {tr('landing.assistant.text')}
         </p>
         <div className="flex max-w-[480px] flex-wrap gap-2">
           {ASSISTANT_SKILLS.map((k) => (
@@ -43,7 +44,7 @@ export function LandingAssistant() {
         </div>
         <div className="flex items-center gap-2.5 self-start rounded-[10px] bg-[var(--kl-night-2)] px-4 py-3 text-[13px] text-[var(--kl-night-mid)]">
           <span className="kl-orb-ring h-2.5 w-2.5 rounded-full" />
-          Source : Arbre familial · aide Kinjy
+          {tr('landing.assistant.source')}
         </div>
       </div>
     </section>
@@ -51,6 +52,7 @@ export function LandingAssistant() {
 }
 
 export function LandingPricing() {
+  const { t: tr } = useTranslation()
   const join = useJoinTarget()
   const tone = {
     plain: { bg: 'var(--kl-surface)', color: 'var(--kl-ink)', border: 'var(--kl-paper-2)', tick: 'var(--kl-gold-deep)', btnBg: 'var(--kl-paper)', btnColor: 'var(--kl-ink)' },
@@ -60,27 +62,26 @@ export function LandingPricing() {
   return (
     <section id="tarifs" className="kl-pad-x py-[140px]">
       <div className="mb-14 flex flex-wrap items-end justify-between gap-8">
-        <h2 className="kl-h2">Commencez gratuitement.</h2>
+        <h2 className="kl-h2">{tr('landing.pricing.title')}</h2>
         <p className="kl-lead max-w-[380px]">
-          Les quinze modules sont accessibles dès la formule gratuite. Les formules payantes retirent la publicité et
-          ajoutent des outils avancés.
+          {tr('landing.pricing.text')}
         </p>
       </div>
       <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))' }}>
         {PLANS.map((p) => {
           const t = tone[p.tone]
           return (
-            <div key={p.name} className="flex flex-col rounded-2xl border p-8" style={{ background: t.bg, color: t.color, borderColor: t.border }}>
-              <div className="text-[15px] font-semibold">{p.name}</div>
+            <div key={tr(p.name)} className="flex flex-col rounded-2xl border p-8" style={{ background: t.bg, color: t.color, borderColor: t.border }}>
+              <div className="text-[15px] font-semibold">{tr(p.name)}</div>
               <div className="mb-7 mt-5 flex items-baseline gap-1.5">
                 <span className="kl-serif text-[56px] font-semibold leading-none tracking-[-.02em]">{p.price}</span>
-                <span className="text-[15px] opacity-70">/ mois</span>
+                <span className="text-[15px] opacity-70">{tr('landing.pricing.perMonth')}</span>
               </div>
               <ul className="mb-8 flex flex-1 flex-col gap-3">
                 {p.features.map((f) => (
                   <li key={f} className="flex gap-2.5 text-[15px] leading-[1.45]">
                     <span style={{ color: t.tick }} aria-hidden="true">✓</span>
-                    {f}
+                    {tr(f)}
                   </li>
                 ))}
               </ul>
@@ -100,14 +101,15 @@ export function LandingPricing() {
 }
 
 export function LandingTrust() {
+  const { t: tr } = useTranslation()
   return (
     <section id="confiance" className="kl-pad-x mx-auto max-w-[1320px] pb-10 pt-[120px]">
       <div className="mb-12 flex flex-wrap items-end justify-between gap-8">
         <h2 className="kl-h2 max-w-[640px]" style={{ fontSize: 'clamp(40px, 5vw, 64px)' }}>
-          Un espace sûr, par défaut.
+          {tr('landing.trustSection.title')}
         </h2>
         <p className="max-w-[400px] text-lg leading-[1.5] text-[var(--kl-mid)]">
-          Vos données, votre fil, vos règles. La confiance n’est pas une option cachée dans les paramètres.
+          {tr('landing.trustSection.text')}
         </p>
       </div>
       <div className="border-t-2 border-[var(--kl-ink)]">
@@ -116,10 +118,10 @@ export function LandingTrust() {
             <div className="flex flex-[1_1_360px] items-baseline gap-7">
               <span className="kl-mono w-7 flex-none text-[13px] tracking-[.08em] text-[var(--kl-gold-deep)]">{t.n}</span>
               <h3 className="kl-serif m-0 font-semibold leading-[1.1] tracking-[-.02em]" style={{ fontSize: 'clamp(26px, 2.6vw, 34px)' }}>
-                {t.title}
+                {tr(t.title)}
               </h3>
             </div>
-            <p className="m-0 max-w-[520px] flex-[1_1_360px] text-[17px] leading-[1.6] text-[var(--kl-mid)]">{t.text}</p>
+            <p className="m-0 max-w-[520px] flex-[1_1_360px] text-[17px] leading-[1.6] text-[var(--kl-mid)]">{tr(t.text)}</p>
           </div>
         ))}
       </div>
@@ -148,6 +150,7 @@ export function LandingTrust() {
 }
 
 export function LandingFinalCta() {
+  const { t: tr } = useTranslation()
   const join = useJoinTarget()
   return (
     <section id="rejoindre" className="mx-auto max-w-[1320px] px-4 pb-4 pt-20">
@@ -174,10 +177,10 @@ export function LandingFinalCta() {
             className="kl-serif mx-auto mb-6 max-w-[900px] font-semibold text-[var(--kl-night-text)]"
             style={{ fontSize: 'clamp(48px, 8vw, 112px)', lineHeight: 0.92, letterSpacing: '-.02em', textWrap: 'balance' }}
           >
-            Votre tribu vous attend.
+            {tr('landing.cta.title')}
           </h2>
           <p className="mx-auto mb-10 max-w-[520px] text-xl leading-[1.5] text-[var(--kl-night-mid)]">
-            Inscription gratuite. Créez votre profil en moins d’une minute.
+            {tr('landing.cta.text')}
           </p>
           <div className="flex flex-col items-center gap-6">
             <Link to={join.to} className="kl-sheen rounded-[10px] px-7 py-3.5 text-[17px] font-bold text-[var(--kl-night)]">
@@ -196,21 +199,22 @@ export function LandingFinalCta() {
 
 /** The site footer: every public page, in four columns. */
 export function LandingFooter() {
+  const { t: tr } = useTranslation()
   return (
   <footer className="px-2 pb-7 pt-14 text-sm text-[var(--kl-mid)]">
     <div className="grid gap-10" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))' }}>
       <div className="flex flex-col gap-3">
         <Brand size={39} text={20} />
-        <p className="max-w-[220px] leading-[1.5]">Un seul compte pour vos proches, vos communautés et votre famille.</p>
+        <p className="max-w-[220px] leading-[1.5]">{tr('landing.cta.sub')}</p>
       </div>
       {FOOTER_COLUMNS.map((col) => (
         <nav key={col.title} aria-label={col.title}>
           <h3 className="mb-3 text-[13px] font-semibold uppercase tracking-[.08em] text-[var(--kl-ink)]">{col.title}</h3>
           <ul className="flex flex-col gap-2">
             {col.links.map((l) => (
-              <li key={l.label}>
+              <li key={tr(l.label)}>
                 <Link to={l.to} className="hover:text-[var(--kl-gold-deep)]">
-                  {l.label}
+                  {tr(l.label)}
                 </Link>
               </li>
             ))}
@@ -221,7 +225,7 @@ export function LandingFooter() {
     <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-[var(--kl-paper-2)] pt-6">
       <span>© {new Date().getFullYear()} Kinjy</span>
       <Link to="/join?mode=signup" className="font-semibold text-[var(--kl-gold-deep)] hover:underline">
-        Rejoindre Kinjy →
+        {tr('nav.join')} →
       </Link>
     </div>
   </footer>

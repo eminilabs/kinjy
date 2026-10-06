@@ -11,6 +11,28 @@
 # which front door it sits behind.
 
 kinjy.com {
+	# A shared post, as a link unfurler sees it.
+	#
+	# The app is a single-page build: one index.html with one set of meta tags,
+	# written before any post existed. A crawler does not run JavaScript, so
+	# every shared post previewed as the same generic Kinjy card. These
+	# requests go to social-service, which renders that post's own title,
+	# description and picture.
+	#
+	# Matched on the user agent rather than served to everybody, so a person
+	# following the link still gets the real page rather than a redirect stub.
+	# The list is the unfurlers that matter here - WhatsApp, Facebook,
+	# Telegram, Twitter/X, LinkedIn, Slack, Discord, iMessage, Signal, Google -
+	# and anything not on it simply gets the app, which is the safe default.
+	@unfurler {
+		path /p/*
+		header_regexp User-Agent (?i)(whatsapp|facebookexternalhit|facebookcatalog|twitterbot|telegrambot|linkedinbot|slackbot|discordbot|skypeuripreview|redditbot|pinterest|applebot|googlebot|bingbot|embedly|quora link preview|vkshare|w3c_validator|bitlybot|signal)
+	}
+	handle @unfurler {
+		rewrite * /api/share{uri}
+		reverse_proxy gateway:8000
+	}
+
 	# The address is the compose service name; Caddy resolves it on the
 	# internal network.
 	reverse_proxy web:80

@@ -246,6 +246,16 @@ export interface AuthUser {
   kyc_verified: boolean
   referral_code: string
   status: string
+  /** Null means never changed since the account was created. */
+  password_changed_at: string | null
+  /** False for an account that signs in with a passkey only. */
+  has_password: boolean
+}
+
+export interface PasswordChangeResult {
+  changed_at: string
+  sessions_ended: number
+  signed_out_here: boolean
 }
 
 export interface AuthResult {
@@ -429,6 +439,8 @@ export interface Post {
   episode_number: number | null
   likes_count: number
   comments_count: number
+  /** People the viewer follows who reacted or commented, plus a count of the rest. */
+  known_actors?: KnownActors | null
   reposts_count: number
   views_count?: number
   /** The shared post, when this card is a repost. */
@@ -460,6 +472,8 @@ export interface FeedPage {
    * a minor and may be missing posts. Temporary; worth saying so on screen.
    */
   degraded?: boolean
+  /** Whether asking for the next page is worth it. Absent on an older server. */
+  has_more?: boolean
   items: Post[]
 }
 
@@ -490,11 +504,34 @@ export interface UploadedMedia {
   deduplicated?: boolean
 }
 
+export interface LinkCard {
+  url: string
+  title: string
+  description: string
+  image: string | null
+  site_name: string
+  cached?: boolean
+}
+
+export interface KnownActors {
+  people: Array<{
+    id: string
+    name: string
+    handle: string | null
+    avatar_url: string | null
+    action: 'reacted' | 'commented'
+  }>
+  /** Everyone else who acted, so a post can say "and 40 others" without naming them. */
+  others: number
+}
+
 export interface NewPost {
   body: string
   format?: string
   visibility?: string
   circle_id?: string
+  /** Required when visibility is 'community'; the server checks you are a member. */
+  community_id?: string
   topics?: string[]
   lang?: string
   country?: string
@@ -1314,7 +1351,15 @@ export const kaluta = {
     algorithms: () => api.get<{ items: Algorithm[] }>('/algorithms', { auth: false }),
 
     page: (
-      params: { mode: string; algorithm_id?: string; city?: string; country?: string; topic?: string; limit?: number },
+      params: {
+        mode: string
+        algorithm_id?: string
+        city?: string
+        country?: string
+        topic?: string
+        limit?: number
+        offset?: number
+      },
       options: { signal?: AbortSignal } = {},
     ) => {
       const query = new URLSearchParams({ mode: params.mode })
@@ -1323,6 +1368,7 @@ export const kaluta = {
       if (params.country) query.set('country', params.country)
       if (params.topic) query.set('topic', params.topic)
       query.set('limit', String(params.limit ?? 20))
+      if (params.offset) query.set('offset', String(params.offset))
       return api.get<FeedPage>(`/feed?${query}`, { signal: options.signal })
     },
 
@@ -1340,6 +1386,13 @@ export const kaluta = {
   posts: {
     create: (post: NewPost) => api.post<Post>('/posts', post),
     get: (id: string) => api.get<Post>(`/posts/${id}`),
+    /**
+     * The card for a link in a post. Read by the server, not the browser: a
+     * page may be unreachable from the member's network, and having every
+     * reader fetch whatever a post links to points a crowd at someone's site.
+     */
+    linkPreview: (url: string) =>
+      api.get<LinkCard>(`/link-preview?url=${encodeURIComponent(url)}`),
     /** Ask for media data saver withheld — "load it anyway", for this post only. */
     media: (id: string) => api.get<{ post_id: string; media: PostMedia[] }>(`/posts/${id}/media`),
     byAuthor: (userId: string, limit = 20) =>
@@ -1553,6 +1606,22 @@ export const kaluta = {
     create: (input: { name: string; description?: string; kind?: string; price_usd?: number; country?: string }) =>
       api.post<{ id: string; slug: string; kind: string }>('/communities', { kind: 'public', ...input }),
     join: (id: string) => api.post<{ joined: boolean; status: string }>(`/communities/${id}/join`),
+    /** Leave, or withdraw a request that has not been answered. */
+    leave: (id: string) => api.post<{ left: boolean }>(`/communities/${id}/leave`),
+    /**
+     * What has been posted inside a community.
+     *
+     * Served by social-service, where posts live, which is why the path is
+     * under /feed rather than /communities: the gateway sends /communities to
+     * community-service, and membership and posts are owned by different
+     * services on purpose.
+     */
+    feed: (id: string, limit = 20, offset = 0) =>
+      api.get<{
+        community: { id: string; name: string; slug: string; kind: string; members_count: number }
+        total: number
+        items: Post[]
+      }>(`/feed/community/${id}?limit=${limit}&offset=${offset}`, { auth: false }),
   },
 
   forums: {
@@ -1911,6 +1980,35 @@ export const kaluta = {
       return result.user
     },
     me: () => api.get<AuthUser>('/auth/me'),
+
+    /**
+     * Whether a reset link can actually be delivered.
+     *
+     * Asked before the form is offered: an installation with no mail configured
+     * can only answer "not available", and finding that out after typing your
+     * address reads as a fault on your side.
+     */
+    resetAvailable: () =>
+      api.get<{ available: boolean }>('/auth/password/reset-available', { auth: false }),
+
+    /**
+     * Ask for a reset link. Succeeds whether or not the address has an account -
+     * the server will not say, and neither will this.
+     */
+    requestPasswordReset: (email: string) =>
+      api.post<{ status: string; note: string }>(
+        '/auth/password/reset-request', { email }, { auth: false },
+      ),
+
+    /** Set a new password from the link. Every session is signed out, this one included. */
+    async resetPassword(token: string, new_password: string) {
+      const result = await api.post<{ status: string; sessions_ended: number }>(
+        '/auth/password/reset', { token, new_password }, { auth: false },
+      )
+      // Whatever was stored belongs to the session the server has just revoked.
+      tokens.clear()
+      return result
+    },
     async logout() {
       const refresh_token = tokens.refresh
       // Revoke the session server-side so the device disappears from the
@@ -2016,6 +2114,25 @@ export const kaluta = {
 
     kyc: () => api.get<KycStatus>('/kyc/status'),
     startKyc: () => api.post<{ status: string; attempt?: number }>('/kyc/start'),
+
+    /**
+     * Change the password, and sign the other devices out.
+     *
+     * The current refresh token goes with the request so the server knows which
+     * session to keep - without it the member would be signed out of the very
+     * device they are standing at. If the server signs us out anyway (no token
+     * to hand it), the stored tokens are cleared rather than left to fail on
+     * the next call.
+     */
+    async changePassword(current_password: string, new_password: string) {
+      const result = await api.post<PasswordChangeResult>('/auth/password', {
+        current_password,
+        new_password,
+        refresh_token: tokens.refresh,
+      })
+      if (result.signed_out_here) tokens.clear()
+      return result
+    },
 
     sessions: () => api.get<DeviceSession[]>('/auth/sessions'),
     revokeSession: (id: string) => api.delete<void>(`/auth/sessions/${id}`),

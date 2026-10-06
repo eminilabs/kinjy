@@ -1,4 +1,5 @@
 import { Link } from 'react-router'
+import { Trans, useTranslation } from 'react-i18next'
 import { StoreBadges } from './shared'
 import { useJoinTarget } from './useJoinTarget'
 
@@ -9,6 +10,7 @@ function Photo({ src, alt }: { src: string; alt: string }) {
 
 export default function LandingHero() {
   const join = useJoinTarget()
+  const { t } = useTranslation()
   return (
     <header className="kl-split kl-pad-x relative items-stretch gap-[clamp(40px,6vw,96px)] pb-12 pt-14">
       <div className="kl-rise flex flex-col justify-between gap-14">
@@ -17,24 +19,29 @@ export default function LandingHero() {
             className="kl-serif mb-8 font-semibold"
             style={{ fontSize: 'clamp(56px, 7.6vw, 104px)', lineHeight: 0.92, letterSpacing: '-.02em' }}
           >
-            Une nouvelle façon de vous <span className="text-[var(--kl-gold-deep)]">connecter</span>.
+            {/* <Trans> rather than two keys: the highlighted word sits in a
+                different place in every language - at the end in French, in the
+                middle in Chinese - so the sentence has to be translated whole
+                and carry the emphasis with it. */}
+            <Trans i18nKey="hero.title">
+              A new way to <span className="text-[var(--kl-gold-deep)]">connect</span>.
+            </Trans>
           </h1>
           <p className="mb-10 max-w-[420px] text-[19px] leading-[1.55] text-[var(--kl-mid)]" style={{ textWrap: 'pretty' }}>
-            Kinjy réunit les gens autour de ce qu’ils aiment. Des communautés vivantes, un fil sans bruit, des
-            conversations qui comptent.
+            {t('hero.sub')}
           </p>
           <Link
             to={join.to}
             className="kl-sheen inline-flex items-center gap-[18px] rounded-[20px] py-[7px] pe-[7px] ps-[30px] text-[17px] font-semibold shadow-[0_14px_30px_-12px_rgba(169,118,28,.55)] transition-transform hover:-translate-y-0.5"
           >
-            {join.to.startsWith('/join') ? 'Rejoindre la tribu' : join.label}
+            {join.to.startsWith('/join') ? t('hero.cta') : join.label}
             <span className="grid h-12 w-12 place-items-center rounded-full bg-white text-xl text-[var(--kl-night)]" aria-hidden="true">
               →
             </span>
           </Link>
         </div>
         <div className="flex flex-col gap-4 border-t border-[var(--kl-paper-2)] pt-7">
-          <span className="text-sm font-semibold text-[var(--kl-low)]">L’application</span>
+          <span className="text-sm font-semibold text-[var(--kl-low)]">{t('hero.app')}</span>
           <StoreBadges />
         </div>
       </div>
@@ -69,7 +76,7 @@ export default function LandingHero() {
           </div>
           <div className="absolute inset-x-4 bottom-4 flex items-center gap-2">
             <span className="flex h-10 flex-1 items-center rounded-[20px] border-2 border-white/90 bg-white/15 px-4 text-[13px] text-white backdrop-blur-md">
-              Répondre à Awa…
+              {t('landing.hero.reply')}
             </span>
             <span className="h-10 w-10 rounded-full border-2 border-white/90" />
           </div>

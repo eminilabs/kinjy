@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Globe } from 'lucide-react'
 import ArcButton from './ui-kit/ArcButton'
 import { LANGUAGES } from '@/i18n'
+import { COMPANY } from '@/lib/company'
 import { isRouteAvailable } from '@/lib/features'
 
 const ALL_COLUMNS: { title: string; links: { label: string; to: string }[] }[] = [
@@ -110,9 +111,17 @@ export default function Footer() {
 
         {/* Bottom row */}
         <div className="mt-16 flex flex-col items-center justify-between gap-6 border-t border-white/8 pt-8 md:flex-row">
-          <div className="flex items-center gap-2.5">
-            <img src="/logo.svg" alt="" className="h-6 w-6" />
-            <span className="caption">© 2025 Kinjy</span>
+          <div className="flex items-center gap-2.5 md:items-start">
+            <img src="/logo.svg" alt="" className="h-6 w-6 shrink-0" />
+            <div className="text-center md:text-start">
+              <span className="caption block">© 2025 {COMPANY.name}</span>
+              {/* The registered address, because a platform that takes money
+                  and holds people's accounts should say plainly who is behind
+                  it and where they can be written to. */}
+              <address className="caption mt-0.5 block not-italic text-text-low">
+                {COMPANY.address}
+              </address>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <Globe size={14} className="text-text-low" aria-hidden="true" />

@@ -135,7 +135,11 @@ class Preferences(Base):
     __table_args__ = {"schema": SCHEMA}
 
     user_id: Mapped[str] = mapped_column(String(40), primary_key=True)
-    default_feed_mode: Mapped[str] = mapped_column(String(30), default="following")
+    # "new", not "following": a member who has just joined follows nobody, so a
+    # Following feed is empty by construction. Defaulting to it meant every new
+    # account opened the app to a blank page - which reads as the posts having
+    # disappeared rather than as a feed working exactly as specified.
+    default_feed_mode: Mapped[str] = mapped_column(String(30), default="new")
     algorithm_id: Mapped[str] = mapped_column(String(60), default="chronological")
     display_mode: Mapped[str] = mapped_column(String(20), default="cloud")  # cloud|light|dark|system
     data_saver: Mapped[bool] = mapped_column(Boolean, default=False)
