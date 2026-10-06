@@ -13,6 +13,7 @@ import EarlyWarningSystem from '@/components/safety/EarlyWarningSystem'
 import CrisisAlertMode from '@/components/safety/CrisisAlertMode'
 import ProvenanceSigning from '@/components/safety/ProvenanceSigning'
 import VoiceFirstAccess from '@/components/safety/VoiceFirstAccess'
+import WhoOperatesKinjy from '@/components/safety/WhoOperatesKinjy'
 
 /**
  * Safety, Privacy & Account Control — /safety.
@@ -34,6 +35,10 @@ export default function Safety() {
       <CrisisAlertMode />
       <ProvenanceSigning />
       <VoiceFirstAccess />
+
+      {/* Last before the call to action: a member who has read what the
+          platform promises should finish by learning who is promising it. */}
+      <WhoOperatesKinjy />
 
       {/* CTA */}
       <section aria-labelledby="safety-cta-heading" className="twilight-field noise-overlay py-24 text-center">
