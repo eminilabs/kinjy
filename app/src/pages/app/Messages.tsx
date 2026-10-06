@@ -48,6 +48,7 @@ import MemberAvatar from '@/components/social/MemberAvatar'
 import { useApi } from '@/hooks/useApi'
 import { useRealtime } from '@/hooks/useRealtime'
 import { useAuth } from '@/hooks/useAuth'
+import { useMyProfile } from '@/hooks/useMyProfile'
 import {
   ApiError,
   kaluta,
@@ -251,14 +252,13 @@ function MessageMeta({
 function Attachment({
   message,
   onOpenImage,
-  dark: _dark,
   sender,
   mine,
   metaSlot,
 }: {
   message: ChatMessage
   onOpenImage: (url: string) => void
-  dark: boolean
+  dark?: boolean
   sender?: PersonBrief | { handle?: string; display_name?: string; avatar_url?: string | null } | null
   mine?: boolean
   metaSlot?: React.ReactNode
@@ -402,6 +402,7 @@ function PresenceAvatar({
 
 export default function Messages() {
   const { user } = useAuth()
+  const me = useMyProfile()
   const { lang: locale, resolved } = useAppTheme()
   const [params, setParams] = useSearchParams()
   const requestedId = params.get('c')
@@ -1707,7 +1708,13 @@ export default function Messages() {
                   )
 
                   const attachmentSender = mine
-                    ? (user ? { display_name: user.display_name, handle: user.handle, avatar_url: user.avatar_url } : null)
+                    ? (user
+                        ? {
+                            display_name: user.display_name,
+                            handle: user.handle,
+                            avatar_url: me?.avatar_url ?? active.profiles?.[user.id]?.avatar_url ?? null,
+                          }
+                        : null)
                     : sender
 
                   return (
