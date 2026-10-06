@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta, timezone
 import httpx
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session as OrmSession
 
 from common import ageclient, classifier, events, mediasign, notify, permissions, settings
@@ -57,6 +57,15 @@ FAITH_STYLE = "^[a-z_]{2,40}$"
 # a path; the columns that store ids are 40 characters wide.
 MEDIA_ID = r"^[A-Za-z0-9_-]{1,64}$"
 TRIBUTE_KINDS = ("message", "flower", "candle", "photo")
+
+# The gallery. A page families fill from their phones and strangers read from a
+# grave: bounded so one memorial cannot take the disk, and so a gallery page is a
+# page and not a download. A video's ticket lasts longer than a picture's because
+# it is played, paused and rewound over minutes; five would cut it off.
+GALLERY_MAX_ITEMS = 60
+GALLERY_MAX_BYTES = 500 * 1024 * 1024
+VIDEO_TICKET_SECONDS = 3600
+GALLERY_PROVENANCE = ("original", "edited", "ai_assisted", "ai_generated", "verified_source")
 
 
 def _clean_name(value: str | None) -> str | None:
@@ -214,15 +223,18 @@ def _asset_id(url: str | None) -> str | None:
     return None
 
 
-def _signed(url: str | None, viewer: str | None) -> str | None:
+def _signed(url: str | None, viewer: str | None, ttl: int | None = None) -> str | None:
     """A viewing ticket for this viewer — minted only after the memorial has been
     found viewable for them, like every other media ticket on the platform."""
     asset = _asset_id(url)
-    return mediasign.sign_url(url, asset, viewer) if url and asset else url
+    if not (url and asset):
+        return url
+    return mediasign.sign_url(url, asset, viewer, ttl=ttl or mediasign.DEFAULT_TTL_SECONDS)
 
 
-def _own_media(media_id: str, owner_id: str, kinds: tuple[str, ...]) -> str:
-    """The stored URL of a file this member uploaded, of an accepted kind.
+def _own_media_info(media_id: str, owner_id: str, kinds: tuple[str, ...]) -> dict:
+    """What media-service says about a file this member uploaded, of an accepted
+    kind — after it has been made to need a ticket.
 
     Someone else's asset id is refused with the same words as a missing one:
     the difference would tell a prober which ids exist. Once attached, the file
@@ -245,7 +257,23 @@ def _own_media(media_id: str, owner_id: str, kinds: tuple[str, ...]) -> str:
     except Exception as exc:
         log.error("could not restrict media %s: %s", media_id, exc)
         raise HTTPException(status_code=503, detail="Could not secure that file right now. Try again.")
-    return info["url"]
+    return info
+
+
+def _own_media(media_id: str, owner_id: str, kinds: tuple[str, ...]) -> str:
+    """The stored URL of a file this member uploaded, of an accepted kind."""
+    return _own_media_info(media_id, owner_id, kinds)["url"]
+
+
+def _asset_info(media_id: str) -> dict | None:
+    """What media-service says about any asset, for attaching a file that is
+    already on the memorial (a tribute photo) — no ownership claim is made."""
+    try:
+        response = httpx.get(f"{MEDIA_URL}/internal/media/{media_id}", timeout=4)
+    except Exception as exc:
+        log.warning("media lookup failed for %s: %s", media_id, exc)
+        raise HTTPException(status_code=503, detail="Could not check that file right now. Try again.")
+    return response.json() if response.status_code == 200 else None
 
 
 def _screen(text: str | None, author_id: str | None, media_kinds: list[str] | None = None) -> None:
@@ -685,10 +713,18 @@ def delete_memorial(memorial_id: str, principal: CurrentUser, db: OrmSession = D
     _managed(db, memorial_id, principal.user_id, "delete it")
     if _admin_ids(db, memorial_id)[0] != principal.user_id:
         raise HTTPException(status_code=403, detail="Only the first administrator can delete a memorial")
-    for model in (models.Tribute, models.Reminder, models.DeathReport, models.MemorialEvent, models.MemorialAdmin):
+    # The gallery's own files go with it; a tribute's photo stays the tribute's.
+    own_files = [(r.media_url, r.added_by) for r in _gallery_rows(db, memorial_id) if r.source_tribute_id is None]
+    for model in (
+        models.Tribute, models.Reminder, models.DeathReport, models.MemorialEvent,
+        models.MemorialMedia, models.MemorialAdmin,
+    ):
         db.execute(delete(model).where(model.memorial_id == memorial_id))
     db.execute(delete(models.Memorial).where(models.Memorial.id == memorial_id))
     db.commit()
+    for url, owner in own_files:
+        if not _still_referenced(db, url):
+            _release_file(url, owner)
 
 
 # ---------------------------------------------------------------------------
@@ -1068,6 +1104,242 @@ def delete_event(memorial_id: str, event_id: str, principal: CurrentUser, db: Or
         raise HTTPException(status_code=404, detail="Moment not found")
     db.delete(row)
     db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Gallery: photos and videos
+# ---------------------------------------------------------------------------
+
+class GalleryAdd(BaseModel):
+    media_id: str = Field(pattern=MEDIA_ID)
+    caption: str | None = Field(default=None, max_length=500)
+    sensitive: bool = False
+
+
+class GalleryPatch(BaseModel):
+    caption: str | None = Field(default=None, max_length=500)
+    sensitive: bool | None = None
+    provenance: str | None = Field(default=None, pattern="^(original|edited|ai_assisted|ai_generated|verified_source)$")
+
+
+class GalleryOrder(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=GALLERY_MAX_ITEMS)
+
+
+def _gallery_rows(db: OrmSession, memorial_id: str) -> list[models.MemorialMedia]:
+    return list(
+        db.scalars(
+            select(models.MemorialMedia)
+            .where(models.MemorialMedia.memorial_id == memorial_id)
+            .order_by(models.MemorialMedia.position, models.MemorialMedia.created_at)
+        ).all()
+    )
+
+
+def _gallery_item(db: OrmSession, memorial_id: str, item_id: str) -> models.MemorialMedia:
+    row = db.get(models.MemorialMedia, item_id)
+    if row is None or row.memorial_id != memorial_id:
+        raise HTTPException(status_code=404, detail="Photo or video not found")
+    return row
+
+
+def _gallery_out(row: models.MemorialMedia, viewer: str | None) -> dict:
+    return {
+        "id": row.id,
+        "kind": row.kind,
+        "url": _signed(row.media_url, viewer, ttl=VIDEO_TICKET_SECONDS if row.kind == "video" else None),
+        "caption": row.caption,
+        "provenance": row.provenance,
+        "sensitive": row.sensitive,
+        "position": row.position,
+        "size_bytes": row.size_bytes,
+        "from_tribute": row.source_tribute_id is not None,
+    }
+
+
+def _gallery_add(
+    db: OrmSession,
+    memorial_id: str,
+    info: dict,
+    *,
+    caption: str | None,
+    sensitive: bool,
+    added_by: str,
+    tribute_id: str | None = None,
+) -> models.MemorialMedia:
+    """Put a file in the gallery, last in line — within the limits."""
+    url = info.get("url")
+    if not url:
+        raise HTTPException(status_code=400, detail="That file cannot be shown.")
+    rows = _gallery_rows(db, memorial_id)
+    size = int(info.get("size_bytes") or 0)
+    if len(rows) >= GALLERY_MAX_ITEMS:
+        raise HTTPException(status_code=400, detail=f"A gallery holds at most {GALLERY_MAX_ITEMS} photos and videos.")
+    if sum(r.size_bytes or 0 for r in rows) + size > GALLERY_MAX_BYTES:
+        raise HTTPException(status_code=400, detail=f"A gallery holds at most {GALLERY_MAX_BYTES // 1024 // 1024} MB.")
+    if any(r.media_url == url for r in rows):
+        raise HTTPException(status_code=409, detail="That photo or video is already in the gallery.")
+    provenance = info.get("provenance") if info.get("provenance") in GALLERY_PROVENANCE else "original"
+    row = models.MemorialMedia(
+        memorial_id=memorial_id,
+        kind=info["kind"],
+        media_url=url,
+        caption=caption,
+        provenance=provenance,
+        sensitive=sensitive,
+        position=(rows[-1].position + 1) if rows else 1,
+        size_bytes=size,
+        source_tribute_id=tribute_id,
+        added_by=added_by,
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def _still_referenced(db: OrmSession, url: str) -> bool:
+    """Whether anything else on any memorial still points at this file. The same
+    bytes uploaded twice by the same member are one asset, so two memorials — or
+    a memorial's portrait and its gallery — can share one."""
+    for stmt in (
+        select(func.count()).select_from(models.MemorialMedia).where(models.MemorialMedia.media_url == url),
+        select(func.count()).select_from(models.Memorial).where(
+            or_(models.Memorial.photo_url == url, models.Memorial.cover_url == url, models.Memorial.memorial_audio_url == url)
+        ),
+        select(func.count()).select_from(models.Tribute).where(models.Tribute.media_url == url),
+        select(func.count()).select_from(models.DeathReport).where(models.DeathReport.document_url == url),
+    ):
+        if db.scalar(stmt):
+            return True
+    return False
+
+
+def _release_file(url: str | None, owner_id: str) -> None:
+    """Ask media-service to delete a gallery file nobody points at any more.
+
+    media-service only deletes files that carry a purpose, for the owner named —
+    a gallery file's, never a post's — so a stale or wrong call cannot take
+    somebody's picture. A failure leaves an orphan on disk and is logged: the
+    gallery has already changed and must not fail because of it.
+    """
+    asset = _asset_id(url)
+    if not asset:
+        return
+    try:
+        httpx.post(f"{MEDIA_URL}/internal/media/{asset}/discard", json={"owner_id": owner_id}, timeout=6)
+    except Exception as exc:
+        log.warning("could not release gallery file %s: %s", asset, exc)
+
+
+@app.get("/memorials/{memorial_id}/media", tags=["gallery"])
+def list_media(memorial_id: str, principal: MaybeUser, db: OrmSession = Depends(get_db)):
+    """The gallery, in the family's order. Anyone who may see the memorial may see it."""
+    viewer = principal.user_id if principal else None
+    _viewable(db, memorial_id, viewer)
+    rows = _gallery_rows(db, memorial_id)
+    out = {
+        "limit": GALLERY_MAX_ITEMS,
+        "max_bytes": GALLERY_MAX_BYTES,
+        "items": [_gallery_out(r, viewer) for r in rows],
+    }
+    if _is_admin_of(db, memorial_id, viewer):
+        out["bytes_used"] = sum(r.size_bytes or 0 for r in rows)
+    return out
+
+
+@app.post("/memorials/{memorial_id}/media", status_code=201, tags=["gallery"])
+def add_media(memorial_id: str, payload: GalleryAdd, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    _managed(db, memorial_id, principal.user_id, "add to the gallery")
+    info = _own_media_info(payload.media_id, principal.user_id, ("image", "video"))
+    # Only a file uploaded *for a memorial* has been through the memorial's
+    # checks — its own size caps, and a look at what the bytes really are.
+    if info.get("purpose") != "memorial":
+        raise HTTPException(
+            status_code=400,
+            detail="Upload that file for a memorial first: the gallery only takes files that went through its checks.",
+        )
+    caption = (payload.caption or "").strip() or None
+    _screen(caption, principal.user_id)
+    row = _gallery_add(
+        db, memorial_id, info, caption=caption, sensitive=payload.sensitive, added_by=principal.user_id
+    )
+    db.commit()
+    return _gallery_out(row, principal.user_id)
+
+
+@app.patch("/memorials/{memorial_id}/media/{item_id}", tags=["gallery"])
+def update_media(
+    memorial_id: str, item_id: str, payload: GalleryPatch, principal: CurrentUser, db: OrmSession = Depends(get_db)
+):
+    _managed(db, memorial_id, principal.user_id, "edit the gallery")
+    row = _gallery_item(db, memorial_id, item_id)
+    if "caption" in payload.model_fields_set:
+        caption = (payload.caption or "").strip() or None
+        _screen(caption, principal.user_id)
+        row.caption = caption
+    if payload.sensitive is not None:
+        row.sensitive = payload.sensitive
+    if payload.provenance is not None:
+        row.provenance = payload.provenance
+    db.commit()
+    return _gallery_out(row, principal.user_id)
+
+
+@app.post("/memorials/{memorial_id}/media/reorder", tags=["gallery"])
+def reorder_media(memorial_id: str, payload: GalleryOrder, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """Set the whole order at once. Every item must be named exactly once: a
+    partial list would leave the rest in an order nobody chose."""
+    _managed(db, memorial_id, principal.user_id, "edit the gallery")
+    rows = _gallery_rows(db, memorial_id)
+    if sorted(payload.ids) != sorted(r.id for r in rows):
+        raise HTTPException(status_code=400, detail="Send every photo and video once, in the order you want.")
+    by_id = {r.id: r for r in rows}
+    for position, item_id in enumerate(payload.ids, start=1):
+        by_id[item_id].position = position
+    db.commit()
+    return {"items": [_gallery_out(by_id[i], principal.user_id) for i in payload.ids]}
+
+
+@app.delete("/memorials/{memorial_id}/media/{item_id}", status_code=204, tags=["gallery"])
+def delete_media(memorial_id: str, item_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    _managed(db, memorial_id, principal.user_id, "edit the gallery")
+    row = _gallery_item(db, memorial_id, item_id)
+    url, owner, from_tribute = row.media_url, row.added_by, row.source_tribute_id is not None
+    db.delete(row)
+    db.flush()
+    for position, rest in enumerate(_gallery_rows(db, memorial_id), start=1):
+        rest.position = position
+    db.commit()
+    # A promoted tribute photo still belongs to the tribute; anything else the
+    # family uploaded goes, unless the same file is in use somewhere else.
+    if not from_tribute and not _still_referenced(db, url):
+        _release_file(url, owner)
+
+
+@app.post("/memorials/{memorial_id}/media/from-tribute/{tribute_id}", status_code=201, tags=["gallery"])
+def promote_tribute_photo(
+    memorial_id: str, tribute_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)
+):
+    """Put a visitor's approved photo in the gallery. The item points at the same
+    file as the tribute, so neither can take it from the other."""
+    _managed(db, memorial_id, principal.user_id, "edit the gallery")
+    tribute = db.get(models.Tribute, tribute_id)
+    if (
+        tribute is None or tribute.memorial_id != memorial_id or tribute.kind != "photo"
+        or tribute.status != "approved" or not tribute.media_url
+    ):
+        raise HTTPException(status_code=404, detail="That photo is not among this memorial's approved tributes.")
+    asset = _asset_id(tribute.media_url)
+    info = _asset_info(asset) if asset else None
+    if not info or info.get("kind") != "image":
+        raise HTTPException(status_code=404, detail="That photo could not be found.")
+    caption = (tribute.body or "").strip()[:500] or None
+    row = _gallery_add(
+        db, memorial_id, {**info, "url": tribute.media_url}, caption=caption, sensitive=False,
+        added_by=principal.user_id, tribute_id=tribute.id,
+    )
+    db.commit()
+    return _gallery_out(row, principal.user_id)
 
 
 # ---------------------------------------------------------------------------

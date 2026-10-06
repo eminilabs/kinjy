@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Date,
     DateTime,
@@ -147,6 +148,41 @@ class MemorialEvent(Base):
     title: Mapped[str] = mapped_column(String(200))
     body: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[str] = mapped_column(String(40))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class MemorialMedia(Base):
+    """One photo or video in a memorial's gallery (blueprint §8: "photos/videos/voice").
+
+    The portrait, the cover and the voice recording are single slots on the
+    memorial itself; this is the rest — the family's pictures and clips, in the
+    order they chose. A tribute photo a visitor shared can be promoted into it:
+    the item then *points at the same file* (``source_tribute_id``) rather than
+    owning a copy, so taking it out of the gallery never takes the file from the
+    tribute.
+    """
+
+    __tablename__ = "memorial_media"
+    __table_args__ = (
+        UniqueConstraint("memorial_id", "media_url", name="uq_memorial_media_url"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("gal"))
+    memorial_id: Mapped[str] = mapped_column(ForeignKey(f"{SCHEMA}.memorials.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(10))  # image|video
+    media_url: Mapped[str] = mapped_column(String(500))
+    caption: Mapped[str | None] = mapped_column(String(500))
+    # The label shown on this page. It starts as the one the file was uploaded
+    # with (original|edited|ai_assisted|ai_generated|verified_source).
+    provenance: Mapped[str] = mapped_column(String(20), default="original")
+    # Blurred until the visitor chooses to look: the family's call, since a
+    # funeral or a final illness can be in the picture.
+    sensitive: Mapped[bool] = mapped_column(Boolean, default=False)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, default=0)
+    source_tribute_id: Mapped[str | None] = mapped_column(String(40))
+    added_by: Mapped[str] = mapped_column(String(40))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 

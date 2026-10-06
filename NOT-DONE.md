@@ -293,11 +293,15 @@ guest book; and the public `/memorials` page showed a dead button, a candle that
 was never sent anywhere, a made-up legacy contact and a paid tier that does not
 exist.
 
+**Gallery of photos and videos (06/10)** — built (`info.md` §8, "photos/videos/voice"),
+covered by `backend/tests/e2e_graveyard_gallery.py` (66 checks) and a browser
+pass of the grid, the viewer, the family's screen, light mode and 390px (55
+checks, WCAG AA). The family adds, captions, orders and removes up to 60 photos
+and videos (500 MB in all); each carries an origin label; some can be marked
+sensitive; an approved visitor photo can be promoted into it.
+
 Not built — in the blueprint (`info.md` §8):
 
-- **Photos and videos.** The blueprint says "photos/videos/voice". A memorial
-  has one portrait, one cover and one voice recording, and a visitor's message
-  may carry a photo; there is no gallery and no video anywhere.
 - **Paid flowers and candles** ("free + paid"). `paid` and `amount` exist on
   tributes; nothing charges, and the public pages no longer show a paid tier.
   The age rule is already settled — every checkout passes the `payments` gate
@@ -312,6 +316,34 @@ Deferred by the blueprint itself:
   only): the family is whoever the family tree says, and the tree is hidden
   (`FEATURES.familyTree`).
 
+Known limits of the gallery:
+
+- **No thumbnails.** There is no ffmpeg in media-service, so the grid loads the
+  pictures themselves (25 MB at most each, twelve before "Show all"), and a
+  video's first frame stands in for a poster.
+- **A video must be playable where it is watched.** MP4 and WebM only; an iPhone
+  `.mov` is refused with what to do. An MP4 encoded as HEVC passes the checks but
+  Chrome and Firefox cannot play it — the viewer offers the download. Nothing is
+  converted.
+- **50 MB per video** because the gateway holds a whole upload in memory
+  (`await request.body()`). Raising it means streaming the body through the
+  gateway first.
+- **Media is not age-rated.** The classifier cannot look at a picture, and posts
+  with media stay adult-only until a person reviews them. A memorial gallery is
+  shown to everyone — signed-out visitors, who are the people at the grave, and
+  minors included — and the family's "sensitive" mark (blurred until shown) is
+  the only guard. A decision, not an oversight; AGE-SAFETY.md says so.
+- **Only the gallery's own files are deleted** with their item or their
+  memorial. The portrait, cover, voice and tribute photos still stay in
+  media-service, because the same bytes can be shared with a post.
+- **A video's link lasts an hour, a picture's five minutes.** A picture whose
+  link ran out asks for fresh ones and a second failure within ten seconds is
+  believed. The page does not renew links while it is untouched.
+- **Error red on the dark theme is 4.3:1.** The theme's `--danger` is `#DE5C5C`;
+  small text needs 4.5:1. The gallery shows problems in normal text with a red
+  icon; the other 17 uses in Circles and Graveyard (51 in the app) are a token
+  change away from passing.
+
 Known limits:
 
 - **"Captured at the grave" is the device's word.** The location is marked
@@ -324,8 +356,9 @@ Known limits:
   family, so nothing they write appears unreviewed.
 - **A tribute's author cannot withdraw it.** Only an administrator can take it
   down.
-- **Deleting a memorial leaves its files** in media-service, restricted and
-  owned by whoever uploaded them.
+- **Deleting a memorial leaves its portrait, cover, voice and tribute photos** in
+  media-service, restricted and owned by whoever uploaded them (the gallery's
+  files are deleted).
 - **The reporter of a death is not told the outcome** unless they administer
   the memorial; the family is.
 - **Reminders fall at midnight UTC** on the anniversary, not at the family's

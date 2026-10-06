@@ -14,6 +14,7 @@ import {
 } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { FAITH_STYLES, formatDate, momentDate } from './format'
+import GalleryManage from './GalleryManage'
 import { TICKET_REFRESH_MS, useEvery } from './useEvery'
 
 /** The most a device may be off and still count as being at the grave (the backend holds the same number). */
@@ -110,11 +111,35 @@ const KIND_LABEL: Record<string, string> = {
 }
 
 /** What visitors can see now — the place to take something down again. */
-function PublishedTributes({ memorial, onChanged }: { memorial: Memorial; onChanged: () => void }) {
+function PublishedTributes({
+  memorial,
+  onChanged,
+  onPromoted,
+}: {
+  memorial: Memorial
+  onChanged: () => void
+  onPromoted: () => void
+}) {
   const [shown, setShown] = useState(20)
   const list = useApi(() => kaluta.memorials.tributes(memorial.id, { limit: shown }), [memorial.id, shown])
   useEvery(list.reload, TICKET_REFRESH_MS)
   const [error, setError] = useState<string | null>(null)
+
+  const [added, setAdded] = useState<Set<string>>(new Set())
+  const [note, setNote] = useState<string | null>(null)
+
+  const promote = async (id: string) => {
+    setError(null)
+    setNote(null)
+    try {
+      await kaluta.memorials.promoteTribute(memorial.id, id)
+      setAdded((prev) => new Set(prev).add(id))
+      setNote('Added to the gallery.')
+      onPromoted()
+    } catch (err) {
+      setError(message(err, 'Could not add it to the gallery'))
+    }
+  }
 
   const takeDown = async (id: string) => {
     setError(null)
@@ -147,14 +172,27 @@ function PublishedTributes({ memorial, onChanged }: { memorial: Memorial; onChan
               {t.body && <p className="mt-0.5 line-clamp-3 whitespace-pre-line text-text-mid">{t.body}</p>}
               {t.media_url && <img src={t.media_url} alt={`Photo from ${t.author_name}`} className="mt-1.5 max-h-28 rounded-card-sm object-cover" loading="lazy" />}
             </div>
-            <button
-              type="button"
-              onClick={() => void takeDown(t.id)}
-              aria-label={`Take down: ${t.author_name} ${KIND_LABEL[t.kind] ?? t.kind}`}
-              className={ghost}
-            >
-              <Trash2 size={12} aria-hidden="true" /> Take down
-            </button>
+            <div className="flex shrink-0 flex-col gap-1.5">
+              {t.kind === 'photo' && (
+                <button
+                  type="button"
+                  onClick={() => void promote(t.id)}
+                  disabled={added.has(t.id)}
+                  aria-label={`Add ${t.author_name}'s photo to the gallery`}
+                  className={ghost}
+                >
+                  {added.has(t.id) ? 'In the gallery' : 'Add to gallery'}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => void takeDown(t.id)}
+                aria-label={`Take down: ${t.author_name} ${KIND_LABEL[t.kind] ?? t.kind}`}
+                className={ghost}
+              >
+                <Trash2 size={12} aria-hidden="true" /> Take down
+              </button>
+            </div>
           </li>
         ))}
       </ul>
@@ -163,6 +201,7 @@ function PublishedTributes({ memorial, onChanged }: { memorial: Memorial; onChan
           Show more ({total - items.length} more)
         </button>
       )}
+      {note && <p className="mt-2 text-sm text-success">{note}</p>}
       <Problem text={error ?? list.error} />
     </Section>
   )
@@ -364,7 +403,7 @@ function Media({ memorial, onChanged }: { memorial: Memorial; onChanged: () => v
   )
 
   return (
-    <Section title="Pictures and sound" hint="Only files you upload yourself can be used.">
+    <Section title="Portrait, cover and voice" hint="Only files you upload yourself can be used.">
       <div className="space-y-3">
         {row('photo', 'Portrait', Boolean(memorial.photo_url), 'image/jpeg,image/png,image/webp', ImageIcon)}
         {row('cover', 'Cover image', Boolean(memorial.cover_url), 'image/jpeg,image/png,image/webp', ImageIcon)}
@@ -741,12 +780,15 @@ export default function MemorialManage({
   onChanged: () => void
   onDeleted: () => void
 }) {
+  // A photo promoted from the tributes must show up in the gallery section below it.
+  const [galleryVersion, setGalleryVersion] = useState(0)
   return (
     <div className="space-y-4">
       <PendingTributes memorial={memorial} onChanged={onChanged} />
-      <PublishedTributes memorial={memorial} onChanged={onChanged} />
+      <PublishedTributes memorial={memorial} onChanged={onChanged} onPromoted={() => setGalleryVersion((n) => n + 1)} />
       <Details key={`${memorial.id}-details`} memorial={memorial} onChanged={onChanged} />
       <Media memorial={memorial} onChanged={onChanged} />
+      <GalleryManage memorial={memorial} refresh={galleryVersion} />
       <Timeline memorial={memorial} />
       <Location key={`${memorial.id}-place`} memorial={memorial} onChanged={onChanged} />
       <Admins memorial={memorial} />
