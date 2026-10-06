@@ -82,22 +82,23 @@ export default function AppShell({
 
       <div
         className={cn(
-          // The centre column is capped at 560px and the three columns are
-          // centred in whatever is left, which is how LinkedIn and Facebook
-          // both lay a feed out.
+          // The rails sit in the corners and the feed is centred between them.
           //
-          // It used to be minmax(0,1fr) inside a 1600px shell, on the reasoning
-          // that three columns of dense content should use the screen they are
-          // given. That was wrong for the column that matters: a feed is a
-          // line of text and a picture, and at 814px the line ran past
-          // comfortable reading length and a square photo rendered 814px tall
-          // and swallowed the post under it. Width helps the rails, not the
-          // feed - so the rails keep their size and the stretch goes to the
-          // margins.
-          'mx-auto grid w-full max-w-app justify-center gap-4 px-3 pb-24 pt-4 md:px-4 lg:pb-8',
+          // So the shell is full width with no max-w cap, the middle column
+          // takes everything the rails leave, and the *reading* width is held
+          // on <main> instead - 560px, centred in that column. Capping the
+          // column itself and centring the three together, which is what this
+          // did a moment ago, pulls the rails inward and leaves a margin
+          // outside them; the feed measures the same either way, but the rails
+          // end up floating rather than anchored.
+          //
+          // The cap matters wherever it lives: at the old 814px the line ran
+          // past comfortable reading length and a square photo rendered 814px
+          // tall and swallowed the post under it.
+          'grid w-full gap-4 px-3 pb-24 pt-4 md:px-4 lg:pb-8',
           aside
-            ? 'lg:grid-cols-[240px_minmax(0,560px)] xl:grid-cols-[240px_minmax(0,560px)_320px]'
-            : 'lg:grid-cols-[240px_minmax(0,560px)]',
+            ? 'lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_320px]'
+            : 'lg:grid-cols-[240px_minmax(0,1fr)]',
         )}
       >
         {/* Left rail — identity and shortcuts */}
@@ -107,8 +108,10 @@ export default function AppShell({
           </div>
         </div>
 
-        {/* Centre column */}
-        <main className="min-w-0">
+        {/* Centre column. The reading width lives here rather than on the grid
+            column, so the rails stay anchored to the edges while the feed sits
+            in the middle of the space between them. */}
+        <main className="mx-auto w-full min-w-0 max-w-[560px]">
           {(title || action) && (
             <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
               {title ? (
