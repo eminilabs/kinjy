@@ -626,7 +626,15 @@ def tree(
         "truncated": any(node["more"] for node in nodes),
         "nodes": nodes,
         "edges": [
-            {"id": e.id, "from": e.from_person_id, "to": e.to_person_id, "kind": e.kind, "status": e.status}
+            {
+                "id": e.id,
+                "from": e.from_person_id,
+                "to": e.to_person_id,
+                "kind": e.kind,
+                "status": e.status,
+                # The server decides who may take a link back, so the screen only offers what would be allowed.
+                "removable": e.asserted_by == principal.user_id or bool(principal.is_admin),
+            }
             for e in links
         ],
     }
