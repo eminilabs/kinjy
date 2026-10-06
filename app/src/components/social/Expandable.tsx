@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils'
  */
 export default function Expandable({
   collapsedHeight,
+  lines,
   children,
   label = 'See more',
   lessLabel = 'See less',
@@ -32,6 +33,16 @@ export default function Expandable({
   onExpand,
 }: {
   collapsedHeight: number
+  /**
+   * Cut at a whole number of lines instead of at a pixel height.
+   *
+   * For running text this is the one to use. A pixel height lands wherever it
+   * lands - usually halfway down a line - and the fade then sits over
+   * characters that are still legible underneath it, which reads as a broken
+   * render rather than as "there is more". A line clamp ends on a line, with
+   * an ellipsis, and needs no fade at all.
+   */
+  lines?: number
   children: React.ReactNode
   label?: string
   lessLabel?: string
@@ -46,10 +57,24 @@ export default function Expandable({
   const measure = useCallback(() => {
     const el = inner.current
     if (!el) return
+    if (lines) {
+      // Measured against what the clamp *would* allow, worked out from the
+      // line box - not against the element's current height.
+      //
+      // Comparing scrollHeight with clientHeight cannot work here: the clamp
+      // is only applied once an overflow has been found, so until then the two
+      // are equal, nothing is ever found, and the clamp is never applied. The
+      // test has to hold whether or not it is currently clamped.
+      const style = getComputedStyle(el)
+      const lineHeight =
+        parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.5 || 20
+      setOverflows(el.scrollHeight > lineHeight * lines + 4)
+      return
+    }
     // A few pixels of slack: a block one or two pixels over its limit is not
     // worth a button, and sub-pixel text metrics produce exactly that.
     setOverflows(el.scrollHeight > collapsedHeight + 4)
-  }, [collapsedHeight])
+  }, [collapsedHeight, lines])
 
   useEffect(() => {
     measure()
@@ -70,18 +95,33 @@ export default function Expandable({
       <div
         ref={inner}
         className={cn('relative', clipped && 'overflow-hidden')}
-        style={clipped ? { maxHeight: collapsedHeight } : undefined}
+        style={
+          clipped
+            ? lines
+              ? {
+                  // The clamp ends on a line and adds the ellipsis itself.
+                  display: '-webkit-box',
+                  WebkitBoxOrient: 'vertical',
+                  WebkitLineClamp: lines,
+                  overflow: 'hidden',
+                }
+              : { maxHeight: collapsedHeight }
+            : undefined
+        }
       >
         {children}
-        {clipped && (
-          /* The fade sits over the last of the content rather than under a
-             hard edge, so it reads as "this continues" instead of as a
-             rendering fault. Not interactive: the button below is the control,
-             and an overlay that swallowed taps would make the post itself
-             unclickable along its bottom edge. */
+        {clipped && !lines && (
+          /* Only for a height clamp, which cuts wherever it happens to land.
+             Short and quick to transparent: a tall fade washes out lines that
+             are still perfectly readable, and ghosted text reads as a broken
+             render rather than as "this continues".
+
+             Not interactive - the button below is the control, and an overlay
+             that swallowed taps would make the post unclickable along its
+             bottom edge. */
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[var(--cloud)] via-[var(--cloud)]/85 to-transparent"
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[var(--cloud)] to-transparent"
           />
         )}
       </div>

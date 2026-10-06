@@ -49,8 +49,13 @@ import { Link } from 'react-router'
  *
  * Only a cut that is real is shown - Expandable measures first, so a post that
  * fits gets no fade and no button rather than a "See more" that does nothing.
+ *
+ * Running text is cut by line and an article body by height, because
+ * -webkit-line-clamp needs a -webkit-box, which an article's paragraphs and
+ * lists cannot live inside.
  */
-const BODY_COLLAPSED = 120
+const BODY_LINES = 5
+const BODY_COLLAPSED = 140
 
 /** Who can read a restricted post, said on the card so nobody has to guess. */
 const AUDIENCE: Record<string, { label: string; hint: string }> = {
@@ -551,7 +556,7 @@ export default function PostCard({
            interactive elements inside a button is invalid and unreadable to a
            screen reader. A plain click handler leaves them alone, and the
            header already offers a keyboard route to the same place. */
-        <Expandable collapsedHeight={BODY_COLLAPSED} className="mt-3" deps={[body]}>
+        <Expandable collapsedHeight={BODY_COLLAPSED} lines={BODY_LINES} className="mt-3" deps={[body]}>
           <p
             onClick={(event) => {
               if (!onOpen) return
