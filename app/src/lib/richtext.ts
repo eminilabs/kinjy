@@ -83,3 +83,35 @@ export function htmlToText(html: string): string {
 export function looksLikeHtml(value: string): boolean {
   return /<(p|br|h2|h3|ul|ol|li|blockquote|strong|b|em|i|a|code|pre)\b/i.test(value)
 }
+
+/**
+ * A body that is not an article, made readable.
+ *
+ * Plain-text posts are not always plain: bodies arrive carrying `<br>`, `&gt;`
+ * and the occasional `<p>` - from an importer, from a paste out of a rich
+ * editor, from a client that escaped once too often. Rendered as text those
+ * show literally, so a post reads "...Limited time!&gt;<br>Join as Founding
+ * Member", which is what the member wrote mangled into what the member did
+ * not.
+ *
+ * So: breaks become newlines, the rest of the tags go, and entities are
+ * decoded once by the parser. Single newlines survive, unlike `htmlToText`,
+ * which flattens everything to one line - that is right for feeding a
+ * translator and wrong for showing somebody their own paragraphs.
+ *
+ * Decoding happens via textContent, so nothing here can reintroduce markup:
+ * the output is text and is rendered as text.
+ */
+export function readableText(value: string): string {
+  if (!/[<&]/.test(value)) return value
+  const withBreaks = value
+    .replace(/<\s*br\s*\/?\s*>/gi, '\n')
+    .replace(/<\s*\/\s*(p|div|li|h[1-6]|blockquote)\s*>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+  const doc = new DOMParser().parseFromString(`<body>${withBreaks}</body>`, 'text/html')
+  return (doc.body.textContent ?? '')
+    // Three or more blank lines is somebody's stray markup, not their spacing.
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .trim()
+}

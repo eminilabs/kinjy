@@ -524,6 +524,8 @@ export interface KnownActors {
   }>
   /** Everyone else who acted, so a post can say "and 40 others" without naming them. */
   others: number
+  /** What those others did, so the line never has to say "reacted or commented". */
+  others_action?: 'reacted' | 'commented' | 'both'
 }
 
 export interface NewPost {
@@ -1669,6 +1671,19 @@ export const kaluta = {
       api.post<{ id: string }>(`/forums/${forumId}/threads`, input),
     thread: (threadId: string) => api.get<ThreadDetail>(`/threads/${threadId}`, { auth: false }),
     reply: (threadId: string, body: string) => api.post<{ id: string }>(`/threads/${threadId}/replies`, { body }),
+  },
+
+  /**
+   * Browser notifications. The key is public and says whether this
+   * installation can push at all, so the switch is never offered when it
+   * cannot work.
+   */
+  push: {
+    key: () => api.get<{ available: boolean; public_key: string | null }>('/push/key', { auth: false }),
+    subscribe: (subscription: { endpoint: string; p256dh: string; auth: string }) =>
+      api.post<{ subscribed: boolean }>('/push/subscribe', subscription),
+    unsubscribe: (endpoint: string) =>
+      api.delete<void>(`/push/subscribe?endpoint=${encodeURIComponent(endpoint)}`),
   },
 
   messages: {

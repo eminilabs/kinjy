@@ -19,7 +19,7 @@ import {
 } from 'lucide-react'
 import { ApiError, kaluta, type Post, type WhyFactor } from '@/lib/api'
 import { useTopic } from '@/hooks/useRealtime'
-import { htmlToText, looksLikeHtml, sanitizeHtml } from '@/lib/richtext'
+import { htmlToText, looksLikeHtml, readableText, sanitizeHtml } from '@/lib/richtext'
 import { useAuth } from '@/hooks/useAuth'
 import { postUrl, shareLink } from '@/lib/share'
 import { cn } from '@/lib/utils'
@@ -509,7 +509,7 @@ export default function PostCard({
         <div className="mt-3 grid gap-4 sm:grid-cols-2">
           <div>
             <p className="caption mb-1 uppercase">{post.lang} · original</p>
-            <p className="whitespace-pre-wrap text-[0.95rem] leading-relaxed text-text-hi">{plainBody}</p>
+            <p className="whitespace-pre-wrap text-[0.95rem] leading-relaxed text-text-hi">{readableText(plainBody)}</p>
           </div>
           <div className="sm:border-s sm:border-white/8 sm:ps-4">
             <p className="caption mb-1 uppercase">{uiLang} · translated</p>
@@ -543,7 +543,7 @@ export default function PostCard({
             onOpen && 'cursor-pointer',
           )}
         >
-          {withHashtags(body)}
+          {withHashtags(readableText(body))}
         </p>
       )}
 

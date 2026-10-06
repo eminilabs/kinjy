@@ -49,6 +49,8 @@ import { FEATURES } from '@/lib/features'
 import { realtime } from '@/lib/realtime'
 import { playMessageChime, primeSound, setSoundEnabled, soundEnabled } from '@/lib/chime'
 import { MESSAGE_REACTIONS, type StickerPack } from '@/lib/api'
+import ConfirmDialog from '@/components/ui-kit/ConfirmDialog'
+import PushToggle from '@/components/app/PushToggle'
 import { cn } from '@/lib/utils'
 
 function useMediaQuery(query: string): boolean {
@@ -663,6 +665,9 @@ export default function Messages() {
   // Which message's reaction row is open, and the sticker tray.
   const [reactingTo, setReactingTo] = useState<string | null>(null)
   const [stickersOpen, setStickersOpen] = useState(false)
+  // The message awaiting a yes. Held rather than confirmed inline so the
+  // dialog can name what is about to happen.
+  const [confirmDelete, setConfirmDelete] = useState<ChatMessage | null>(null)
   const [packs, setPacks] = useState<StickerPack[] | null>(null)
   const [sound, setSound] = useState(soundEnabled())
   const [staged, setStaged] = useState<File[]>([])
@@ -754,7 +759,7 @@ export default function Messages() {
   const removeMessage = async (message: ChatMessage) => {
     const conversationId = activeIdRef.current
     if (!conversationId) return
-    if (!window.confirm('Delete this message? The text is removed for everyone and cannot be recovered.')) return
+    setConfirmDelete(null)
     try {
       await kaluta.messages.remove(conversationId, message.id)
       setMessages((current) =>
@@ -1209,6 +1214,10 @@ export default function Messages() {
       subtitle="Private conversations between members."
       action={showThread && !wide ? undefined : (
         <div className="flex items-center gap-2">
+          {/* Renders nothing when the browser or this installation cannot
+              push, so it never offers a switch that does nothing. */}
+          <PushToggle />
+
           {/* A sound nobody can switch off is a reason to close the tab. It
               sits beside the connection state because both are facts about
               this surface rather than settings about the account. */}
@@ -1928,7 +1937,7 @@ export default function Messages() {
                             {mine && (
                               <button
                                 type="button"
-                                onClick={() => removeMessage(message)}
+                                onClick={() => setConfirmDelete(message)}
                                 className="inline-flex items-center gap-1 px-1 text-[0.68rem] text-text-low hover:text-red-200"
                               >
                                 <Trash2 size={11} aria-hidden="true" />
@@ -2212,6 +2221,14 @@ export default function Messages() {
           onClose={() => setLightbox(null)}
         />
       )}
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        onOpenChange={(open) => !open && setConfirmDelete(null)}
+        title="Delete this message?"
+        description="The text is removed for everyone in this conversation, not hidden. It cannot be recovered."
+        confirmLabel="Delete message"
+        onConfirm={() => confirmDelete && void removeMessage(confirmDelete)}
+      />
     </AppShell>
   )
 }

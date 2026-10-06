@@ -512,18 +512,24 @@ def _known_actors(
         return {}
 
     # Totals first, for everyone - the "and N others" part does not depend on
-    # who the viewer knows.
+    # who the viewer knows. Kept per verb as well as in total, because
+    # "1 person reacted or commented" is what a program says when it knows the
+    # count and not the action, and the action is right here.
     totals: dict[str, set[str]] = {}
+    reacted: dict[str, set[str]] = {}
+    commented: dict[str, set[str]] = {}
     for post_id, user_id in db.execute(
         select(models.Reaction.post_id, models.Reaction.user_id)
         .where(models.Reaction.post_id.in_(ids))
     ).all():
         totals.setdefault(post_id, set()).add(user_id)
+        reacted.setdefault(post_id, set()).add(user_id)
     for post_id, user_id in db.execute(
         select(models.Comment.post_id, models.Comment.author_id)
         .where(models.Comment.post_id.in_(ids), models.Comment.status == "published")
     ).all():
         totals.setdefault(post_id, set()).add(user_id)
+        commented.setdefault(post_id, set()).add(user_id)
 
     known = set(following)
     named: dict[str, list[tuple[str, str]]] = {}
@@ -569,7 +575,21 @@ def _known_actors(
                 "action": action,
             })
         named_ids = {u for u, _ in bucket}
-        out[post_id] = {"people": people, "others": max(0, len(everyone - named_ids))}
+        rest = everyone - named_ids
+        # What the unnamed ones did. Only "both" when it is genuinely both -
+        # otherwise the line says the thing that actually happened.
+        rest_reacted = bool(rest & reacted.get(post_id, set()))
+        rest_commented = bool(rest & commented.get(post_id, set()))
+        action = (
+            "both" if rest_reacted and rest_commented
+            else "commented" if rest_commented
+            else "reacted"
+        )
+        out[post_id] = {
+            "people": people,
+            "others": max(0, len(rest)),
+            "others_action": action,
+        }
     return out
 
 
