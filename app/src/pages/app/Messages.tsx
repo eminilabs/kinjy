@@ -22,6 +22,9 @@ import {
   Wifi,
   WifiOff,
   X,
+  CornerUpLeft,
+  Volume2,
+  VolumeX,
 } from 'lucide-react'
 import AppShell from '@/components/app/AppShell'
 import { useAppTheme } from '@/components/appdemo/theme'
@@ -41,6 +44,7 @@ import {
 } from '@/lib/api'
 import { FEATURES } from '@/lib/features'
 import { realtime } from '@/lib/realtime'
+import { playMessageChime, primeSound, setSoundEnabled, soundEnabled } from '@/lib/chime'
 import { cn } from '@/lib/utils'
 
 function useMediaQuery(query: string): boolean {
@@ -381,6 +385,9 @@ export default function Messages() {
   // --- scrolling ------------------------------------------------------------
   const listRef = useRef<HTMLDivElement>(null)
   const nearBottom = useRef(true)
+  // Message ids already announced. A reconnect replays everything missed,
+  // and without this the catch-up is a burst of chimes.
+  const seenForSound = useRef<Set<string>>(new Set())
   const scrollMode = useRef<'bottom' | 'keep' | { restoreFrom: number }>('bottom')
 
   const onScroll = () => {
@@ -429,7 +436,15 @@ export default function Messages() {
    */
   const openThread = useCallback(
     async (conversationId: string, how: 'user' | 'url' | 'auto' = 'user') => {
+      // Opening a thread by hand is a gesture, and a gesture is the only
+      // moment a browser lets audio start. Unlocking here means the first
+      // message to arrive can be heard; doing it later means the first one is
+      // always silent. Not on 'url' or 'auto', which are not gestures.
+      if (how === 'user') primeSound()
       setActiveId(conversationId)
+      // A thread just opened is being read, so nothing in it should chime.
+      // Without this, opening a busy conversation plays the catch-up.
+      setReplyTo(null)
       activeIdRef.current = conversationId
       if (how !== 'url') {
         const push = how === 'user' && !wideRef.current && !paramsRef.current.get('c')
@@ -532,7 +547,13 @@ export default function Messages() {
    * after a lost response finds the stored message instead of sending it twice.
    */
   const deliver = useCallback(
-    async (conversationId: string, clientId: string, body: string | null, file?: File) => {
+    async (
+      conversationId: string,
+      clientId: string,
+      body: string | null,
+      file?: File,
+      replyToId?: string | null,
+    ) => {
       try {
         let mediaId: string | undefined
         if (file) {
@@ -546,7 +567,12 @@ export default function Messages() {
           )
           mediaId = asset.id
         }
-        const created = await kaluta.messages.send(conversationId, { body, mediaId, clientId })
+        const created = await kaluta.messages.send(conversationId, {
+          body,
+          mediaId,
+          clientId,
+          replyToId,
+        })
         filesRef.current.delete(clientId)
         if (activeIdRef.current !== conversationId) return
         // Usually the socket frame has already brought the full message; this
@@ -623,6 +649,10 @@ export default function Messages() {
     })()
   }
 
+  // The message being answered, if any. Held as the message rather than its
+  // id so the composer can show the quoted line without searching the thread.
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
+  const [sound, setSound] = useState(soundEnabled())
   const [staged, setStaged] = useState<File[]>([])
   const stage = (files: FileList | File[] | null) => {
     // Copied now, not inside the updater: a FileList is live, and the input
@@ -647,6 +677,7 @@ export default function Messages() {
     setDraft('')
     setError(null)
     const clientId = crypto.randomUUID()
+    const answering = replyTo
     scrollMode.current = 'bottom'
     setMessages((current) => [
       ...current,
@@ -659,10 +690,23 @@ export default function Messages() {
         ciphertext_b64: null,
         body: text,
         kind: 'text',
+        // The quote is on the bubble before the server answers, so the reply
+        // does not appear detached from what it answers for a moment.
+        reply_to_id: answering?.id ?? null,
+        reply_to: answering
+          ? {
+              id: answering.id,
+              sender_id: answering.sender_id,
+              encrypted: answering.encrypted,
+              preview: answering.body ?? 'Message',
+              media_kind: answering.media_kind ?? null,
+            }
+          : null,
         created_at: new Date().toISOString(),
       },
     ])
-    void deliver(conversationId, clientId, text)
+    setReplyTo(null)
+    void deliver(conversationId, clientId, text, undefined, answering?.id ?? null)
   }
 
   const retry = (message: ChatMessage) => {
@@ -878,6 +922,19 @@ export default function Messages() {
           )
           if (event.sender_id !== user?.id) markRead(event.conversation_id)
         }
+        // A sound for a message somebody else sent. Not for your own, which
+        // you just watched leave, and not for a frame echoing a message
+        // already on screen - a reconnect replays what was missed, and a
+        // thread that chimes six times on catch-up is a thread people mute.
+        if (
+          event.sender_id &&
+          event.sender_id !== user?.id &&
+          event.message_id &&
+          !seenForSound.current.has(event.message_id)
+        ) {
+          seenForSound.current.add(event.message_id)
+          playMessageChime()
+        }
         // Whoever sent a message has stopped typing it.
         if (event.conversation_id && event.sender_id) {
           const { conversation_id: cid, sender_id: sid } = event
@@ -994,17 +1051,47 @@ export default function Messages() {
       title={showThread && !wide ? undefined : 'Messages'}
       subtitle="Private conversations between members."
       action={showThread && !wide ? undefined : (
-        <span
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold',
-            connected
-              ? 'border-emerald-400/30 text-emerald-200'
-              : 'border-amber-400/30 text-amber-200',
-          )}
-        >
-          {connected ? <Wifi size={12} aria-hidden="true" /> : <WifiOff size={12} aria-hidden="true" />}
-          {connected ? 'Connected' : 'Reconnecting…'}
-        </span>
+        <div className="flex items-center gap-2">
+          {/* A sound nobody can switch off is a reason to close the tab. It
+              sits beside the connection state because both are facts about
+              this surface rather than settings about the account. */}
+          <button
+            type="button"
+            onClick={() => {
+              const next = !sound
+              setSound(next)
+              setSoundEnabled(next)
+              // Turning it on is a gesture, which is the only moment a browser
+              // will let audio start - so unlock here, and play it once, which
+              // doubles as showing what it sounds like.
+              if (next) {
+                primeSound()
+                playMessageChime()
+              }
+            }}
+            aria-pressed={sound}
+            title={sound ? 'Sound on for new messages' : 'Sound off for new messages'}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-full border border-white/12 px-3 py-1.5 text-xs font-semibold',
+              sound ? 'text-text-mid hover:text-text-hi' : 'text-text-low',
+            )}
+          >
+            {sound ? <Volume2 size={12} aria-hidden="true" /> : <VolumeX size={12} aria-hidden="true" />}
+            {sound ? 'Sound on' : 'Sound off'}
+          </button>
+
+          <span
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold',
+              connected
+                ? 'border-emerald-400/30 text-emerald-200'
+                : 'border-amber-400/30 text-amber-200',
+            )}
+          >
+            {connected ? <Wifi size={12} aria-hidden="true" /> : <WifiOff size={12} aria-hidden="true" />}
+            {connected ? 'Connected' : 'Reconnecting…'}
+          </span>
+        </div>
       )}
     >
       <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
@@ -1467,7 +1554,7 @@ export default function Messages() {
                   const hasText = !message.encrypted && Boolean(message.body?.trim())
                   const mediaOnly = Boolean(message.media_kind) && !hasText
                   return (
-                    <div key={message.client_id ?? message.id}>
+                    <div key={message.client_id ?? message.id} id={`msg-${message.id}`}>
                       {newDay && (
                         <div className="my-4 flex items-center gap-3" role="separator">
                           <span className="h-px flex-1 bg-white/8" />
@@ -1477,7 +1564,13 @@ export default function Messages() {
                           <span className="h-px flex-1 bg-white/8" />
                         </div>
                       )}
-                      <div className={cn('flex flex-col', mine ? 'items-end' : 'items-start', burst ? 'mt-0.5' : 'mt-3')}>
+                      <div
+                        className={cn(
+                          'group/msg flex flex-col',
+                          mine ? 'items-end' : 'items-start',
+                          burst ? 'mt-0.5' : 'mt-3',
+                        )}
+                      >
                         {!mine && active.kind === 'group' && !burst && (
                           <span className="caption mb-0.5 ms-1">{sender?.display_name ?? 'Member'}</span>
                         )}
@@ -1490,6 +1583,41 @@ export default function Messages() {
                             message.status === 'failed' && 'border border-red-400/40',
                           )}
                         >
+                          {(message.reply_to || message.reply_to_id) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                // Jump to what is being answered. The original
+                                // may be further back than the loaded page, in
+                                // which case there is nothing to scroll to and
+                                // the quote is simply not a link anywhere.
+                                const target = message.reply_to_id
+                                  ? document.getElementById(`msg-${message.reply_to_id}`)
+                                  : null
+                                target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                              }}
+                              className={cn(
+                                'mb-1.5 flex w-full flex-col items-start gap-0.5 rounded-card-sm border-s-2 px-2 py-1 text-start',
+                                mine ? 'border-gold/60 bg-black/15' : 'border-sky/60 bg-black/20',
+                              )}
+                            >
+                              <span className="caption">
+                                {message.reply_to
+                                  ? active.profiles?.[message.reply_to.sender_id]?.display_name ??
+                                    (message.reply_to.sender_id === user?.id ? 'You' : 'Member')
+                                  : ''}
+                              </span>
+                              <span className="line-clamp-2 text-xs text-text-mid">
+                                {/* The original may have expired or been deleted
+                                    between being answered and being read. The
+                                    reply stays either way - hiding an answer
+                                    because the question went is worse than an
+                                    answer with nothing above it. */}
+                                {message.reply_to?.preview ?? 'Message unavailable'}
+                              </span>
+                            </button>
+                          )}
+
                           {message.media_kind && (
                             <div className={cn('relative', hasText && '-mx-2 -mt-0.5 mb-1.5')}>
                               <Attachment message={message} onOpenImage={setLightbox} dark={resolved !== 'light'} />
@@ -1525,6 +1653,22 @@ export default function Messages() {
                               : timeOf(message.created_at, locale)}
                           </p>
                         </div>
+
+                        {/* Reply. Shown on hover on a pointer device and always
+                            on a touch one, where there is no hover to reveal it.
+                            Not offered for a message still being sent: it has no
+                            server id yet, so the reply would point at nothing. */}
+                        {!message.status && (
+                          <button
+                            type="button"
+                            onClick={() => setReplyTo(message)}
+                            className="mt-0.5 inline-flex items-center gap-1 px-1 text-[0.68rem] text-text-low opacity-100 hover:text-gold-soft md:opacity-0 md:group-hover/msg:opacity-100"
+                          >
+                            <CornerUpLeft size={11} aria-hidden="true" />
+                            Reply
+                          </button>
+                        )}
+
                         {message.status === 'failed' && (
                           <button
                             type="button"
@@ -1599,6 +1743,36 @@ export default function Messages() {
                   rests in the bottom-end corner (lib/floating.ts, slot 0) —
                   exactly where a full-height thread puts its composer. No
                   orb, no gap: Send keeps the full width. */}
+              {/* What is being answered, above the box. Shown rather than
+                  implied: a reply sent to the wrong message is a small
+                  humiliation, and the only moment to prevent it is before
+                  pressing send. */}
+              {replyTo && (
+                <div className="mt-3 flex items-start gap-2 rounded-card-sm border-s-2 border-gold/60 bg-white/[0.06] px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="caption">
+                      Replying to{' '}
+                      {replyTo.sender_id === user?.id
+                        ? 'yourself'
+                        : active.profiles?.[replyTo.sender_id]?.display_name ?? 'this message'}
+                    </p>
+                    <p className="line-clamp-2 text-xs text-text-mid">
+                      {replyTo.encrypted
+                        ? 'Encrypted message'
+                        : replyTo.body?.trim() || (replyTo.media_kind ? 'Attachment' : 'Message')}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReplyTo(null)}
+                    aria-label="Cancel reply"
+                    className="shrink-0 rounded-full p-1 text-text-low hover:text-text-hi"
+                  >
+                    <X size={13} aria-hidden="true" />
+                  </button>
+                </div>
+              )}
+
               <form onSubmit={send} className={cn('mt-3 flex items-center gap-2 border-t border-white/8 pt-3', FEATURES.assistant && 'pe-14 lg:pe-12')}>
                 {recordingSince !== null ? (
                   <>

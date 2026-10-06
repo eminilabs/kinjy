@@ -763,6 +763,20 @@ export interface Message {
   media_name?: string | null
   media_type?: string | null
   media_size?: number | null
+  /** The message this one answers, if any. */
+  reply_to_id?: string | null
+  /**
+   * One line of the message being answered, as the server renders it. Null when
+   * the original has expired or been deleted - the reply survives it, and the
+   * thread says "Message unavailable" rather than hiding the answer.
+   */
+  reply_to?: {
+    id: string
+    sender_id: string
+    encrypted: boolean
+    preview: string
+    media_kind?: string | null
+  } | null
   created_at: string
 }
 
@@ -1660,17 +1674,27 @@ export const kaluta = {
      */
     send: (
       conversationId: string,
-      message: { body?: string | null; mediaId?: string; clientId?: string },
+      message: {
+        body?: string | null
+        mediaId?: string
+        clientId?: string
+        /** The message being answered. The server ignores an id from another thread. */
+        replyToId?: string | null
+      },
     ) =>
-      api.post<{ id: string; created_at: string; client_id: string | null; duplicate?: boolean }>(
-        `/conversations/${conversationId}/messages`,
-        {
-          body: message.body || null,
-          kind: message.mediaId ? 'media' : 'text',
-          media_id: message.mediaId,
-          client_id: message.clientId,
-        },
-      ),
+      api.post<{
+        id: string
+        created_at: string
+        client_id: string | null
+        duplicate?: boolean
+        reply_to_id?: string | null
+      }>(`/conversations/${conversationId}/messages`, {
+        body: message.body || null,
+        kind: message.mediaId ? 'media' : 'text',
+        media_id: message.mediaId,
+        client_id: message.clientId,
+        reply_to_id: message.replyToId ?? null,
+      }),
     /** The thread is on screen: record it as read and tell the room. */
     markRead: (conversationId: string) =>
       api.post<{ read_at: string }>(`/conversations/${conversationId}/read`),

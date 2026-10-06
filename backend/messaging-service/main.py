@@ -61,6 +61,7 @@ MIGRATIONS = [
     f"ALTER TABLE {models.SCHEMA}.conversations "
     "ADD COLUMN IF NOT EXISTS disappear_after_seconds INTEGER DEFAULT 0",
     f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ",
+    f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS reply_to_id VARCHAR(40)",
     # Conversations that already exist predate the request model, so everyone
     # in them is treated as having accepted. Retro-fitting a request state onto
     # live threads would silently block attachments between people who have
@@ -300,6 +301,10 @@ class MessageIn(BaseModel):
     # must not be able to embed an arbitrary address as a "photo".
     media_id: str | None = Field(default=None, max_length=40)
     lang: str | None = None
+    # The message being answered. Checked against this conversation before it
+    # is stored - an id from another thread would otherwise quote a message the
+    # people here are not allowed to read.
+    reply_to_id: str | None = Field(default=None, max_length=40)
     # See models.Message.client_id: makes a retried send idempotent.
     client_id: str | None = Field(default=None, max_length=64)
 
@@ -859,6 +864,29 @@ MEDIA_LABELS = {"image": "a photo", "video": "a video", "audio": "a voice or aud
                 "document": "a document", "file": "a file"}
 
 
+def _quoted(message: "models.Message | None") -> dict | None:
+    """The one line of the message being answered.
+
+    Returns None when the original has gone - expired, deleted, or simply not
+    in this conversation. The reply itself stays: a thread that refuses to show
+    an answer because the question disappeared is worse than an answer with
+    nothing above it, and the client renders "Message unavailable".
+
+    An end-to-end encrypted original has no line the server can quote, so it
+    says so rather than inventing one; the client has the plaintext and can do
+    better if it still holds the thread.
+    """
+    if message is None:
+        return None
+    return {
+        "id": message.id,
+        "sender_id": message.sender_id,
+        "encrypted": message.encrypted,
+        "preview": "Encrypted message" if message.encrypted else _preview(message)[:140],
+        "media_kind": message.media_kind,
+    }
+
+
 def _preview(message: models.Message) -> str:
     """One line for a notification or the conversation list — never ciphertext."""
     if message.encrypted:
@@ -868,6 +896,29 @@ def _preview(message: models.Message) -> str:
         label = MEDIA_LABELS.get(message.media_kind, "a file")
         return f"Sent {label}" + (f": {text}" if text else "")
     return text
+
+
+def _reply_target(db: OrmSession, conversation_id: str, reply_to_id: str | None) -> str | None:
+    """The message being answered, if it belongs to this conversation.
+
+    An id from another thread is refused rather than ignored: silently dropping
+    it would send a reply that quotes nothing, and accepting it would let
+    somebody quote a message from a conversation they are not in - the quoted
+    line is rendered from the original, so that would be a read.
+
+    A reply to a message that has since expired is allowed through as a plain
+    message. The alternative is refusing to send at all because the thing being
+    answered disappeared between opening the reply box and pressing send.
+    """
+    if not reply_to_id:
+        return None
+    exists = db.scalar(
+        select(models.Message.id).where(
+            models.Message.id == reply_to_id,
+            models.Message.conversation_id == conversation_id,
+        )
+    )
+    return exists or None
 
 
 @app.post("/conversations/{conversation_id}/messages", status_code=201, tags=["messages"])
@@ -961,6 +1012,9 @@ async def send_message(
         media_type=attachment["content_type"] if attachment else None,
         media_size=attachment["size_bytes"] if attachment else None,
         lang=payload.lang,
+        # Resolved against this conversation; an id from another thread becomes
+        # None rather than a quote of a message these people cannot read.
+        reply_to_id=_reply_target(db, conversation_id, payload.reply_to_id),
         client_id=payload.client_id,
         # The deadline is computed from the room's setting, not sent by the
         # client: letting the sender choose would let them set a shorter timer
@@ -1054,7 +1108,8 @@ async def send_message(
     if offline:
         db.commit()
 
-    return {"id": message.id, "created_at": message.created_at, "client_id": message.client_id}
+    return {"id": message.id, "created_at": message.created_at, "client_id": message.client_id,
+            "reply_to_id": message.reply_to_id}
 
 
 @app.post("/conversations/{conversation_id}/read", tags=["messages"])
@@ -1127,6 +1182,22 @@ def list_messages(
     # Fetching is not reading. A catch-up in a background tab, or a page of
     # history, must not tell the other side "Seen": the client posts /read
     # when the thread is actually on screen.
+    # The quoted messages, in one query for the page. Only ones from this same
+    # conversation are fetched, so a reply cannot carry a line out of a thread
+    # the reader is not in.
+    quoted_ids = {r.reply_to_id for r in rows if r.reply_to_id}
+    quoted: dict[str, models.Message] = {}
+    if quoted_ids:
+        quoted = {
+            q.id: q
+            for q in db.scalars(
+                select(models.Message).where(
+                    models.Message.id.in_(quoted_ids),
+                    models.Message.conversation_id == conversation_id,
+                )
+            ).all()
+        }
+
     return {
         "items": [
             {
@@ -1138,6 +1209,8 @@ def list_messages(
                 "body": _plain(r)[0],
                 "kind": r.kind,
                 **_media_fields(r),
+                "reply_to_id": r.reply_to_id,
+                "reply_to": _quoted(quoted.get(r.reply_to_id or "")),
                 "created_at": r.created_at,
             }
             for r in rows

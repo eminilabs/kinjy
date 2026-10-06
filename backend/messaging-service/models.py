@@ -80,6 +80,10 @@ class Message(Base):
     media_type: Mapped[str | None] = mapped_column(String(100))
     media_size: Mapped[int | None] = mapped_column(BigInteger)
     lang: Mapped[str | None] = mapped_column(String(5))
+    # The message this one answers, in the same conversation. A pointer rather
+    # than a copy of the quoted text: a copy would outlive the original, so a
+    # deleted or expired message would stay readable inside every reply to it.
+    reply_to_id: Mapped[str | None] = mapped_column(String(40), index=True)
     # Chosen by the sending device before the request goes out. A retry after
     # a dropped response carries the same id, so it finds the message already
     # stored instead of sending it twice. Unique per sender (partial index in
