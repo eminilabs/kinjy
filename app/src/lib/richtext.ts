@@ -33,10 +33,64 @@ function safeHref(value: string): string | null {
   }
 }
 
-function clean(node: Node, out: Node, doc: Document): void {
+/**
+ * A bare address typed into a body, matched so it can be made clickable.
+ *
+ * Deliberately narrow: only http(s), and the address stops at whitespace or at
+ * a character that cannot appear unescaped in one. Trailing sentence
+ * punctuation is handled by the caller, since "see https://example.com." ends
+ * with a full stop that belongs to the sentence and not to the address.
+ */
+const BARE_URL_RE = /https?:\/\/[^\s<>"']+/g
+
+/**
+ * Wrap bare addresses in a text node in real links.
+ *
+ * An author who types an address into an article gets text, not a link: the
+ * editor only creates an <a> when somebody uses the link button. For a post
+ * that also carries a photo there is no unfurled card either - that is
+ * suppressed on purpose, so two pictures do not compete for the same glance -
+ * and the result was an address the reader could see and could not follow.
+ *
+ * So the address is detected here instead. No preview, just a link.
+ *
+ * Never called for text inside an existing <a>: nested anchors are invalid and
+ * would silently drop the inner one.
+ */
+function linkifyInto(text: string, out: Node, doc: Document): void {
+  BARE_URL_RE.lastIndex = 0
+  let last = 0
+  let match: RegExpExecArray | null
+  while ((match = BARE_URL_RE.exec(text)) !== null) {
+    // Trailing punctuation belongs to the sentence, not to the address.
+    const trailing = match[0].match(/[.,;:!?)\]]+$/)?.[0] ?? ''
+    const raw = trailing ? match[0].slice(0, -trailing.length) : match[0]
+    const href = safeHref(raw)
+    if (!href) continue
+
+    if (match.index > last) {
+      out.appendChild(doc.createTextNode(text.slice(last, match.index)))
+    }
+    const anchor = doc.createElement('a')
+    anchor.setAttribute('href', href)
+    // Same hardening as an authored link: noreferrer so the destination does
+    // not learn which Kinjy page the reader came from.
+    anchor.setAttribute('rel', 'noopener noreferrer nofollow')
+    anchor.setAttribute('target', '_blank')
+    anchor.appendChild(doc.createTextNode(raw))
+    out.appendChild(anchor)
+    if (trailing) out.appendChild(doc.createTextNode(trailing))
+    last = match.index + match[0].length
+  }
+  if (last < text.length) out.appendChild(doc.createTextNode(text.slice(last)))
+}
+
+function clean(node: Node, out: Node, doc: Document, inAnchor = false): void {
   for (const child of Array.from(node.childNodes)) {
     if (child.nodeType === Node.TEXT_NODE) {
-      out.appendChild(doc.createTextNode(child.textContent ?? ''))
+      const text = child.textContent ?? ''
+      if (inAnchor) out.appendChild(doc.createTextNode(text))
+      else linkifyInto(text, out, doc)
       continue
     }
     if (child.nodeType !== Node.ELEMENT_NODE) continue
@@ -45,7 +99,7 @@ function clean(node: Node, out: Node, doc: Document): void {
     if (!ALLOWED_TAGS.has(element.tagName)) {
       // Keep the words, drop the wrapper: unwrapping a <div> or a <span> loses
       // styling but never loses the author's text.
-      clean(element, out, doc)
+      clean(element, out, doc, inAnchor)
       continue
     }
 
@@ -53,14 +107,16 @@ function clean(node: Node, out: Node, doc: Document): void {
     if (element.tagName === 'A') {
       const href = safeHref(element.getAttribute('href') ?? '')
       if (!href) {
-        clean(element, out, doc)
+        // The wrapper goes but its text stays, and that text is now loose in
+        // the document - so it is linkified like any other loose text.
+        clean(element, out, doc, inAnchor)
         continue
       }
       copy.setAttribute('href', href)
       copy.setAttribute('rel', 'noopener noreferrer nofollow')
       copy.setAttribute('target', '_blank')
     }
-    clean(element, copy, doc)
+    clean(element, copy, doc, inAnchor || element.tagName === 'A')
     out.appendChild(copy)
   }
 }

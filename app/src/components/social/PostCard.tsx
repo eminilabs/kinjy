@@ -509,11 +509,17 @@ export default function PostCard({
         <div className="mt-3 grid gap-4 sm:grid-cols-2">
           <div>
             <p className="caption mb-1 uppercase">{post.lang} · original</p>
-            <p className="whitespace-pre-wrap text-[0.95rem] leading-relaxed text-text-hi">{readableText(plainBody)}</p>
+            {/* withHashtags here too: a link does not stop being a link
+                because the reader asked to see the translation beside it. */}
+            <p className="whitespace-pre-wrap text-[0.95rem] leading-relaxed text-text-hi">
+              {withHashtags(readableText(plainBody))}
+            </p>
           </div>
           <div className="sm:border-s sm:border-white/8 sm:ps-4">
             <p className="caption mb-1 uppercase">{uiLang} · translated</p>
-            <p className="whitespace-pre-wrap text-[0.95rem] leading-relaxed text-text-hi">{translation.text}</p>
+            <p className="whitespace-pre-wrap text-[0.95rem] leading-relaxed text-text-hi">
+              {withHashtags(translation.text)}
+            </p>
           </div>
         </div>
       ) : isRichArticle ? (
