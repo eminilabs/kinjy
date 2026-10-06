@@ -226,9 +226,16 @@
      white-7%-over---ink flattened, so the surface keeps the colour it was
      designed to have and loses only the see-through.
 
-     Scoped to the attribute on purpose: ThemeProvider mounts inside the app
-     and nowhere else, so the landing page carries no data-theme and keeps its
-     glass. Changing the :root token instead would have flattened the hero. */
+     What keeps the marketing glass is not this selector - AppThemeProvider
+     wraps the whole tree from main.tsx, so data-theme is set on the landing
+     page too. It is the cascade: .twilight-field and .force-dark declare
+     --cloud on themselves, so their descendants inherit the translucent value
+     from them rather than from :root. Every section that paints its own
+     background already carries one of those classes, which is why the heroes
+     are untouched and only cards sitting on the plain --ink body flatten -
+     and over --ink the two are the same colour. Keep that invariant: a new
+     section with its own background needs .force-dark, or its cards will go
+     opaque against it. */
   :root[data-theme='cloud'] {
     --cloud: #1C1F2D;
     --cloud-border: #2D303D;
