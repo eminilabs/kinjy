@@ -22,7 +22,7 @@ const SCOPE = [
   'people',
   'communities',
   ...(FEATURES.marketplace ? ['the marketplace'] : []),
-  ...(FEATURES.familyTree ? ['the family graph'] : []),
+  ...(FEATURES.familyTreeApp ? ['the family graph'] : []),
 ]
 const SCOPE_TEXT = `${SCOPE.slice(0, -1).join(', ')} and ${SCOPE.at(-1)}`
 
@@ -93,7 +93,7 @@ export default function Explore() {
       kaluta.people.search(q, PEOPLE_LIMIT),
       kaluta.communities.list({ q }),
       FEATURES.marketplace ? kaluta.market.products({ q }) : null,
-      FEATURES.familyTree ? kaluta.family.search(q) : null,
+      FEATURES.familyTreeApp ? kaluta.family.search(q) : null,
     ])
 
     // Answers arrive out of order: the one for "e" can land after the one for
@@ -220,7 +220,7 @@ export default function Explore() {
             </Section>
           )}
 
-          {FEATURES.familyTree && (
+          {FEATURES.familyTreeApp && (
             <Section title="Family graph" icon={TreeDeciduous} empty={(people ?? []).length === 0}>
               <ul className="space-y-2">
                 {(people ?? []).map((p) => (

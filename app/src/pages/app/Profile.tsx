@@ -179,7 +179,7 @@ export default function Profile() {
                 <li className={tok.low}>
                   {permissions.can_message ? 'Can message' : 'Cannot message yet'}
                 </li>
-                {FEATURES.familyTree && (
+                {FEATURES.familyTreeApp && (
                   <li className={tok.low}>
                     {permissions.can_add_family ? 'Can add to family tree' : 'Cannot add to family tree'}
                   </li>

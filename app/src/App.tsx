@@ -103,7 +103,7 @@ export default function App() {
           <Route path="/communities/:slug" element={<Communities />} />
           <Route path="/forums" element={<Forums />} />
           <Route path="/messages" element={<Messages />} />
-          <Route path="/tree" element={gated('familyTree', <FamilyTreeApp />, '/hub')} />
+          <Route path="/tree" element={gated('familyTreeApp', <FamilyTreeApp />, '/hub')} />
           <Route path="/graveyard" element={<Graveyard />} />
           {/* Where a memorial's QR code leads. Public: whoever scans a headstone
               usually has no account. */}
