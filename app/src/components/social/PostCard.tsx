@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils'
 import Comments from './Comments'
 import MemberAvatar from './MemberAvatar'
 import KnownActors from './KnownActors'
+import Expandable from './Expandable'
 import LinkPreview, { firstLink } from './LinkPreview'
 import MediaGrid from './MediaGrid'
 import MediaLightbox from './MediaLightbox'
@@ -37,6 +38,19 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Link } from 'react-router'
+
+/**
+ * How much of a post's text the card shows before it offers to open.
+ *
+ * About five lines at the body size, which is roughly where LinkedIn cuts and
+ * a little more than Facebook. The point is that every card is about the size
+ * of every other card: one long post owning the screen is the thing that makes
+ * a feed tiring to scroll.
+ *
+ * Only a cut that is real is shown - Expandable measures first, so a post that
+ * fits gets no fade and no button rather than a "See more" that does nothing.
+ */
+const BODY_COLLAPSED = 120
 
 /** Who can read a restricted post, said on the card so nobody has to guess. */
 const AUDIENCE: Record<string, { label: string; hint: string }> = {
@@ -525,32 +539,36 @@ export default function PostCard({
       ) : isRichArticle ? (
         /* Sanitised again at render time: the database can hold anything, and
            trusting what was cleaned on the way in would only move the risk. */
-        <div
-          className="prose-article mt-3 text-[0.95rem] text-text-hi"
-          dangerouslySetInnerHTML={{ __html: sanitizeHtml(body) }}
-        />
+        <Expandable collapsedHeight={BODY_COLLAPSED} className="mt-3" deps={[body]}>
+          <div
+            className="prose-article text-[0.95rem] text-text-hi"
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(body) }}
+          />
+        </Expandable>
       ) : (
         /* The body opens the post. Not a <button>: the text contains links and
            hashtags that must stay clickable in their own right, and nesting
            interactive elements inside a button is invalid and unreadable to a
            screen reader. A plain click handler leaves them alone, and the
            header already offers a keyboard route to the same place. */
-        <p
-          onClick={(event) => {
-            if (!onOpen) return
-            // A click that landed on a link, a hashtag or a text selection is
-            // not a request to open the post.
-            if ((event.target as HTMLElement).closest('a,button')) return
-            if (window.getSelection()?.toString()) return
-            onOpen()
-          }}
-          className={cn(
-            'mt-3 whitespace-pre-wrap text-[0.95rem] leading-relaxed text-text-hi',
-            onOpen && 'cursor-pointer',
-          )}
-        >
-          {withHashtags(readableText(body))}
-        </p>
+        <Expandable collapsedHeight={BODY_COLLAPSED} className="mt-3" deps={[body]}>
+          <p
+            onClick={(event) => {
+              if (!onOpen) return
+              // A click that landed on a link, a hashtag or a text selection is
+              // not a request to open the post.
+              if ((event.target as HTMLElement).closest('a,button')) return
+              if (window.getSelection()?.toString()) return
+              onOpen()
+            }}
+            className={cn(
+              'whitespace-pre-wrap text-[0.95rem] leading-relaxed text-text-hi',
+              onOpen && 'cursor-pointer',
+            )}
+          >
+            {withHashtags(readableText(body))}
+          </p>
+        </Expandable>
       )}
 
       {/* Only when the post has no media of its own: a post with a photo and a

@@ -90,12 +90,14 @@ export default function MediaGrid({
     // file once it lands.
     const source =
       only.width && only.height ? { width: only.width, height: only.height } : natural
-    const ratio = source
-      ? Math.min(Math.max(source.width / source.height, MIN_RATIO), MAX_RATIO)
-      : null
+    const trueRatio = source ? source.width / source.height : null
+    const ratio = trueRatio ? Math.min(Math.max(trueRatio, MIN_RATIO), MAX_RATIO) : null
+    // Clamped, so part of the picture is not on screen. Worth saying so: the
+    // card otherwise looks like the whole picture, just badly framed.
+    const cropped = trueRatio !== null && ratio !== null && Math.abs(trueRatio - ratio) > 0.01
     return (
       <div
-        className="-mx-5 mt-3 overflow-hidden border-y border-white/8 bg-black/40"
+        className="relative -mx-5 mt-3 overflow-hidden border-y border-white/8 bg-black/40"
         style={
           ratio
             ? {
@@ -125,6 +127,30 @@ export default function MediaGrid({
           more={0}
           onNatural={setNatural}
         />
+        {cropped && only.kind !== 'video' && (
+          /* The cut edge, faded, with the way to the whole picture.
+
+             The fade is pointer-events-none so the picture underneath stays
+             tappable along its bottom edge; the button is the only thing here
+             that takes a click, and it stops the event so it opens the image
+             rather than the post. */
+          <>
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/75 via-black/35 to-transparent"
+            />
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                onOpen(0)
+              }}
+              className="absolute bottom-3 right-3 rounded-full bg-black/55 px-3 py-1.5 text-[0.78rem] font-semibold text-white backdrop-blur-sm hover:bg-black/75"
+            >
+              See full image
+            </button>
+          </>
+        )}
       </div>
     )
   }
@@ -267,7 +293,11 @@ function Tile({
             // box defined by min-height alone it resolves to zero, and the
             // image renders as a line - so until the file is measured it is
             // laid out by its own width instead.
-            ? cn('w-full object-cover', boxed ? 'h-full' : 'max-h-[560px] object-contain')
+            // object-top, not the default centre. What gets cut off a tall
+            // picture is then its foot rather than its head, and the head is
+            // where a poster puts its title and a screenshot its first line -
+            // a banner arrived with its own headline sliced off.
+            ? cn('w-full object-cover object-top', boxed ? 'h-full' : 'max-h-[560px] object-contain')
             : 'h-full w-full object-cover',
         )}
       />
