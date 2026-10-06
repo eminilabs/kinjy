@@ -697,11 +697,13 @@ export interface Thread {
   id: string
   title: string
   author_id: string
+  author?: PersonBrief | null
   replies_count: number
   views_count: number
   pinned: boolean
   ai_summary: string | null
   last_activity_at: string
+  created_at?: string
 }
 
 export interface ThreadDetail {
@@ -709,10 +711,21 @@ export interface ThreadDetail {
   title: string
   body: string
   author_id: string
+  author?: PersonBrief | null
   lang: string
   ai_summary: string | null
   locked: boolean
-  replies: Array<{ id: string; author_id: string; body: string; upvotes: number; created_at: string }>
+  created_at?: string
+  replies: Array<{
+    id: string
+    author_id: string
+    author?: PersonBrief | null
+    parent_id?: string | null
+    body: string
+    upvotes: number
+    accepted_answer?: boolean
+    created_at: string
+  }>
 }
 
 export interface PersonBrief {

@@ -856,18 +856,21 @@ def list_threads(
         .limit(min(limit, 100))
         .offset(offset)
     ).all()
+    profiles = _profiles({r.author_id for r in rows})
     return {
         "items": [
             {
                 "id": r.id,
                 "title": r.title,
                 "author_id": r.author_id,
+                "author": profiles.get(r.author_id),
                 "replies_count": r.replies_count,
                 "views_count": r.views_count,
                 "pinned": r.pinned,
                 "ai_summary": r.ai_summary,
                 "duplicate_of": r.duplicate_of,
                 "last_activity_at": r.last_activity_at,
+                "created_at": r.created_at,
             }
             for r in rows
         ]
@@ -894,19 +897,23 @@ def get_thread(thread_id: str, principal: MaybeUser, db: OrmSession = Depends(ge
     # Replies are separately rated: one unsuitable answer in an otherwise fine
     # thread should remove that answer, not the whole discussion.
     replies = _visible_replies(db, age, replies)
+    profiles = _profiles({thread.author_id} | {r.author_id for r in replies})
     db.commit()
     return {
         "id": thread.id,
         "title": thread.title,
         "body": thread.body,
         "author_id": thread.author_id,
+        "author": profiles.get(thread.author_id),
         "lang": thread.lang,
         "ai_summary": thread.ai_summary,
         "locked": thread.locked,
+        "created_at": thread.created_at,
         "replies": [
             {
                 "id": r.id,
                 "author_id": r.author_id,
+                "author": profiles.get(r.author_id),
                 "parent_id": r.parent_id,
                 "body": r.body,
                 "upvotes": r.upvotes,
