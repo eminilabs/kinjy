@@ -485,3 +485,51 @@
     height: 0;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Mobile-first floors.
+
+   The type scale was drawn for a desktop column and then reused on phones, so
+   the smallest tiers - 0.6rem is 9.6px - ended up below what anybody can
+   comfortably read at arm's length, on the labels that matter least to a
+   designer and most to somebody skimming: feed-mode chips, counters, badges.
+
+   Rather than rewrite the ~470 call sites, every tier below 0.72rem gets a
+   floor of 0.72rem (11.5px) on small screens. Text reflows, so raising it
+   cannot push the page sideways - verified by re-running the overflow audit
+   after this landed.
+
+   Scoped to the phone breakpoint: the desktop scale is deliberate and is left
+   exactly as drawn.
+   --------------------------------------------------------------------------- */
+@media (max-width: 767px) {
+  .text-\[0\.5rem\],
+  .text-\[0\.55rem\],
+  .text-\[0\.58rem\],
+  .text-\[0\.6rem\],
+  .text-\[0\.62rem\],
+  .text-\[0\.65rem\],
+  .text-\[0\.66rem\],
+  .text-\[0\.68rem\],
+  .text-\[0\.7rem\],
+  .text-\[11px\] {
+    font-size: 0.72rem;
+  }
+}
+
+/* A thumb is not a mouse pointer. The icon buttons are 36px squares, which is
+   fine for a cursor and under every touch-target guideline there is (44pt on
+   iOS, 48dp on Android) - so on a touch device they grow to 44px.
+
+   pointer: coarse rather than a width breakpoint, because what matters is the
+   input device, not the screen: a touch laptop deserves the bigger target and
+   a narrow desktop window does not. */
+@media (pointer: coarse) {
+  button.h-9.w-9,
+  a.h-9.w-9,
+  button.h-8.w-8,
+  a.h-8.w-8 {
+    height: 2.75rem;
+    width: 2.75rem;
+  }
+}

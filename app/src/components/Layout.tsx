@@ -91,7 +91,16 @@ export default function Layout({ children }: { children: ReactNode }) {
   const showAssistant = FEATURES.assistant && !location.pathname.startsWith('/app')
 
   return (
-    <div className="min-h-[100dvh] bg-ink text-text-hi">
+    // overflow-x-clip is the mobile guard for the scroll-reveal animations.
+    // Sections enter with a translateX, so until they scroll into view they sit
+    // 40-60px right of where they belong. On a desktop container that slack is
+    // absorbed; at 375px it became real page width, and the whole site could be
+    // dragged sideways.
+    //
+    // clip, not hidden: hidden would make this a scroll container, which breaks
+    // the sticky rails inside the app shell and lets the page trap scroll. clip
+    // just cuts the overflow off and changes nothing else.
+    <div className="min-h-[100dvh] overflow-x-clip bg-ink text-text-hi">
       {!ownChrome && <Navbar />}
       <main className={ownChrome ? undefined : 'pt-[72px]'}>{children}</main>
       {!ownChrome && <Footer />}
