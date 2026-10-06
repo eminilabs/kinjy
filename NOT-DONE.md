@@ -603,3 +603,31 @@ What the tests do not cover:
 - **No pagination on a community's posts.** The endpoint takes limit and offset
   and the page asks for the first twenty, so a busy group silently stops at
   twenty until somebody wires the rest.
+
+## Feed, video and link previews (06/10)
+
+- ~~A post could not be opened without leaving the feed, video used the
+  browser's own player, and there was no scroll-to-load.~~ Built on 06/10:
+  post dialog with comments, "people you follow who were here", scroll-to-load,
+  a custom video player that follows the viewport, and link unfurling.
+- **Scroll-to-load and video play-on-scroll were never seen working in a
+  browser.** Both depend on IntersectionObserver, which delivers no callbacks
+  while the page is hidden — and the test pane runs hidden, confirmed by
+  `document.hidden === true` and by a hand-made observer on the same node also
+  never firing. The data path underneath was checked instead (six pages, 120
+  posts, no overlap), and the attach bug that *was* found came from reading the
+  code, not from the browser. Somebody should scroll a real feed before this is
+  called done.
+- **A photo post previews as the generic Kinjy card until it is classified.**
+  The share card only describes a post a signed-out visitor could read, and a
+  freshly posted image is UNCLASSIFIED, which fails closed. That is the right
+  call for safety and the wrong experience for somebody sharing a photo the
+  moment they post it. Measured in the local stack only — nobody has timed how
+  long classification takes in production.
+- **The unfurler list in the Caddyfile is a list.** An unfurler not on it gets
+  the app and therefore the generic card. That is the safe failure, but it does
+  mean the list needs revisiting when a messenger matters enough.
+- **Only the first link in a post is unfurled**, and only when the post has no
+  media of its own.
+- **Nothing refreshes a link card.** A page that changes its title keeps the
+  old one for seven days, and a dead link keeps its card until then too.
