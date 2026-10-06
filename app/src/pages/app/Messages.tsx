@@ -319,6 +319,15 @@ function titleOf(conversation: Conversation, others: string[]): string {
 }
 
 /** An avatar with the member's online dot. Never a link here: a tap means "write". */
+/**
+ * Messenger's grouping: inside a run from one person the corners that face
+ * their side tighten, so consecutive bubbles read as one block.
+ */
+function bubbleShape(mine: boolean, first: boolean, last: boolean): string {
+  if (mine) return cn('rounded-[18px]', !first && 'rounded-se-[5px]', !last && 'rounded-ee-[5px]')
+  return cn('rounded-[18px]', !first && 'rounded-ss-[5px]', !last && 'rounded-es-[5px]')
+}
+
 function PresenceAvatar({
   profile,
   online,
@@ -386,6 +395,9 @@ export default function Messages() {
   const catalogue = useApi(() => kaluta.messages.stickers(), [])
   const [peer, setPeer] = useState('')
   const [composing, setComposing] = useState(false)
+  // Narrowing the list you already have: nothing is fetched.
+  const [chatQuery, setChatQuery] = useState('')
+  const [unreadOnly, setUnreadOnly] = useState(false)
   const [results, setResults] = useState<Array<PersonBrief & { user_id: string }>>([])
   const [searched, setSearched] = useState(false)
   // Kept apart from `error`, which renders in the thread pane on the right —
@@ -1147,32 +1159,79 @@ export default function Messages() {
   })()
 
   return (
-    <AppShell
-      // On a phone, the open thread is the whole screen: its own header (with
-      // the back button) says where you are, and every pixel above the
-      // composer is a message you can read.
-      title={showThread && !wide ? undefined : 'Messages'}
-      subtitle="Private conversations between members."
-      action={showThread && !wide ? undefined : (
-        <span
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold',
-            connected
-              ? 'border-emerald-400/30 text-emerald-200'
-              : 'border-amber-400/30 text-amber-200',
-          )}
-        >
-          {connected ? <Wifi size={12} aria-hidden="true" /> : <WifiOff size={12} aria-hidden="true" />}
-          {connected ? 'Connected' : 'Reconnecting…'}
-        </span>
-      )}
-    >
-      <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
-        <div className={cn('min-w-0 space-y-4', showThread && 'hidden lg:block')}>
+    <AppShell rail={false}>
+      {/* One workspace, as Messenger draws it: the chats on the left, the open
+          conversation on the right, in a single card. On a phone the open
+          thread is the whole screen. */}
+      <div className="cloud-card grid h-[calc(100dvh-236px)] min-h-[420px] min-w-0 grid-cols-[minmax(0,1fr)] overflow-hidden !p-0 lg:h-[calc(100dvh-196px)] lg:min-h-[520px] lg:grid-cols-[340px_minmax(0,1fr)]">
+        <div className={cn('flex min-h-0 min-w-0 flex-col lg:border-e lg:border-[var(--cloud-border)]', showThread && 'hidden lg:flex')}>
+          <div className="space-y-3 px-4 pb-2 pt-4">
+            <div className="flex items-center gap-2">
+              <h1 className="text-[26px] font-bold leading-none tracking-[-0.03em] text-text-hi">Chats</h1>
+              {connected ? (
+                <span title="Connected" className="inline-flex text-success">
+                  <Wifi size={13} aria-hidden="true" />
+                  <span className="sr-only">Connected</span>
+                </span>
+              ) : (
+                <span
+                  role="status"
+                  className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-200"
+                >
+                  <WifiOff size={12} aria-hidden="true" />
+                  Reconnecting…
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => setComposing((v) => !v)}
+                aria-expanded={composing}
+                aria-label="New conversation"
+                title="New conversation"
+                className={cn(
+                  'ms-auto grid h-9 w-9 place-items-center rounded-full text-text-hi transition-colors hover:bg-text-hi/[0.1]',
+                  composing ? 'bg-gold/20 text-gold-soft' : 'bg-text-hi/[0.07]',
+                )}
+              >
+                <Plus size={17} aria-hidden="true" />
+              </button>
+            </div>
+
+            <label className="relative flex items-center">
+              <Search size={15} className="pointer-events-none absolute start-3.5 text-text-low" aria-hidden="true" />
+              <input
+                type="search"
+                value={chatQuery}
+                onChange={(e) => setChatQuery(e.target.value)}
+                placeholder="Search chats"
+                aria-label="Search your conversations"
+                className="w-full rounded-full border border-transparent bg-text-hi/[0.07] py-2.5 pe-4 ps-10 text-[15px] text-text-hi placeholder:text-text-low focus:border-gold/50 focus:bg-transparent focus:outline-none"
+              />
+            </label>
+
+            <div className="flex gap-2" role="group" aria-label="Filter conversations">
+              {([['All', false], ['Unread', true]] as const).map(([label, value]) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setUnreadOnly(value)}
+                  aria-pressed={unreadOnly === value}
+                  className={cn(
+                    'rounded-full px-3.5 py-1.5 text-[0.82rem] font-semibold transition-colors',
+                    unreadOnly === value ? 'bg-gold/20 text-gold-soft' : 'text-text-mid hover:bg-text-hi/[0.07]',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-2 pb-3">
           {/* Friends: every accepted connection, one tap from a conversation.
               A strip rather than a second list, so the conversations below
               stay in view at the same time. */}
-          <section aria-labelledby="friends-heading">
+          <section aria-labelledby="friends-heading" className="px-2">
             <div className="mb-2 flex items-center gap-2">
               <h2 id="friends-heading" className="flex items-center gap-2 text-sm font-semibold text-text-hi">
                 Friends
@@ -1308,14 +1367,14 @@ export default function Messages() {
                       type="button"
                       onClick={() => void startWith(friend.user_id)}
                       title={`Message ${friend.profile?.display_name ?? 'this member'}`}
-                      className="flex w-[64px] flex-col items-center gap-1 rounded-card-sm px-1 py-1.5 hover:bg-white/5"
+                      className="flex w-[72px] flex-col items-center gap-1.5 rounded-xl px-1 py-2 hover:bg-text-hi/[0.05]"
                     >
                       <PresenceAvatar
                         profile={friend.profile}
                         online={presence[friend.user_id]?.online}
-                        size={40}
+                        size={52}
                       />
-                      <span className="w-full truncate text-center text-[0.7rem] text-text-mid">
+                      <span className="w-full truncate text-center text-xs text-text-mid">
                         {friend.profile?.display_name.split(' ')[0] ?? 'Member'}
                       </span>
                     </button>
@@ -1359,23 +1418,10 @@ export default function Messages() {
             )}
           </section>
 
-          <div className="space-y-3">
+          <div className="space-y-3 px-2">
             {/* Starting a conversation with someone who is not yet a friend is
                 an action, so it is a button — not a form permanently occupying
                 the top of the list. */}
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-text-hi">Conversations</h2>
-              <button
-                type="button"
-                onClick={() => setComposing((v) => !v)}
-                aria-expanded={composing}
-                className="inline-flex items-center gap-1.5 rounded-full border border-white/12 px-3 py-1.5 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
-              >
-                <Plus size={12} aria-hidden="true" />
-                New
-              </button>
-            </div>
-
             {composing && (
               <div>
                 <input
@@ -1434,87 +1480,111 @@ export default function Messages() {
               </p>
             )}
 
-            <ul className="space-y-2">
-              {(conversations.data?.items ?? []).map((conversation) => {
+            {(() => {
+              const needle = chatQuery.trim().toLowerCase()
+              const shown = (conversations.data?.items ?? []).filter((conversation) => {
+                if (unreadOnly && !((conversation.unread ?? 0) > 0)) return false
+                if (!needle) return true
                 const others = conversation.participants.filter((p) => p !== user?.id)
-                const typingHere = Object.entries(typing[conversation.id] ?? {}).some(
-                  ([uid, until]) => uid !== user?.id && until > Date.now(),
-                )
                 return (
-                  <li key={conversation.id}>
-                    <button
-                      type="button"
-                      onClick={() => void openThread(conversation.id)}
-                      className={cn(
-                        'flex w-full items-center gap-2.5 rounded-card-sm border p-2.5 text-start',
-                        activeId === conversation.id
-                          ? 'border-gold/40 bg-gold/5'
-                          : 'border-white/8 bg-ink-2/40 hover:border-white/15',
-                      )}
-                    >
-                      <PresenceAvatar
-                        profile={conversation.profiles?.[others[0]]}
-                        online={conversation.kind === 'direct' && presence[others[0]]?.online}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-baseline gap-2">
-                          <span className="truncate text-sm font-medium text-text-hi">
-                            {titleOf(conversation, others)}
-                          </span>
-                          <span
-                            className={cn(
-                              'ms-auto shrink-0 text-[0.7rem]',
-                              (conversation.unread ?? 0) > 0 ? 'font-semibold text-gold-soft' : 'text-text-low',
-                            )}
-                            title={fullStamp(conversation.last_message_at, locale)}
-                          >
-                            {listStamp(conversation.last_message_at, locale)}
-                          </span>
-                        </span>
-                        <span className="flex items-center gap-2">
-                          <span className="caption flex min-w-0 items-center gap-1">
-                            {typingHere ? (
-                              <span className="text-gold-soft">typing…</span>
-                            ) : conversation.last_message ? (
-                              <span className="truncate">
-                                {conversation.last_message.sender_id === user?.id && 'You: '}
-                                {conversation.last_message.preview}
-                              </span>
-                            ) : (
-                              <>
-                                {conversation.encrypted || conversation.sealed_at_rest ? (
-                                  <Lock size={10} aria-hidden="true" />
-                                ) : (
-                                  <ShieldOff size={10} aria-hidden="true" />
+                  titleOf(conversation, others).toLowerCase().includes(needle) ||
+                  (conversation.last_message?.preview ?? '').toLowerCase().includes(needle)
+                )
+              })
+              if (conversations.data && conversations.data.items.length > 0 && shown.length === 0) {
+                return (
+                  <p className="px-2 py-3 text-sm text-text-low">
+                    {unreadOnly && !needle ? 'Nothing unread.' : 'No conversation matches.'}
+                  </p>
+                )
+              }
+              return (
+                <ul className="space-y-0.5">
+                  {shown.map((conversation) => {
+                    const others = conversation.participants.filter((p) => p !== user?.id)
+                    const typingHere = Object.entries(typing[conversation.id] ?? {}).some(
+                      ([uid, until]) => uid !== user?.id && until > Date.now(),
+                    )
+                    const unread = (conversation.unread ?? 0) > 0
+                    return (
+                      <li key={conversation.id}>
+                        <button
+                          type="button"
+                          onClick={() => void openThread(conversation.id)}
+                          aria-current={activeId === conversation.id ? 'true' : undefined}
+                          className={cn(
+                            'flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-start transition-colors',
+                            activeId === conversation.id ? 'bg-gold/15' : 'hover:bg-text-hi/[0.05]',
+                          )}
+                        >
+                          <PresenceAvatar
+                            profile={conversation.profiles?.[others[0]]}
+                            online={conversation.kind === 'direct' && presence[others[0]]?.online}
+                            size={52}
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[15px] font-semibold leading-tight text-text-hi">
+                              {titleOf(conversation, others)}
+                            </span>
+                            <span className="mt-0.5 flex items-center gap-1.5 text-[0.82rem] leading-tight">
+                              <span
+                                className={cn(
+                                  'flex min-w-0 items-center gap-1',
+                                  unread ? 'font-semibold text-text-hi' : 'text-text-low',
                                 )}
-                                No messages yet
-                              </>
-                            )}
+                              >
+                                {typingHere ? (
+                                  <span className="text-gold-soft">typing…</span>
+                                ) : conversation.last_message ? (
+                                  <span className="truncate">
+                                    {conversation.last_message.sender_id === user?.id && 'You: '}
+                                    {conversation.last_message.preview}
+                                  </span>
+                                ) : (
+                                  <>
+                                    {conversation.encrypted || conversation.sealed_at_rest ? (
+                                      <Lock size={11} aria-hidden="true" />
+                                    ) : (
+                                      <ShieldOff size={11} aria-hidden="true" />
+                                    )}
+                                    No messages yet
+                                  </>
+                                )}
+                              </span>
+                              <span
+                                aria-hidden="true"
+                                className="shrink-0 text-text-low"
+                                title={fullStamp(conversation.last_message_at, locale)}
+                              >
+                                · {listStamp(conversation.last_message_at, locale)}
+                              </span>
+                            </span>
                           </span>
-                          {(conversation.unread ?? 0) > 0 && (
-                            <span className="ms-auto shrink-0 rounded-full bg-gold px-1.5 py-0.5 text-[0.65rem] font-bold text-ink">
+                          {unread && (
+                            <span
+                              className="ms-auto grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-gradient-to-br from-gold-soft to-gold px-1.5 text-[0.7rem] font-bold text-ink"
+                              aria-label={`${conversation.unread} unread`}
+                            >
                               {conversation.unread}
                             </span>
                           )}
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )
+            })()}
+          </div>
           </div>
         </div>
 
         {/* Thread */}
         <div
           className={cn(
-            // Phone: the space between the sticky top chrome (~113px + 16px)
-            // and the bottom bar (the shell's 96px of padding).
-            'cloud-card relative flex h-[calc(100dvh-230px)] min-h-[360px] min-w-0 flex-col p-3 sm:p-5',
-            'lg:h-[calc(100dvh-220px)] lg:min-h-[440px]',
+            'relative flex min-h-0 min-w-0 flex-col',
             !showThread && 'hidden',
-            dragging && 'ring-2 ring-gold/50',
+            dragging && 'ring-2 ring-inset ring-gold/50',
           )}
           onDragOver={(e) => {
             if (!active || !e.dataTransfer.types.includes('Files')) return
@@ -1545,7 +1615,7 @@ export default function Messages() {
             </div>
           ) : (
             <>
-              <header className="mb-3 flex items-center gap-3 border-b border-white/8 pb-3">
+              <header className="flex items-center gap-3 border-b border-[var(--cloud-border)] px-3 py-3 sm:px-5">
                 <button
                   type="button"
                   onClick={backToList}
@@ -1557,12 +1627,12 @@ export default function Messages() {
                 <PresenceAvatar
                   profile={active.profiles?.[activeOthers[0]]}
                   online={active.kind === 'direct' && presence[activeOthers[0]]?.online}
-                  size={40}
+                  size={44}
                 />
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-text-hi">{titleOf(active, activeOthers)}</p>
+                  <p className="truncate text-base font-bold leading-tight text-text-hi">{titleOf(active, activeOthers)}</p>
                   <p
-                    className={cn('caption truncate', typingNames.length > 0 && 'text-gold-soft')}
+                    className={cn('truncate text-xs text-text-low', typingNames.length > 0 && 'text-gold-soft')}
                     aria-live="polite"
                   >
                     {headerSubtitle}
@@ -1594,7 +1664,7 @@ export default function Messages() {
                 </span>
               </header>
 
-              <div ref={listRef} onScroll={onScroll} className="flex flex-1 flex-col overflow-y-auto pe-1">
+              <div ref={listRef} onScroll={onScroll} className="flex flex-1 flex-col overflow-y-auto px-3 py-3 sm:px-5">
                 {hasOlder && (
                   <div className="mb-2 text-center">
                     <button
@@ -1633,15 +1703,23 @@ export default function Messages() {
                   const stickerSrc = isSticker ? stickerUrl(message.sticker_id!) : null
                   const stickerName =
                     catalogue.data?.items.find((s) => s.id === message.sticker_id)?.name ?? 'Sticker'
+                  // Is the next bubble part of the same run? Decides the corners and
+                  // where the sender's avatar and the time are drawn.
+                  const following = messages[index + 1]
+                  const burstNext =
+                    Boolean(following) &&
+                    startOfDay(new Date(following.created_at)) === startOfDay(new Date(message.created_at)) &&
+                    following.sender_id === message.sender_id &&
+                    new Date(following.created_at).getTime() - new Date(message.created_at).getTime() < BURST_MS
                   return (
                     <div key={message.client_id ?? message.id}>
                       {newDay && (
                         <div className="my-4 flex items-center gap-3" role="separator">
-                          <span className="h-px flex-1 bg-white/8" />
-                          <span className="caption rounded-full border border-white/8 bg-ink-2/60 px-3 py-0.5">
+                          <span className="h-px flex-1 bg-[var(--cloud-border)]" />
+                          <span className="rounded-full bg-text-hi/[0.06] px-3 py-1 text-xs font-semibold text-text-low">
                             {dayLabel(message.created_at, locale)}
                           </span>
-                          <span className="h-px flex-1 bg-white/8" />
+                          <span className="h-px flex-1 bg-[var(--cloud-border)]" />
                         </div>
                       )}
                       <div
@@ -1654,7 +1732,13 @@ export default function Messages() {
                         )}
                       >
                         {!mine && active.kind === 'group' && !burst && (
-                          <span className="caption mb-0.5 ms-1">{sender?.display_name ?? 'Member'}</span>
+                          <span className="mb-0.5 ms-9 text-xs text-text-low">{sender?.display_name ?? 'Member'}</span>
+                        )}
+                        <div className="flex max-w-full items-end gap-2">
+                        {!mine && (
+                          <span className="w-7 shrink-0" aria-hidden={burstNext ? 'true' : undefined}>
+                            {!burstNext && <PresenceAvatar profile={sender} size={28} />}
+                          </span>
                         )}
                         <div className="group/bubble relative flex max-w-[75%] items-stretch">
                         {/* Beside the bubble, out of the flow: they must not widen it or push the reactions off its edge. */}
@@ -1680,13 +1764,14 @@ export default function Messages() {
                         >
                         <div
                           className={cn(
-                            'min-w-0 rounded-card-md',
-                            bareSticker ? 'p-0' : mediaOnly ? 'p-1.5' : 'px-3.5 py-2',
+                            'min-w-0',
+                            bareSticker ? 'p-0' : mediaOnly ? 'p-1.5' : 'px-3.5 py-[7px]',
+                            !bareSticker && bubbleShape(mine, !burst, !burstNext),
                             bareSticker
                               ? 'text-text-hi'
                               : mine
-                                ? 'bg-gold/15 text-text-hi'
-                                : 'border border-white/8 bg-white/[0.08] text-text-hi',
+                                ? 'bg-gradient-to-br from-gold-soft to-gold text-ink'
+                                : 'bg-text-hi/[0.07] text-text-hi',
                             message.status === 'sending' && 'opacity-80',
                             message.status === 'failed' && 'border border-red-400/40',
                           )}
@@ -1722,7 +1807,7 @@ export default function Messages() {
                             </div>
                           )}
                           {(hasText || (message.encrypted && !isSticker)) && (
-                            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                            <p className="whitespace-pre-wrap break-words text-[15px] leading-snug">
                               {message.encrypted ? (
                                 <span className="italic text-text-low">
                                   Encrypted — only your device can read this.
@@ -1733,7 +1818,13 @@ export default function Messages() {
                             </p>
                           )}
                           <p
-                            className={cn('text-right text-[0.68rem] text-text-low', mediaOnly || bareSticker ? 'px-1.5 pt-1' : 'mt-0.5')}
+                            className={cn(
+                              'text-right text-[0.68rem] leading-none',
+                              mine && !bareSticker ? 'text-ink/70' : 'text-text-low',
+                              mediaOnly || bareSticker ? 'px-1.5 pt-1' : 'mt-1',
+                              // A run shows one time, on its last bubble; hover has the full stamp.
+                              burstNext && !message.status && 'hidden',
+                            )}
                             title={fullStamp(message.created_at, locale)}
                           >
                             {message.status === 'sending'
@@ -1744,6 +1835,7 @@ export default function Messages() {
                           </p>
                         </div>
                         </SwipeToReply>
+                        </div>
                         </div>
                         <ReactionChips
                           reactions={message.reactions ?? []}
@@ -1782,7 +1874,7 @@ export default function Messages() {
                 })}
                 {typingNames.length > 0 && (
                   <div className="mt-3 flex" aria-hidden="true">
-                    <span className="inline-flex gap-1 rounded-card-md bg-white/6 px-3.5 py-3">
+                    <span className="inline-flex gap-1 rounded-[18px] bg-text-hi/[0.07] px-3.5 py-3">
                       {[0, 1, 2].map((i) => (
                         <span
                           key={i}
@@ -1797,7 +1889,7 @@ export default function Messages() {
 
               {/* Files waiting to go: reviewed, captioned, removable. */}
               {staged.length > 0 && (
-                <ul className="mt-3 flex flex-wrap gap-2" aria-label="Attachments to send">
+                <ul className="flex flex-wrap gap-2 px-3 pt-2 sm:px-5" aria-label="Attachments to send">
                   {staged.map((file, index) => (
                     <li
                       key={`${file.name}-${index}`}
@@ -1828,7 +1920,7 @@ export default function Messages() {
               {replyTo && (
                 <ReplyBanner name={nameOf(replyTo)} message={replyTo} onCancel={() => setReplyTo(null)} />
               )}
-              <form onSubmit={send} className={cn('mt-3 flex items-center gap-2 border-t border-white/8 pt-3', FEATURES.assistant && 'pe-14 lg:pe-12')}>
+              <form onSubmit={send} className={cn('flex items-center gap-1.5 px-3 py-3 sm:px-5', FEATURES.assistant && 'pe-14 lg:pe-12')}>
                 {recordingSince !== null ? (
                   <>
                     <button
@@ -1847,7 +1939,7 @@ export default function Messages() {
                       type="button"
                       onClick={() => stopRecording(false)}
                       aria-label="Stop and send the voice message"
-                      className="shrink-0 rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-2.5 text-ink"
+                      className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-gold-soft to-gold text-ink"
                     >
                       <Square size={15} aria-hidden="true" />
                     </button>
@@ -1875,13 +1967,13 @@ export default function Messages() {
                       }}
                       placeholder={staged.length ? 'Add a caption…' : 'Write a message…'}
                       aria-label="Message"
-                      className="w-full min-w-0 rounded-full border border-white/10 bg-ink-2/60 px-4 py-2.5 text-sm text-text-hi placeholder:text-text-low focus:border-gold/40 focus:outline-none"
+                      className="w-full min-w-0 rounded-full border border-transparent bg-text-hi/[0.07] px-4 py-2.5 text-[15px] text-text-hi placeholder:text-text-low focus:border-gold/50 focus:bg-transparent focus:outline-none"
                     />
                     {draft.trim() || staged.length ? (
                       <button
                         type="submit"
                         aria-label="Send"
-                        className="shrink-0 rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-2.5 text-ink"
+                        className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-gold-soft to-gold text-ink"
                       >
                         <Send size={15} aria-hidden="true" />
                       </button>
@@ -1890,7 +1982,7 @@ export default function Messages() {
                         type="button"
                         onClick={() => void startRecording()}
                         aria-label="Record a voice message"
-                        className="shrink-0 rounded-full border border-white/12 px-4 py-2.5 text-text-mid hover:border-gold/40 hover:text-gold-soft"
+                        className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-text-mid hover:bg-text-hi/[0.07] hover:text-gold-soft"
                       >
                         <Mic size={15} aria-hidden="true" />
                       </button>
@@ -1901,7 +1993,7 @@ export default function Messages() {
             </>
           )}
           {error && (
-            <p role="alert" className="mt-2 text-sm text-red-200">
+            <p role="alert" className="px-3 pb-2 text-sm text-red-200 sm:px-5">
               {error}
             </p>
           )}
