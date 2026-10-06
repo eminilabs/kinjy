@@ -1,6 +1,8 @@
 """Kinjy · social-service — posts, feed modes, algorithm marketplace, reactions."""
 from __future__ import annotations
 
+import hashlib
+import html as html_module
 import json
 import logging
 import re
@@ -8,12 +10,13 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import httpx
-from fastapi import BackgroundTasks, Depends, HTTPException, Query
+from fastapi import BackgroundTasks, Depends, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.orm import Session as OrmSession
 
-from common import events, notify
+from common import events, notify, settings
 from common.auth import AdminUser, CurrentUser, MaybeUser
 from common.database import SessionLocal, get_db
 from common.ids import new_id
@@ -23,6 +26,7 @@ from common import ageclient, classifier, mediasign
 from common.agesafety import engine as age_engine, rating_strictness
 
 import agefilter
+import linkpreview
 import moderation
 import models
 import ranking
@@ -801,6 +805,152 @@ async def create_post(payload: PostIn, principal: CurrentUser, db: OrmSession = 
 
 # Declared before /posts/{post_id}: FastAPI matches in order, and the
 # parameterised route would otherwise read "by" as a post id.
+@app.get("/link-preview", tags=["posts"])
+def link_preview(url: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """The card for a link somebody pasted into a post.
+
+    Signed in only. An endpoint that fetches an arbitrary URL on request is a
+    small open proxy if anybody may call it: the request would come from this
+    server's address, with this server's reputation attached.
+
+    Answers are cached, successes and failures alike. Without caching the
+    failure, a link to a site that is down is re-fetched by every viewer of
+    that post, every time - this platform pointing a crowd at somebody else's
+    server.
+    """
+    key = hashlib.sha256(url.strip().encode("utf-8")).hexdigest()
+    cached = db.get(models.LinkPreview, key)
+    now = datetime.now(timezone.utc)
+    if cached:
+        age = now - cached.fetched_at
+        fresh_for = timedelta(hours=1) if cached.failed_at else timedelta(days=7)
+        if age < fresh_for:
+            if cached.failed_at:
+                raise HTTPException(status_code=422, detail="That link has no preview")
+            return {
+                "url": cached.url, "title": cached.title, "description": cached.description,
+                "image": cached.image_url, "site_name": cached.site_name, "cached": True,
+            }
+
+    try:
+        card = linkpreview.fetch(url)
+    except linkpreview.UnsafeURL as exc:
+        # The reason is not returned. "That link points inside a private
+        # network" is a yes/no oracle for what exists on the private network,
+        # answered one guess at a time.
+        log.info("link preview refused: %s", exc)
+        row = cached or models.LinkPreview(url_hash=key, url=url[:2000])
+        row.failed_at = now
+        row.fetched_at = now
+        db.merge(row)
+        db.commit()
+        raise HTTPException(status_code=422, detail="That link has no preview")
+
+    row = cached or models.LinkPreview(url_hash=key, url=url[:2000])
+    row.url = card["url"][:2000]
+    row.title = card["title"]
+    row.description = card["description"]
+    row.image_url = card["image"]
+    row.site_name = card["site_name"]
+    row.failed_at = None
+    row.fetched_at = now
+    db.merge(row)
+    db.commit()
+    return {**card, "cached": False}
+
+
+@app.get("/share/p/{post_id}", response_class=HTMLResponse, tags=["posts"])
+def post_share_card(post_id: str, request: Request, db: OrmSession = Depends(get_db)):
+    """The page a link unfurler sees for a shared post.
+
+    The app is a single-page build: one index.html with one set of meta tags,
+    written before any post existed. A crawler does not run JavaScript, so
+    every shared post previewed as the same generic Kinjy card no matter what
+    was in it.
+
+    This renders the tags for one post. Caddy sends crawler requests for /p/<id>
+    here and everyone else to the app, so a person still gets the real page.
+
+    Only a public post gets a card, and only one that a signed-out visitor could
+    read anyway. A crawler has no account and no age, so it is treated exactly
+    as the most restricted visitor: anything else would turn a preview into a
+    way of reading a post the link's recipient could not open - and would put
+    the first line of a followers-only post into a chat app's preview.
+    """
+    post = db.get(models.Post, post_id)
+    fallback = f"{settings.FRONTEND_URL.rstrip('/')}/og-image.png"
+    site = settings.FRONTEND_URL.rstrip("/")
+
+    title, description, image = "Kinjy", DEFAULT_SHARE_DESCRIPTION, fallback
+    if (
+        post is not None
+        and post.status == "published"
+        and post.visibility == "public"
+        and agefilter.visible_to(db, _viewer_age(None), post.id)
+    ):
+        author = _resolve_authors({post.author_id}).get(post.author_id) or {}
+        who = author.get("display_name") or author.get("handle") or "Someone"
+        title = f"{who} on Kinjy"
+        body = htmlish_to_text(post.body).strip()
+        description = (body[:197] + "…") if len(body) > 200 else (body or DEFAULT_SHARE_DESCRIPTION)
+        # The post's own picture if it has one, Kinjy's otherwise - a card with
+        # no image is a grey rectangle in every chat app.
+        shot = db.scalar(
+            select(models.PostMedia)
+            .where(models.PostMedia.post_id == post.id, models.PostMedia.kind == "image")
+            .order_by(models.PostMedia.position)
+        )
+        if shot is not None and shot.url:
+            # Signed, like every other read of post media. A bare media URL is
+            # a 404: the bytes are served against a ticket, so an unsigned
+            # og:image is a blank rectangle in every chat app. `sign_url` binds
+            # an absent viewer as the literal "anon", which is exactly what a
+            # crawler is. Long-lived because an unfurler may come back to the
+            # link days later - it is a public post's picture either way.
+            image = mediasign.sign_url(shot.url, shot.media_id, None, ttl=60 * 60 * 24 * 14)
+
+    url = f"{site}/p/{post_id}"
+    return HTMLResponse(_share_html(title, description, image, url))
+
+
+DEFAULT_SHARE_DESCRIPTION = (
+    "Social, forums, family trees, memorials, commerce and AI agents — in one elegant ecosystem."
+)
+
+
+def htmlish_to_text(body: str) -> str:
+    """An article body is HTML; a preview description is not."""
+    return html_module.unescape(re.sub(r"<[^>]+>", " ", body or "")).replace("\xa0", " ")
+
+
+def _share_html(title: str, description: str, image: str, url: str) -> str:
+    """The smallest page that previews correctly and still works if a person
+    lands on it - a crawler that passes the link to a human must not leave them
+    staring at a blank document."""
+    esc = html_module.escape
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{esc(title)}</title>
+<meta name="description" content="{esc(description)}">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Kinjy">
+<meta property="og:title" content="{esc(title)}">
+<meta property="og:description" content="{esc(description)}">
+<meta property="og:url" content="{esc(url)}">
+<meta property="og:image" content="{esc(image)}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{esc(title)}">
+<meta name="twitter:description" content="{esc(description)}">
+<meta name="twitter:image" content="{esc(image)}">
+<link rel="canonical" href="{esc(url)}">
+<meta http-equiv="refresh" content="0; url={esc(url)}">
+</head>
+<body><p><a href="{esc(url)}">{esc(title)}</a></p></body>
+</html>"""
+
+
 @app.get("/posts/by/{author_id}", tags=["posts"])
 def posts_by_author(
     author_id: str,

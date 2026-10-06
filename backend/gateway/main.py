@@ -40,6 +40,8 @@ ROUTES: dict[str, str] = {
     "/api/preferences": "http://user-service:8000",
     "/api/supervision": "http://user-service:8000",
     "/api/posts": "http://social-service:8000",
+    "/api/link-preview": "http://social-service:8000",
+    "/api/share": "http://social-service:8000",
     "/api/comments": "http://social-service:8000",
     "/api/moderation": "http://social-service:8000",
     "/api/feed": "http://social-service:8000",

@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils'
 import Comments from './Comments'
 import MemberAvatar from './MemberAvatar'
 import KnownActors from './KnownActors'
+import LinkPreview, { firstLink } from './LinkPreview'
 import MediaLightbox from './MediaLightbox'
 import VideoPlayer from './VideoPlayer'
 import Reactions from './Reactions'
@@ -61,20 +62,44 @@ const PROVENANCE_LABEL: Record<string, string> = {
  */
 function withHashtags(text: string) {
   return text
-    .split(/(#[\wÀ-ÿ؀-ۿ一-鿿][\wÀ-ÿ؀-ۿ一-鿿-]{1,49})/g)
-    .map((part, index) =>
-      part.startsWith('#') ? (
-        <Link
-          key={index}
-          to={`/hub?mode=topics&topic=${encodeURIComponent(part.slice(1).toLowerCase())}`}
-          className="font-medium text-gold-soft hover:underline"
-        >
-          {part}
-        </Link>
-      ) : (
-        part
-      ),
-    )
+    // One split over both, so a hashtag inside a URL's fragment is not turned
+    // into a topic link in the middle of an address.
+    .split(/(https?:\/\/[^\s<>"']+|#[\wÀ-ÿ؀-ۿ一-鿿][\wÀ-ÿ؀-ۿ一-鿿-]{1,49})/g)
+    .map((part, index) => {
+      if (/^https?:\/\//i.test(part)) {
+        // Trailing punctuation belongs to the sentence, not the address.
+        const trailing = part.match(/[.,;:!?)\]]+$/)?.[0] ?? ''
+        const href = trailing ? part.slice(0, -trailing.length) : part
+        return (
+          <span key={index}>
+            <a
+              href={href}
+              target="_blank"
+              // noreferrer as well as noopener: otherwise the destination
+              // learns which Kinjy page the reader came from, which for a
+              // private post is its address.
+              rel="noopener noreferrer nofollow"
+              className="font-medium text-sky hover:underline"
+            >
+              {href}
+            </a>
+            {trailing}
+          </span>
+        )
+      }
+      if (part.startsWith('#')) {
+        return (
+          <Link
+            key={index}
+            to={`/hub?mode=topics&topic=${encodeURIComponent(part.slice(1).toLowerCase())}`}
+            className="font-medium text-gold-soft hover:underline"
+          >
+            {part}
+          </Link>
+        )
+      }
+      return part
+    })
 }
 
 function ago(iso: string): string {
@@ -378,6 +403,11 @@ export default function PostCard({
   const body = translation && !sideBySide ? translation.text : source.body
   /** Text without the tags — for translation, and for the side-by-side column. */
   const plainBody = looksLikeHtml(source.body) ? htmlToText(source.body) : source.body
+  // The first link in the body is the one worth unfurling; a post full of
+  // links is a list, and five cards under it is not a post any more. Declared
+  // after plainBody, which it reads - a const used above its declaration is a
+  // crash, not a hoist.
+  const bodyLink = firstLink(plainBody)
 
   return (
     <article className="cloud-card p-5" data-post-id={post.id}>
@@ -516,6 +546,10 @@ export default function PostCard({
           {withHashtags(body)}
         </p>
       )}
+
+      {/* Only when the post has no media of its own: a post with a photo and a
+          link does not need two pictures competing for the same glance. */}
+      {media.length === 0 && bodyLink && <LinkPreview url={bodyLink} />}
 
       <KnownActors actors={target.known_actors} />
 

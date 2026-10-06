@@ -502,6 +502,15 @@ export interface UploadedMedia {
   deduplicated?: boolean
 }
 
+export interface LinkCard {
+  url: string
+  title: string
+  description: string
+  image: string | null
+  site_name: string
+  cached?: boolean
+}
+
 export interface KnownActors {
   people: Array<{
     id: string
@@ -1348,6 +1357,13 @@ export const kaluta = {
   posts: {
     create: (post: NewPost) => api.post<Post>('/posts', post),
     get: (id: string) => api.get<Post>(`/posts/${id}`),
+    /**
+     * The card for a link in a post. Read by the server, not the browser: a
+     * page may be unreachable from the member's network, and having every
+     * reader fetch whatever a post links to points a crowd at someone's site.
+     */
+    linkPreview: (url: string) =>
+      api.get<LinkCard>(`/link-preview?url=${encodeURIComponent(url)}`),
     /** Ask for media data saver withheld — "load it anyway", for this post only. */
     media: (id: string) => api.get<{ post_id: string; media: PostMedia[] }>(`/posts/${id}/media`),
     byAuthor: (userId: string, limit = 20) =>
