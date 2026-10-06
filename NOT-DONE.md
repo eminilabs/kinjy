@@ -154,6 +154,9 @@ Each of these was checked against https://kinjy.com, not only locally.
 
 ## 3e. What /family promises, measured against what it does
 
+*Checked 20/08. Partly superseded on 06/10: see "Family tree (06/10)" at the end,
+which records what was found still open and what changed.*
+
 Checked on production 2026-08-20, promise by promise.
 
 - **"Family-only by default. Trees are private."** — was **false, and it was a
@@ -203,8 +206,8 @@ Checked on production 2026-08-20, promise by promise.
   answer; no screen calls them. The marketing page promises an archive, an
   interactive timeline, a narrated documentary and biographies. None of that
   has a UI.
-- **3-relative corroboration for deceased persons** — modelled with the family
-  tree, which is hidden. The memorial death verification itself (UNCONFIRMED →
+- **3-relative corroboration for deceased persons** — built with the family
+  tree, which is open in the app since 06/10 (see "Family tree" below). The memorial death verification itself (UNCONFIRMED →
   REPORTED → UNDER REVIEW → VERIFIED) now has its UI; see Graveyard below.
 - **Smoke test leaves data behind** — `smoke-test.sh` registers two members and
   posts several items on every run, and never cleans up. Fine locally, wrong
@@ -313,7 +316,8 @@ Deferred by the blueprint itself:
 
 - **AR memorials** — "future AR memorials".
 - **"Family" visibility** is accepted and treated as private (administrators
-  only): the family is whoever the family tree says, and the tree is hidden
+  only): the family is whoever the family tree says. The tree is open in the app
+  (`FEATURES.familyTreeApp`, 06/10); the public `/family` page stays hidden
   (`FEATURES.familyTree`).
 
 Known limits of the gallery:
@@ -664,3 +668,64 @@ What the tests do not cover:
   media of its own.
 - **Nothing refreshes a link card.** A page that changes its title keeps the
   old one for seven days, and a dead link keeps its card until then too.
+
+## Family tree (06/10)
+
+The tree was hidden behind one switch since 28/09. It is open **in the app**
+(`FEATURES.familyTreeApp`: `/tree`, its privacy settings, the family search in
+Explore). The public site's `/family` page and every line of copy advertising it
+stay hidden (`FEATURES.familyTree`) on purpose, because that copy still promises
+what is not built (below).
+
+**Found and fixed, each reproduced against the running service before the change:**
+
+- ~~"Trees are private" was still false after 20/08.~~ `GET /family/persons`
+  listed **every person on the platform to anyone, with no token** (added after
+  the earlier fix, to fill the screen's picker), and `/persons/{id}`, `/timeline`,
+  `/duplicates`, `/heritage` and `/disputes` answered anyone too. All now answer
+  the family only; a stranger gets 404, never 403.
+- ~~Anyone with an account could write into anyone's tree.~~ Linking two people
+  who were not members, confirming, and **disputing** (which marks the person
+  `disputed`) needed no place in the tree. Writing now needs being in it; a
+  member's node also needs that member's `who_can_add_family`.
+- ~~The model accepted what cannot be true:~~ the same marriage written both ways,
+  a spouse who is also a parent, two parent edges for one pair, a parent born
+  after the child, dates in the future or out of order. Refused by the service,
+  and backed by two partial unique indexes.
+- ~~`PATCH` could not clear a field and could reassign `user_id` (a 500).~~
+- ~~No way to remove a person.~~ `DELETE /family/persons/{id}`.
+- ~~Siblings declared without a shared parent never appeared in the tree.~~
+- ~~Every read loaded the whole relationships table.~~ Now only the family's
+  connected component, and a tree response is capped at 250 people.
+
+**Still not built (and stated, not hidden):**
+
+- **Links are never verified.** A relationship is created `pending` and nothing
+  moves it to `verified`; only *people* are corroborated. The screen therefore
+  shows no verified/pending mark on lines, and "how are we related" reports 0
+  verified links.
+- **A member does not confirm a claim made about them.** The privacy setting only
+  decides who may link their node; there is no "X says you are their cousin —
+  accept?". (The setting's hint used to say there was; it no longer does.)
+- **A dispute has no resolution path.** `disputes.status` can be `resolved` but no
+  endpoint resolves one, so a disputed person stays disputed.
+- **A deleted account leaves its node behind.** `user.deletion_requested` has no
+  consumer; the node keeps a `user_id` that no longer exists and stays readable.
+  `memorial.person_id` can likewise point at a person who was removed (services do
+  not read each other's tables).
+- **No age rule.** Nothing here treats a minor's node differently; the only
+  protection is the owner's `who_can_see_family` / `who_can_add_family`
+  settings, which parental supervision already constrains.
+- **No cap on parents.** A person can have any number of `parent_of` edges; the
+  graph assumes at most two for "full sibling" but does not enforce it. A product
+  decision, not an invention to make here.
+- **Per-branch sharing, legacy contacts, GEDCOM export, Heritage AI screens:**
+  unchanged from 3e, and the reason the public page stays hidden.
+- **The unique indexes need a clean table.** They are created by the service's
+  migrations; on a database that already holds duplicate spouse or parent rows
+  the migration fails (logged, not fatal) and only the service-level check
+  applies. Look for `migration failed (family-service)` after deploying.
+- Relation labels still stop at "cousin (degree N)" and otherwise say "related
+  through N steps" (a step-parent shows that way), rather than invent a term.
+- The tree and list views were exercised in a headless browser at 1440 and 390 px
+  in both light and dark; not on a real phone, and not with a screen reader.
