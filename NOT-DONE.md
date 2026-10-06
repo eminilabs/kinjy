@@ -658,3 +658,27 @@ What the tests do not cover:
   for these checks. It should be removed.
 - **The imported `$2y$` hash prefixes still have not been verified against a
   real production row.** One query; it has been blocked twice.
+
+## Mobile (06/10)
+
+- ~~The site could be dragged sideways on a phone.~~ Fixed: `min-w-0` on the
+  nav-demo column (/platform was 1535px wide on a 375px screen), and
+  `overflow-x-clip` on the page shell for the scroll-reveal sections that sit
+  at a translateX until they animate in.
+- ~~Text bottomed out at 8px and icon buttons at 36px.~~ Floors added: 0.72rem
+  (11.5px) under the phone breakpoint, 44px targets on a coarse pointer.
+- **This is not a mobile-first redesign.** What was done is remedial: no
+  sideways scroll, a legible type floor, thumb-sized targets - measured on
+  every route at 375px. The layouts themselves are still desktop layouts that
+  collapse to one column, and several pages deserve a phone-first pass in their
+  own right rather than a `lg:` prefix removed here and there.
+- **The floors are blanket CSS overrides, not corrected call sites.** ~470
+  usages of the small tiers still say `text-[0.6rem]` in the markup and only
+  look right because of the media query in index.css. Somebody changing the
+  type scale needs to know that rule is there.
+- **Verified by measurement, not by eye.** Screenshots timed out for most of
+  this session because the browser pane was hidden, so the evidence is
+  geometry: `scrollWidth`, bounding boxes, computed font sizes. Nobody has
+  actually looked at these pages on a phone.
+- **`pointer: coarse` was exercised in emulation only.** A real touch device
+  may match differently.
