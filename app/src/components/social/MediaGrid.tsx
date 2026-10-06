@@ -29,6 +29,19 @@ import VideoPlayer from './VideoPlayer'
  * (`object-cover` keeps the middle), which is why the single-image case is the
  * one that must not crop: there is no grid to keep tidy, only a photograph.
  */
+/**
+ * The shape a feed picture is allowed to be, as a width/height ratio.
+ *
+ * The same limits Facebook uses: nothing taller than 4:5 and nothing wider
+ * than 1.91:1. Outside that range the picture is cropped to the limit rather
+ * than shown whole, because a 9:16 phone photo shown whole is a column of
+ * image two screens tall that buries the next post.
+ */
+const MIN_RATIO = 0.8
+const MAX_RATIO = 1.91
+/** And never taller than this, however wide the column gets. */
+const MAX_MEDIA_HEIGHT = 560
+
 export default function MediaGrid({
   media,
   onOpen,
@@ -43,6 +56,14 @@ export default function MediaGrid({
   loadingDeferred: boolean
   autoplay?: boolean
 }) {
+  // Measured from the file when the server did not record it, which is almost
+  // always: 10 of the 11 images in production carry no width or height. Without
+  // this the single-image box has no shape to hold and falls back to a minimum.
+  //
+  // Declared before any early return - a hook after a conditional return runs
+  // on some renders and not others, which is React error #310.
+  const [natural, setNatural] = useState<{ width: number; height: number } | null>(null)
+
   if (media.length === 0) return null
 
   const shown = media.slice(0, 4)
@@ -62,23 +83,32 @@ export default function MediaGrid({
     />
   )
 
-  // One: the picture itself, uncropped.
+  // One: the picture, filling the card, at a shape the feed can live with.
   if (media.length === 1) {
     const only = media[0]
-    // The box is reserved from the real shape when it is known, so the card
-    // does not collapse to a line and then shove the feed down when the
-    // picture lands. Capped the same way the image is, and clamped so a very
-    // wide panorama still has somewhere to sit.
-    const ratio =
-      only.width && only.height ? Math.min(Math.max(only.width / only.height, 0.5), 3) : null
+    // The recorded shape if there is one, otherwise the shape measured off the
+    // file once it lands.
+    const source =
+      only.width && only.height ? { width: only.width, height: only.height } : natural
+    const ratio = source
+      ? Math.min(Math.max(source.width / source.height, MIN_RATIO), MAX_RATIO)
+      : null
     return (
       <div
-        className="-mx-5 mt-3 border-y border-white/8 bg-black/40"
+        className="-mx-5 mt-3 overflow-hidden border-y border-white/8 bg-black/40"
         style={
           ratio
-            ? { aspectRatio: String(ratio), maxHeight: 560 }
-            : // Unknown shape - every post made before anything measured. A
-              // minimum keeps the jump small instead of total.
+            ? {
+                // width is set explicitly, not left to auto. A block with
+                // aspect-ratio *and* max-height shrinks itself sideways to keep
+                // the ratio once the cap bites, so a square picture came out
+                // 560 wide in an 814 column with dead card either side of it.
+                width: '100%',
+                aspectRatio: String(ratio),
+                maxHeight: MAX_MEDIA_HEIGHT,
+              }
+            : // Nothing measured yet. A minimum keeps the jump small rather
+              // than total when the picture lands and the real shape arrives.
               { minHeight: 220 }
         }
       >
@@ -93,6 +123,7 @@ export default function MediaGrid({
           loadingDeferred={loadingDeferred}
           autoplay={autoplay}
           more={0}
+          onNatural={setNatural}
         />
       </div>
     )
@@ -135,6 +166,7 @@ function Tile({
   more,
   single = false,
   boxed = false,
+  onNatural,
 }: {
   item: PostMedia
   index: number
@@ -148,6 +180,8 @@ function Tile({
   single?: boolean
   /** The container already has the right shape, so the image fills it. */
   boxed?: boolean
+  /** Reports the file's real shape when the server never recorded one. */
+  onNatural?: (size: { width: number; height: number }) => void
 }) {
   const [broken, setBroken] = useState(false)
 
@@ -211,17 +245,29 @@ function Tile({
         alt={item.alt_text ?? ''}
         loading="lazy"
         onError={() => setBroken(true)}
+        onLoad={(event) => {
+          if (!onNatural) return
+          const el = event.currentTarget
+          if (el.naturalWidth && el.naturalHeight) {
+            onNatural({ width: el.naturalWidth, height: el.naturalHeight })
+          }
+        }}
         className={cn(
           'cursor-zoom-in hover:opacity-95',
           single
-            // The whole picture, at its own shape. Capped so a very tall image
-            // does not push the rest of the feed off the screen - it opens full
-            // size on tap.
+            // Fills the card and crops to the box, the way a feed picture does
+            // everywhere else. object-contain was letterboxing instead: once
+            // the height cap bit, a tall picture sat in a band of black with
+            // the card's own width unused either side of it.
+            //
+            // What is cropped is only what falls outside 4:5 or 1.91:1, and a
+            // tap still opens the whole picture.
             //
             // `h-full` only when the container already has the shape: inside a
             // box defined by min-height alone it resolves to zero, and the
-            // image renders as a line.
-            ? cn('mx-auto max-h-[560px] w-full object-contain', boxed && 'h-full')
+            // image renders as a line - so until the file is measured it is
+            // laid out by its own width instead.
+            ? cn('w-full object-cover', boxed ? 'h-full' : 'max-h-[560px] object-contain')
             : 'h-full w-full object-cover',
         )}
       />
