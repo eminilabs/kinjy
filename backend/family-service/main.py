@@ -61,7 +61,7 @@ def _clean_url(value: str | None) -> str | None:
     return value
 
 
-class PersonIn(BaseModel):
+class PersonCore(BaseModel):
     given_name: str = Field(min_length=1, max_length=120)
     family_name: str | None = Field(default=None, max_length=120)
     other_names: str | None = Field(default=None, max_length=255)
@@ -73,7 +73,6 @@ class PersonIn(BaseModel):
     deceased: bool = False
     photo_url: str | None = Field(default=None, max_length=500)
     biography: str | None = Field(default=None, max_length=5000)
-    user_id: str | None = Field(default=None, max_length=40)
 
     _url = field_validator("photo_url")(_clean_url)
 
@@ -84,6 +83,27 @@ class PersonIn(BaseModel):
         if not value:
             raise ValueError("A person needs a given name")
         return value
+
+
+class PersonIn(PersonCore):
+    user_id: str | None = Field(default=None, max_length=40)
+
+
+# How a new person stands to the one they are added to, and so which edge is written.
+# (edge kind, is the new person the "from" end of it)
+RELATIVES = {
+    "parent": ("parent_of", True),
+    "adoptive_parent": ("adoptive_parent_of", True),
+    "child": ("parent_of", False),
+    "spouse": ("spouse_of", False),
+    "sibling": ("sibling_of", False),
+}
+
+
+class RelativeIn(BaseModel):
+    relation: str = Field(pattern="^(parent|adoptive_parent|child|spouse|sibling)$")
+    # A relative added this way has no account; a member joins by linking their own node.
+    person: PersonCore
 
 
 class PersonUpdate(BaseModel):
@@ -361,6 +381,58 @@ async def delete_person(person_id: str, principal: CurrentUser, db: OrmSession =
     db.delete(person)
     db.commit()
     await events.publish("family.person_removed", {"person_id": person_id, "by": principal.user_id})
+
+
+@app.post("/family/persons/{person_id}/relatives", status_code=201, tags=["persons"])
+async def add_relative(
+    person_id: str,
+    payload: RelativeIn,
+    principal: CurrentUser,
+    db: OrmSession = Depends(get_db),
+):
+    """Add someone to the tree as this person's parent, child, partner or sibling.
+
+    The person and the relationship are written together or not at all: adding a
+    relative from the screen used to be two requests, and a refusal on the second
+    left a person in the tree attached to nobody. Every check that applies to a
+    relationship applies here, before anything is written.
+    """
+    anchor = access.person_or_404(db, person_id)
+    family = access.load_family(db, principal.user_id, person_id)
+    access.require_belongs(family)
+    access.may_link_member(principal, anchor.user_id)
+
+    data = payload.person.model_dump()
+    integrity.check_life_dates(payload.person.birth_date, payload.person.death_date)
+    deceased = data.pop("deceased") or bool(data.get("death_date"))
+    newcomer = models.Person(
+        id=new_id("prs"), created_by=principal.user_id, deceased=deceased, status="pending", **data
+    )
+
+    kind, newcomer_is_from = RELATIVES[payload.relation]
+    left, right = (newcomer, anchor) if newcomer_is_from else (anchor, newcomer)
+    integrity.check_new_edge(family.edges, left, right, kind)
+
+    from_id, to_id = integrity.canonical_pair(kind, left.id, right.id)
+    edge = models.Relationship(
+        id=new_id("rel"), from_person_id=from_id, to_person_id=to_id, kind=kind, asserted_by=principal.user_id
+    )
+    db.add(newcomer)
+    db.flush()
+    db.add(edge)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="This relationship already exists")
+    db.refresh(newcomer)
+
+    await events.publish("family.person_added", {"person_id": newcomer.id, "by": principal.user_id})
+    await events.publish("family.relationship_added", {"relationship_id": edge.id, "kind": kind})
+    return {
+        "person": PersonOut.model_validate(newcomer),
+        "relationship": {"id": edge.id, "kind": kind, "from": from_id, "to": to_id, "status": edge.status},
+    }
 
 
 @app.get("/family/search", tags=["persons"])
