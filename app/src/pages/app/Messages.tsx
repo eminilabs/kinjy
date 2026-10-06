@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Check,
   CheckCheck,
+  Clock,
   Download,
   File as FileIcon,
   FileText,
@@ -27,6 +28,7 @@ import AppShell from '@/components/app/AppShell'
 import { useAppTheme } from '@/components/appdemo/theme'
 import AttachmentMenu from '@/components/social/AttachmentMenu'
 import MediaLightbox from '@/components/social/MediaLightbox'
+import VoiceNotePlayer from '@/components/social/VoiceNotePlayer'
 import {
   ReactButton,
   ReactionChips,
@@ -198,15 +200,68 @@ function recorderType(): string | undefined {
   )
 }
 
+/** An adaptive meta indicator showing the timestamp and delivery/read ticks. */
+function MessageMeta({
+  message,
+  locale,
+  mine,
+  isRead,
+  className,
+}: {
+  message: ChatMessage
+  locale: string
+  mine: boolean
+  isRead: boolean
+  className?: string
+}) {
+  const isSending = message.status === 'sending'
+  const isFailed = message.status === 'failed'
+
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 select-none whitespace-nowrap text-[0.68rem] text-text-low',
+        className,
+      )}
+      title={fullStamp(message.created_at, locale)}
+    >
+      <span>
+        {isSending
+          ? message.media_kind
+            ? `${Math.round((message.progress ?? 0) * 100)}%`
+            : 'Sending…'
+          : timeOf(message.created_at, locale)}
+      </span>
+      {mine && !isFailed && (
+        <span className="inline-flex items-center ms-0.5">
+          {isSending ? (
+            <Clock size={11} className="text-text-low/70" aria-label="Sending" />
+          ) : isRead ? (
+            <CheckCheck size={13} className="text-sky-400 dark:text-sky-400" aria-label="Read" />
+          ) : (
+            <CheckCheck size={13} className="text-text-low/60" aria-label="Delivered" />
+          )}
+        </span>
+      )}
+    </span>
+  )
+}
+
 /** One attachment, drawn for what it is. */
 function Attachment({
   message,
   onOpenImage,
-  dark,
+  dark: _dark,
+  sender,
+  mine,
+  metaSlot,
 }: {
   message: ChatMessage
   onOpenImage: (url: string) => void
   dark: boolean
+  sender?: PersonBrief | { handle?: string; display_name?: string; avatar_url?: string | null } | null
+  mine?: boolean
+  metaSlot?: React.ReactNode
 }) {
   const url = message.media_url ?? message.preview_url ?? null
   const kind = message.media_kind ?? 'file'
@@ -227,15 +282,14 @@ function Attachment({
     return <video src={url} controls preload="metadata" className="max-h-80 max-w-full rounded-card-sm" />
   }
   if (url && kind === 'audio') {
-    // The browser draws its own player; `color-scheme` is how it learns the
-    // page is dark, instead of dropping a white pill into a dark thread.
     return (
-      <audio
+      <VoiceNotePlayer
         src={url}
-        controls
-        preload="metadata"
-        className="w-64 max-w-full"
-        style={{ colorScheme: dark ? 'dark' : 'light' }}
+        senderAvatarUrl={sender?.avatar_url}
+        senderDisplayName={sender?.display_name}
+        senderHandle={sender?.handle}
+        mine={mine}
+        metaSlot={metaSlot}
       />
     )
   }
@@ -1625,6 +1679,7 @@ export default function Messages() {
                     previous.sender_id === message.sender_id &&
                     new Date(message.created_at).getTime() - new Date(previous.created_at).getTime() < BURST_MS
                   const hasText = !message.encrypted && Boolean(message.body?.trim())
+                  const isAudio = message.media_kind === 'audio'
                   const mediaOnly = Boolean(message.media_kind) && !hasText
                   // A sticker stands on its own, without a bubble, unless it answers a message
                   // (then the quote needs one to sit in).
@@ -1633,6 +1688,28 @@ export default function Messages() {
                   const stickerSrc = isSticker ? stickerUrl(message.sticker_id!) : null
                   const stickerName =
                     catalogue.data?.items.find((s) => s.id === message.sticker_id)?.name ?? 'Sticker'
+
+                  const isRead =
+                    Boolean(active) && mine
+                      ? activeOthers.some((uid) => {
+                          const at = readAt(active, uid)
+                          return at !== null && new Date(at).getTime() >= new Date(message.created_at).getTime()
+                        })
+                      : false
+
+                  const meta = (
+                    <MessageMeta
+                      message={message}
+                      locale={locale}
+                      mine={mine}
+                      isRead={isRead}
+                    />
+                  )
+
+                  const attachmentSender = mine
+                    ? (user ? { display_name: user.display_name, handle: user.handle, avatar_url: user.avatar_url } : null)
+                    : sender
+
                   return (
                     <div key={message.client_id ?? message.id}>
                       {newDay && (
@@ -1681,7 +1758,13 @@ export default function Messages() {
                         <div
                           className={cn(
                             'min-w-0 rounded-card-md',
-                            bareSticker ? 'p-0' : mediaOnly ? 'p-1.5' : 'px-3.5 py-2',
+                            bareSticker
+                              ? 'p-0'
+                              : (isAudio && mediaOnly)
+                                ? 'px-2.5 py-1.5'
+                                : mediaOnly
+                                  ? 'p-1.5'
+                                  : 'px-3.5 py-1.5',
                             bareSticker
                               ? 'text-text-hi'
                               : mine
@@ -1709,9 +1792,16 @@ export default function Messages() {
                             />
                           )}
                           {message.media_kind && (
-                            <div className={cn('relative', hasText && '-mx-2 -mt-0.5 mb-1.5')}>
-                              <Attachment message={message} onOpenImage={setLightbox} dark={resolved !== 'light'} />
-                              {message.status === 'sending' && (
+                            <div className={cn('relative', hasText && '-mx-2 -mt-0.5 mb-1')}>
+                              <Attachment
+                                message={message}
+                                onOpenImage={setLightbox}
+                                dark={resolved !== 'light'}
+                                sender={attachmentSender}
+                                mine={mine}
+                                metaSlot={meta}
+                              />
+                              {message.status === 'sending' && !isAudio && (
                                 <div className="absolute inset-x-2 bottom-2 h-1 overflow-hidden rounded-full bg-black/40">
                                   <div
                                     className="h-full bg-gold"
@@ -1722,26 +1812,30 @@ export default function Messages() {
                             </div>
                           )}
                           {(hasText || (message.encrypted && !isSticker)) && (
-                            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-                              {message.encrypted ? (
-                                <span className="italic text-text-low">
-                                  Encrypted — only your device can read this.
-                                </span>
-                              ) : (
-                                message.body
-                              )}
-                            </p>
+                            <div className="relative text-sm leading-relaxed">
+                              <span className="whitespace-pre-wrap break-words">
+                                {message.encrypted ? (
+                                  <span className="italic text-text-low">
+                                    Encrypted — only your device can read this.
+                                  </span>
+                                ) : (
+                                  message.body
+                                )}
+                              </span>
+                              {/* WhatsApp-style adaptive inline-float timestamp */}
+                              <span className="float-right ml-2.5 mt-1 inline-flex items-center select-none align-bottom">
+                                {meta}
+                              </span>
+                            </div>
                           )}
-                          <p
-                            className={cn('text-right text-[0.68rem] text-text-low', mediaOnly || bareSticker ? 'px-1.5 pt-1' : 'mt-0.5')}
-                            title={fullStamp(message.created_at, locale)}
-                          >
-                            {message.status === 'sending'
-                              ? message.media_kind
-                                ? `Uploading ${Math.round((message.progress ?? 0) * 100)}%`
-                                : 'Sending…'
-                              : timeOf(message.created_at, locale)}
-                          </p>
+                          {(!hasText && (!isAudio || !message.media_kind)) && (
+                            <div
+                              className={cn('text-right text-[0.68rem] text-text-low', mediaOnly || bareSticker ? 'px-1.5 pt-0.5' : 'mt-0.5')}
+                              title={fullStamp(message.created_at, locale)}
+                            >
+                              {meta}
+                            </div>
+                          )}
                         </div>
                         </SwipeToReply>
                         </div>
@@ -1761,19 +1855,10 @@ export default function Messages() {
                             Not sent — tap to retry
                           </button>
                         )}
-                        {lastMine && message.id === lastMine.id && (
+                        {lastMine && message.id === lastMine.id && active.kind === 'group' && seenBy.length > 0 && (
                           <span className="caption mt-0.5 inline-flex items-center gap-1">
-                            {seenBy.length ? (
-                              <>
-                                <CheckCheck size={12} className="text-gold-soft" aria-hidden="true" />
-                                {active.kind === 'direct' ? 'Seen' : `Seen by ${seenBy.length}`}
-                              </>
-                            ) : (
-                              <>
-                                <Check size={12} aria-hidden="true" />
-                                Sent
-                              </>
-                            )}
+                            <CheckCheck size={12} className="text-sky-400" aria-hidden="true" />
+                            Seen by {seenBy.length}
                           </span>
                         )}
                       </div>
