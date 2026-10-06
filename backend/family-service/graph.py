@@ -50,23 +50,14 @@ class Edges:
         return found
 
 
-def load_edges(db: OrmSession, person_ids: set[str] | None = None) -> Edges:
-    stmt = select(models.Relationship).where(models.Relationship.status != "disputed")
-    if person_ids:
-        stmt = stmt.where(
-            or_(
-                models.Relationship.from_person_id.in_(person_ids),
-                models.Relationship.to_person_id.in_(person_ids),
-            )
-        )
-
+def edges_from_rows(rows) -> Edges:
     parents: dict[str, set[str]] = defaultdict(set)
     children: dict[str, set[str]] = defaultdict(set)
     spouses: dict[str, set[str]] = defaultdict(set)
     explicit_siblings: dict[str, set[str]] = defaultdict(set)
     adoptive: set[tuple[str, str]] = set()
 
-    for edge in db.scalars(stmt).all():
+    for edge in rows:
         if edge.kind in PARENT_KINDS:
             parents[edge.to_person_id].add(edge.from_person_id)
             children[edge.from_person_id].add(edge.to_person_id)
@@ -82,31 +73,98 @@ def load_edges(db: OrmSession, person_ids: set[str] | None = None) -> Edges:
     return Edges(parents, children, spouses, explicit_siblings, adoptive)
 
 
-def levels(edges: Edges, root: str, max_depth: int = 4) -> dict[str, int]:
+# A family is a connected component. Nothing in here needs the rest of the
+# database, so a request loads the people it can reach and stops: the table of
+# every family on the platform used to be read, whole, on each call.
+COMPONENT_LIMIT = 4000
+
+
+def load_component(
+    db: OrmSession, start_ids: set[str], limit: int = COMPONENT_LIMIT
+) -> tuple[Edges, set[str], list]:
+    """Everyone reachable from ``start_ids`` through any edge, and the edges between them.
+
+    One query per generation of the walk, not one per person. Disputed edges are
+    left out, as before. ``limit`` bounds the walk so a runaway graph cannot make
+    a single request unbounded. Returns ``(edges, person_ids, rows)``.
+    """
+    seen = set(start_ids)
+    frontier = set(start_ids)
+    rows: dict[str, models.Relationship] = {}
+    while frontier:
+        batch = db.scalars(
+            select(models.Relationship).where(
+                models.Relationship.status != "disputed",
+                or_(
+                    models.Relationship.from_person_id.in_(frontier),
+                    models.Relationship.to_person_id.in_(frontier),
+                ),
+            )
+        ).all()
+        found: set[str] = set()
+        for edge in batch:
+            rows[edge.id] = edge
+            for person_id in (edge.from_person_id, edge.to_person_id):
+                if person_id not in seen:
+                    found.add(person_id)
+        room = max(0, limit - len(seen))
+        frontier = set(sorted(found)[:room])
+        seen |= frontier
+    inside = [e for e in rows.values() if e.from_person_id in seen and e.to_person_id in seen]
+    return edges_from_rows(inside), seen, inside
+
+
+def levels(edges: Edges, root: str, max_depth: int = 4, max_nodes: int | None = None) -> dict[str, int]:
     """The Kinjy Level model: root = 0, each parent step +1, each child step -1.
 
-    Lazy loading is the caller's job — ``max_depth`` bounds how far we walk so a
-    tree with 10 000 nodes never gets serialised in one response.
+    ``max_depth`` bounds how many generations are walked and ``max_nodes`` how
+    many people are returned, nearest first, so a family with thousands of
+    members never goes out in one response. The walk is breadth-first, so what
+    is cut is always the farthest.
     """
     seen = {root: 0}
     queue = deque([(root, 0)])
+
+    def room() -> bool:
+        return max_nodes is None or len(seen) < max_nodes
+
     while queue:
         current, level = queue.popleft()
         if abs(level) >= max_depth:
             continue
-        for parent in edges.parents.get(current, set()):
-            if parent not in seen:
+        for parent in sorted(edges.parents.get(current, set())):
+            if parent not in seen and room():
                 seen[parent] = level + 1
                 queue.append((parent, level + 1))
-        for child in edges.children.get(current, set()):
-            if child not in seen:
+        for child in sorted(edges.children.get(current, set())):
+            if child not in seen and room():
                 seen[child] = level - 1
                 queue.append((child, level - 1))
         # Spouses sit on the same level and are not traversed further, so a
         # spouse's whole birth family doesn't flood the view.
-        for spouse in edges.spouses.get(current, set()):
-            seen.setdefault(spouse, level)
+        for spouse in sorted(edges.spouses.get(current, set())):
+            if spouse not in seen and room():
+                seen[spouse] = level
+        # A sibling declared without a shared parent has no parent to be reached through, so
+        # without this they would never appear. They stand on the same level, and their own
+        # descendants are walked from there.
+        for sibling in sorted(edges.explicit_siblings.get(current, set())):
+            if sibling not in seen and room():
+                seen[sibling] = level
+                queue.append((sibling, level))
     return seen
+
+
+def has_more(edges: Edges, person_id: str, shown: set[str]) -> bool:
+    """Whether this person has parents or children that are not in the view.
+
+    Spouses and declared siblings are not counted: they do not extend the tree
+    up or down, only sideways.
+    """
+    return any(
+        other not in shown
+        for other in edges.parents.get(person_id, set()) | edges.children.get(person_id, set())
+    )
 
 
 def _neighbours(edges: Edges, person_id: str) -> list[tuple[str, str]]:
@@ -228,11 +286,12 @@ def describe(edges: Edges, source: str, target: str) -> str:
     return f"related through {len(path)} steps"
 
 
-def closeness(edges: Edges, source: str, target: str) -> int:
+def closeness(edges: Edges, source: str, target: str, label: str | None = None) -> int:
     """Lower = closer. Used to rank a tree view and to pick the 3 corroborators
-    for a deceased person's verification."""
+    for a deceased person's verification. Pass the label when it is already
+    known: working it out again walks the graph a second time."""
     ranking = {"self": 0, "parent": 1, "child": 1, "spouse": 1, "sibling": 2, "half-sibling": 3}
-    label = describe(edges, source, target)
+    label = label if label is not None else describe(edges, source, target)
     if label in ranking:
         return ranking[label]
     path = shortest_path(edges, source, target)

@@ -13,6 +13,8 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -90,6 +92,11 @@ class Relationship(Base):
     )
 
     PRIMITIVES = ("parent_of", "adoptive_parent_of", "guardian_of", "spouse_of", "sibling_of")
+    # Two people are spouses (or siblings) of each other, whichever way round the
+    # edge was written, so these are one fact and may be stored only once.
+    SYMMETRIC = ("spouse_of", "sibling_of")
+    # A parent edge says who stands above whom: one per ordered pair, whatever its kind.
+    FILIATION = ("parent_of", "adoptive_parent_of", "guardian_of")
 
     id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("rel"))
     from_person_id: Mapped[str] = mapped_column(ForeignKey(f"{SCHEMA}.persons.id", ondelete="CASCADE"))
@@ -104,6 +111,27 @@ class Relationship(Base):
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|verified|disputed
     asserted_by: Mapped[str] = mapped_column(String(40))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+# The database backs up what the service checks before it writes: a second
+# marriage between the same two people, or a second parent edge for the same
+# ordered pair, is refused even when two requests race past the check. They are
+# also created for databases that already exist by the service's MIGRATIONS.
+Index(
+    "uq_relationship_symmetric",
+    func.least(Relationship.from_person_id, Relationship.to_person_id),
+    func.greatest(Relationship.from_person_id, Relationship.to_person_id),
+    Relationship.kind,
+    unique=True,
+    postgresql_where=text("kind IN ('spouse_of', 'sibling_of')"),
+)
+Index(
+    "uq_relationship_filiation",
+    Relationship.from_person_id,
+    Relationship.to_person_id,
+    unique=True,
+    postgresql_where=text("kind IN ('parent_of', 'adoptive_parent_of', 'guardian_of')"),
+)
 
 
 class Confirmation(Base):

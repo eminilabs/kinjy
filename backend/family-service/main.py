@@ -1,57 +1,117 @@
 """Kinjy · family-service — the genealogical graph, verification and heritage."""
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime, timezone
 
 from fastapi import Depends, HTTPException, Query
-from pydantic import BaseModel, Field
-import logging
-from collections import deque
-
-import httpx
-
-from sqlalchemy import func, or_, select
+from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as OrmSession
 
-log = logging.getLogger("family-service")
-
 from common import events
-from common import permissions
-from common.auth import CurrentUser, MaybeUser
+from common.auth import CurrentUser
 from common.database import get_db
 from common.ids import new_id
 from common.service import create_app
 
+import access
 import graph
+import integrity
 import models
+
+log = logging.getLogger("family-service")
 
 # A deceased person needs corroboration from this many closely-related members
 # before they are marked verified (blueprint §6).
 DECEASED_CONFIRMATIONS = 3
 CLOSE_ENOUGH = 6  # closeness score under which a member counts as "closely related"
 
+# The most people one tree response carries, nearest first. A family can be far
+# larger; the view says so and lets the member re-centre or go deeper.
+TREE_MAX_NODES = 250
+
+MIGRATIONS = [
+    # The indexes in models.py, for databases that already had the table.
+    f"CREATE UNIQUE INDEX IF NOT EXISTS uq_relationship_symmetric ON {models.SCHEMA}.relationships "
+    "(LEAST(from_person_id, to_person_id), GREATEST(from_person_id, to_person_id), kind) "
+    "WHERE kind IN ('spouse_of', 'sibling_of')",
+    f"CREATE UNIQUE INDEX IF NOT EXISTS uq_relationship_filiation ON {models.SCHEMA}.relationships "
+    "(from_person_id, to_person_id) "
+    "WHERE kind IN ('parent_of', 'adoptive_parent_of', 'guardian_of')",
+]
+
 app = create_app(
     name="family-service",
     schema=models.SCHEMA,
+    migrations=MIGRATIONS,
     description="Family tree graph, derived relationships, verification, heritage archive.",
 )
 
 
 # --- schemas ---------------------------------------------------------------
 
+def _clean_url(value: str | None) -> str | None:
+    """A picture is ours (/media/...) or an https address; never a script or a data: blob."""
+    if value is None or value == "":
+        return None
+    if not value.startswith(("https://", "http://", "/media/")):
+        raise ValueError("photo_url must be an http(s) address or a /media/ path")
+    return value
+
+
 class PersonIn(BaseModel):
     given_name: str = Field(min_length=1, max_length=120)
-    family_name: str | None = None
-    other_names: str | None = None
-    gender: str | None = None
+    family_name: str | None = Field(default=None, max_length=120)
+    other_names: str | None = Field(default=None, max_length=255)
+    gender: str | None = Field(default=None, max_length=20)
     birth_date: date | None = None
-    birth_place: str | None = None
+    birth_place: str | None = Field(default=None, max_length=200)
     death_date: date | None = None
-    death_place: str | None = None
+    death_place: str | None = Field(default=None, max_length=200)
     deceased: bool = False
-    photo_url: str | None = None
-    biography: str | None = None
-    user_id: str | None = None
+    photo_url: str | None = Field(default=None, max_length=500)
+    biography: str | None = Field(default=None, max_length=5000)
+    user_id: str | None = Field(default=None, max_length=40)
+
+    _url = field_validator("photo_url")(_clean_url)
+
+    @field_validator("given_name")
+    @classmethod
+    def _name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("A person needs a given name")
+        return value
+
+
+class PersonUpdate(BaseModel):
+    """What may change on a person. Not `user_id`: whose account a node is cannot be edited into another's."""
+
+    given_name: str | None = Field(default=None, min_length=1, max_length=120)
+    family_name: str | None = Field(default=None, max_length=120)
+    other_names: str | None = Field(default=None, max_length=255)
+    gender: str | None = Field(default=None, max_length=20)
+    birth_date: date | None = None
+    birth_place: str | None = Field(default=None, max_length=200)
+    death_date: date | None = None
+    death_place: str | None = Field(default=None, max_length=200)
+    deceased: bool | None = None
+    photo_url: str | None = Field(default=None, max_length=500)
+    biography: str | None = Field(default=None, max_length=5000)
+
+    _url = field_validator("photo_url")(_clean_url)
+
+    @field_validator("given_name")
+    @classmethod
+    def _name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            raise ValueError("A person needs a given name")
+        return value
 
 
 class PersonOut(BaseModel):
@@ -71,36 +131,71 @@ class PersonOut(BaseModel):
 
 
 class RelationshipIn(BaseModel):
-    from_person_id: str
-    to_person_id: str
-    kind: str
+    from_person_id: str = Field(max_length=40)
+    to_person_id: str = Field(max_length=40)
+    kind: str = Field(max_length=30)
     biological: bool = True
     since: date | None = None
 
 
 class ConfirmIn(BaseModel):
     decision: str = Field(pattern="^(confirm|dispute)$")
-    note: str | None = None
+    note: str | None = Field(default=None, max_length=1000)
 
 
 class HeritageIn(BaseModel):
     person_id: str | None = None
     kind: str = Field(pattern="^(photo|letter|audio|video|document)$")
     title: str = Field(min_length=1, max_length=200)
-    source_url: str
+    source_url: str = Field(max_length=500)
     happened_on: date | None = None
     transcript: str | None = None
 
 
-def _person_or_404(db: OrmSession, person_id: str) -> models.Person:
-    person = db.get(models.Person, person_id)
-    if person is None:
-        raise HTTPException(status_code=404, detail="Person not found")
-    return person
+def _detail(person: models.Person, principal, family: access.Family, db: OrmSession) -> dict:
+    """One person in full, with what the caller may do about them - decided here, not by the screen."""
+    me = access.my_person(db, principal.user_id)
+    in_family = me is not None and me.id in family.people
+    mine = family.viewer_belongs
+    edges = family.edges
+    decision = db.scalar(
+        select(models.Confirmation.decision).where(
+            models.Confirmation.target_type == "person",
+            models.Confirmation.target_id == person.id,
+            models.Confirmation.member_id == principal.user_id,
+        )
+    )
+    return {
+        **PersonOut.model_validate(person).model_dump(),
+        "other_names": person.other_names,
+        "birth_place": person.birth_place,
+        "death_place": person.death_place,
+        "biography": person.biography,
+        "is_me": person.user_id == principal.user_id,
+        "relation_to_me": graph.describe(edges, me.id, person.id) if in_family else None,
+        "counts": {
+            "parents": len(edges.parents.get(person.id, set())),
+            "children": len(edges.children.get(person.id, set())),
+            "spouses": len(edges.spouses.get(person.id, set())),
+            "siblings": len(edges.siblings(person.id)),
+        },
+        "my_decision": decision,
+        "permissions": {
+            "can_edit": access.can_edit(principal, person),
+            "can_delete": access.can_delete(principal, person),
+            "can_link": mine,
+            "can_confirm": mine and me is not None,
+        },
+    }
 
 
-def _my_person(db: OrmSession, user_id: str) -> models.Person | None:
-    return db.scalar(select(models.Person).where(models.Person.user_id == user_id))
+def _visible_ids(db: OrmSession, user_id: str) -> set[str]:
+    """Everyone in a family the caller belongs to."""
+    mine = access.my_person_ids(db, user_id)
+    if not mine:
+        return set()
+    _edges, people, _rows = graph.load_component(db, mine)
+    return people
 
 
 # ---------------------------------------------------------------------------
@@ -109,10 +204,15 @@ def _my_person(db: OrmSession, user_id: str) -> models.Person | None:
 
 @app.post("/family/persons", response_model=PersonOut, status_code=201, tags=["persons"])
 async def create_person(payload: PersonIn, principal: CurrentUser, db: OrmSession = Depends(get_db)):
-    if payload.user_id and db.scalar(select(models.Person).where(models.Person.user_id == payload.user_id)):
-        raise HTTPException(status_code=409, detail="This member already has a person node")
-
     data = payload.model_dump()
+    integrity.check_life_dates(payload.birth_date, payload.death_date)
+
+    if payload.user_id:
+        if db.scalar(select(models.Person).where(models.Person.user_id == payload.user_id)):
+            raise HTTPException(status_code=409, detail="This member already has a person node")
+        # A node that is a member's own is a claim about them; their setting decides who may make it.
+        access.may_link_member(principal, payload.user_id)
+
     deceased = data.pop("deceased") or bool(data.get("death_date"))
     person = models.Person(
         id=new_id("prs"),
@@ -126,164 +226,141 @@ async def create_person(payload: PersonIn, principal: CurrentUser, db: OrmSessio
     if person.status == "verified":
         person.verified_at = datetime.now(timezone.utc)
     db.add(person)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="This member already has a person node")
     db.refresh(person)
 
     await events.publish("family.person_added", {"person_id": person.id, "by": principal.user_id})
     return PersonOut.model_validate(person)
 
 
-@app.get("/family/persons/{person_id}", response_model=PersonOut, tags=["persons"])
-def get_person(person_id: str, db: OrmSession = Depends(get_db)):
-    return PersonOut.model_validate(_person_or_404(db, person_id))
-
-
-@app.patch("/family/persons/{person_id}", response_model=PersonOut, tags=["persons"])
-def update_person(person_id: str, payload: PersonIn, principal: CurrentUser, db: OrmSession = Depends(get_db)):
-    person = _person_or_404(db, person_id)
-    if person.created_by != principal.user_id and person.user_id != principal.user_id and not principal.is_admin:
-        raise HTTPException(status_code=403, detail="Only the author or the person themselves can edit this node")
-    for key, value in payload.model_dump(exclude_unset=True).items():
-        if value is not None:
-            setattr(person, key, value)
-    if person.death_date:
-        person.deceased = True
-    db.commit()
-    db.refresh(person)
-    return PersonOut.model_validate(person)
+@app.get("/family/me", tags=["persons"])
+def my_node(principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """Where the member stands in the tree: their own node, if they have added themselves."""
+    person = access.my_person(db, principal.user_id)
+    if person is None:
+        return {"person": None}
+    family = access.load_family(db, principal.user_id, person.id)
+    return {"person": _detail(person, principal, family, db)}
 
 
 @app.get("/family/persons", tags=["persons"])
-def list_persons(limit: int = 30, db: OrmSession = Depends(get_db)):
-    """The people you can open, most recently added first.
+def list_persons(principal: CurrentUser, limit: int = Query(default=30, ge=1, le=100), db: OrmSession = Depends(get_db)):
+    """The people in the families you belong to, most recently added first.
 
-    The tree screen used to get this list by *searching for the letter "a"* —
-    which the search endpoint rejects, because it asks for two characters. The
-    422 was swallowed by the caller's catch, so the list was permanently empty
-    and there was no way to open a tree at all. Browsing and searching are two
-    different questions; this answers the first one.
+    Scoped to your own graph, like search. It used to list every person on the
+    platform to anyone, with or without an account: the same hole the other
+    endpoints had been closed against, reopened by the endpoint added to fill
+    the picker.
     """
+    visible = _visible_ids(db, principal.user_id)
+    if not visible:
+        return {"items": []}
     rows = db.scalars(
-        select(models.Person).order_by(models.Person.created_at.desc()).limit(min(limit, 100))
+        select(models.Person)
+        .where(models.Person.id.in_(visible))
+        .order_by(models.Person.created_at.desc())
+        .limit(limit)
     ).all()
     return {"items": [PersonOut.model_validate(r) for r in rows]}
 
 
-# ---------------------------------------------------------------------------
-# Who may read a tree
-# ---------------------------------------------------------------------------
-#
-# /family promises "Family-only by default. Trees are private." It was not
-# true: `/family/search` and `/family/tree` took no token at all, so anyone on
-# the internet could search a name and read a whole family — real given names,
-# real relationships, including the dead.
-#
-# The rule enforced here is the plain reading of that promise: **you may read a
-# tree you belong to.** You belong to it if you created any person in its
-# connected component, or if one of its person nodes is linked to your account.
-#
-# Per-branch sharing (the maternal line not seeing the paternal side) is a
-# finer rule the blueprint also promises and this does not implement; it is
-# recorded as not done rather than pretended. What this does do is stop the
-# graph being world-readable, which is the difference between a private tree
-# and a public directory of families.
+@app.get("/family/persons/{person_id}", tags=["persons"])
+def get_person(person_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    person = access.person_or_404(db, person_id)
+    family = access.load_family(db, principal.user_id, person_id)
+    access.require_can_read(db, principal, family)
+    return _detail(person, principal, family, db)
 
 
-def _my_person_ids(db: OrmSession, user_id: str) -> set[str]:
-    """Person nodes this member owns: the one that is them, and any they added."""
-    return set(
-        db.scalars(
-            select(models.Person.id).where(
-                or_(models.Person.user_id == user_id, models.Person.created_by == user_id)
-            )
-        ).all()
-    )
+@app.patch("/family/persons/{person_id}", tags=["persons"])
+def update_person(person_id: str, payload: PersonUpdate, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    person = access.person_or_404(db, person_id)
+    family = access.load_family(db, principal.user_id, person_id)
+    access.require_can_read(db, principal, family)
+    if not access.can_edit(principal, person):
+        raise HTTPException(status_code=403, detail="Only the author or the person themselves can edit this node")
+
+    changes = payload.model_dump(exclude_unset=True)
+    # A field that was sent as null is a field the member cleared; one that was not sent is untouched.
+    for required in ("given_name", "deceased"):
+        if required in changes and changes[required] is None:
+            raise HTTPException(status_code=400, detail=f"{required} cannot be cleared")
+
+    birth = changes.get("birth_date", person.birth_date)
+    death = changes.get("death_date", person.death_date)
+    integrity.check_life_dates(birth, death, changes.get("deceased"))
+    if "birth_date" in changes and changes["birth_date"] is not None:
+        _check_children_born_after(db, family, person, changes["birth_date"])
+
+    for key, value in changes.items():
+        setattr(person, key, value)
+    if person.death_date:
+        person.deceased = True
+    db.commit()
+    db.refresh(person)
+    return _detail(person, principal, family, db)
 
 
-def _component(edges, start_ids: set[str], limit: int = 4000) -> set[str]:
-    """Everyone reachable from these people, in either direction."""
-    seen = set(start_ids)
-    queue = deque(start_ids)
-    while queue and len(seen) < limit:
-        current = queue.popleft()
-        for neighbour, _kind in graph._neighbours(edges, current):
-            if neighbour not in seen:
-                seen.add(neighbour)
-                queue.append(neighbour)
-    return seen
-
-
-USER_URL = "http://user-service:8000"
-
-
-def _owner_preferences(db: OrmSession, person_id: str) -> dict:
-    """The settings of whoever this tree belongs to.
-
-    Fails **closed**: if user-service cannot be reached we assume the strictest
-    choice the owner might have made, because guessing "open to everyone" on an
-    outage is exactly the wrong way to be wrong about a family tree.
-    """
-    person = db.get(models.Person, person_id)
-    owner = (person.user_id or person.created_by) if person else None
-    if not owner:
-        return {"who_can_see_family": "family", "family_tree_shared": True}
-    try:
-        response = httpx.get(f"{USER_URL}/internal/preferences/{owner}", timeout=4)
-        response.raise_for_status()
-        data = response.json()
-        return {
-            "who_can_see_family": data.get("who_can_see_family", "family"),
-            "family_tree_shared": data.get("family_tree_shared", True),
-            "owner": owner,
-        }
-    except Exception as exc:
-        log.warning("family preferences lookup failed for %s: %s", owner, exc)
-        return {"who_can_see_family": "family", "family_tree_shared": True, "owner": owner}
-
-
-def _require_can_read(db: OrmSession, principal, person_id: str) -> None:
-    """Refuse a tree the caller is not entitled to.
-
-    The rule is the *owner's*, not the code's: they choose between family only,
-    their accepted connections, or everyone, and they can close the tree
-    entirely. Nothing here is hardcoded except the direction of the default.
-
-    404, not 403: telling a stranger that a person id exists is itself a leak
-    of the family they were looking for.
-    """
-    if principal is None:
-        raise HTTPException(status_code=404, detail="Person not found")
-
-    mine = _my_person_ids(db, principal.user_id)
-    # Your own people are always yours to read, whatever anyone else has set.
-    if person_id in mine:
-        return
-
-    prefs = _owner_preferences(db, person_id)
-    owner = prefs.get("owner")
-
-    if not prefs.get("family_tree_shared", True):
-        raise HTTPException(status_code=404, detail="Person not found")
-
-    audience = prefs.get("who_can_see_family", "family")
-
-    if audience == "everyone":
-        return
-
-    if audience == "connections" and owner:
-        # An accepted connection, decided by user-service — the same authority
-        # that owns every other "who may reach me" rule.
-        allowed, _reason = permissions.check(
-            principal.user_id, owner, "can_message", "see this family tree"
+def _check_children_born_after(db: OrmSession, family: access.Family, person: models.Person, born: date) -> None:
+    """Moving a birth date must not make a parent younger than their child."""
+    too_young = "A parent cannot be born on or after the day their child was"
+    children = family.edges.children.get(person.id, set())
+    parents = family.edges.parents.get(person.id, set())
+    if children and db.scalar(
+        select(func.count()).select_from(models.Person).where(
+            models.Person.id.in_(children), models.Person.birth_date <= born
         )
-        if allowed:
-            return
+    ):
+        raise HTTPException(status_code=400, detail=too_young)
+    if parents and db.scalar(
+        select(func.count()).select_from(models.Person).where(
+            models.Person.id.in_(parents), models.Person.birth_date >= born
+        )
+    ):
+        raise HTTPException(status_code=400, detail=too_young)
 
-    # "family": you may read a tree you share a graph with.
-    if mine and person_id in _component(graph.load_edges(db), mine):
-        return
 
-    raise HTTPException(status_code=404, detail="Person not found")
+@app.delete("/family/persons/{person_id}", status_code=204, tags=["persons"])
+async def delete_person(person_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """Remove a person, and everything that only made sense with them in the tree.
+
+    Their relationships go with them (a relationship needs both ends), as do the
+    confirmations and disputes about them. Archive items they were attached to are
+    kept and detached: an uploaded original is never destroyed by editing a tree.
+    """
+    person = access.person_or_404(db, person_id)
+    family = access.load_family(db, principal.user_id, person_id)
+    access.require_can_read(db, principal, family)
+    if not access.can_delete(principal, person):
+        raise HTTPException(status_code=403, detail="Only the author, or the member themselves, can remove this person")
+
+    touching = or_(
+        models.Relationship.from_person_id == person_id,
+        models.Relationship.to_person_id == person_id,
+    )
+    edge_ids = select(models.Relationship.id).where(touching)
+    db.execute(
+        delete(models.Confirmation).where(
+            models.Confirmation.target_type == "relationship", models.Confirmation.target_id.in_(edge_ids)
+        )
+    )
+    db.execute(delete(models.Relationship).where(touching))
+    db.execute(
+        delete(models.Confirmation).where(
+            models.Confirmation.target_type == "person", models.Confirmation.target_id == person_id
+        )
+    )
+    db.execute(
+        delete(models.Dispute).where(models.Dispute.target_type == "person", models.Dispute.target_id == person_id)
+    )
+    db.execute(update(models.HeritageItem).where(models.HeritageItem.person_id == person_id).values(person_id=None))
+    db.delete(person)
+    db.commit()
+    await events.publish("family.person_removed", {"person_id": person_id, "by": principal.user_id})
 
 
 @app.get("/family/search", tags=["persons"])
@@ -296,8 +373,7 @@ def search_persons(
     # Scoped to the caller's own graph. Authenticating the endpoint without
     # scoping the query would have been theatre: a stranger with any account
     # could still have searched every family on the platform by name.
-    mine = _my_person_ids(db, principal.user_id)
-    visible = _component(graph.load_edges(db), mine) if mine else set()
+    visible = _visible_ids(db, principal.user_id)
     if not visible:
         return {"items": []}
 
@@ -318,13 +394,18 @@ def search_persons(
 
 
 @app.get("/family/duplicates/{person_id}", tags=["persons"])
-def duplicate_candidates(person_id: str, db: OrmSession = Depends(get_db)):
+def duplicate_candidates(person_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
     """Surface possible duplicates. Never auto-merges — the blueprint is explicit
-    that merging is a human decision."""
-    person = _person_or_404(db, person_id)
+    that merging is a human decision. Only people in families you can see are compared."""
+    person = access.person_or_404(db, person_id)
+    family = access.load_family(db, principal.user_id, person_id)
+    access.require_can_read(db, principal, family)
+    visible = _visible_ids(db, principal.user_id) | family.people
+
     rows = db.scalars(
         select(models.Person).where(
             models.Person.id != person_id,
+            models.Person.id.in_(visible),
             func.lower(models.Person.given_name) == person.given_name.lower(),
         )
     ).all()
@@ -357,58 +438,42 @@ async def add_relationship(payload: RelationshipIn, principal: CurrentUser, db: 
     if payload.from_person_id == payload.to_person_id:
         raise HTTPException(status_code=400, detail="A person cannot be related to themselves")
 
-    left = _person_or_404(db, payload.from_person_id)
-    right = _person_or_404(db, payload.to_person_id)
+    left = access.person_or_404(db, payload.from_person_id)
+    right = access.person_or_404(db, payload.to_person_id)
 
-    # Linking a person node that belongs to a member is a claim about *them*.
-    # Their who_can_add_family setting decides whether a stranger may make it —
-    # the same authority messaging asks, so the rule cannot drift between the two.
-    for person in (left, right):
-        if not person.user_id or person.user_id == principal.user_id:
-            continue
-        allowed, reason = permissions.check(
-            principal.user_id, person.user_id, "can_add_family", "add this member to a family tree"
-        )
-        if not allowed:
-            raise HTTPException(status_code=403, detail=reason)
+    # Writing needs a place in the tree: at least one end is in a family the caller belongs to.
+    # The other end is either in one too, or is a member who agrees to be linked (their own
+    # who_can_add_family setting). A stranger's tree, and a person nobody here knows, are
+    # not there to be stitched onto.
+    family_left = access.load_family(db, principal.user_id, left.id)
+    family_right = family_left if right.id in family_left.people else access.load_family(db, principal.user_id, right.id)
+    if not (family_left.viewer_belongs or family_right.viewer_belongs):
+        raise access.not_found()
+    for person, family in ((left, family_left), (right, family_right)):
+        if not family.viewer_belongs and not person.user_id:
+            raise access.not_found()
+        access.may_link_member(principal, person.user_id)
 
-    # A parent edge that closes a loop would make someone their own ancestor.
-    if payload.kind in graph.PARENT_KINDS:
-        edges = graph.load_edges(db)
-        if payload.from_person_id in graph.ancestors(edges, payload.from_person_id) or (
-            payload.to_person_id in graph.ancestors(edges, payload.from_person_id)
-            or payload.from_person_id == payload.to_person_id
-        ):
-            pass  # ancestors() of self is empty unless a cycle already exists
-        if payload.from_person_id in graph.ancestors(edges, payload.to_person_id):
-            pass
-        descendants_of_child = graph.ancestors(edges, payload.from_person_id)
-        if payload.to_person_id in descendants_of_child:
-            raise HTTPException(
-                status_code=400,
-                detail="This edge would make a person their own ancestor",
-            )
+    if family_left is family_right:
+        edges = family_left.edges
+    else:
+        edges, _people, _rows = graph.load_component(db, {left.id, right.id})
+    integrity.check_new_edge(edges, left, right, payload.kind)
 
-    existing = db.scalar(
-        select(models.Relationship).where(
-            models.Relationship.from_person_id == payload.from_person_id,
-            models.Relationship.to_person_id == payload.to_person_id,
-            models.Relationship.kind == payload.kind,
-        )
-    )
-    if existing:
+    from_id, to_id = integrity.canonical_pair(payload.kind, left.id, right.id)
+    data = payload.model_dump()
+    data.update(from_person_id=from_id, to_person_id=to_id)
+    edge = models.Relationship(id=new_id("rel"), asserted_by=principal.user_id, **data)
+    db.add(edge)
+    try:
+        db.commit()
+    except IntegrityError:
+        # Two requests raced past the checks; the unique index kept one.
+        db.rollback()
         raise HTTPException(status_code=409, detail="This relationship already exists")
 
-    edge = models.Relationship(
-        id=new_id("rel"),
-        asserted_by=principal.user_id,
-        **payload.model_dump(),
-    )
-    db.add(edge)
-    db.commit()
-
     await events.publish("family.relationship_added", {"relationship_id": edge.id, "kind": edge.kind})
-    return {"id": edge.id, "status": edge.status}
+    return {"id": edge.id, "status": edge.status, "kind": edge.kind, "from": edge.from_person_id, "to": edge.to_person_id}
 
 
 @app.delete("/family/relationships/{relationship_id}", status_code=204, tags=["relationships"])
@@ -418,6 +483,11 @@ def delete_relationship(relationship_id: str, principal: CurrentUser, db: OrmSes
         raise HTTPException(status_code=404, detail="Relationship not found")
     if edge.asserted_by != principal.user_id and not principal.is_admin:
         raise HTTPException(status_code=403, detail="Only the member who asserted this edge can remove it")
+    db.execute(
+        delete(models.Confirmation).where(
+            models.Confirmation.target_type == "relationship", models.Confirmation.target_id == relationship_id
+        )
+    )
     db.delete(edge)
     db.commit()
 
@@ -435,26 +505,34 @@ def tree(
 ):
     """Level 0 = this person, positive levels are ancestors, negative descendants.
 
-    ``depth`` bounds the walk so a large tree loads lazily rather than in one
-    enormous payload. Re-rooting is just calling this with another person id.
+    ``depth`` bounds the generations and ``TREE_MAX_NODES`` the people, nearest
+    first, so a large family loads in pieces rather than in one enormous payload.
+    Each person says whether more of the family lies beyond them (``more``), so the
+    screen can offer to go further. Re-rooting is just calling this with another id.
     """
-    _person_or_404(db, person_id)
-    _require_can_read(db, principal, person_id)
-    edges = graph.load_edges(db)
-    level_map = graph.levels(edges, person_id, max_depth=depth)
+    person = access.person_or_404(db, person_id)
+    family = access.load_family(db, principal.user_id, person_id)
+    access.require_can_read(db, principal, family)
+    edges = family.edges
 
-    people = db.scalars(select(models.Person).where(models.Person.id.in_(level_map.keys()))).all()
+    level_map = graph.levels(edges, person_id, max_depth=depth, max_nodes=TREE_MAX_NODES)
+    shown = set(level_map)
+    people = db.scalars(select(models.Person).where(models.Person.id.in_(shown))).all()
     sibling_kinds = edges.siblings(person_id)
 
     nodes = []
-    for person in people:
+    for member in people:
+        relation = graph.describe(edges, person_id, member.id)
         nodes.append(
             {
-                "person": PersonOut.model_validate(person).model_dump(),
-                "level": level_map[person.id],
-                "relation": graph.describe(edges, person_id, person.id),
-                "closeness": graph.closeness(edges, person_id, person.id),
-                "sibling_kind": sibling_kinds.get(person.id),
+                "person": PersonOut.model_validate(member).model_dump(),
+                "level": level_map[member.id],
+                "relation": relation,
+                "closeness": graph.closeness(edges, person_id, member.id, label=relation),
+                "sibling_kind": sibling_kinds.get(member.id),
+                "more": graph.has_more(edges, member.id, shown),
+                "mine": member.id in family.mine,
+                "editable": access.can_edit(principal, member),
             }
         )
     # Full siblings before half siblings, closest relations first.
@@ -462,15 +540,18 @@ def tree(
 
     links = db.scalars(
         select(models.Relationship).where(
-            models.Relationship.from_person_id.in_(level_map.keys()),
-            models.Relationship.to_person_id.in_(level_map.keys()),
+            models.Relationship.from_person_id.in_(shown),
+            models.Relationship.to_person_id.in_(shown),
         )
     ).all()
 
+    me = access.my_person(db, principal.user_id)
     return {
-        "root": person_id,
+        "root": person.id,
         "depth": depth,
-        "truncated": len(level_map) >= 1 and depth < 6,
+        "me": me.id if me else None,
+        "family_size": len(family.people),
+        "truncated": any(node["more"] for node in nodes),
         "nodes": nodes,
         "edges": [
             {"id": e.id, "from": e.from_person_id, "to": e.to_person_id, "kind": e.kind, "status": e.status}
@@ -487,11 +568,15 @@ def how_related(
     db: OrmSession = Depends(get_db),
 ):
     """"How are we related?" — the derived label plus the actual path."""
-    _person_or_404(db, from_person)
-    _person_or_404(db, to_person)
-    _require_can_read(db, principal, from_person)
-    _require_can_read(db, principal, to_person)
-    edges = graph.load_edges(db)
+    access.person_or_404(db, from_person)
+    access.person_or_404(db, to_person)
+    family = access.load_family(db, principal.user_id, from_person)
+    access.require_can_read(db, principal, family)
+    if to_person not in family.people:
+        # Not in the same family. The other person still has to be one the caller may see.
+        access.require_can_read(db, principal, access.load_family(db, principal.user_id, to_person))
+        return {"related": False, "relation": "no known relation", "path": []}
+    edges = family.edges
 
     path = graph.shortest_path(edges, from_person, to_person)
     if path is None:
@@ -557,14 +642,17 @@ async def confirm_person(
     For a deceased person the blueprint requires three *closely related* members;
     a confirmation from a distant relative is recorded but does not count toward
     the threshold, which is what stops a ring of strangers from verifying
-    fabricated ancestors.
+    fabricated ancestors. Only someone in the same family can confirm or dispute:
+    a member with a tree of their own cannot reach into another.
     """
-    person = _person_or_404(db, person_id)
-    me = _my_person(db, principal.user_id)
+    person = access.person_or_404(db, person_id)
+    family = access.load_family(db, principal.user_id, person_id)
+    access.require_belongs(family)
+    me = access.my_person(db, principal.user_id)
     if me is None:
         raise HTTPException(status_code=400, detail="Add yourself to the tree before confirming others")
 
-    edges = graph.load_edges(db)
+    edges = family.edges
     score = graph.closeness(edges, me.id, person_id)
     counts_toward_threshold = score <= CLOSE_ENOUGH
 
@@ -612,7 +700,7 @@ async def confirm_person(
             models.Confirmation.decision == "confirm",
         )
     ).all():
-        confirmer = _my_person(db, confirmation.member_id)
+        confirmer = access.my_person(db, confirmation.member_id)
         if confirmer is not None and graph.closeness(edges, confirmer.id, person_id) <= CLOSE_ENOUGH:
             close_confirmations += 1
 
@@ -634,8 +722,15 @@ async def confirm_person(
 
 @app.get("/family/disputes", tags=["verification"])
 def list_disputes(principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """Open disputes about people in your families, and the ones you raised."""
+    visible = _visible_ids(db, principal.user_id)
     rows = db.scalars(
-        select(models.Dispute).where(models.Dispute.status == "open").order_by(models.Dispute.created_at.desc())
+        select(models.Dispute)
+        .where(
+            models.Dispute.status == "open",
+            or_(models.Dispute.target_id.in_(visible), models.Dispute.raised_by == principal.user_id),
+        )
+        .order_by(models.Dispute.created_at.desc())
     ).all()
     return {
         "items": [
@@ -658,6 +753,9 @@ def list_disputes(principal: CurrentUser, db: OrmSession = Depends(get_db)):
 
 @app.post("/family/heritage", status_code=201, tags=["heritage"])
 def add_heritage(payload: HeritageIn, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    if payload.person_id:
+        access.person_or_404(db, payload.person_id)
+        access.require_belongs(access.load_family(db, principal.user_id, payload.person_id))
     item = models.HeritageItem(
         id=new_id("her"),
         uploaded_by=principal.user_id,
@@ -675,10 +773,20 @@ def add_heritage(payload: HeritageIn, principal: CurrentUser, db: OrmSession = D
 
 
 @app.get("/family/heritage", tags=["heritage"])
-def list_heritage(person_id: str | None = None, limit: int = 50, db: OrmSession = Depends(get_db)):
+def list_heritage(
+    principal: CurrentUser,
+    person_id: str | None = None,
+    limit: int = 50,
+    db: OrmSession = Depends(get_db),
+):
     stmt = select(models.HeritageItem).order_by(models.HeritageItem.created_at.desc())
     if person_id:
+        access.person_or_404(db, person_id)
+        access.require_can_read(db, principal, access.load_family(db, principal.user_id, person_id))
         stmt = stmt.where(models.HeritageItem.person_id == person_id)
+    else:
+        # With no person named, only what the caller uploaded themselves.
+        stmt = stmt.where(models.HeritageItem.uploaded_by == principal.user_id)
     rows = db.scalars(stmt.limit(min(limit, 200))).all()
     return {
         "items": [
@@ -697,8 +805,9 @@ def list_heritage(person_id: str | None = None, limit: int = 50, db: OrmSession 
 
 
 @app.get("/family/timeline/{person_id}", tags=["heritage"])
-def timeline(person_id: str, db: OrmSession = Depends(get_db)):
-    person = _person_or_404(db, person_id)
+def timeline(person_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    person = access.person_or_404(db, person_id)
+    access.require_can_read(db, principal, access.load_family(db, principal.user_id, person_id))
     entries = []
     if person.birth_date:
         entries.append({"date": person.birth_date, "kind": "birth", "label": f"Born in {person.birth_place or 'unknown place'}"})
