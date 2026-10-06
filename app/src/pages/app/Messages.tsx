@@ -1734,13 +1734,13 @@ export default function Messages() {
                         {!mine && active.kind === 'group' && !burst && (
                           <span className="mb-0.5 ms-9 text-xs text-text-low">{sender?.display_name ?? 'Member'}</span>
                         )}
-                        <div className="flex max-w-full items-end gap-2">
+                        <div className={cn('flex w-full items-end gap-2', mine ? 'justify-end' : 'justify-start')}>
                         {!mine && (
                           <span className="w-7 shrink-0" aria-hidden={burstNext ? 'true' : undefined}>
                             {!burstNext && <PresenceAvatar profile={sender} size={28} />}
                           </span>
                         )}
-                        <div className="group/bubble relative flex max-w-[75%] items-stretch">
+                        <div className="group/bubble relative flex min-w-0 max-w-[min(75%,34rem)] items-stretch">
                         {/* Beside the bubble, out of the flow: they must not widen it or push the reactions off its edge. */}
                         <div className={cn('absolute inset-y-0 flex items-center', mine ? 'end-full' : 'start-full')}>
                           <ReplyButton
