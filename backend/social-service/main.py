@@ -466,6 +466,109 @@ def _author_ids(db: OrmSession, posts: list[models.Post]) -> set[str]:
     return ids
 
 
+def _with_actors(item: dict, actors: dict[str, dict]) -> dict:
+    """Attach "people you follow who were here" to a post on its way out.
+
+    Read from the post the card actually shows: on a repost that is the
+    original, which is where the reactions and comments live.
+    """
+    source = item.get("repost_of") or item
+    found = actors.get(source.get("id") or "")
+    if found:
+        item["known_actors"] = found
+    return item
+
+
+def _known_actors(
+    db: OrmSession,
+    viewer: str | None,
+    following: set[str] | frozenset[str],
+    posts: list[models.Post],
+    per_post: int = 3,
+) -> dict[str, dict]:
+    """People this viewer follows who have reacted to or commented on each post.
+
+    "Three people liked this" is noise; "Ama and two others liked this" is a
+    reason to look. So only people the viewer actually follows are named, and
+    the rest are a count.
+
+    One query for reactions and one for comments across the whole page, rather
+    than two per post: a feed of twenty was forty round trips the moment this
+    was written per-card.
+
+    Returns {post_id: {"people": [{id, name, avatar, action}], "others": n}}.
+    `others` counts everybody else who acted, so a post can say "Ama and 40
+    others" without naming forty strangers.
+    """
+    if not posts:
+        return {}
+    ids = [p.id for p in posts] + [p.repost_of for p in posts if p.repost_of]
+    ids = list(dict.fromkeys(i for i in ids if i))
+    if not ids:
+        return {}
+
+    # Totals first, for everyone - the "and N others" part does not depend on
+    # who the viewer knows.
+    totals: dict[str, set[str]] = {}
+    for post_id, user_id in db.execute(
+        select(models.Reaction.post_id, models.Reaction.user_id)
+        .where(models.Reaction.post_id.in_(ids))
+    ).all():
+        totals.setdefault(post_id, set()).add(user_id)
+    for post_id, user_id in db.execute(
+        select(models.Comment.post_id, models.Comment.author_id)
+        .where(models.Comment.post_id.in_(ids), models.Comment.status == "published")
+    ).all():
+        totals.setdefault(post_id, set()).add(user_id)
+
+    known = set(following)
+    named: dict[str, list[tuple[str, str]]] = {}
+    if known:
+        for post_id, user_id in db.execute(
+            select(models.Reaction.post_id, models.Reaction.user_id)
+            .where(models.Reaction.post_id.in_(ids), models.Reaction.user_id.in_(known))
+            .order_by(models.Reaction.created_at.desc())
+        ).all():
+            bucket = named.setdefault(post_id, [])
+            if len(bucket) < per_post and user_id not in [u for u, _ in bucket]:
+                bucket.append((user_id, "reacted"))
+        for post_id, user_id in db.execute(
+            select(models.Comment.post_id, models.Comment.author_id)
+            .where(
+                models.Comment.post_id.in_(ids),
+                models.Comment.author_id.in_(known),
+                models.Comment.status == "published",
+            )
+            .order_by(models.Comment.created_at.desc())
+        ).all():
+            bucket = named.setdefault(post_id, [])
+            if len(bucket) < per_post and user_id not in [u for u, _ in bucket]:
+                bucket.append((user_id, "commented"))
+
+    profiles = _resolve_authors({u for bucket in named.values() for u, _ in bucket})
+    out: dict[str, dict] = {}
+    for post_id in ids:
+        bucket = named.get(post_id, [])
+        everyone = totals.get(post_id, set())
+        # The viewer's own action is not news to them.
+        everyone = {u for u in everyone if u != viewer}
+        if not bucket and not everyone:
+            continue
+        people = []
+        for user_id, action in bucket:
+            profile = profiles.get(user_id)
+            people.append({
+                "id": user_id,
+                "name": (profile or {}).get("display_name") or (profile or {}).get("handle") or "Someone",
+                "handle": (profile or {}).get("handle"),
+                "avatar_url": (profile or {}).get("avatar_url"),
+                "action": action,
+            })
+        named_ids = {u for u, _ in bucket}
+        out[post_id] = {"people": people, "others": max(0, len(everyone - named_ids))}
+    return out
+
+
 def _reposted_by(db: OrmSession, viewer: str | None, posts: list[models.Post]) -> set[str]:
     """Which of these posts the viewer has already reposted — in one query.
 
@@ -1885,26 +1988,48 @@ def feed(
                     "empty_reason": "not_following_anyone"}
         authors = _resolve_authors(_author_ids(db, list(rows)))
         reposted = _reposted_by(db, viewer, list(rows))
+        actors = _known_actors(db, viewer, following, list(rows))
         return {
             "mode": mode,
             "algorithm": "chronological",
             "ranked": False,
             "age_tier": agefilter.tier_of(age),
             "degraded": age.degraded,
-            "items": [_apply_prefs(_post_out(p, db, viewer=viewer, authors=authors, reposted=reposted), prefs) for p in rows],
+            # A full page means there is probably another; the next request
+            # settles it by coming back empty. Cheaper than counting the table
+            # on every scroll.
+            "has_more": len(rows) == limit,
+            "items": [
+                _with_actors(
+                    _apply_prefs(_post_out(p, db, viewer=viewer, authors=authors, reposted=reposted), prefs),
+                    actors,
+                )
+                for p in rows
+            ],
         }
 
     if mode == "new":
         rows = db.scalars(stmt.order_by(models.Post.created_at.desc()).limit(limit).offset(offset)).all()
         authors = _resolve_authors(_author_ids(db, list(rows)))
         reposted = _reposted_by(db, viewer, list(rows))
+        actors = _known_actors(db, viewer, following, list(rows))
         return {
             "mode": mode,
             "algorithm": "chronological",
             "ranked": False,
             "age_tier": agefilter.tier_of(age),
             "degraded": age.degraded,
-            "items": [_apply_prefs(_post_out(p, db, viewer=viewer, authors=authors, reposted=reposted), prefs) for p in rows],
+            # A full page means there is probably another; the next request
+            # settles it by coming back empty. Cheaper than counting the table
+            # on every scroll.
+            "has_more": len(rows) == limit,
+            "items": [
+                _with_actors(
+                    _apply_prefs(_post_out(p, db, viewer=viewer, authors=authors, reposted=reposted), prefs),
+                    actors,
+                )
+                for p in rows
+            ],
         }
 
     if mode == "local" and city:
@@ -1940,6 +2065,7 @@ def feed(
     page = scored[offset : offset + limit]
     ranked_authors = _resolve_authors(_author_ids(db, [item.post for item in page]))
     reposted = _reposted_by(db, viewer, [item.post for item in page])
+    actors = _known_actors(db, viewer, following, [item.post for item in page])
 
     return {
         "mode": mode,
@@ -1955,9 +2081,15 @@ def feed(
             "data_saver": bool(prefs.get("data_saver")),
             "degraded": bool(prefs.get("degraded")) or age.degraded,
         },
+        # Exact here: the whole candidate pool was scored, so we know.
+        "has_more": offset + limit < len(scored),
         "items": [
-            _apply_prefs(
-                _post_out(item.post, db, why=item.why(), viewer=viewer, authors=ranked_authors, reposted=reposted), prefs
+            _with_actors(
+                _apply_prefs(
+                    _post_out(item.post, db, why=item.why(), viewer=viewer, authors=ranked_authors, reposted=reposted),
+                    prefs,
+                ),
+                actors,
             )
             for item in page
         ],

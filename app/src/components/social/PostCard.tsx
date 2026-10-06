@@ -25,7 +25,9 @@ import { postUrl, shareLink } from '@/lib/share'
 import { cn } from '@/lib/utils'
 import Comments from './Comments'
 import MemberAvatar from './MemberAvatar'
+import KnownActors from './KnownActors'
 import MediaLightbox from './MediaLightbox'
+import VideoPlayer from './VideoPlayer'
 import Reactions from './Reactions'
 import {
   Dialog,
@@ -180,6 +182,8 @@ export default function PostCard({
   currentUserId,
   onHidden,
   onChangeAlgorithm,
+  commentsAlwaysOpen = false,
+  onOpen,
 }: {
   post: Post
   algorithmId: string
@@ -189,12 +193,19 @@ export default function PostCard({
   currentUserId: string
   onHidden: (postId: string) => void
   onChangeAlgorithm: () => void
+  /** In the post dialog the comments are the point: open, and no toggle. */
+  commentsAlwaysOpen?: boolean
+  /**
+   * Open this post in a dialog. Given by the feed; absent inside the dialog
+   * itself, where the card must not be able to open another copy of itself.
+   */
+  onOpen?: () => void
 }) {
   const { i18n } = useTranslation()
   const target = post.repost_of ?? post
   const [reactions, setReactions] = useState(target.reactions ?? { counts: {}, total: 0, mine: null })
   const [comments, setComments] = useState(target.comments_count)
-  const [showComments, setShowComments] = useState(false)
+  const [showComments, setShowComments] = useState(commentsAlwaysOpen)
   const [preview, setPreview] = useState<number | null>(null)
   // Reporting. Held open as a small inline panel rather than a modal: a report
   // is a judgement about the thing you are looking at, and a dialog that
@@ -483,10 +494,30 @@ export default function PostCard({
           dangerouslySetInnerHTML={{ __html: sanitizeHtml(body) }}
         />
       ) : (
-        <p className="mt-3 whitespace-pre-wrap text-[0.95rem] leading-relaxed text-text-hi">
+        /* The body opens the post. Not a <button>: the text contains links and
+           hashtags that must stay clickable in their own right, and nesting
+           interactive elements inside a button is invalid and unreadable to a
+           screen reader. A plain click handler leaves them alone, and the
+           header already offers a keyboard route to the same place. */
+        <p
+          onClick={(event) => {
+            if (!onOpen) return
+            // A click that landed on a link, a hashtag or a text selection is
+            // not a request to open the post.
+            if ((event.target as HTMLElement).closest('a,button')) return
+            if (window.getSelection()?.toString()) return
+            onOpen()
+          }}
+          className={cn(
+            'mt-3 whitespace-pre-wrap text-[0.95rem] leading-relaxed text-text-hi',
+            onOpen && 'cursor-pointer',
+          )}
+        >
           {withHashtags(body)}
         </p>
       )}
+
+      <KnownActors actors={target.known_actors} />
 
       {/* Attached media — one full-width, several in a grid, videos playable. */}
       {media.length > 0 && (
@@ -498,8 +529,10 @@ export default function PostCard({
         >
           {media.map((item, index) => (
             <li key={item.url ?? `deferred-${index}`} className="relative bg-ink">
-              {/* The whole tile opens the viewer; the video keeps its own
-                  controls, so only images get the button treatment. */}
+              {/* An image tile is one big button into the viewer. A video
+                  cannot be, or every tap on the scrubber would open the
+                  lightbox instead of seeking - it carries its own expand
+                  control into the same viewer. */}
               {item.url === null ? (
                 /* Data saver: the server never sent this URL, so nothing has
                    downloaded. The tap is what asks for it. */
@@ -517,16 +550,14 @@ export default function PostCard({
                   </span>
                 </button>
               ) : item.kind === 'video' ? (
-                <video
+                // Starts muted: a browser blocks unmuted autoplay anyway, and
+                // sound starting by itself in a feed is nobody's setting. The
+                // player stops it when it scrolls out of view.
+                <VideoPlayer
                   src={item.url}
-                  controls
-                  // Muted because a browser blocks unmuted autoplay anyway, and
-                  // sound starting by itself in a feed is nobody's setting.
-                  autoPlay={post.autoplay !== false}
-                  muted={post.autoplay !== false}
-                  preload={post.autoplay === false ? 'none' : 'metadata'}
-                  playsInline
-                  className="max-h-[420px] w-full bg-black object-contain"
+                  autoplay={post.autoplay !== false}
+                  onExpand={() => setPreview(index)}
+                  className="w-full"
                 />
               ) : (
                 <button
@@ -573,7 +604,7 @@ export default function PostCard({
 
         <button
           type="button"
-          onClick={() => setShowComments(true)}
+          onClick={() => (onOpen ? onOpen() : setShowComments(true))}
           className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-text-mid hover:text-text-hi"
         >
           <MessageCircle size={13} aria-hidden="true" />

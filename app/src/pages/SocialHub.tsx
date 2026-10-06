@@ -8,6 +8,7 @@ import Composer from '@/components/social/Composer'
 import FeedModeMenu from '@/components/social/FeedModeMenu'
 import Suggestions from '@/components/social/Suggestions'
 import PostCard from '@/components/social/PostCard'
+import PostDialog from '@/components/social/PostDialog'
 import { ApiError, kaluta, type Algorithm, type FeedMode, type FeedPage, type Post } from '@/lib/api'
 import { FEATURES } from '@/lib/features'
 import { slotAboveOrb } from '@/lib/floating'
@@ -126,6 +127,10 @@ export default function SocialHub() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const [feed, setFeed] = useState<FeedPage | null>(null)
+  // The post opened over the feed, and the paging state for scroll-to-load.
+  const [openPost, setOpenPost] = useState<Post | null>(null)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const observer = useRef<IntersectionObserver | null>(null)
   // Cards report themselves as seen from here rather than each card firing its
   // own request — one observer, one batched call.
   const feedRef = useRef<HTMLDivElement>(null)
@@ -237,6 +242,74 @@ export default function SocialHub() {
     )
   }
   if (!user) return <Navigate to="/join?mode=signin" replace />
+
+  /**
+   * The next page, appended.
+   *
+   * Guarded on `loadingMore` as well as `has_more` because the sentinel can
+   * cross the viewport several times in one flick, and without the guard a
+   * fast scroll fires four identical requests and shows each page twice.
+   *
+   * Posts are deduplicated on the way in: a ranked feed re-scores a moving
+   * candidate pool, so the same post can legitimately appear in two pages, and
+   * React would then warn about duplicate keys and render it twice.
+   */
+  const loadMore = useCallback(async () => {
+    if (!feed || loadingMore || !feed.has_more) return
+    setLoadingMore(true)
+    try {
+      const page = await kaluta.feeds.page({
+        mode,
+        algorithm_id: algorithmId,
+        city: mode === 'local' ? city || undefined : undefined,
+        country: mode === 'country' ? country || undefined : undefined,
+        topic: mode === 'topics' ? topic || undefined : undefined,
+        offset: feed.items.length,
+      })
+      setFeed((current) => {
+        if (!current) return current
+        const seen = new Set(current.items.map((item) => item.id))
+        const fresh = page.items.filter((item) => !seen.has(item.id))
+        return { ...current, items: [...current.items, ...fresh], has_more: page.has_more }
+      })
+    } catch (err) {
+      // A failed page is not a failed feed: what is already on screen stays,
+      // and the next scroll tries again. Logged rather than swallowed - a
+      // silent catch here is how a broken "load more" looks exactly like a
+      // feed that has ended.
+      console.warn('could not load the next page of the feed', err)
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [feed, loadingMore, mode, algorithmId, city, country, topic])
+
+  /**
+   * Watch the end of the feed.
+   *
+   * A callback ref rather than an effect over a ref: the sentinel is rendered
+   * conditionally, so the moment it exists is not the moment any dependency
+   * list changes. Keyed on `loadMore` so the observer always closes over the
+   * current page offset.
+   *
+   * rootMargin starts the fetch before the member reaches the end, so the next
+   * page is usually already there when they get to it.
+   */
+  const watchEnd = useCallback(
+    (node: HTMLDivElement | null) => {
+      observer.current?.disconnect()
+      if (!node) return
+      observer.current = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) void loadMore()
+        },
+        { rootMargin: '600px' },
+      )
+      observer.current.observe(node)
+    },
+    [loadMore],
+  )
+
+  useEffect(() => () => observer.current?.disconnect(), [])
 
   const prepend = (post: Post) => setFeed((f) => (f ? { ...f, items: [post, ...f.items] } : f))
   const drop = (postId: string) =>
@@ -487,17 +560,45 @@ export default function SocialHub() {
                   key={post.id}
                   post={post}
                   algorithmId={feed.algorithm}
-                mode={feed.mode}
+                  mode={feed.mode}
                   isOwn={post.author_id === user.id}
                   currentUserId={user.id}
                   onHidden={drop}
+                  onOpen={() => setOpenPost(post)}
                   onChangeAlgorithm={() =>
                     document.getElementById('algorithm-picker')?.focus({ preventScroll: false })
                   }
                 />
               ))}
+
+            {/* What the observer watches. Rendered only while there is more,
+                so reaching the real end stops the requests rather than leaving
+                a sentinel sitting at the bottom firing forever. */}
+            {!loading && feed?.has_more && (
+              <div ref={watchEnd} className="py-6 text-center" aria-hidden="true">
+                {loadingMore && (
+                  <span className="inline-flex items-center gap-2 text-sm text-text-low" role="status">
+                    <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                    Loading more…
+                  </span>
+                )}
+              </div>
+            )}
+
+            {!loading && feed && !feed.has_more && feed.items.length > 0 && (
+              <p className="py-6 text-center text-xs text-text-low">You are all caught up.</p>
+            )}
           </div>
       </div>
+
+      {openPost && (
+        <PostDialog
+          post={openPost}
+          currentUserId={user.id}
+          onClose={() => setOpenPost(null)}
+          onHidden={drop}
+        />
+      )}
 
       {/* Compose stays one tap away once the card has scrolled off. */}
       {scrolled && (

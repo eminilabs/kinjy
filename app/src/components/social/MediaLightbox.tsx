@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import type { PostMedia } from '@/lib/api'
+import VideoPlayer from './VideoPlayer'
 
 /**
  * Full-size preview for a post's media.
@@ -95,7 +96,16 @@ export default function MediaLightbox({
       {/* Stop the backdrop's close handler from firing on the media itself. */}
       <div className="max-h-[92svh] max-w-[92vw]" onClick={(e) => e.stopPropagation()}>
         {item.kind === 'video' ? (
-          <video src={item.url ?? undefined} controls autoPlay className="max-h-[92svh] max-w-[92vw]" />
+          // The same player as in the feed, so the controls do not change shape
+          // between the card and the full-size view. Unmuted here: opening a
+          // video full-size is asking to watch it.
+          <VideoPlayer
+            src={item.url ?? ''}
+            autoplay
+            startMuted={false}
+            fill
+            className="max-w-[92vw] rounded-lg"
+          />
         ) : (
           <img
             src={item.url ?? undefined}

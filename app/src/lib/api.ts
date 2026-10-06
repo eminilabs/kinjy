@@ -437,6 +437,8 @@ export interface Post {
   episode_number: number | null
   likes_count: number
   comments_count: number
+  /** People the viewer follows who reacted or commented, plus a count of the rest. */
+  known_actors?: KnownActors | null
   reposts_count: number
   views_count?: number
   /** The shared post, when this card is a repost. */
@@ -468,6 +470,8 @@ export interface FeedPage {
    * a minor and may be missing posts. Temporary; worth saying so on screen.
    */
   degraded?: boolean
+  /** Whether asking for the next page is worth it. Absent on an older server. */
+  has_more?: boolean
   items: Post[]
 }
 
@@ -496,6 +500,18 @@ export interface UploadedMedia {
   provenance_signed: boolean
   alt_text?: string | null
   deduplicated?: boolean
+}
+
+export interface KnownActors {
+  people: Array<{
+    id: string
+    name: string
+    handle: string | null
+    avatar_url: string | null
+    action: 'reacted' | 'commented'
+  }>
+  /** Everyone else who acted, so a post can say "and 40 others" without naming them. */
+  others: number
 }
 
 export interface NewPost {
@@ -1297,7 +1313,15 @@ export const kaluta = {
     algorithms: () => api.get<{ items: Algorithm[] }>('/algorithms', { auth: false }),
 
     page: (
-      params: { mode: string; algorithm_id?: string; city?: string; country?: string; topic?: string; limit?: number },
+      params: {
+        mode: string
+        algorithm_id?: string
+        city?: string
+        country?: string
+        topic?: string
+        limit?: number
+        offset?: number
+      },
       options: { signal?: AbortSignal } = {},
     ) => {
       const query = new URLSearchParams({ mode: params.mode })
@@ -1306,6 +1330,7 @@ export const kaluta = {
       if (params.country) query.set('country', params.country)
       if (params.topic) query.set('topic', params.topic)
       query.set('limit', String(params.limit ?? 20))
+      if (params.offset) query.set('offset', String(params.offset))
       return api.get<FeedPage>(`/feed?${query}`, { signal: options.signal })
     },
 
