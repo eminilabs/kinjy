@@ -118,6 +118,26 @@ class Reply(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
+class ReplyVote(Base):
+    """One member's upvote on one reply.
+
+    `Reply.upvotes` is only a cached count. The votes live here so a member can
+    vote once, take the vote back, and so the count can always be rebuilt from
+    what actually happened instead of trusting an increment.
+    """
+
+    __tablename__ = "reply_votes"
+    __table_args__ = (
+        UniqueConstraint("reply_id", "user_id", name="uq_reply_vote"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("rvt"))
+    reply_id: Mapped[str] = mapped_column(String(40), index=True)
+    user_id: Mapped[str] = mapped_column(String(40), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
 class KnowledgeEntry(Base):
     """Forum-to-Knowledge transformation (blueprint §18).
 

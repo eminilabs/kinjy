@@ -693,26 +693,60 @@ export interface Forum {
   threads_count: number
 }
 
+export type ThreadSort = 'recent' | 'trending' | 'solved' | 'unanswered'
+
 export interface Thread {
   id: string
   title: string
   author_id: string
+  author?: PersonBrief | null
+  /** At least one reply has been accepted as the answer. */
+  solved?: boolean
   replies_count: number
   views_count: number
   pinned: boolean
   ai_summary: string | null
   last_activity_at: string
+  created_at?: string
+}
+
+export interface KnowledgeEntry {
+  id: string
+  /** `community`: an answer the asker accepted and members upvoted. `curated`: written down by a reviewer. */
+  origin: 'community' | 'curated'
+  question: string
+  answer: string
+  lang: string
+  confidence: number | null
+  votes: number
+  /** The threads this came from. */
+  sources: string[]
+  reviewed: boolean
 }
 
 export interface ThreadDetail {
   id: string
+  forum_id: string
   title: string
   body: string
   author_id: string
+  author?: PersonBrief | null
   lang: string
   ai_summary: string | null
   locked: boolean
-  replies: Array<{ id: string; author_id: string; body: string; upvotes: number; created_at: string }>
+  created_at?: string
+  replies: Array<{
+    id: string
+    author_id: string
+    author?: PersonBrief | null
+    parent_id?: string | null
+    body: string
+    upvotes: number
+    /** Whether the signed-in viewer has upvoted this reply. */
+    voted_by_me?: boolean
+    accepted_answer?: boolean
+    created_at: string
+  }>
 }
 
 export interface PersonBrief {
@@ -1648,11 +1682,23 @@ export const kaluta = {
     },
     create: (input: { name: string; description?: string; hierarchy?: string; scope?: string; scope_value?: string }) =>
       api.post<{ id: string; slug: string }>('/forums', { hierarchy: 'topic', ...input }),
-    threads: (forumId: string) => api.get<{ items: Thread[] }>(`/forums/${forumId}/threads`, { auth: false }),
+    threads: (forumId: string, sort: ThreadSort = 'recent') =>
+      api.get<{ items: Thread[] }>(`/forums/${forumId}/threads?sort=${sort}`, { auth: false }),
     createThread: (forumId: string, input: { title: string; body: string; lang?: string }) =>
       api.post<{ id: string }>(`/forums/${forumId}/threads`, input),
     thread: (threadId: string) => api.get<ThreadDetail>(`/threads/${threadId}`, { auth: false }),
     reply: (threadId: string, body: string) => api.post<{ id: string }>(`/threads/${threadId}/replies`, { body }),
+    /** What a forum has settled, with the discussions it came from. */
+    knowledge: (forumId: string, q = '') =>
+      api.get<{ items: KnowledgeEntry[] }>(
+        `/forums/${forumId}/knowledge${q ? `?q=${encodeURIComponent(q)}` : ''}`,
+        { auth: false },
+      ),
+    /** Upvote a reply, or take the vote back. One vote each, never on your own reply. */
+    upvote: (replyId: string) => api.post<{ upvotes: number; voted: boolean }>(`/replies/${replyId}/upvote`),
+    /** Mark a reply as the answer. Only the author of the thread can. */
+    acceptAnswer: (replyId: string) =>
+      api.post<{ accepted: boolean; reply_id: string }>(`/replies/${replyId}/accept`),
   },
 
   messages: {
