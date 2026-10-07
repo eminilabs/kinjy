@@ -101,11 +101,16 @@ export default function MediaGrid({
         style={
           ratio
             ? {
-                // width is set explicitly, not left to auto. A block with
+                // Width is set explicitly, not left to auto: a block with
                 // aspect-ratio *and* max-height shrinks itself sideways to keep
-                // the ratio once the cap bites, so a square picture came out
+                // the ratio once the cap bites, and a square picture came out
                 // 560 wide in an 814 column with dead card either side of it.
-                width: '100%',
+                //
+                // The +2.5rem is the -mx-5 above. A plain 100% resolves against
+                // the card's *content* box, so it cancelled the right half of
+                // the bleed: the picture sat flush to the left edge and stopped
+                // 40px short of the right one.
+                width: 'calc(100% + 2.5rem)',
                 aspectRatio: String(ratio),
                 maxHeight: MAX_MEDIA_HEIGHT,
               }
