@@ -182,9 +182,9 @@ export default function SignIn() {
       className={`kl kl-plain ${theme === 'dark' ? 'force-dark' : 'force-light'} min-h-screen bg-[var(--kl-bg)] text-[var(--kl-ink)]`}
       data-kl-theme={theme}
     >
-      <div className="grid min-h-screen grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-        {/* Left: the form */}
-        <main className="flex min-w-0 flex-col px-[clamp(20px,5vw,72px)] py-6">
+      <div className="grid min-h-screen grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+        {/* Right: the form */}
+        <main className="flex min-w-0 flex-col lg:order-2 px-[clamp(20px,5vw,72px)] py-6">
           <div className="flex items-center justify-between">
             <Link to="/" aria-label="Kinjy home">
               <Brand size={40} text={22} />
@@ -361,10 +361,10 @@ export default function SignIn() {
           </div>
         </main>
 
-        {/* Right: the landing, as a showcase */}
+        {/* Left: the landing, as a showcase */}
         <aside
           aria-label="About Kinjy"
-          className="relative hidden min-w-0 overflow-hidden lg:block"
+          className="relative hidden min-w-0 overflow-hidden lg:order-1 lg:block"
           style={{ background: 'linear-gradient(160deg, var(--kl-stage-a), var(--kl-stage-b))' }}
         >
           <div aria-hidden="true" className="absolute -right-24 -top-24 h-[420px] w-[420px] rounded-full opacity-35 blur-[110px]" style={{ background: 'var(--kl-sky)' }} />
