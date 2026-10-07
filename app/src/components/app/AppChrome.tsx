@@ -80,7 +80,8 @@ export function AppTopBar() {
   const me = useMyProfile()
 
   return (
-    <div className={cn('flex h-[64px] items-center gap-3 border-x-0 border-t-0 border-b px-4', tok.card)}>
+    <div className={cn('border-x-0 border-t-0 border-b', tok.card)}>
+    <div className="mx-auto flex h-[64px] w-full max-w-[1320px] items-center gap-3 px-4 md:h-[72px] md:gap-6 md:px-6">
       {/* The marketing navbar is hidden inside the app, so the logo is the way
           back out to the public site — the same choice the /app design makes. */}
       <Link
@@ -88,8 +89,8 @@ export function AppTopBar() {
         className="flex shrink-0 items-center gap-2"
         aria-label="Back to the Kinjy site"
       >
-        <img src="/logo.svg" alt="" className="h-7 w-7" />
-        <span className={cn('hidden font-display text-base font-medium lg:block', tok.text)}>Kinjy</span>
+        <img src="/logo.svg" alt="" className="h-8 w-8" />
+        <span className={cn('hidden font-display text-[22px] font-bold lg:block', tok.text)}>Kinjy</span>
       </Link>
 
       <form onSubmit={submitSearch} className="mx-1 min-w-0 flex-1">
@@ -144,7 +145,7 @@ export function AppTopBar() {
 
       {/* display mode — the signature control */}
       <div
-        className={cn('hidden items-center rounded-full p-0.5 md:flex', tok.input)}
+        className={cn('hidden items-center gap-0.5 rounded-full p-[3px] md:flex', tok.input)}
         role="radiogroup"
         aria-label="Display mode"
       >
@@ -161,7 +162,7 @@ export function AppTopBar() {
               onClick={() => setMode(m)}
               className={cn(
                 'flex h-7 w-7 items-center justify-center rounded-full',
-                active ? 'bg-gradient-to-br from-gold-soft to-gold text-ink' : cn(tok.low, tok.hoverBg),
+                active ? 'bg-gold/20 text-gold-soft' : cn(tok.low, tok.hoverBg),
               )}
             >
               <Icon size={13} />
@@ -175,6 +176,7 @@ export function AppTopBar() {
       <Link to="/dashboard" aria-label="Your profile" className="shrink-0 rounded-full">
         <MemberAvatar displayName={user?.display_name} avatarUrl={me?.avatar_url} size={36} ring />
       </Link>
+    </div>
     </div>
   )
 }
@@ -233,7 +235,7 @@ export function AppChipBar({ pathname, search }: { pathname: string; search: str
 
   return (
     <div className={cn('relative border-x-0 border-t-0 border-b', tok.card)}>
-      <div className="flex items-center gap-1.5 px-3 py-2">
+      <div className="mx-auto flex h-[56px] w-full max-w-[1320px] items-center gap-2 px-4 md:h-[60px] md:px-6">
         <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {onBar.map((m) => {
               const isActive = active === m.key
@@ -244,10 +246,10 @@ export function AppChipBar({ pathname, search }: { pathname: string; search: str
                     aria-current={isActive ? 'page' : undefined}
                     aria-label={unreadLabel(m.key, m.label)}
                     className={cn(
-                      'flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-[0.8rem] font-semibold',
+                      'flex h-9 items-center gap-2 whitespace-nowrap rounded-full px-4 text-[0.8rem] font-bold transition-colors',
                       isActive
-                        ? 'bg-gradient-to-br from-gold-soft to-gold text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]'
-                        : cn(tok.mid, tok.hoverBg, tok.subtleBg),
+                        ? 'bg-gradient-to-br from-gold-soft to-gold text-ink shadow-[0_6px_14px_-6px_rgba(166,120,57,0.5)]'
+                        : cn(tok.mid, tok.hoverBg),
                     )}
                   >
                     <m.Icon size={13} aria-hidden="true" />
@@ -264,8 +266,8 @@ export function AppChipBar({ pathname, search }: { pathname: string; search: str
           onClick={() => setDrawerOpen((v) => !v)}
           aria-expanded={drawerOpen}
           className={cn(
-            'flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.8rem] font-semibold',
-            drawerOpen ? 'bg-gold/15 text-gold-soft' : cn(tok.mid, tok.hoverBg, tok.subtleBg),
+            'flex h-9 shrink-0 items-center gap-2 rounded-full border border-current/15 px-4 text-[0.8rem] font-semibold',
+            drawerOpen ? 'bg-gold/15 text-gold-soft' : cn(tok.mid, tok.hoverBg),
           )}
         >
           <LayoutGrid size={13} aria-hidden="true" />

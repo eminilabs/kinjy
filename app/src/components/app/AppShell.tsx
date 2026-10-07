@@ -32,6 +32,7 @@ export default function AppShell({
   subtitle,
   action,
   aside,
+  rail = true,
   children,
 }: {
   /**
@@ -44,10 +45,12 @@ export default function AppShell({
   action?: ReactNode
   /** Right-hand context rail. Omitted on pages that don't need one. */
   aside?: ReactNode
+  /** The left rail (profile, pinned modules, circles). A page that is a workspace of its own turns it off. */
+  rail?: boolean
   children: ReactNode
 }) {
   const { user, loading } = useAuth()
-  const { tok, frameStyle, rtl } = useAppTheme()
+  const { tok, frameStyle, rtl, resolved } = useAppTheme()
   const location = useLocation()
   const unread = useUnreadMessages()
 
@@ -71,7 +74,15 @@ export default function AppShell({
   // the steps up. The marketing sections have always used it; the app frame —
   // the largest gradient in the product — never did.
   return (
-    <div className="app-shell relative min-h-[100dvh] noise-overlay" style={frameStyle} dir={rtl ? 'rtl' : 'ltr'}>
+    <div
+      className="app-shell relative min-h-[100dvh] noise-overlay"
+      style={
+        resolved === 'light'
+          ? { background: 'radial-gradient(circle at 70% -20%, #fff 0, #f8f5ef 48%, #f3efe7 100%)' }
+          : frameStyle
+      }
+      dir={rtl ? 'rtl' : 'ltr'}
+    >
       {/* Chrome: the app owns the top of the page here — the marketing navbar
           is suppressed on these routes, so this sticks to 0 rather than 72. */}
       <div className="sticky top-0 z-30">
@@ -82,18 +93,22 @@ export default function AppShell({
 
       <div
         className={cn(
-          'mx-auto grid max-w-container gap-4 px-3 pb-24 pt-4 md:px-4 lg:pb-8',
-          aside
-            ? 'lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_290px]'
-            : 'lg:grid-cols-[220px_minmax(0,1fr)]',
+          'mx-auto grid w-full max-w-[1320px] gap-[26px] px-4 pb-24 pt-6 md:px-6 lg:pb-16 lg:pt-9',
+          !rail
+            ? 'lg:grid-cols-[minmax(0,1fr)]'
+            : aside
+              ? 'lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_300px]'
+              : 'lg:grid-cols-[220px_minmax(0,1fr)]',
         )}
       >
         {/* Left rail — identity and shortcuts */}
-        <div className="hidden lg:block">
-          <div className="sticky top-[140px]">
-            <ProfileCard />
+        {rail && (
+          <div className="hidden lg:block">
+            <div className="sticky top-[156px]">
+              <ProfileCard />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Centre column */}
         <main className="min-w-0">
@@ -118,7 +133,7 @@ export default function AppShell({
         {/* Right rail */}
         {aside && (
           <aside className="hidden xl:block">
-            <div className="sticky top-[140px] space-y-3">{aside}</div>
+            <div className="sticky top-[156px] space-y-3">{aside}</div>
           </aside>
         )}
       </div>
@@ -146,7 +161,9 @@ export default function AppShell({
                   <span
                     className={cn(
                       'relative flex h-9 w-9 items-center justify-center rounded-full',
-                      'primary' in item && item.primary && 'bg-gradient-to-br from-gold-soft to-gold',
+                      'primary' in item &&
+                        item.primary &&
+                        '-mt-6 h-12 w-12 border-[5px] border-[#f7f4ee] bg-gradient-to-br from-gold-soft to-gold shadow-[0_6px_16px_-4px_rgba(170,124,60,0.45)]',
                     )}
                   >
                     <item.icon size={18} aria-hidden="true" />

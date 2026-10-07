@@ -144,7 +144,7 @@ export default function EmojiStickerButton({
         aria-haspopup="dialog"
         aria-expanded={Boolean(anchor)}
         title="Emojis and stickers"
-        className="shrink-0 rounded-full border border-white/12 p-2.5 text-text-mid hover:border-gold/40 hover:text-gold-soft"
+        className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-text-mid hover:bg-text-hi/[0.07] hover:text-gold-soft"
       >
         <Smile size={15} aria-hidden="true" />
       </button>

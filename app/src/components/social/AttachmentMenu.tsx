@@ -122,8 +122,8 @@ export default function AttachmentMenu({ onFiles }: { onFiles: (files: FileList 
         aria-controls={open ? menuId : undefined}
         title="Photos, videos, audio, documents — any file up to 200 MB"
         className={cn(
-          'rounded-full border p-2.5 hover:border-gold/40 hover:text-gold-soft',
-          open ? 'border-gold/40 text-gold-soft' : 'border-white/12 text-text-mid',
+          'grid h-10 w-10 place-items-center rounded-full hover:bg-text-hi/[0.07] hover:text-gold-soft',
+          open ? 'bg-text-hi/[0.07] text-gold-soft' : 'text-text-mid',
         )}
       >
         <Paperclip size={15} aria-hidden="true" />

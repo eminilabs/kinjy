@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, ChevronDown, RefreshCw } from 'lucide-react'
+import { Check, ChevronDown } from 'lucide-react'
 import { useAppTheme } from '@/components/appdemo/theme'
 import type { FeedMode } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -15,14 +15,10 @@ export default function FeedModeMenu({
   modes,
   active,
   onSelect,
-  onRefresh,
-  loading,
 }: {
   modes: FeedMode[]
   active: string
   onSelect: (id: string) => void
-  onRefresh: () => void
-  loading: boolean
 }) {
   const { tok } = useAppTheme()
   const [open, setOpen] = useState(false)
@@ -45,7 +41,7 @@ export default function FeedModeMenu({
   const current = modes.find((m) => m.id === active)
 
   return (
-    <div className="mb-3 flex items-center gap-2">
+    <div className="flex items-center gap-2">
       <div ref={boxRef} className="relative">
         <button
           type="button"
@@ -58,15 +54,15 @@ export default function FeedModeMenu({
           aria-label={`${current?.label ?? 'Feed'} — choose a feed (${modes.length} available)`}
           title={`Choose a feed (${modes.length} available)`}
           className={cn(
-            'flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-semibold',
-            tok.subtleBg,
+            'flex items-center gap-2.5 rounded-full border px-4 py-2 text-[0.82rem] font-semibold',
+            tok.input,
             tok.text,
             tok.hoverBg,
           )}
         >
           {current?.label ?? 'Feed'}
           {current && !current.ranked && (
-            <span className="rounded-full bg-gold/15 px-1.5 py-0.5 text-[0.6rem] font-bold text-gold-soft">
+            <span className="rounded-md bg-gold/20 px-2 py-0.5 font-mono text-[0.68rem] font-bold text-gold-soft">
               chronological
             </span>
           )}
@@ -117,14 +113,6 @@ export default function FeedModeMenu({
           )}
       </div>
 
-      <button
-        type="button"
-        onClick={onRefresh}
-        aria-label="Refresh the feed"
-        className={cn('ms-auto rounded-full p-2', tok.mid, tok.hoverBg)}
-      >
-        <RefreshCw size={14} className={cn(loading && 'animate-spin')} aria-hidden="true" />
-      </button>
     </div>
   )
 }

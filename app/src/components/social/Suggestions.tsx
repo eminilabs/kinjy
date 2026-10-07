@@ -62,7 +62,7 @@ function People() {
 
   return (
     <RailCard title="People to follow">
-      <p className={cn('mb-4 -mt-2 text-xs', tok.low)}>
+      <p className={cn('mb-4 -mt-2 text-[0.8rem]', tok.mid)}>
         {REASON[suggestions.data?.reason ?? ''] ?? 'Suggested for you'}
       </p>
 
@@ -97,9 +97,9 @@ function People() {
                 disabled={busy === person.user_id || followed.has(person.user_id)}
                 title="Follow — one-way, no permission needed"
                 className={cn(
-                  'inline-flex items-center justify-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors',
+                  'inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors',
                   followed.has(person.user_id)
-                    ? cn('border-[var(--cloud-border)]', tok.low)
+                    ? 'border-transparent bg-gradient-to-br from-gold-soft to-gold'
                     : 'border-gold/50 text-gold-soft hover:bg-gold/10',
                 )}
               >
@@ -116,7 +116,7 @@ function People() {
                 disabled={busy === person.user_id || invited.has(person.user_id)}
                 title="Connect — they have to accept before you can message them"
                 className={cn(
-                  'inline-flex items-center justify-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors',
+                  'inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors',
                   invited.has(person.user_id)
                     ? cn('border-[var(--cloud-border)]', tok.low)
                     : 'border-sky/50 text-sky hover:bg-sky/10',
