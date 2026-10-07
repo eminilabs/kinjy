@@ -38,7 +38,7 @@ export default function SpokenLanguages({
                 key={code}
                 className={cn(
                   'inline-flex items-center gap-1 rounded-full py-1 pe-1.5 ps-3 text-xs font-semibold',
-                  index === 0 ? 'bg-gold/15 text-gold-soft ring-1 ring-gold/40' : 'bg-white/8 text-text-mid',
+                  index === 0 ? 'bg-gold/15 text-gold-soft ring-1 ring-gold/40' : 'bg-text-hi/10 text-text-mid',
                 )}
               >
                 {name}
@@ -47,7 +47,7 @@ export default function SpokenLanguages({
                   onClick={() => onChange(value.filter((c) => c !== code))}
                   disabled={disabled}
                   aria-label={`Remove ${name}`}
-                  className="rounded-full p-0.5 transition-colors hover:bg-white/10 disabled:opacity-40"
+                  className="rounded-full p-0.5 transition-colors hover:bg-text-hi/10 disabled:opacity-40"
                 >
                   <X size={12} aria-hidden="true" />
                 </button>
