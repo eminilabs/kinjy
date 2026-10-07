@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { AlertCircle, Fingerprint, Loader2, ShieldCheck } from 'lucide-react'
+import { AlertCircle, Loader2 } from 'lucide-react'
 import '@/components/landing/landing.css'
-import { Eyebrow, KlButton } from '@/components/landing/PageKit'
+import { KlButton } from '@/components/landing/PageKit'
 import { HeroCollage } from '@/components/landing/LandingHero'
 import { Brand, ThemeToggle } from '@/components/landing/shared'
 import { useLandingTheme } from '@/components/landing/useLandingTheme'
@@ -360,32 +360,8 @@ export default function SignIn() {
         >
           <div aria-hidden="true" className="absolute -right-24 -top-24 h-[420px] w-[420px] rounded-full opacity-35 blur-[110px]" style={{ background: 'var(--kl-sky)' }} />
           <div aria-hidden="true" className="absolute -bottom-32 -left-24 h-[420px] w-[420px] rounded-full opacity-40 blur-[110px]" style={{ background: '#D9A648' }} />
-          <div className="relative sticky top-0 flex h-screen flex-col justify-start overflow-y-auto px-[clamp(32px,5vw,84px)] py-10">
-            <HeroCollage className="relative mb-8 w-[min(100%,340px)] shrink-0 self-start" />
-            <Eyebrow>{t('signin.yourSocietyAwaits')}</Eyebrow>
-            <h2 className="kl-serif mt-4 max-w-[640px] text-balance text-[clamp(36px,3.8vw,56px)] font-semibold leading-[0.98] tracking-[-0.02em]">
-              One account.{' '}
-              <span className="text-[var(--kl-gold-deep)]">{spelled(OPEN_MODULES)} modules.</span>
-            </h2>
-
-            <ul className="mt-6 max-w-[560px] space-y-3">
-              <li className="flex items-start gap-4 rounded-[18px] bg-[var(--kl-surface)]/80 p-4">
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-[#F6EBD3] text-[#8A6414]">
-                  <Fingerprint size={18} aria-hidden="true" />
-                </span>
-                <span className="text-[15px] leading-relaxed text-[var(--kl-mid)]">
-                  <strong className="text-[var(--kl-ink)]">{t('signin.passkeysNotABiometric')}</strong> {t('signin.yourFingerprintOrFace')}
-                </span>
-              </li>
-              <li className="flex items-start gap-4 rounded-[18px] bg-[var(--kl-surface)]/80 p-4">
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-[#E3ECF7] text-[#2F6BA8]">
-                  <ShieldCheck size={18} aria-hidden="true" />
-                </span>
-                <span className="text-[15px] leading-relaxed text-[var(--kl-mid)]">
-                  <strong className="text-[var(--kl-ink)]">{t('signin.leaveWheneverYouWant')}</strong> {t('signin.deactivateOrDeleteFrom')}
-                </span>
-              </li>
-            </ul>
+          <div className="relative sticky top-0 flex h-screen items-center justify-center overflow-y-auto px-[clamp(32px,5vw,84px)] py-10">
+            <HeroCollage className="relative w-[min(100%,min(560px,calc((100vh-80px)/1.08)))] shrink-0" />
           </div>
         </aside>
       </div>
