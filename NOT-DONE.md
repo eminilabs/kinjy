@@ -729,3 +729,39 @@ what is not built (below).
   through N steps" (a step-parent shows that way), rather than invent a term.
 - The tree and list views were exercised in a headless browser at 1440 and 390 px
   in both light and dark; not on a real phone, and not with a screen reader.
+
+## Family tree against `todo copy.md` (07/10)
+
+The product reference for the family tree is Module 5 of `todo copy.md` (untracked;
+there is no `todo.md`). Compared with what was built on 06/10, before the second pass:
+
+| `todo copy.md` says | State before this pass | Decision |
+|---|---|---|
+| Primitive edges only (`parent_of`, `spouse_of`, `adoptive_parent_of`, `guardian_of`, `sibling_of`); half-sibling and every complex relation computed, never stored | Matches. Checked on a blended family: full and half siblings were derived correctly from shared parents | Kept. A father/mother `role` is an *attribute of a parent edge*, not a new edge kind |
+| Level model: root 0, ancestors positive, descendants negative | Matches | Kept |
+| Trees strictly private, 404 for a stranger; 3 close confirmations for a deceased person | Matches (hardened on 06/10) | Untouched |
+| Mobile: `Vue Générations` with **expandable cards Parents / Moi & Conjoint / Enfants** | A list by generation, **not expandable**, no such grouping | Rebuilt as expandable sections |
+| Mobile: pinch-to-zoom and pan on the graph | Missing (the graph only scrolled inside its box) | Added, with zoom buttons |
+| Graph view by default on desktop, generations view by default on mobile | Matches | Kept |
+| Phase 2: invite a relative by link and claim the node on sign-up | Not built | Out of this pass |
+| Phase 3: record oral histories on a person | Not built | Out of this pass |
+| Phase 4: set `FEATURES.familyTree: true` | **Not done on purpose.** The app side is open through `FEATURES.familyTreeApp`; `familyTree` keeps hiding the public `/family` page while its copy promises what is not built | Deliberate gap, unchanged |
+| *(silent)* gender, father/mother, how unions are drawn, blended families, layout rules | Gender was optional free text; no father/mother; "add a sibling" wrote a `sibling_of` edge; lines ran parent-to-child one by one and crossed cards | Decided with the product owner, below |
+| *(outdated)* names `FamilyGraph.tsx` and the branch `feat/family-tree-mobile-ux` | `FamilyGraph.tsx` was replaced on 06/10; work is on `feat/family-tree` | Noted |
+
+**Decisions where the todo is silent** (validated 07/10):
+
+- `relationships.role` is nullable (`father`, `mother`, or unknown) and only on
+  `parent_of` / `adoptive_parent_of`. `gender` belongs to the person; `role` to the
+  relationship; **neither is ever derived from the other**.
+- No "one father, one mother" limit. Biological and adoptive parents must coexist,
+  and a rule across filiation types is not in the todo. The integrity checks that
+  already exist (no loop, no duplicate pair, no parent born after the child) stay.
+  The narrow rule *"within `parent_of` only, a child has at most one `father` and
+  one `mother`"* is **proposed, not introduced**; it needs a product decision.
+- Adding a sibling asks which parents are shared and writes real parent edges;
+  `sibling_of` remains only for "parents unknown". Half-sibling stays derived.
+- A union is a drawing device (the parents of a child), not a stored entity.
+- End of a union (`relationships.until`) stays unexposed: the todo does not ask.
+- Labels: Father / Mother when the role is known, otherwise Parent. No attempt
+  yet at grandfather, uncle or cousin beyond what the graph already derives.
