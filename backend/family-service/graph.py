@@ -26,6 +26,8 @@ class Edges:
     spouses: dict[str, set[str]]
     explicit_siblings: dict[str, set[str]]
     adoptive: set[tuple[str, str]]
+    # (parent, child) -> "father" | "mother", only where the edge says so.
+    roles: dict[tuple[str, str], str]
 
     def siblings(self, person_id: str) -> dict[str, str]:
         """``{sibling_id: "full" | "half" | "declared"}``.
@@ -56,11 +58,14 @@ def edges_from_rows(rows) -> Edges:
     spouses: dict[str, set[str]] = defaultdict(set)
     explicit_siblings: dict[str, set[str]] = defaultdict(set)
     adoptive: set[tuple[str, str]] = set()
+    roles: dict[tuple[str, str], str] = {}
 
     for edge in rows:
         if edge.kind in PARENT_KINDS:
             parents[edge.to_person_id].add(edge.from_person_id)
             children[edge.from_person_id].add(edge.to_person_id)
+            if getattr(edge, "role", None):
+                roles[(edge.from_person_id, edge.to_person_id)] = edge.role
             if edge.kind != "parent_of":
                 adoptive.add((edge.from_person_id, edge.to_person_id))
         elif edge.kind == "spouse_of":
@@ -70,7 +75,7 @@ def edges_from_rows(rows) -> Edges:
             explicit_siblings[edge.from_person_id].add(edge.to_person_id)
             explicit_siblings[edge.to_person_id].add(edge.from_person_id)
 
-    return Edges(parents, children, spouses, explicit_siblings, adoptive)
+    return Edges(parents, children, spouses, explicit_siblings, adoptive, roles)
 
 
 # A family is a connected component. Nothing in here needs the rest of the
@@ -247,7 +252,10 @@ def describe(edges: Edges, source: str, target: str) -> str:
         return "self"
 
     if target in edges.parents.get(source, set()):
-        return "adoptive parent" if (target, source) in edges.adoptive else "parent"
+        # Father or mother only where the relationship says so; never inferred from gender.
+        role = edges.roles.get((target, source))
+        kind = "adoptive " if (target, source) in edges.adoptive else ""
+        return f"{kind}{role}" if role else f"{kind}parent"
     if target in edges.children.get(source, set()):
         return "adoptive child" if (source, target) in edges.adoptive else "child"
     if target in edges.spouses.get(source, set()):
@@ -290,7 +298,7 @@ def closeness(edges: Edges, source: str, target: str, label: str | None = None) 
     """Lower = closer. Used to rank a tree view and to pick the 3 corroborators
     for a deceased person's verification. Pass the label when it is already
     known: working it out again walks the graph a second time."""
-    ranking = {"self": 0, "parent": 1, "child": 1, "spouse": 1, "sibling": 2, "half-sibling": 3}
+    ranking = {"self": 0, "parent": 1, "father": 1, "mother": 1, "child": 1, "spouse": 1, "sibling": 2, "half-sibling": 3}
     label = label if label is not None else describe(edges, source, target)
     if label in ranking:
         return ranking[label]

@@ -91,6 +91,26 @@ def check_new_edge(
         return
 
 
+PARENT_ROLES = ("father", "mother")
+ROLE_KINDS = ("parent_of", "adoptive_parent_of")
+
+
+def check_role(kind: str, role: str | None) -> None:
+    """A role (father or mother) says what a parent is to a child; it has no meaning on other edges.
+
+    Deliberately *not* checked: that a "father" is male, that a child has one father
+    only, or that biological and adoptive parents do not both hold the same role.
+    The todo does not specify any of that, and a biological and an adoptive father
+    must be able to coexist. Gender and role are independent.
+    """
+    if role is None:
+        return
+    if role not in PARENT_ROLES:
+        raise _refuse("A role is father or mother")
+    if kind not in ROLE_KINDS:
+        raise _refuse("A role (father or mother) only applies to a parent or adoptive-parent link")
+
+
 def canonical_pair(kind: str, a: str, b: str) -> tuple[str, str]:
     """Spouse and sibling edges are stored one way only, so they cannot be doubled."""
     if kind in models.Relationship.SYMMETRIC and a > b:

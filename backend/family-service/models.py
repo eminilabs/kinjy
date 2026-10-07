@@ -108,6 +108,11 @@ class Relationship(Base):
     since: Mapped[date | None] = mapped_column(Date)
     until: Mapped[date | None] = mapped_column(Date)
 
+    # What this parent is to this child: "father", "mother", or None when it is not
+    # said. A property of the *relationship*, never of the person: gender belongs to
+    # Person.gender, and neither is worked out from the other. Only on parent edges.
+    role: Mapped[str | None] = mapped_column(String(20))
+
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|verified|disputed
     asserted_by: Mapped[str] = mapped_column(String(40))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

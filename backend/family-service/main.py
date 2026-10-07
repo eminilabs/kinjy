@@ -33,6 +33,8 @@ CLOSE_ENOUGH = 6  # closeness score under which a member counts as "closely rela
 TREE_MAX_NODES = 250
 
 MIGRATIONS = [
+    # What a parent is to a child (father / mother / not said). Additive and nullable.
+    f"ALTER TABLE {models.SCHEMA}.relationships ADD COLUMN IF NOT EXISTS role VARCHAR(20)",
     # The indexes in models.py, for databases that already had the table.
     f"CREATE UNIQUE INDEX IF NOT EXISTS uq_relationship_symmetric ON {models.SCHEMA}.relationships "
     "(LEAST(from_person_id, to_person_id), GREATEST(from_person_id, to_person_id), kind) "
@@ -89,6 +91,10 @@ class PersonIn(PersonCore):
     user_id: str | None = Field(default=None, max_length=40)
 
 
+# What a parent is to a child. Never worked out from gender; see models.Relationship.role.
+ROLE = "^(father|mother)$"
+
+
 # How a new person stands to the one they are added to, and so which edge is written.
 # (edge kind, is the new person the "from" end of it)
 RELATIVES = {
@@ -104,6 +110,17 @@ class RelativeIn(BaseModel):
     relation: str = Field(pattern="^(parent|adoptive_parent|child|spouse|sibling)$")
     # A relative added this way has no account; a member joins by linking their own node.
     person: PersonCore
+    # parent / adoptive_parent: what the new person is to the one they are added to.
+    role: str | None = Field(default=None, pattern=ROLE)
+    # child: what the person being added to is to the child, the child's other parent (if
+    # any, someone already in the tree) and what that other parent is.
+    anchor_role: str | None = Field(default=None, pattern=ROLE)
+    other_parent_id: str | None = Field(default=None, max_length=40)
+    other_parent_role: str | None = Field(default=None, pattern=ROLE)
+    # sibling: the parents of the person being added to that are also this one's. Real
+    # parent links are written to each; none selected means the parents are not known and
+    # the two are declared siblings. Half and full siblings are derived from this, never stored.
+    shared_parent_ids: list[str] = Field(default_factory=list, max_length=6)
 
 
 class PersonUpdate(BaseModel):
@@ -156,6 +173,14 @@ class RelationshipIn(BaseModel):
     kind: str = Field(max_length=30)
     biological: bool = True
     since: date | None = None
+    # What the "from" parent is to the "to" child. Only on parent and adoptive-parent links.
+    role: str | None = Field(default=None, pattern=ROLE)
+
+
+class RelationshipPatch(BaseModel):
+    """Today only the role can change: a link is otherwise removed and made again."""
+
+    role: str | None = Field(default=None, pattern=ROLE)
 
 
 class ConfirmIn(BaseModel):
@@ -409,17 +434,72 @@ async def add_relative(
         id=new_id("prs"), created_by=principal.user_id, deceased=deceased, status="pending", **data
     )
 
-    kind, newcomer_is_from = RELATIVES[payload.relation]
-    left, right = (newcomer, anchor) if newcomer_is_from else (anchor, newcomer)
-    integrity.check_new_edge(family.edges, left, right, kind)
+    if payload.role and payload.relation not in ("parent", "adoptive_parent"):
+        raise HTTPException(status_code=400, detail="role is for adding a parent")
+    if (payload.anchor_role or payload.other_parent_id or payload.other_parent_role) and payload.relation != "child":
+        raise HTTPException(status_code=400, detail="anchor_role and other_parent are for adding a child")
+    if payload.other_parent_role and not payload.other_parent_id:
+        raise HTTPException(status_code=400, detail="other_parent_role needs other_parent_id")
+    if payload.shared_parent_ids and payload.relation != "sibling":
+        raise HTTPException(status_code=400, detail="shared_parent_ids is for adding a sibling")
 
-    from_id, to_id = integrity.canonical_pair(kind, left.id, right.id)
-    edge = models.Relationship(
-        id=new_id("rel"), from_person_id=from_id, to_person_id=to_id, kind=kind, asserted_by=principal.user_id
-    )
+    kind, newcomer_is_from = RELATIVES[payload.relation]
+    # Every edge this addition writes: (from, to, kind, role, biological).
+    planned: list[tuple[models.Person, models.Person, str, str | None, bool]] = []
+
+    if payload.relation in ("parent", "adoptive_parent"):
+        planned.append((newcomer, anchor, kind, payload.role, payload.relation == "parent"))
+    elif payload.relation == "child":
+        planned.append((anchor, newcomer, kind, payload.anchor_role, True))
+        if payload.other_parent_id:
+            if payload.other_parent_id == anchor.id:
+                raise HTTPException(status_code=400, detail="The other parent is someone else")
+            other = access.person_or_404(db, payload.other_parent_id)
+            if other.id not in family.people:
+                raise access.not_found()
+            access.may_link_member(principal, other.user_id)
+            planned.append((other, newcomer, kind, payload.other_parent_role, True))
+    elif payload.relation == "sibling" and payload.shared_parent_ids:
+        wanted = set(payload.shared_parent_ids)
+        shared = db.scalars(
+            select(models.Relationship).where(
+                models.Relationship.to_person_id == anchor.id,
+                models.Relationship.from_person_id.in_(wanted),
+                models.Relationship.kind.in_(models.Relationship.FILIATION),
+                models.Relationship.status != "disputed",
+            )
+        ).all()
+        if {edge.from_person_id for edge in shared} != wanted:
+            raise HTTPException(status_code=400, detail="Only a parent of this person can be a shared parent")
+        by_id = {p.id: p for p in db.scalars(select(models.Person).where(models.Person.id.in_(wanted))).all()}
+        for edge in shared:
+            # The same father is the same father of both: kind, role and "biological" carry over.
+            planned.append((by_id[edge.from_person_id], newcomer, edge.kind, edge.role, edge.biological))
+    else:
+        left, right = (newcomer, anchor) if newcomer_is_from else (anchor, newcomer)
+        planned.append((left, right, kind, None, True))
+
+    for left, right, edge_kind, edge_role, _bio in planned:
+        integrity.check_role(edge_kind, edge_role)
+        integrity.check_new_edge(family.edges, left, right, edge_kind)
+
+    edges = []
+    for left, right, edge_kind, edge_role, biological in planned:
+        from_id, to_id = integrity.canonical_pair(edge_kind, left.id, right.id)
+        edges.append(
+            models.Relationship(
+                id=new_id("rel"),
+                from_person_id=from_id,
+                to_person_id=to_id,
+                kind=edge_kind,
+                role=edge_role,
+                biological=biological,
+                asserted_by=principal.user_id,
+            )
+        )
     db.add(newcomer)
     db.flush()
-    db.add(edge)
+    db.add_all(edges)
     try:
         db.commit()
     except IntegrityError:
@@ -428,11 +508,13 @@ async def add_relative(
     db.refresh(newcomer)
 
     await events.publish("family.person_added", {"person_id": newcomer.id, "by": principal.user_id})
-    await events.publish("family.relationship_added", {"relationship_id": edge.id, "kind": kind})
-    return {
-        "person": PersonOut.model_validate(newcomer),
-        "relationship": {"id": edge.id, "kind": kind, "from": from_id, "to": to_id, "status": edge.status},
-    }
+    for edge in edges:
+        await events.publish("family.relationship_added", {"relationship_id": edge.id, "kind": edge.kind})
+    shown = [
+        {"id": e.id, "kind": e.kind, "from": e.from_person_id, "to": e.to_person_id, "role": e.role, "status": e.status}
+        for e in edges
+    ]
+    return {"person": PersonOut.model_validate(newcomer), "relationship": shown[0], "relationships": shown}
 
 
 @app.get("/family/search", tags=["persons"])
@@ -530,6 +612,7 @@ async def add_relationship(payload: RelationshipIn, principal: CurrentUser, db: 
         edges = family_left.edges
     else:
         edges, _people, _rows = graph.load_component(db, {left.id, right.id})
+    integrity.check_role(payload.kind, payload.role)
     integrity.check_new_edge(edges, left, right, payload.kind)
 
     from_id, to_id = integrity.canonical_pair(payload.kind, left.id, right.id)
@@ -545,7 +628,33 @@ async def add_relationship(payload: RelationshipIn, principal: CurrentUser, db: 
         raise HTTPException(status_code=409, detail="This relationship already exists")
 
     await events.publish("family.relationship_added", {"relationship_id": edge.id, "kind": edge.kind})
-    return {"id": edge.id, "status": edge.status, "kind": edge.kind, "from": edge.from_person_id, "to": edge.to_person_id}
+    return {
+        "id": edge.id,
+        "status": edge.status,
+        "kind": edge.kind,
+        "from": edge.from_person_id,
+        "to": edge.to_person_id,
+        "role": edge.role,
+    }
+
+
+@app.patch("/family/relationships/{relationship_id}", tags=["relationships"])
+def update_relationship(
+    relationship_id: str,
+    payload: RelationshipPatch,
+    principal: CurrentUser,
+    db: OrmSession = Depends(get_db),
+):
+    """Say, or take back, what a parent is to a child (father, mother, or not said)."""
+    edge = db.get(models.Relationship, relationship_id)
+    if edge is None:
+        raise HTTPException(status_code=404, detail="Relationship not found")
+    if edge.asserted_by != principal.user_id and not principal.is_admin:
+        raise HTTPException(status_code=403, detail="Only the member who asserted this edge can change it")
+    integrity.check_role(edge.kind, payload.role)
+    edge.role = payload.role
+    db.commit()
+    return {"id": edge.id, "kind": edge.kind, "from": edge.from_person_id, "to": edge.to_person_id, "role": edge.role}
 
 
 @app.delete("/family/relationships/{relationship_id}", status_code=204, tags=["relationships"])
@@ -631,6 +740,7 @@ def tree(
                 "from": e.from_person_id,
                 "to": e.to_person_id,
                 "kind": e.kind,
+                "role": e.role,
                 "status": e.status,
                 # The server decides who may take a link back, so the screen only offers what would be allowed.
                 "removable": e.asserted_by == principal.user_id or bool(principal.is_admin),
