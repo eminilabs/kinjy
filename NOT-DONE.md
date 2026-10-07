@@ -830,3 +830,36 @@ server lists things in, and the person you are viewing is not the origin.
   from the final positions; a `spouse_of` link is not needed to draw it (and none is
   created). When the pair are also recorded spouses, the spouse line is the one drawn.
 
+
+### FT-01: invite someone to claim their place (built)
+
+A member who added a living adult to their tree can make a link for that person
+(`/tree/invite#t=<token>`) and pass it on themselves; Kinjy sends nothing and stores no
+contact. The token is 256 bits, stored only as a SHA-256, works once, lives 7 days, can be
+withdrawn, declined or superseded (one live link per person), and reads as the same plain
+404 whether it never existed, expired, was used, withdrawn or declined. A visitor learns only
+that a link is good; a signed-in member learns the invited person's given name. Accepting is an
+explicit button: it attaches the account to the node (`status` becomes `verified`, as when
+someone makes their own node), only for an adult account with no node yet (a second place is
+never merged), never the inviter, never a minor (unknown age counts as a minor). Every
+operation is audited (`family.invitation_events`, no token) and expired data is purged lazily
+(invitations 90 days after expiry, events 365 days). Guessing is limited per source address.
+
+Without touching auth-service or `/join`: the token rides in the URL fragment, is remembered
+in the browser, removed from the address bar, and the visitor goes to
+`/join?mode=signup|signin&next=/tree/invite`, which the sign-in page already honours.
+
+Limits, stated rather than hidden:
+- **Accepting makes the member belong to the tree**, so they then read it by the ordinary rule
+  (belonging); the link itself never opens anything. Whether a claimed relative should see the
+  whole connected family is an FT-02/FT-03 question.
+- The author of a node keeps edit rights on it after the claim (existing `created_by` rule).
+- A node under 18 cannot be invited, and a minor's account cannot accept; there is no
+  guardian-led path yet.
+- The rate limit is in memory and per replica; it resets when the service restarts.
+- An account deleted later keeps `Person.user_id` pointing at it: no consumer of
+  `user.deletion_requested` exists in family-service (outside this task's scope).
+- Invitations arriving through `/join?ref=` are not affiliate invitations: no sponsor credit
+  is created, and registration proceeds as it does today.
+- Browser flows (inviter panel, visitor, sign-in round trip, accept, phone) were run with
+  headless Chrome scripts kept outside the repository.

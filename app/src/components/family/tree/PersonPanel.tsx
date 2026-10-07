@@ -4,6 +4,7 @@ import { useAppTheme } from '@/components/appdemo/theme'
 import { useApi } from '@/hooks/useApi'
 import { ApiError, kaluta, type HowRelated, type ParentRole, type PersonDetail, type RelativeKind } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import InvitePanel from './InvitePanel'
 import LinkExisting from './LinkExisting'
 import PersonForm from './PersonForm'
 import RelativeQuestions from './RelativeQuestions'
@@ -293,6 +294,8 @@ export default function PersonPanel({
               </button>
             </section>
           )}
+
+          {perms.can_invite && <InvitePanel personId={person.id} name={person.given_name} />}
 
           {links.length > 0 && (
             <section className="mt-5 border-t border-white/10 pt-4" aria-labelledby="links-title">

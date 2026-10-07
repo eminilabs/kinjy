@@ -19,6 +19,7 @@ from common.service import create_app
 import access
 import graph
 import integrity
+import invitations
 import models
 
 log = logging.getLogger("family-service")
@@ -50,6 +51,7 @@ app = create_app(
     migrations=MIGRATIONS,
     description="Family tree graph, derived relationships, verification, heritage archive.",
 )
+app.include_router(invitations.router)
 
 
 # --- schemas ---------------------------------------------------------------
@@ -232,6 +234,7 @@ def _detail(person: models.Person, principal, family: access.Family, db: OrmSess
             "can_edit": access.can_edit(principal, person),
             "can_delete": access.can_delete(principal, person),
             "can_link": mine,
+            "can_invite": invitations.can_invite(principal, person),
             "can_confirm": mine and me is not None,
         },
     }

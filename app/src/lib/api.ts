@@ -854,7 +854,7 @@ export interface PersonDetail extends Person {
   relation_to_me: string | null
   counts: { parents: number; children: number; spouses: number; siblings: number }
   my_decision: 'confirm' | 'dispute' | null
-  permissions: { can_edit: boolean; can_delete: boolean; can_link: boolean; can_confirm: boolean }
+  permissions: { can_edit: boolean; can_delete: boolean; can_link: boolean; can_confirm: boolean; can_invite: boolean }
 }
 
 /** What may be sent for a person. `null` clears a field; leaving it out leaves it alone. */
@@ -1899,6 +1899,19 @@ export const kaluta = {
         `/family/persons/${personId}/confirm`,
         { decision, note },
       ),
+    /** Invite someone to claim a person node as themselves. The link is returned once. */
+    invite: (personId: string) =>
+      api.post<{ id: string; token: string; expires_at: string; path: string }>(`/family/persons/${personId}/invitations`, {}),
+    invitations: (personId: string) =>
+      api.get<{ items: Array<{ id: string; status: 'active' | 'accepted' | 'revoked' | 'declined' | 'expired'; created_at: string; expires_at: string }> }>(
+        `/family/persons/${personId}/invitations`,
+      ),
+    revokeInvitation: (invitationId: string) => api.delete<void>(`/family/invitations/${invitationId}`),
+    /** Public on purpose: a visitor learns only that a link is valid. */
+    lookupInvitation: (token: string) =>
+      api.post<{ valid: true; person_given_name?: string; already_has_node?: boolean; own?: boolean }>('/family/invitations/lookup', { token }),
+    acceptInvitation: (token: string) => api.post<{ person_id: string }>('/family/invitations/accept', { token }),
+    declineInvitation: (token: string) => api.post<void>('/family/invitations/decline', { token }),
   },
 
   memorials: {

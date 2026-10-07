@@ -194,3 +194,50 @@ class HeritageItem(Base):
     ai_confidence: Mapped[float | None] = mapped_column(Float)
     happened_on: Mapped[date | None] = mapped_column(Date)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class Invitation(Base):
+    """One link that lets someone claim a person node as themselves.
+
+    What is stored is a SHA-256 of the token, never the token: the token is a
+    credential until it is used, so a copy of this table must not be enough to
+    claim anybody. The inviter sees it once, when it is made. It grants nothing by
+    itself: it can only be accepted by a signed-in adult who has no node yet, and
+    only while it is unused, unrevoked, undeclined and unexpired.
+    """
+
+    __tablename__ = "invitations"
+    __table_args__ = (
+        Index("ix_invitation_person", "person_id"),
+        Index("ix_invitation_creator", "created_by"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("inv"))
+    person_id: Mapped[str] = mapped_column(ForeignKey(f"{SCHEMA}.persons.id", ondelete="CASCADE"))
+    created_by: Mapped[str] = mapped_column(String(40))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    accepted_by: Mapped[str | None] = mapped_column(String(40))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    declined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class InvitationEvent(Base):
+    """What was done with an invitation, who did it, and when. Never the token.
+
+    Not tied to the invitation by a foreign key: the record of a claim must outlive
+    the node it was about. Kept for a limited time (see invitations.py).
+    """
+
+    __tablename__ = "invitation_events"
+    __table_args__ = (Index("ix_invitation_event_time", "at"), {"schema": SCHEMA})
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("ive"))
+    invitation_id: Mapped[str] = mapped_column(String(40), index=True)
+    person_id: Mapped[str | None] = mapped_column(String(40))
+    actor_id: Mapped[str | None] = mapped_column(String(40))
+    kind: Mapped[str] = mapped_column(String(30))
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
