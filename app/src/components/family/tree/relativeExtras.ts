@@ -36,6 +36,15 @@ export function toExtras(relation: RelativeKind, answers: ExtraAnswers): Relativ
       ...(answers.otherParent && answers.otherRole ? { other_parent_role: answers.otherRole } : {}),
     }
   }
-  if (relation === 'sibling') return answers.shared.length ? { shared_parent_ids: answers.shared } : {}
+  if (relation === 'sibling') {
+    if (!answers.shared.length) return {}
+    // A different other parent only makes sense next to exactly one shared parent.
+    const other = answers.shared.length === 1 ? answers.otherParent : null
+    return {
+      shared_parent_ids: answers.shared,
+      ...(other ? { other_parent_id: other.id } : {}),
+      ...(other && answers.otherRole ? { other_parent_role: answers.otherRole } : {}),
+    }
+  }
   return {}
 }

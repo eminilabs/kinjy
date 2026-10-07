@@ -146,6 +146,27 @@ export default function RelativeQuestions({
         <p className={cn('text-xs', tok.low)}>
           Tick the parents they share. Leave all unticked if their parents are not in the tree. Whether they are full or half brothers or sisters follows from this.
         </p>
+        {answers.shared.length === 1 && (
+          <div className="space-y-2 pt-1">
+            <p className={cn('text-xs font-semibold', tok.mid)}>Their other parent</p>
+            {answers.otherParent ? (
+              <p className={cn('flex items-center justify-between gap-2 rounded-card-sm px-3 py-2 text-sm', tok.input, tok.text)}>
+                <span className="truncate font-semibold">{answers.otherParent.name}</span>
+                <button type="button" onClick={() => set({ otherParent: null, otherRole: '' })} className="inline-flex min-h-9 shrink-0 items-center px-2 text-xs text-gold-soft underline underline-offset-2">
+                  Change
+                </button>
+              </p>
+            ) : (
+              <FamilyFinder
+                onPick={(person: Person) => set({ otherParent: { id: person.id, name: fullName(person) } })}
+                placeholder="Someone else in the tree"
+                label="Find their other parent in the tree"
+              />
+            )}
+            {answers.otherParent && <RoleSelect label={`${answers.otherParent.name} is their …`} value={answers.otherRole} onChange={(otherRole) => set({ otherRole })} />}
+            <p className={cn('text-xs', tok.low)}>Leave empty if their other parent is not in the tree or not known. They will not be drawn under {anchorName}’s other parent.</p>
+          </div>
+        )}
       </fieldset>
     )
   }

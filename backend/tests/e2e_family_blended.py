@@ -47,6 +47,12 @@ def person(given, **extra):
     return r.json()
 
 
+def person_from(headers):
+    r = c.post("/family/persons", headers=headers, json={"given_name": "Elsewhere"})
+    assert r.status_code == 201
+    return r.json()["id"]
+
+
 def relative(anchor, relation, given, **extra):
     body = {"relation": relation, "person": {"given_name": given, **extra.pop("person", {})}, **extra}
     return c.post(f"/family/persons/{anchor}/relatives", headers=h, json=body)
@@ -135,6 +141,26 @@ check("a shared parent who is not a parent of this person is refused (400)", r.s
 check("and nobody was added", len(c.get("/family/persons?limit=100", headers=h).json()["items"]) == before)
 check("a sibling's shared parent cannot be someone from another tree (400/404)", relative(esi["id"], "sibling", "X", shared_parent_ids=["prs_nope"]).status_code in (400, 404))
 check("shared parents are only for siblings (400)", relative(esi["id"], "child", "X", shared_parent_ids=[kofi["id"]]).status_code == 400)
+
+print("\nA half-sibling whose other parent is someone else")
+zita = person("Zita", gender="female", birth_date="1965-01-01")
+check("the father's other partner is linked", c.post("/family/relationships", headers=h, json={"from_person_id": kofi["id"], "to_person_id": zita["id"], "kind": "spouse_of"}).status_code == 201)
+r = relative(esi["id"], "sibling", "Ekow", shared_parent_ids=[kofi["id"]], other_parent_id=zita["id"], other_parent_role="mother", person={"birth_date": "1997-01-01"})
+check("a half-brother by the father, with his own mother, is added", r.status_code == 201 and len(r.json()["relationships"]) == 2, r.text[:200])
+ekow = r.json()["person"]
+n = nodes(esi["id"])
+check("he is a half-sibling on the same generation", n["Ekow"]["sibling_kind"] == "half" and n["Ekow"]["level"] == 0, n["Ekow"])
+parents_of_ekow = {e["from"]: e["role"] for e in tree(ekow["id"])["edges"] if e["to"] == ekow["id"] and e["kind"] == "parent_of"}
+check("his parents are Kofi (father) and Zita (mother), never Ama", parents_of_ekow == {kofi["id"]: "father", zita["id"]: "mother"}, parents_of_ekow)
+r = relative(esi["id"], "sibling", "Bad", shared_parent_ids=[kofi["id"]], other_parent_id=ama["id"])
+check("the other parent cannot be another parent of the same person (400)", r.status_code == 400, r.text[:120])
+r = relative(esi["id"], "sibling", "Bad", shared_parent_ids=[ama["id"], kofi["id"]], other_parent_id=zita["id"])
+check("an other parent next to two shared parents is refused (400)", r.status_code == 400, r.text[:120])
+r = relative(esi["id"], "sibling", "Bad", other_parent_id=zita["id"])
+check("an other parent with no shared parent is refused (400)", r.status_code == 400, r.text[:120])
+check("an other parent who is not in the tree is refused (404)", relative(esi["id"], "sibling", "Bad", shared_parent_ids=[kofi["id"]], other_parent_id="prs_nope").status_code in (400, 404))
+check("an other parent from another tree is refused", relative(esi["id"], "sibling", "Bad", shared_parent_ids=[kofi["id"]], other_parent_id=person_from(stranger_h)).status_code in (400, 404))
+check("a role for an other parent that is not given is refused (400)", relative(esi["id"], "sibling", "Bad", shared_parent_ids=[kofi["id"]], other_parent_role="mother").status_code == 400)
 
 print("\nHalf and full are derived, so they change when the parents do")
 edge_id = [e["id"] for e in tree(esi["id"])["edges"] if e["to"] == nodes(esi["id"])["Kwame"]["person"]["id"] and e["from"] == kofi["id"]][0]

@@ -120,6 +120,9 @@ class RelativeIn(BaseModel):
     # sibling: the parents of the person being added to that are also this one's. Real
     # parent links are written to each; none selected means the parents are not known and
     # the two are declared siblings. Half and full siblings are derived from this, never stored.
+    # With a single shared parent, `other_parent_id` (above) says who the new person's other
+    # parent is, when that is someone in the tree who is not a parent of the one added to:
+    # a half-sibling is then a child of that other union, not of this person's parents.
     shared_parent_ids: list[str] = Field(default_factory=list, max_length=6)
 
 
@@ -436,8 +439,12 @@ async def add_relative(
 
     if payload.role and payload.relation not in ("parent", "adoptive_parent"):
         raise HTTPException(status_code=400, detail="role is for adding a parent")
-    if (payload.anchor_role or payload.other_parent_id or payload.other_parent_role) and payload.relation != "child":
-        raise HTTPException(status_code=400, detail="anchor_role and other_parent are for adding a child")
+    if payload.anchor_role and payload.relation != "child":
+        raise HTTPException(status_code=400, detail="anchor_role is for adding a child")
+    if (payload.other_parent_id or payload.other_parent_role) and payload.relation not in ("child", "sibling"):
+        raise HTTPException(status_code=400, detail="other_parent is for adding a child or a brother or sister")
+    if payload.relation == "sibling" and payload.other_parent_id and not payload.shared_parent_ids:
+        raise HTTPException(status_code=400, detail="Name the shared parent as well: the other parent alone does not make a sibling")
     if payload.other_parent_role and not payload.other_parent_id:
         raise HTTPException(status_code=400, detail="other_parent_role needs other_parent_id")
     if payload.shared_parent_ids and payload.relation != "sibling":
@@ -475,6 +482,18 @@ async def add_relative(
         for edge in shared:
             # The same father is the same father of both: kind, role and "biological" carry over.
             planned.append((by_id[edge.from_person_id], newcomer, edge.kind, edge.role, edge.biological))
+        if payload.other_parent_id:
+            if len(wanted) != 1:
+                raise HTTPException(status_code=400, detail="A different other parent means exactly one shared parent")
+            if payload.other_parent_id in wanted or payload.other_parent_id == anchor.id:
+                raise HTTPException(status_code=400, detail="The other parent is someone else")
+            if payload.other_parent_id in family.edges.parents.get(anchor.id, set()):
+                raise HTTPException(status_code=400, detail="That is also a parent of this person: tick them as shared instead")
+            other = access.person_or_404(db, payload.other_parent_id)
+            if other.id not in family.people:
+                raise access.not_found()
+            access.may_link_member(principal, other.user_id)
+            planned.append((other, newcomer, "parent_of", payload.other_parent_role, True))
     else:
         left, right = (newcomer, anchor) if newcomer_is_from else (anchor, newcomer)
         planned.append((left, right, kind, None, True))
