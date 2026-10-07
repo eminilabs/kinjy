@@ -482,8 +482,8 @@ export default function ShortPlayer({
       tabIndex={0}
       aria-label="Shorts reel"
       className={cn(
-        'mx-auto h-[calc(100svh-9rem)] w-full max-w-[420px] snap-y snap-mandatory overflow-y-auto',
-        'rounded-card-lg border border-white/10 bg-black focus:outline-none',
+        'mx-auto h-[calc(100svh-21rem)] min-h-[460px] w-full max-w-[420px] snap-y snap-mandatory overflow-y-auto',
+        'rounded-[28px] bg-black shadow-[0_30px_60px_-30px_rgba(36,31,22,0.55)] ring-1 ring-black/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60',
         // Scrollbars are hidden platform-wide; scrolling still works.
         '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
       )}
