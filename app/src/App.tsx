@@ -26,6 +26,7 @@ const SocialHub = lazy(() => import('./pages/SocialHub'))
 const Circles = lazy(() => import('./pages/app/Circles'))
 const Connections = lazy(() => import('./pages/app/Connections'))
 const Communities = lazy(() => import('./pages/app/Communities'))
+const JoinByLink = lazy(() => import('./components/community/JoinByLink'))
 const Forums = lazy(() => import('./pages/app/Forums'))
 const Messages = lazy(() => import('./pages/app/Messages'))
 const FamilyTreeApp = lazy(() => import('./pages/app/FamilyTree'))
@@ -89,7 +90,8 @@ export default function App() {
           <Route path="/circles" element={<Circles />} />
           <Route path="/connections" element={<Connections />} />
           <Route path="/communities" element={<Communities />} />
-          <Route path="/forums" element={<Forums />} />
+          <Route path="/communities/join/:token" element={<JoinByLink />} />
+          <Route path="/forums"element={<Forums />} />
           <Route path="/messages" element={<Messages />} />
           <Route path="/tree" element={gated('familyTree', <FamilyTreeApp />, '/hub')} />
           <Route path="/graveyard" element={<Graveyard />} />

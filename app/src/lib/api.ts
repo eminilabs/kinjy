@@ -153,6 +153,8 @@ export const api = {
   get: <T>(path: string, options?: RequestOptions) => request<T>(path, { ...options, method: 'GET' }),
   post: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>(path, { ...options, method: 'POST', body }),
+  put: <T>(path: string, body?: unknown, options?: RequestOptions) =>
+    request<T>(path, { ...options, method: 'PUT', body }),
   patch: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>(path, { ...options, method: 'PATCH', body }),
   delete: <T>(path: string, options?: RequestOptions) =>
@@ -651,18 +653,44 @@ export interface Forum {
   scope: string | null
   scope_value: string | null
   parent_id: string | null
+  /** The community whose door applies, or null for a free-standing forum. */
+  community_id: string | null
+  /** That community and what the viewer is to it; null for a free-standing forum. */
+  community: { id: string; name: string; kind: string; my_role: string | null; my_status: string | null } | null
+  /** false on a sub-forum its creator opened to everyone. */
+  inherit_access: boolean
   threads_count: number
 }
 
 export interface Thread {
   id: string
   title: string
+  /** First ~200 characters of the body, on one line. */
+  preview: string
   author_id: string
   replies_count: number
   views_count: number
   pinned: boolean
+  /** Id of the original, when a steward marked this thread a duplicate. */
+  duplicate_of: string | null
   ai_summary: string | null
   last_activity_at: string
+}
+
+export interface ThreadReply {
+  id: string
+  author_id: string
+  parent_id: string | null
+  body: string
+  upvotes: number
+  accepted_answer: boolean
+  /** Votes up minus votes down. */
+  score: number
+  /** The viewer's own vote: 1, -1, or 0 for none. */
+  my_vote: number
+  created_at: string
+  edited?: boolean
+  edited_at?: string | null
 }
 
 export interface ThreadDetail {
@@ -673,7 +701,65 @@ export interface ThreadDetail {
   lang: string
   ai_summary: string | null
   locked: boolean
-  replies: Array<{ id: string; author_id: string; body: string; upvotes: number; created_at: string }>
+  pinned: boolean
+  duplicate_of: { id: string; title: string } | null
+  /** Whether to offer the moderation buttons. The routes check the rule again. */
+  can_moderate: boolean
+  accepted_reply_id: string | null
+  replies: ThreadReply[]
+}
+
+export interface KnowledgeEntry {
+  id: string
+  question: string
+  answer: string
+  lang: string
+  /** 0 to 1, from the discussion's own signal; reviewing does not change it. */
+  confidence: number
+  reviewed: boolean
+  reviewed_by: string | null
+  source_thread_id: string
+  source_thread_title: string
+  source_reply_id: string | null
+  created_at: string
+  /** Whether to offer Approve, Edit and Delete. The routes check the rule again. */
+  can_review: boolean
+}
+
+/** A community I belong to or have asked to join. */
+export interface MyCommunity {
+  id: string
+  slug: string
+  name: string
+  description: string
+  kind: string
+  price_usd: string | null
+  members_count: number
+  /** Who may open a forum in it: any member, or only the owner and moderators. */
+  forum_creation: 'members' | 'stewards'
+  avatar_url: string | null
+  my_role: 'owner' | 'moderator' | 'member'
+  my_status: 'active' | 'pending'
+  joined_at: string
+}
+
+export interface InviteLink {
+  id: string
+  community_id: string
+  max_uses: number | null
+  uses: number
+  expires_at: string | null
+  revoked: boolean
+  created_at: string
+}
+
+export interface CommunityInvitation {
+  id: string
+  community_id: string
+  community_name: string | null
+  inviter: { handle: string; display_name: string; avatar_url: string | null } | null
+  expires_at: string
+  created_at: string
 }
 
 export interface PersonBrief {
@@ -1485,6 +1571,9 @@ export const kaluta = {
   },
 
   communities: {
+    /** The communities I belong to or have asked to join, newest first. */
+    mine: () => api.get<{ items: MyCommunity[] }>('/communities/mine'),
+
     /** One community. A secret one answers 404 unless you are a member. */
     get: (id: string) =>
       api.get<{
@@ -1495,6 +1584,7 @@ export const kaluta = {
         kind: string
         price_usd: string | null
         members_count: number
+        forum_creation: 'members' | 'stewards'
         my_role: string | null
         my_status: string | null
       }>(`/communities/${id}`),
@@ -1521,9 +1611,85 @@ export const kaluta = {
       query.set('limit', String(params.limit ?? 30))
       return api.get<{ total: number; items: Community[] }>(`/communities?${query}`, { auth: false })
     },
-    create: (input: { name: string; description?: string; kind?: string; price_usd?: number; country?: string }) =>
-      api.post<{ id: string; slug: string; kind: string }>('/communities', { kind: 'public', ...input }),
+    create: (input: {
+      name: string
+      description?: string
+      kind?: string
+      price_usd?: number
+      country?: string
+      /** Who may open forums: any member (default) or only the owner and moderators. */
+      forum_creation?: 'members' | 'stewards'
+    }) => api.post<{ id: string; slug: string; kind: string }>('/communities', { kind: 'public', ...input }),
     join: (id: string) => api.post<{ joined: boolean; status: string }>(`/communities/${id}/join`),
+
+    /** Add one of your accepted connections straight away, with no question asked. */
+    add: (id: string, userId: string) =>
+      api.post<{ invited: boolean; status: string; already?: boolean }>(`/communities/${id}/invite`, {
+        user_id: userId,
+      }),
+
+    /** Secret communities: ask someone, who accepts or declines. */
+    invite: (id: string, userId: string) =>
+      api.post<{ id: string; status: string; expires_at: string }>(`/communities/${id}/invitations`, {
+        user_id: userId,
+      }),
+    myInvitations: () => api.get<{ items: CommunityInvitation[] }>('/communities/me/invitations'),
+    acceptInvitation: (invitationId: string) =>
+      api.post<{ status: string; community_id?: string }>(`/communities/invitations/${invitationId}/accept`),
+    declineInvitation: (invitationId: string) =>
+      api.post<{ status: string }>(`/communities/invitations/${invitationId}/decline`),
+
+    /** Secret communities: links that owners and moderators mint and can cancel. */
+    links: (id: string) =>
+      api.get<{ items: InviteLink[] }>(`/communities/${id}/links`),
+    createLink: (id: string, input: { max_uses?: number; expires_at?: string } = {}) =>
+      api.post<InviteLink & { token: string }>(`/communities/${id}/links`, input),
+    revokeLink: (id: string, linkId: string) =>
+      api.delete<{ revoked: boolean }>(`/communities/${id}/links/${linkId}`),
+    redeemLink: (token: string) =>
+      api.post<{ joined?: boolean; status: string; already?: boolean; community_id?: string }>(
+        '/communities/links/redeem',
+        { token },
+      ),
+
+    /**
+     * A paid community is joined by paying. The price is the community's, not
+     * the caller's; without a live payment rail the checkout is a mock that
+     * `settleMock` completes.
+     */
+    checkout: (communityId: string, amount: number) =>
+      api.post<{ payment_id: string; rail: string; mock: boolean; amount: string; checkout_url?: string | null }>(
+        '/payments/checkout',
+        { purpose: 'community_membership', amount, reference: communityId, rail: 'mock' },
+      ),
+    settleMock: (paymentId: string) =>
+      api.post<{ payment_id: string; status: string; mock: boolean }>(`/payments/${paymentId}/mock-settle`),
+
+    /** Leave. The owner and a banned member cannot; the message says what it cost. */
+    leave: (id: string) =>
+      api.post<{ left: boolean; community_id: string; message: string }>(`/communities/${id}/leave`),
+    /** Owner only. The kind never changes; price_usd only for a paid community. */
+    edit: (
+      id: string,
+      input: {
+        name?: string
+        description?: string
+        avatar_url?: string | null
+        country?: string | null
+        city?: string | null
+        price_usd?: number
+        forum_creation?: 'members' | 'stewards'
+      },
+    ) =>
+      api.patch<{
+        id: string
+        name: string
+        description: string
+        price_usd: string | null
+        forum_creation: 'members' | 'stewards'
+      }>(`/communities/${id}`, input),
+    /** Owner only. Deletes the community with its forums, threads and replies. */
+    remove: (id: string) => api.delete<{ deleted: boolean }>(`/communities/${id}`),
   },
 
   forums: {
@@ -1540,21 +1706,91 @@ export const kaluta = {
         provider?: string
         model?: string
         mock?: boolean
-      }>(`/threads/${threadId}/summary?lang=${lang}`, { auth: false }),
+      }>(`/threads/${threadId}/summary?lang=${lang}`),
 
-    list: (params: { hierarchy?: string; scope?: string } = {}) => {
+    // The calls below send the member's token when there is one: a forum's door
+    // depends on who is asking, so an anonymous call would be refused a private
+    // community's forum even for a member. Signed out, no token is sent.
+    list: (params: { hierarchy?: string; scope?: string; parent_id?: string; community_id?: string } = {}) => {
       const query = new URLSearchParams()
       if (params.hierarchy) query.set('hierarchy', params.hierarchy)
       if (params.scope) query.set('scope', params.scope)
-      return api.get<{ geo_scopes: string[]; items: Forum[] }>(`/forums?${query}`, { auth: false })
+      if (params.parent_id) query.set('parent_id', params.parent_id)
+      if (params.community_id) query.set('community_id', params.community_id)
+      return api.get<{ geo_scopes: string[]; items: Forum[] }>(`/forums?${query}`)
     },
-    create: (input: { name: string; description?: string; hierarchy?: string; scope?: string; scope_value?: string }) =>
+    create: (input: {
+      name: string
+      description?: string
+      hierarchy?: string
+      scope?: string
+      scope_value?: string
+      parent_id?: string
+      /** Attach a top-level forum to a community you run. A sub-forum takes its parent's. */
+      community_id?: string
+      /** Sub-forums only. false opens it to everyone instead of following its parent's door. */
+      inherit_access?: boolean
+    }) =>
       api.post<{ id: string; slug: string }>('/forums', { hierarchy: 'topic', ...input }),
-    threads: (forumId: string) => api.get<{ items: Thread[] }>(`/forums/${forumId}/threads`, { auth: false }),
+    threads: (forumId: string) => api.get<{ items: Thread[] }>(`/forums/${forumId}/threads`),
     createThread: (forumId: string, input: { title: string; body: string; lang?: string }) =>
       api.post<{ id: string }>(`/forums/${forumId}/threads`, input),
-    thread: (threadId: string) => api.get<ThreadDetail>(`/threads/${threadId}`, { auth: false }),
-    reply: (threadId: string, body: string) => api.post<{ id: string }>(`/threads/${threadId}/replies`, { body }),
+    thread: (threadId: string) => api.get<ThreadDetail>(`/threads/${threadId}`),
+    reply: (threadId: string, body: string, parentId?: string) =>
+      api.post<{ id: string }>(`/threads/${threadId}/replies`, { body, parent_id: parentId }),
+
+    /** Moderation. Owners and moderators of the thread's community only. */
+    pin: (threadId: string) => api.post<{ pinned: boolean }>(`/threads/${threadId}/pin`),
+    unpin: (threadId: string) => api.delete<{ pinned: boolean }>(`/threads/${threadId}/pin`),
+    lock: (threadId: string) => api.post<{ locked: boolean }>(`/threads/${threadId}/lock`),
+    unlock: (threadId: string) => api.delete<{ locked: boolean }>(`/threads/${threadId}/lock`),
+    markDuplicate: (threadId: string, originalId: string) =>
+      api.post<{ id: string; duplicate_of: string | null; locked: boolean }>(`/threads/${threadId}/duplicate`, {
+        original_id: originalId,
+      }),
+    unmarkDuplicate: (threadId: string) =>
+      api.delete<{ id: string; duplicate_of: string | null; locked: boolean }>(`/threads/${threadId}/duplicate`),
+
+    /** The thread's author or a moderator marks the reply that solved it. */
+    accept: (threadId: string, replyId: string) =>
+      api.post<{ accepted_reply_id: string | null }>(`/threads/${threadId}/replies/${replyId}/accept`),
+    unaccept: (threadId: string, replyId: string) =>
+      api.delete<{ accepted_reply_id: string | null }>(`/threads/${threadId}/replies/${replyId}/accept`),
+    /** value: 1 up, -1 down, 0 takes the vote back. */
+    vote: (threadId: string, replyId: string, value: 1 | -1 | 0) =>
+      api.put<{ reply_id: string; score: number; my_vote: number }>(
+        `/threads/${threadId}/replies/${replyId}/vote`,
+        { value },
+      ),
+
+    /** Edit and delete: the author edits; the author or a moderator deletes. */
+    editThread: (threadId: string, input: { title?: string; body?: string }) =>
+      api.patch<{ id: string; title: string; body: string }>(`/threads/${threadId}`, input),
+    deleteThread: (threadId: string) => api.delete<{ deleted: boolean }>(`/threads/${threadId}`),
+    editReply: (threadId: string, replyId: string, body: string) =>
+      api.patch<{ id: string; body: string; edited: boolean; edited_at: string }>(
+        `/threads/${threadId}/replies/${replyId}`,
+        { body },
+      ),
+    deleteReply: (threadId: string, replyId: string) =>
+      api.delete<{ deleted: boolean }>(`/threads/${threadId}/replies/${replyId}`),
+
+    /** Knowledge base: accepted answers, cited. Review, edit and delete are for stewards. */
+    knowledge: (forumId: string, params: { q?: string; reviewed?: boolean } = {}) => {
+      const query = new URLSearchParams()
+      if (params.q) query.set('q', params.q)
+      if (params.reviewed !== undefined) query.set('reviewed', String(params.reviewed))
+      const suffix = query.toString()
+      return api.get<{ items: KnowledgeEntry[] }>(`/forums/${forumId}/knowledge${suffix ? `?${suffix}` : ''}`)
+    },
+    reviewKnowledge: (entryId: string) =>
+      api.post<{ id: string; reviewed: boolean; reviewed_by: string }>(`/forums/knowledge/${entryId}/review`),
+    editKnowledge: (entryId: string, input: { question?: string; answer?: string }) =>
+      api.patch<{ id: string; question: string; answer: string; reviewed: boolean }>(
+        `/forums/knowledge/${entryId}`,
+        input,
+      ),
+    deleteKnowledge: (entryId: string) => api.delete<{ deleted: boolean }>(`/forums/knowledge/${entryId}`),
   },
 
   messages: {
