@@ -123,32 +123,57 @@ _topics: dict[str, set[WebSocket]] = {}
 
 
 SOCIAL_URL = "http://social-service:8000"
+COMMUNITY_URL = "http://community-service:8000"
+
+# Topics anyone signed in may listen to: they carry no member's content. Anything
+# else must be gated below; a topic nobody wrote a rule for is refused, so a new
+# kind of topic starts closed instead of open.
+OPEN_TOPICS = frozenset({"feed", "shorts"})
+
+
+async def _readable_ids(url: str, key: str, user_id: str, ids: list[str]) -> set[str]:
+    """Ask the service that owns these items which ones this member may read.
+
+    One call for the whole batch. If the service cannot answer, nothing is
+    allowed: live updates wait for a reload, nothing leaks.
+    """
+    if not ids:
+        return set()
+    try:
+        async with httpx.AsyncClient(timeout=4) as client:
+            response = await client.post(url, json={"viewer": user_id, key: ids[:200]})
+        response.raise_for_status()
+        return set(response.json().get(key, []))
+    except Exception as exc:
+        log.warning("topic check %s failed for %s: %s", key, user_id, exc)
+        return set()
 
 
 async def _readable_topics(user_id: str, topics: list[str]) -> list[str]:
-    """Drop ``post:<id>`` topics for posts this member may not read.
+    """Keep the topics this member may listen to, drop the rest.
 
-    A post topic carries who commented and when. Subscribing used to be open to
-    anyone holding the id, so a member removed from a circle could keep
-    listening to its posts. social-service answers for the whole batch with the
-    same audience rule as every other read; if it cannot answer, the post
-    topics are dropped — live counters wait for a reload, nothing leaks.
+    ``post:<id>`` and ``thread:<id>`` carry who commented, replied or voted, and
+    when. Subscribing used to be open to anyone holding the id, so a member
+    removed from a circle could keep listening to its posts, and anyone could
+    listen to a secret community's threads. The service that owns the item
+    answers with the same rule as opening it (audience, forum door, age).
     """
-    post_ids = [t.split(":", 1)[1] for t in topics if t.startswith("post:")]
-    if not post_ids:
-        return topics
-    try:
-        async with httpx.AsyncClient(timeout=4) as client:
-            response = await client.post(
-                f"{SOCIAL_URL}/internal/readable-posts",
-                json={"viewer": user_id, "post_ids": post_ids[:200]},
-            )
-        response.raise_for_status()
-        allowed = set(response.json().get("post_ids", []))
-    except Exception as exc:
-        log.warning("post topic check failed for %s: %s", user_id, exc)
-        allowed = set()
-    return [t for t in topics if not t.startswith("post:") or t.split(":", 1)[1] in allowed]
+    def ids_of(prefix: str) -> list[str]:
+        return list(dict.fromkeys(t[len(prefix):] for t in topics if t.startswith(prefix) and len(t) > len(prefix)))
+
+    posts, threads = await asyncio.gather(
+        _readable_ids(f"{SOCIAL_URL}/internal/readable-posts", "post_ids", user_id, ids_of("post:")),
+        _readable_ids(f"{COMMUNITY_URL}/internal/readable-threads", "thread_ids", user_id, ids_of("thread:")),
+    )
+    allowed: list[str] = []
+    for topic in topics:
+        if topic in OPEN_TOPICS or topic == f"user:{user_id}":
+            allowed.append(topic)
+        elif topic.startswith("post:") and topic[5:] in posts:
+            allowed.append(topic)
+        elif topic.startswith("thread:") and topic[7:] in threads:
+            allowed.append(topic)
+    return allowed
 
 
 def _subscribe(socket: WebSocket, topics: list[str]) -> None:
