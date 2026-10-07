@@ -1207,6 +1207,11 @@ export default function Messages() {
 
   return (
     <AppShell
+      // Messages is a working surface, not something to read down the middle of
+      // the page: the 560px reading cap left the thread about 240px once the
+      // conversation list took its 300, which is a column of broken words
+      // rather than a conversation.
+      wide
       // On a phone, the open thread is the whole screen: its own header (with
       // the back button) says where you are, and every pixel above the
       // composer is a message you can read.

@@ -8,6 +8,7 @@ import { AppChipBar, AppTopBar } from './AppChrome'
 import ProfileCard from './ProfileCard'
 import UnreadBadge from './UnreadBadge'
 import { useUnreadMessages } from '@/hooks/useUnreadMessages'
+import MessageToast from './MessageToast'
 import WellbeingBar from './WellbeingBar'
 
 /** Mobile bottom bar — the blueprint's five, Create in the middle. */
@@ -32,6 +33,7 @@ export default function AppShell({
   subtitle,
   action,
   aside,
+  wide = false,
   children,
 }: {
   /**
@@ -44,6 +46,17 @@ export default function AppShell({
   action?: ReactNode
   /** Right-hand context rail. Omitted on pages that don't need one. */
   aside?: ReactNode
+  /**
+   * Drop the reading-width cap and use the whole middle column.
+   *
+   * The 560px cap exists because a feed is a line of text and a picture, and a
+   * long line is tiring to read. A page that is a working surface rather than
+   * something to read - a chat with a conversation list beside it, a table, a
+   * board - is only cramped by it: at 560 the message panel had about 240px
+   * left once the list took its 300, which is not a conversation, it is a
+   * column of broken words.
+   */
+  wide?: boolean
   children: ReactNode
 }) {
   const { user, loading } = useAuth()
@@ -111,7 +124,7 @@ export default function AppShell({
         {/* Centre column. The reading width lives here rather than on the grid
             column, so the rails stay anchored to the edges while the feed sits
             in the middle of the space between them. */}
-        <main className="mx-auto w-full min-w-0 max-w-[560px]">
+        <main className={cn('w-full min-w-0', !wide && 'mx-auto max-w-[560px]')}>
           {(title || action) && (
             <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
               {title ? (
@@ -187,6 +200,11 @@ export default function AppShell({
           })}
         </ul>
       </nav>
+
+      {/* Mounted on the shell, so a message that arrives while you are reading
+          the feed or looking at a profile still shows itself. It takes itself
+          off on the Messages page, where the thread is the better answer. */}
+      <MessageToast />
     </div>
   )
 }
