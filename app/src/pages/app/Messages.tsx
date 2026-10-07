@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Check,
   CheckCheck,
+  Clock,
   Download,
   File as FileIcon,
   FileText,
@@ -27,6 +28,7 @@ import AppShell from '@/components/app/AppShell'
 import { useAppTheme } from '@/components/appdemo/theme'
 import AttachmentMenu from '@/components/social/AttachmentMenu'
 import MediaLightbox from '@/components/social/MediaLightbox'
+import VoiceNotePlayer from '@/components/social/VoiceNotePlayer'
 import {
   ReactButton,
   ReactionChips,
@@ -46,6 +48,7 @@ import MemberAvatar from '@/components/social/MemberAvatar'
 import { useApi } from '@/hooks/useApi'
 import { useRealtime } from '@/hooks/useRealtime'
 import { useAuth } from '@/hooks/useAuth'
+import { useMyProfile } from '@/hooks/useMyProfile'
 import {
   ApiError,
   kaluta,
@@ -198,15 +201,70 @@ function recorderType(): string | undefined {
   )
 }
 
+/**
+ * The time of a message, and for my own the delivery ticks: one line, so a short
+ * message or a voice note does not grow a row of its own for it.
+ * `onGold`: drawn on my gold bubble, so in its fixed dark ink (the `ink` token turns
+ * white in the light theme) rather than the thread's grey.
+ */
+function MessageMeta({
+  message,
+  locale,
+  mine,
+  onGold,
+  isRead,
+}: {
+  message: ChatMessage
+  locale: string
+  mine: boolean
+  onGold: boolean
+  isRead: boolean
+}) {
+  const sending = message.status === 'sending'
+  const failed = message.status === 'failed'
+  return (
+    <span
+      className={cn(
+        'inline-flex select-none items-center gap-1 whitespace-nowrap text-[0.68rem] leading-none',
+        onGold ? 'text-[#0b0e1d]/70' : 'text-text-low',
+      )}
+      title={fullStamp(message.created_at, locale)}
+    >
+      <span>
+        {sending
+          ? message.media_kind
+            ? `Uploading ${Math.round((message.progress ?? 0) * 100)}%`
+            : 'Sending…'
+          : timeOf(message.created_at, locale)}
+      </span>
+      {mine && !failed && (
+        <span className="inline-flex items-center">
+          {sending ? (
+            <Clock size={11} className="opacity-70" aria-label="Sending" />
+          ) : isRead ? (
+            <CheckCheck size={13} className={onGold ? 'text-[#0b0e1d]' : 'text-gold-soft'} aria-label="Seen" />
+          ) : (
+            <CheckCheck size={13} className="opacity-45" aria-label="Delivered" />
+          )}
+        </span>
+      )}
+    </span>
+  )
+}
+
 /** One attachment, drawn for what it is. */
 function Attachment({
   message,
   onOpenImage,
-  dark,
+  sender,
+  mine,
+  metaSlot,
 }: {
   message: ChatMessage
   onOpenImage: (url: string) => void
-  dark: boolean
+  sender?: { handle?: string; display_name?: string; avatar_url?: string | null } | null
+  mine: boolean
+  metaSlot?: React.ReactNode
 }) {
   const url = message.media_url ?? message.preview_url ?? null
   const kind = message.media_kind ?? 'file'
@@ -227,15 +285,14 @@ function Attachment({
     return <video src={url} controls preload="metadata" className="max-h-80 max-w-full rounded-card-sm" />
   }
   if (url && kind === 'audio') {
-    // The browser draws its own player; `color-scheme` is how it learns the
-    // page is dark, instead of dropping a white pill into a dark thread.
     return (
-      <audio
+      <VoiceNotePlayer
         src={url}
-        controls
-        preload="metadata"
-        className="w-64 max-w-full"
-        style={{ colorScheme: dark ? 'dark' : 'light' }}
+        senderAvatarUrl={sender?.avatar_url}
+        senderDisplayName={sender?.display_name}
+        senderHandle={sender?.handle}
+        mine={mine}
+        metaSlot={metaSlot}
       />
     )
   }
@@ -357,7 +414,8 @@ function PresenceAvatar({
 
 export default function Messages() {
   const { user } = useAuth()
-  const { lang: locale, resolved } = useAppTheme()
+  const me = useMyProfile()
+  const { lang: locale } = useAppTheme()
   const [params, setParams] = useSearchParams()
   const requestedId = params.get('c')
   const paramsRef = useRef(params)
@@ -1711,6 +1769,31 @@ export default function Messages() {
                     startOfDay(new Date(following.created_at)) === startOfDay(new Date(message.created_at)) &&
                     following.sender_id === message.sender_id &&
                     new Date(following.created_at).getTime() - new Date(message.created_at).getTime() < BURST_MS
+                  const isAudio = message.media_kind === 'audio'
+                  // A run shows one time, on its last bubble; hover has the full stamp.
+                  const showMeta = !burstNext || Boolean(message.status)
+                  // Where the time goes: inside a voice note, at the end of the text's last
+                  // line, or (a photo, a sticker) on a row of its own. Never a row after text.
+                  const metaInPlayer = isAudio && !hasText && !message.encrypted
+                  const metaInText = hasText || (message.encrypted && !isSticker)
+                  const metaOnItsOwnRow = !metaInPlayer && !metaInText
+                  const seenByThem =
+                    mine && activeOthers.some((uid) => {
+                      const at = readAt(active, uid)
+                      return at !== null && new Date(at).getTime() >= new Date(message.created_at).getTime()
+                    })
+                  const meta = (
+                    <MessageMeta
+                      message={message}
+                      locale={locale}
+                      mine={mine}
+                      onGold={mine && !bareSticker}
+                      isRead={seenByThem}
+                    />
+                  )
+                  const attachmentSender = mine
+                    ? user && { handle: user.handle, display_name: user.display_name, avatar_url: me?.avatar_url ?? sender?.avatar_url ?? null }
+                    : sender
                   return (
                     <div key={message.client_id ?? message.id}>
                       {newDay && (
@@ -1765,7 +1848,7 @@ export default function Messages() {
                         <div
                           className={cn(
                             'min-w-0',
-                            bareSticker ? 'p-0' : mediaOnly ? 'p-1.5' : 'px-3.5 py-[7px]',
+                            bareSticker ? 'p-0' : metaInPlayer ? 'px-2.5 py-1.5' : mediaOnly ? 'p-1.5' : 'px-3.5 py-[7px]',
                             !bareSticker && bubbleShape(mine, !burst, !burstNext),
                             bareSticker
                               ? 'text-text-hi'
@@ -1795,8 +1878,14 @@ export default function Messages() {
                           )}
                           {message.media_kind && (
                             <div className={cn('relative', hasText && '-mx-2 -mt-0.5 mb-1.5')}>
-                              <Attachment message={message} onOpenImage={setLightbox} dark={resolved !== 'light'} />
-                              {message.status === 'sending' && (
+                              <Attachment
+                                message={message}
+                                onOpenImage={setLightbox}
+                                sender={attachmentSender}
+                                mine={mine}
+                                metaSlot={showMeta ? meta : undefined}
+                              />
+                              {message.status === 'sending' && !metaInPlayer && (
                                 <div className="absolute inset-x-2 bottom-2 h-1 overflow-hidden rounded-full bg-black/40">
                                   <div
                                     className="h-full bg-gold"
@@ -1806,8 +1895,8 @@ export default function Messages() {
                               )}
                             </div>
                           )}
-                          {(hasText || (message.encrypted && !isSticker)) && (
-                            <p className="whitespace-pre-wrap break-words text-[15px] leading-snug">
+                          {metaInText && (
+                            <p className="relative whitespace-pre-wrap break-words text-[15px] leading-snug">
                               {message.encrypted ? (
                                 <span className="italic text-text-low">
                                   Encrypted — only your device can read this.
@@ -1815,24 +1904,24 @@ export default function Messages() {
                               ) : (
                                 message.body
                               )}
+                              {showMeta && (
+                                <>
+                                  {/* An unseen copy of the time keeps room for it at the end of the last
+                                      line, or pushes it to a new line when that line is full; the real one
+                                      sits on top of it, bottom right. */}
+                                  <span aria-hidden="true" className="invisible ms-2.5 inline-flex align-bottom">
+                                    {meta}
+                                  </span>
+                                  <span className="absolute bottom-0 end-0 flex items-end">{meta}</span>
+                                </>
+                              )}
                             </p>
                           )}
-                          <p
-                            className={cn(
-                              'text-right text-[0.68rem] leading-none',
-                              mine && !bareSticker ? 'text-ink/70' : 'text-text-low',
-                              mediaOnly || bareSticker ? 'px-1.5 pt-1' : 'mt-1',
-                              // A run shows one time, on its last bubble; hover has the full stamp.
-                              burstNext && !message.status && 'hidden',
-                            )}
-                            title={fullStamp(message.created_at, locale)}
-                          >
-                            {message.status === 'sending'
-                              ? message.media_kind
-                                ? `Uploading ${Math.round((message.progress ?? 0) * 100)}%`
-                                : 'Sending…'
-                              : timeOf(message.created_at, locale)}
-                          </p>
+                          {metaOnItsOwnRow && showMeta && (
+                            <div className={cn('flex justify-end', mediaOnly || bareSticker ? 'px-1.5 pt-1' : 'mt-1')}>
+                              {meta}
+                            </div>
+                          )}
                         </div>
                         </SwipeToReply>
                         </div>
