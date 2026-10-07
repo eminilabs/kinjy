@@ -239,6 +239,12 @@ export function layoutTree(tree: FamilyTree): Layout {
       for (const p of u.unit.parents) d += `M ${cx(p)} ${bottom(p)} V ${jy} `
       d += `M ${Math.min(...xs)} ${jy} H ${Math.max(...xs)} `
     }
+    if (u.adjacent && !partners.get(u.unit.parents[0])?.has(u.unit.parents[1])) {
+      // Two parents of the same child form one parental unit, married or not: the line between
+      // them belongs to the union (drawn from the final positions), not to a spouse link.
+      const [first, second] = (x.get(u.unit.parents[0]) ?? 0) <= (x.get(u.unit.parents[1]) ?? 0) ? u.unit.parents : [u.unit.parents[1], u.unit.parents[0]]
+      d += `M ${(x.get(first) ?? 0) + CARD_W} ${jy} H ${x.get(second) ?? 0} `
+    }
     d += `M ${jx} ${jy} V ${barY} `
     const xs = [jx, ...u.unit.children.map(cx)]
     if (Math.max(...xs) - Math.min(...xs) > 0.5) d += `M ${Math.min(...xs)} ${barY} H ${Math.max(...xs)} `

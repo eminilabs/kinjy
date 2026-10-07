@@ -826,4 +826,7 @@ server lists things in, and the person you are viewing is not the origin.
   they can to their child and the bar runs longer (`Layout.crossLinked`), it is not
   centred. A mother between two unions with wide descendants gets a long partner line.
   A tree this wide shows small cards when fitted on a desktop (zoom floor lowered to 25%).
+- The line between two parents of the same child belongs to the union and is computed
+  from the final positions; a `spouse_of` link is not needed to draw it (and none is
+  created). When the pair are also recorded spouses, the spouse line is the one drawn.
 

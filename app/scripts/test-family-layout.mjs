@@ -79,6 +79,7 @@ function pathSegments(d) {
   }
   return segs
 }
+const longestStem = (segs) => segs.filter((g) => g[0] === g[2] && g[1] !== g[3]).sort((a, b) => Math.abs(b[3] - b[1]) - Math.abs(a[3] - a[1]))[0]
 const crossesCard = (seg, p) => {
   const [x1, y1, x2, y2] = seg
   const l = Math.min(x1, x2), r = Math.max(x1, x2), tp = Math.min(y1, y2), b = Math.max(y1, y2)
@@ -131,13 +132,31 @@ function geometry(name, tree, expectations = () => {}) {
   for (const s of stems) {
     const xs = s.children.map((k) => at.get(k).x + CARD_W / 2)
     const centre = (Math.min(...xs) + Math.max(...xs)) / 2
-    const stemX = pathSegments(s.d).find((seg) => seg[0] === seg[2])[0]
+    const stemX = longestStem(pathSegments(s.d))[0]
     const own = s.parents.map((p) => at.get(p).x + CARD_W / 2)
     // junction is between its parents (or under the lone parent)
     ok(stemX >= Math.min(...own) - 0.5 && stemX <= Math.max(...own) + 0.5, `${name}: stem ${s.id} is outside its parents`)
     // a union whose children stand in another family's tree (joined by marriage) is the one honest exception
     if (lay.crossLinked.includes([...s.parents].sort().join('|'))) continue
     ok(Math.abs(centre - stemX) < 1, `${name}: children of ${s.parents} are not centred under their union (${centre} vs ${stemX})`)
+  }
+
+  // two parents of one child are one parental unit: a horizontal line joins them, the stem leaves from it,
+  // and it reaches no further than those two parents (so it cannot tie two different unions together)
+  for (const s of stems.filter((s) => s.parents.length === 2)) {
+    const spouseLine = lay.connectors.filter((c) => c.kind === 'partner' && c.ends && s.parents.every((p) => c.ends.includes(p)))
+    const segs = [s.d, ...spouseLine.map((c) => c.d)].flatMap(pathSegments)
+    const stem = longestStem(segs)
+    const lo = Math.min(...s.parents.map((p) => at.get(p).x))
+    const hi = Math.max(...s.parents.map((p) => at.get(p).x + CARD_W))
+    const joins = segs.filter((seg) => seg[1] === seg[3] && seg[0] !== seg[2] && Math.min(seg[0], seg[2]) <= stem[0] + 0.5 && Math.max(seg[0], seg[2]) >= stem[0] - 0.5 && seg[1] <= stem[1] + 0.5)
+    ok(joins.length >= 1, `${name}: the parents ${s.parents} are not joined by a horizontal line at the stem`)
+    for (const j of joins) {
+      ok(Math.min(j[0], j[2]) >= lo - 0.5 && Math.max(j[0], j[2]) <= hi + 0.5, `${name}: the line of ${s.parents} reaches beyond its two parents`)
+      const [a, b] = s.parents.map((p) => at.get(p))
+      ok(Math.min(j[0], j[2]) <= Math.max(a.x, b.x) + 0.5, `${name}: the line of ${s.parents} does not reach the second parent`)
+    }
+    ok(stem[1] >= Math.min(...s.parents.map((p) => at.get(p).y)) + CARD_H / 2 - 0.5, `${name}: stem of ${s.parents} starts above its parents`)
   }
 
   expectations({ lay, at, stems })
@@ -252,6 +271,59 @@ geometry('scenario', scenario(), ({ at, stems }) => {
   const order = (lay, row) => lay.placed.filter((p) => p.row === row).sort((a, b) => a.x - b.x).map((p) => p.id).join()
   for (const row of [0, 1, 2, 3]) ok(order(before, row) === order(after, row), `adding a grandchild reordered row ${row}`)
   ok(was.get('Moi').y === after.placed.find((p) => p.id === 'Moi').y, 'a new generation below does not move the ones above')
+}
+
+
+// --- 4. the parental unit does not depend on a spouse link ----------------------------------------
+// No spouse_of anywhere in these: two people who are parents of the same child are still one unit.
+function unitCase(label, kidsOfUnion) {
+  // kidsOfUnion: array of child counts, one per union of the central parent M (unions: M+P0, M+P1, ...)
+  const f = family()
+  f.person('M', 1, 1960)
+  kidsOfUnion.forEach((count, u) => {
+    f.person(`P${u}`, 1, 1958 + u * 5)
+    for (let k = 0; k < count; k++) {
+      f.person(`K${u}_${k}`, 0, 1985 + u * 6 + k)
+      f.parent('M', `K${u}_${k}`); f.parent(`P${u}`, `K${u}_${k}`)
+    }
+  })
+  return geometry(label, f.tree(), ({ at, stems }) => {
+    ok(stems.length === kidsOfUnion.length, `${label}: one parental unit per union`)
+    for (const s of stems) {
+      const u = s.parents.find((p) => p !== 'M').slice(1)
+      ok(s.children.length === kidsOfUnion[u] && s.children.every((k) => k.startsWith(`K${u}_`)), `${label}: union ${u} holds only its own children`)
+    }
+  })
+}
+for (const n of [1, 2, 3, 5, 9]) {
+  const lay = unitCase(`two parents + ${n} children (no spouse link)`, [n])
+  ok(lay.connectors.every((c) => c.kind !== 'partner'), 'no spouse link was invented')
+}
+unitCase('two unions, no spouse link', [2, 3])
+unitCase('three unions, no spouse link', [2, 1, 4])
+{
+  // half-siblings by the mother and by the father, parents never recorded as partners
+  const f = family()
+  f.person('Me', 0, 1992); f.person('Full', 0, 1994); f.person('HalfM', 0, 1985); f.person('HalfP', 0, 1998)
+  f.person('Dad', 1, 1962); f.person('Mum', 1, 1964); f.person('Dad2', 1, 1960); f.person('Mum2', 1, 1970)
+  for (const k of ['Me', 'Full']) { f.parent('Dad', k, 'father'); f.parent('Mum', k, 'mother') }
+  f.parent('Dad2', 'HalfM', 'father'); f.parent('Mum', 'HalfM', 'mother')
+  f.parent('Dad', 'HalfP', 'father'); f.parent('Mum2', 'HalfP', 'mother')
+  geometry('half-siblings by mother and father, no spouse links', f.tree(), ({ stems }) => {
+    ok(stems.length === 3, 'three distinct parental units')
+    const key = (s) => [...s.parents].sort().join('+')
+    const byKey = Object.fromEntries(stems.map((s) => [key(s), s.children.slice().sort().join()]))
+    ok(byKey['Dad+Mum'] === 'Full,Me' && byKey['Dad2+Mum'] === 'HalfM' && byKey['Dad+Mum2'] === 'HalfP', 'each union keeps its own children')
+  })
+}
+{
+  // a married pair keeps the spouse line and does not get a second one on top of it
+  const f = family()
+  f.person('A', 1, 1960); f.person('B', 1, 1961); f.person('C', 0, 1990)
+  f.spouse('A', 'B'); f.parent('A', 'C'); f.parent('B', 'C')
+  const lay = layoutTree(f.tree())
+  ok(lay.connectors.filter((c) => c.kind === 'partner').length === 1, 'one spouse line')
+  ok(!pathSegments(lay.connectors.find((c) => c.kind === 'stem').d).some((seg) => seg[1] === seg[3] && seg[0] !== seg[2] && seg[1] < 200), 'the unit line is not doubled over a spouse line')
 }
 
 console.log(`${checks} geometric checks`)
