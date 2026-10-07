@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 import StatusIcon from './Status'
 import { CARD_H, CARD_W, GENDER_LABEL, GENDER_TINT, fullName, genderKey, layoutTree, lifespan, type Placed } from './layout'
 
-const MIN_SCALE = 0.4
+const MIN_SCALE = 0.25
 const MAX_SCALE = 2
 const clamp = (value: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, value))
 
