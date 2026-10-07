@@ -18,7 +18,7 @@ export default function KycSection() {
     <section aria-labelledby="kyc-heading" className="border-t border-white/8 px-5 py-10 md:px-8">
       <div className="grid items-center gap-8 lg:grid-cols-2">
         <div>
-          <p className="eyebrow text-gold">Refinement #20 · KinjyKYC gate</p>
+          <p className="eyebrow text-gold">KinjyKYC gate</p>
           <h2 id="kyc-heading" className="h3 mt-2 text-xl">
             Verified earners, private by design.
           </h2>

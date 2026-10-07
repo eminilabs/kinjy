@@ -89,7 +89,7 @@ export default function LedgerSection() {
 
   return (
     <section aria-labelledby="ledger-heading" className="border-t border-white/8 px-5 py-10 md:px-8">
-      <p className="eyebrow text-gold">Refinement #21 · Immutable ledger</p>
+      <p className="eyebrow text-gold">Immutable ledger</p>
       <h2 id="ledger-heading" className="h3 mt-2 text-xl">
         Every cent, written in stone.
       </h2>
