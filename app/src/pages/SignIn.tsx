@@ -60,7 +60,9 @@ function passwordProblem(value: string): string | null {
 }
 
 export default function SignIn() {
-  const { t } = useTranslation()
+  // This page is English only, whatever language the browser asks for.
+  const { i18n } = useTranslation()
+  const t = i18n.getFixedT('en')
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const { user, signIn, signUp } = useAuth()
@@ -365,7 +367,7 @@ export default function SignIn() {
               <Brand size={40} text={22} />
             </Link>
             <div className="flex w-full flex-col items-center">
-              <HeroCollage className="relative w-[min(100%,min(480px,calc((100vh-240px)/1.08)))] shrink-0" />
+              <HeroCollage english className="relative w-[min(100%,min(480px,calc((100vh-240px)/1.08)))] shrink-0" />
               <p className="mt-6 max-w-[420px] text-center text-[17px] leading-[1.55] text-[var(--kl-mid)]" style={{ textWrap: 'pretty' }}>
                 {t('hero.sub')}
               </p>

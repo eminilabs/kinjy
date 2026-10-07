@@ -9,8 +9,16 @@ function Photo({ src, alt }: { src: string; alt: string }) {
 }
 
 /** The collage: a community, a story, a post, an avatar. Decorative; also used on the sign-in page. */
-export function HeroCollage({ className = 'relative w-full max-w-[640px] justify-self-end' }: { className?: string }) {
-  const { t } = useTranslation()
+export function HeroCollage({
+  className = 'relative w-full max-w-[640px] justify-self-end',
+  english = false,
+}: {
+  className?: string
+  /** Ignore the browser language: the sign-in page is English only. */
+  english?: boolean
+}) {
+  const { t: translate, i18n } = useTranslation()
+  const t = english ? i18n.getFixedT('en') : translate
   return (
     <div className={className} style={{ aspectRatio: '1 / 1.08' }} aria-hidden="true">
       <div
