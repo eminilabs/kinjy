@@ -13,7 +13,7 @@ type Part = { title: string; body: string; icon: typeof BookOpen }
 
 const PARTS: Part[] = [
   { title: 'Biography & timeline', body: 'Life story told in dated chapters.', icon: BookOpen },
-  { title: 'Portrait, cover & voice', body: 'A portrait, a cover image and a voice recording. Autoplay is the family’s choice — ON or OFF.', icon: Image },
+  { title: 'Photos, videos & voice', body: 'A gallery of photos and videos, a portrait and a voice recording. Each picture says where it comes from; autoplay is the family’s choice.', icon: Image },
   { title: 'Guest book & condolences', body: 'By default, messages and photos wait for the family’s approval before they appear.', icon: ShieldCheck },
   { title: 'Digital flowers & candles', body: 'Anyone can light a candle or leave a flower, free.', icon: Flower2 },
   { title: 'Grave location', body: 'Latitude/longitude captured at the grave are marked confirmed; typed ones are marked not yet confirmed. Never fabricated.', icon: MapPin },

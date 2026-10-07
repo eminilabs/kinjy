@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { ApiError, kaluta, type Memorial, type MemorialEvent, type Tribute } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { DEATH_STATUS, FAITH_STYLES, lifeSpan, momentDate } from './format'
+import MemorialGallery from './MemorialGallery'
 import { TICKET_REFRESH_MS, useEvery } from './useEvery'
 
 const card = 'rounded-card-md border border-text-low/25 bg-text-low/5 p-5'
@@ -476,6 +477,8 @@ export default function MemorialView({ memorial, onChanged }: { memorial: Memori
           <p className="whitespace-pre-line text-sm leading-relaxed text-text-mid">{memorial.biography}</p>
         </section>
       )}
+
+      <MemorialGallery memorial={memorial} />
 
       {moments.length > 0 && (
         <section className={card} aria-label="Timeline">

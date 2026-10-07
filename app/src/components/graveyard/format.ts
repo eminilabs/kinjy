@@ -49,3 +49,23 @@ export const FAITH_STYLES: Array<{ id: string; label: string }> = [
   { id: 'secular', label: 'Secular' },
   { id: 'other', label: 'Other' },
 ]
+
+/** The five origin labels a file can carry (blueprint §17), in the words a family reads. */
+export const PROVENANCE: Array<{ id: string; label: string }> = [
+  { id: 'original', label: 'Original upload' },
+  { id: 'edited', label: 'Edited' },
+  { id: 'ai_assisted', label: 'AI assisted' },
+  { id: 'ai_generated', label: 'AI generated' },
+  { id: 'verified_source', label: 'Verified source' },
+]
+
+export function provenanceLabel(value: string): string {
+  return PROVENANCE.find((p) => p.id === value)?.label ?? 'Original upload'
+}
+
+/** "1.4 MB", "820 KB" — sizes as a person says them. */
+export function formatBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)} MB`
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${bytes} B`
+}

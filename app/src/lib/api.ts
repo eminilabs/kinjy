@@ -922,6 +922,30 @@ export interface Tribute {
   status?: string
 }
 
+/** One photo or video in a memorial's gallery. The url is a ticket: short-lived, never to be stored. */
+export interface GalleryItem {
+  id: string
+  kind: 'image' | 'video'
+  url: string
+  caption: string | null
+  /** original | edited | ai_assisted | ai_generated | verified_source */
+  provenance: string
+  /** The family's call: blurred until the visitor chooses to look. */
+  sensitive: boolean
+  position: number
+  size_bytes: number
+  /** A visitor's tribute photo the family promoted; it still belongs to the tribute. */
+  from_tribute: boolean
+}
+
+export interface Gallery {
+  limit: number
+  max_bytes: number
+  /** Administrators only. */
+  bytes_used?: number
+  items: GalleryItem[]
+}
+
 export interface MemorialEvent {
   id: string
   year: number
@@ -1485,8 +1509,12 @@ export const kaluta = {
         provenance?: string
         altText?: string
         signal?: AbortSignal
-        /** 'chat' accepts any file type; a post only formats every browser renders. */
-        purpose?: 'post' | 'chat'
+        /**
+         * 'chat' accepts any file type; a post only formats every browser renders.
+         * 'memorial' is a gallery photo or video: JPEG/PNG/WebP up to 25 MB, MP4/WebM up
+         * to 50 MB, and the bytes must be what the type says.
+         */
+        purpose?: 'post' | 'chat' | 'memorial'
       } = {},
     ): Promise<UploadedMedia> {
       const form = new FormData()
@@ -1864,6 +1892,22 @@ export const kaluta = {
       api.post<{ id: string; status: string }>(
         `/memorials/${id}/tributes/${tributeId}/moderate?decision=${decision}`,
       ),
+
+    gallery: (id: string) => api.get<Gallery>(`/memorials/${id}/media`),
+    addMedia: (id: string, input: { media_id: string; caption?: string; sensitive?: boolean }) =>
+      api.post<GalleryItem>(`/memorials/${id}/media`, input),
+    updateMedia: (
+      id: string,
+      itemId: string,
+      patch: Partial<{ caption: string | null; sensitive: boolean; provenance: string }>,
+    ) => api.patch<GalleryItem>(`/memorials/${id}/media/${itemId}`, patch),
+    /** Every item, once, in the order wanted. */
+    reorderMedia: (id: string, ids: string[]) =>
+      api.post<{ items: GalleryItem[] }>(`/memorials/${id}/media/reorder`, { ids }),
+    removeMedia: (id: string, itemId: string) => api.delete<void>(`/memorials/${id}/media/${itemId}`),
+    /** Put a visitor's approved photo in the gallery; the file stays the tribute's. */
+    promoteTribute: (id: string, tributeId: string) =>
+      api.post<GalleryItem>(`/memorials/${id}/media/from-tribute/${tributeId}`),
 
     events: (id: string) => api.get<{ items: MemorialEvent[] }>(`/memorials/${id}/events`),
     addEvent: (id: string, input: { year: number; month?: number; day?: number; title: string; body?: string }) =>
