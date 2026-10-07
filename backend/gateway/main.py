@@ -51,6 +51,7 @@ ROUTES: dict[str, str] = {
     "/api/forums": "http://community-service:8000",
     "/api/discover": "http://community-service:8000",
     "/api/threads": "http://community-service:8000",
+    "/api/replies": "http://community-service:8000",
     "/api/family": "http://family-service:8000",
     "/api/memorials": "http://memorial-service:8000",
     "/api/conversations": "http://messaging-service:8000",

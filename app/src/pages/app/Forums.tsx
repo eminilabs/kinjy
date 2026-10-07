@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import {
   ArrowLeft,
+  ArrowUp,
+  BookOpen,
   CheckCircle2,
   ChevronRight,
   Eye,
@@ -16,9 +19,23 @@ import {
   X,
 } from 'lucide-react'
 import AppShell from '@/components/app/AppShell'
+import KnowledgePanel from '@/components/forums/KnowledgePanel'
 import MemberAvatar from '@/components/social/MemberAvatar'
-import { ApiError, kaluta, type Forum, type Thread, type ThreadDetail } from '@/lib/api'
+import { useAuth } from '@/hooks/useAuth'
+import { ApiError, kaluta, type Forum, type Thread, type ThreadDetail, type ThreadSort } from '@/lib/api'
 import { cn } from '@/lib/utils'
+
+const SORT_TABS: Array<{ id: ThreadSort; label: string; empty: string }> = [
+  { id: 'recent', label: 'Recent', empty: 'No discussions posted yet. Be the first to start a conversation!' },
+  { id: 'trending', label: 'Trending', empty: 'Nothing is trending here yet.' },
+  { id: 'solved', label: 'Solved', empty: 'No question has been answered here yet.' },
+  { id: 'unanswered', label: 'Unanswered', empty: 'Every discussion here has at least one reply.' },
+]
+
+/** The accepted answer always reads first, as the server returns it. */
+function withAcceptedFirst(replies: ThreadDetail['replies']): ThreadDetail['replies'] {
+  return [...replies].sort((a, b) => Number(Boolean(b.accepted_answer)) - Number(Boolean(a.accepted_answer)))
+}
 
 /** Responsive media query hook to isolate mobile navigation flows cleanly. */
 function useMediaQuery(query: string): boolean {
@@ -46,10 +63,19 @@ function ago(iso?: string | null): string {
 
 export default function Forums() {
   const isDesktop = useMediaQuery('(min-width: 1024px)')
+  const { user } = useAuth()
 
   const [forums, setForums] = useState<Forum[]>([])
   const [forumId, setForumId] = useState<string | null>(null)
   const [threads, setThreads] = useState<Thread[]>([])
+  const [sort, setSort] = useState<ThreadSort>('recent')
+  const [view, setView] = useState<'discussions' | 'knowledge'>('discussions')
+  const [params, setParams] = useSearchParams()
+  const linkedThread = useRef(params.get('thread'))
+  const [threadsLoading, setThreadsLoading] = useState(false)
+  // Replies whose vote or acceptance is in flight: a second tap waits for the first.
+  const [busyReplies, setBusyReplies] = useState<ReadonlySet<string>>(new Set())
+  const latestThreadsRequest = useRef(0)
   const [open, setOpen] = useState<ThreadDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -84,17 +110,71 @@ export default function Forums() {
     }
   }, [])
 
-  const loadThreads = useCallback(async (id: string) => {
-    setForumId(id)
-    setOpen(null)
-    setIsCreatingThread(false)
+  const fetchThreads = useCallback(async (id: string, order: ThreadSort) => {
+    // Tabs can be tapped faster than the server answers: only the last one counts.
+    const request = ++latestThreadsRequest.current
+    setThreadsLoading(true)
     try {
-      const result = await kaluta.forums.threads(id)
-      setThreads(result.items)
+      const result = await kaluta.forums.threads(id, order)
+      if (request === latestThreadsRequest.current) setThreads(result.items)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not load threads')
+      if (request === latestThreadsRequest.current) {
+        // Never leave the previous tab's threads under this tab's name.
+        setThreads([])
+        setError(err instanceof ApiError ? err.message : 'Could not load threads')
+      }
+    } finally {
+      if (request === latestThreadsRequest.current) setThreadsLoading(false)
     }
   }, [])
+
+  const loadThreads = useCallback(
+    async (id: string) => {
+      setForumId(id)
+      setSort('recent')
+      setView('discussions')
+      setOpen(null)
+      setIsCreatingThread(false)
+      await fetchThreads(id, 'recent')
+    },
+    [fetchThreads],
+  )
+
+  // A link like /forums?thread=… (from a notification) opens that thread, in its forum.
+  useEffect(() => {
+    const threadId = linkedThread.current
+    if (!threadId) return
+    linkedThread.current = null
+    void (async () => {
+      try {
+        const detail = await kaluta.forums.thread(threadId)
+        setForumId(detail.forum_id)
+        setOpen(detail)
+        await fetchThreads(detail.forum_id, 'recent')
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : 'Could not open the thread')
+      } finally {
+        setParams({}, { replace: true })
+      }
+    })()
+  }, [fetchThreads, setParams])
+
+  const openFromKnowledge = (threadId: string) => {
+    setView('discussions')
+    void openThread(threadId)
+  }
+
+  const backToThreads = () => {
+    setOpen(null)
+    // What happened inside (a reply, an accepted answer) changes what the list shows.
+    if (forumId) void fetchThreads(forumId, sort)
+  }
+
+  const changeSort = (next: ThreadSort) => {
+    if (!forumId || next === sort) return
+    setSort(next)
+    void fetchThreads(forumId, next)
+  }
 
   useEffect(() => {
     void loadForums()
@@ -147,6 +227,51 @@ export default function Forums() {
     } finally {
       setSummarising(false)
     }
+  }
+
+  const runOnReply = async (replyId: string, action: () => Promise<void>) => {
+    if (busyReplies.has(replyId)) return
+    setBusyReplies((current) => new Set(current).add(replyId))
+    try {
+      await action()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'That did not go through')
+    } finally {
+      setBusyReplies((current) => {
+        const next = new Set(current)
+        next.delete(replyId)
+        return next
+      })
+    }
+  }
+
+  const toggleUpvote = (replyId: string) =>
+    runOnReply(replyId, async () => {
+      const { upvotes, voted } = await kaluta.forums.upvote(replyId)
+      setOpen((current) =>
+        current && {
+          ...current,
+          replies: current.replies.map((r) => (r.id === replyId ? { ...r, upvotes, voted_by_me: voted } : r)),
+        },
+      )
+    })
+
+  const acceptAnswer = (replyId: string) => {
+    const replacing = open?.replies.some((r) => r.accepted_answer && r.id !== replyId)
+    if (replacing && !window.confirm('Another reply is already marked as the solution. Make this one the solution instead?')) {
+      return Promise.resolve()
+    }
+    return runOnReply(replyId, async () => {
+      await kaluta.forums.acceptAnswer(replyId)
+      setOpen((current) =>
+        current && current.replies.some((r) => r.id === replyId)
+          ? {
+              ...current,
+              replies: withAcceptedFirst(current.replies.map((r) => ({ ...r, accepted_answer: r.id === replyId }))),
+            }
+          : current,
+      )
+    })
   }
 
   const sendReply = async (event: React.FormEvent) => {
@@ -297,7 +422,7 @@ export default function Forums() {
           {/* ========================================================= */}
           {/* RIGHT PANEL: Dynamic Threads & Detail View */}
           {/* ========================================================= */}
-          <main className="space-y-4">
+          <main className="min-w-0 space-y-4">
             {/* Desktop empty selection placeholder */}
             {isDesktop && !forumId && (
               <div className="cloud-card flex min-h-[360px] flex-col items-center justify-center p-8 text-center">
@@ -353,12 +478,41 @@ export default function Forums() {
 
                     <button
                       type="button"
-                      onClick={() => setIsCreatingThread(!isCreatingThread)}
+                      onClick={() => {
+                        setView('discussions')
+                        setIsCreatingThread(!isCreatingThread)
+                      }}
                       className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-gradient-to-r from-gold-soft to-gold px-4 py-2 text-xs font-bold text-ink shadow-sm transition-transform active:scale-95"
                     >
                       {isCreatingThread ? <X size={15} /> : <MessageSquarePlus size={15} />}
                       <span>{isCreatingThread ? 'Cancel' : 'New thread'}</span>
                     </button>
+                  </div>
+
+                  {/* Discussions, or what the forum has settled */}
+                  <div role="group" aria-label="Forum sections" className="mt-4 flex gap-2">
+                    {(
+                      [
+                        { id: 'discussions', label: 'Discussions', icon: MessageSquare },
+                        { id: 'knowledge', label: 'Knowledge', icon: BookOpen },
+                      ] as const
+                    ).map(({ id, label, icon: Icon }) => (
+                      <button
+                        key={id}
+                        type="button"
+                        aria-pressed={view === id}
+                        onClick={() => setView(id)}
+                        className={cn(
+                          'inline-flex min-h-[44px] items-center gap-2 rounded-xl border px-4 text-xs font-semibold transition-colors',
+                          view === id
+                            ? 'border-gold/60 bg-gold/15 text-gold'
+                            : 'border-white/10 bg-white/4 text-text-mid hover:border-white/20 hover:text-text-hi',
+                        )}
+                      >
+                        <Icon size={14} aria-hidden="true" />
+                        {label}
+                      </button>
+                    ))}
                   </div>
 
                   {/* Create thread form */}
@@ -400,18 +554,49 @@ export default function Forums() {
                       </div>
                     </form>
                   )}
+
+                  {/* Sort tabs: one row that scrolls sideways on a phone */}
+                  <div
+                    role="group"
+                    aria-label="Sort discussions"
+                    className={cn('mt-4 flex gap-2 overflow-x-auto pb-1', view !== 'discussions' && 'hidden')}
+                  >
+                    {SORT_TABS.map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        aria-pressed={sort === tab.id}
+                        onClick={() => changeSort(tab.id)}
+                        className={cn(
+                          'inline-flex min-h-[44px] shrink-0 items-center rounded-full border px-4 text-xs font-semibold transition-colors',
+                          sort === tab.id
+                            ? 'border-gold/60 bg-gold/15 text-gold'
+                            : 'border-white/10 bg-white/4 text-text-mid hover:border-white/20 hover:text-text-hi',
+                        )}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
+                {view === 'knowledge' && <KnowledgePanel forumId={forumId} onOpenThread={openFromKnowledge} />}
+
                 {/* Threads listing */}
-                <div className="space-y-3">
-                  {threads.length === 0 && (
+                <div className={cn('space-y-3', view !== 'discussions' && 'hidden')}>
+                  {threadsLoading && threads.length === 0 && (
+                    <div role="status" className="cloud-card p-8 text-center text-sm text-text-low">
+                      Loading discussions…
+                    </div>
+                  )}
+                  {!threadsLoading && threads.length === 0 && (
                     <div className="cloud-card p-8 text-center text-sm text-text-low">
-                      No discussions posted yet. Be the first to start a conversation!
+                      {SORT_TABS.find((tab) => tab.id === sort)?.empty}
                     </div>
                   )}
 
                   {threads.map((thread) => (
-                    <article key={thread.id}>
+                    <article key={thread.id} aria-busy={threadsLoading}>
                       <button
                         type="button"
                         onClick={() => void openThread(thread.id)}
@@ -440,11 +625,18 @@ export default function Forums() {
                             </div>
                           </div>
 
-                          {thread.pinned && (
-                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-gold/40 bg-gold/10 px-2 py-0.5 text-[10px] font-semibold text-gold">
-                              <Pin size={10} /> Pinned
-                            </span>
-                          )}
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            {thread.solved && (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                                <CheckCircle2 size={10} /> Solved
+                              </span>
+                            )}
+                            {thread.pinned && (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-gold/10 px-2 py-0.5 text-[10px] font-semibold text-gold">
+                                <Pin size={10} /> Pinned
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         {/* Title */}
@@ -488,7 +680,7 @@ export default function Forums() {
                   <div className="flex items-center justify-between gap-3 border-b border-white/8 pb-3">
                     <button
                       type="button"
-                      onClick={() => setOpen(null)}
+                      onClick={backToThreads}
                       className="inline-flex min-h-[44px] items-center gap-2 rounded-xl px-2.5 text-xs font-semibold text-gold hover:bg-gold/10 transition-colors active:scale-95"
                     >
                       <ArrowLeft size={16} />
@@ -607,7 +799,7 @@ export default function Forums() {
 
                           {r.accepted_answer && (
                             <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300">
-                              <CheckCircle2 size={12} /> Solved
+                              <CheckCircle2 size={12} /> Solution
                             </span>
                           )}
                         </div>
@@ -615,6 +807,40 @@ export default function Forums() {
                         <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-mid pl-1">
                           {r.body}
                         </p>
+
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => void toggleUpvote(r.id)}
+                            disabled={r.author_id === user?.id || open.locked || busyReplies.has(r.id)}
+                            aria-pressed={Boolean(r.voted_by_me)}
+                            aria-label={`Upvote this reply, ${r.upvotes} ${r.upvotes === 1 ? 'vote' : 'votes'}`}
+                            title={open.locked ? 'This thread is locked' : r.author_id === user?.id ? 'You cannot vote on your own reply' : undefined}
+                            className={cn(
+                              'inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-semibold',
+                              'transition-transform duration-150 active:scale-90 motion-reduce:transition-none disabled:opacity-50',
+                              r.voted_by_me
+                                ? 'border-gold/60 bg-gold/15 text-gold'
+                                : 'border-white/10 bg-white/4 text-text-mid hover:border-white/20 hover:text-text-hi',
+                            )}
+                          >
+                            <ArrowUp size={14} aria-hidden="true" />
+                            <span>{r.upvotes}</span>
+                          </button>
+
+                          {user?.id === open.author_id && !open.locked && !r.accepted_answer && (
+                            <button
+                              type="button"
+                              onClick={() => void acceptAnswer(r.id)}
+                              disabled={busyReplies.has(r.id)}
+                              aria-label={`Accept as solution: reply by ${r.author?.display_name || r.author?.handle || 'this member'}`}
+                              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 text-xs font-semibold text-emerald-300 transition-transform duration-150 hover:bg-emerald-500/15 active:scale-95 motion-reduce:transition-none disabled:opacity-50"
+                            >
+                              <CheckCircle2 size={14} aria-hidden="true" />
+                              <span>Accept as solution</span>
+                            </button>
+                          )}
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -627,7 +853,7 @@ export default function Forums() {
                   {open.locked ? (
                     <div className="flex items-center justify-center gap-2 py-2 text-xs font-semibold text-text-low">
                       <Lock size={14} />
-                      <span>This thread is locked against new replies.</span>
+                      <span>This thread is locked: no new replies, votes or answers.</span>
                     </div>
                   ) : (
                     <form onSubmit={sendReply} className="flex gap-2">

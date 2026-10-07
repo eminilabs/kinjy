@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from typing import Literal
 
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as OrmSession
+from sqlalchemy.orm.exc import StaleDataError
 
 import logging
 
@@ -34,6 +37,22 @@ AI_URL = "http://ai-service:8000"
 # Below this a thread is short enough to read. Summarising six replies wastes a
 # model call and tells the reader nothing they could not get by scrolling.
 SUMMARY_MIN_REPLIES = 8
+
+# "Trending" favours threads somebody touched this week, then the ones people
+# are actually talking in. Older threads still appear, after those.
+TRENDING_WINDOW = timedelta(days=7)
+
+ThreadSort = Literal["recent", "trending", "solved", "unanswered"]
+
+# A reply becomes a knowledge entry once its asker accepted it and this many
+# members agreed. One vote is a thank-you; two is a consensus.
+KNOWLEDGE_MIN_VOTES = 2
+# Entries a viewer may not read are dropped after the query, so the query is read
+# in batches until enough readable ones are found; a hidden entry then never
+# decides what `limit` returns.
+KNOWLEDGE_BATCH = 50
+KNOWLEDGE_MAX_BATCHES = 6
+KNOWLEDGE_QUERY_MAX = 100
 
 
 def _profiles(user_ids: set[str]) -> dict[str, dict]:
@@ -479,6 +498,20 @@ def _visible_replies(db: OrmSession, age, replies: list[models.Reply]) -> list[m
     return [r for r in replies if _engine.can_view_content(age, ratings.get(r.id)).allowed]
 
 
+def _visible_threads(db: OrmSession, age, threads: list[models.Thread]) -> list[models.Thread]:
+    """Threads a viewer of this age may read, by the same engine `get_thread` uses.
+
+    `restrict_query` is a coarser filter pushed into SQL; it is right for paging
+    but looser than the engine (it ignores category ceilings and unknown ages),
+    so anything that shows a thread's text re-checks with this.
+    """
+    if not age.is_minor:
+        return threads
+    from common.agesafety import engine as _engine
+    ratings = agecommunity.classifications_for(db, [t.id for t in threads])
+    return [t for t in threads if _engine.can_view_content(age, ratings.get(t.id)).allowed]
+
+
 @app.get("/communities/{community_id}", tags=["communities"])
 def get_community(community_id: str, principal: MaybeUser, db: OrmSession = Depends(get_db)):
     """One community, by id or by slug.
@@ -828,15 +861,87 @@ async def create_thread(
     return {"id": thread.id, "created_at": thread.created_at}
 
 
+def _accepted_replies():
+    """Every accepted reply still on show, before any viewer's age is applied."""
+    return select(models.Reply).where(
+        models.Reply.accepted_answer.is_(True), models.Reply.status == "published"
+    )
+
+
+def _solved_threads(db: OrmSession, age, *, among: list[str] | None = None, forum_id: str | None = None) -> set[str]:
+    """Threads whose accepted answer this viewer is allowed to read.
+
+    "Solved" is a statement about a reply, so it is only true for a viewer who
+    can see that reply. Otherwise a minor would learn that a reply they cannot
+    read exists, and what it is: the answer.
+    """
+    stmt = _accepted_replies()
+    if among is not None:
+        if not among:
+            return set()
+        stmt = stmt.where(models.Reply.thread_id.in_(among))
+    if forum_id is not None:
+        stmt = stmt.join(models.Thread, models.Thread.id == models.Reply.thread_id).where(
+            models.Thread.forum_id == forum_id
+        )
+    replies = _visible_replies(db, age, list(db.scalars(stmt)))
+    return {r.thread_id for r in replies}
+
+
+def _solved_filter(db: OrmSession, age, forum_id: str):
+    """What `sort=solved` matches against. Adults: a subquery, nothing loaded.
+    Minors: the threads whose accepted answer they may read, which needs the ratings."""
+    if not age.is_minor:
+        return _accepted_replies().with_only_columns(models.Reply.thread_id)
+    return _solved_threads(db, age, forum_id=forum_id)
+
+
+def _thread_card(row: models.Thread, profiles: dict[str, dict], solved: set[str]) -> dict:
+    return {
+        "id": row.id,
+        "title": row.title,
+        "author_id": row.author_id,
+        "author": profiles.get(row.author_id),
+        "solved": row.id in solved,
+        "replies_count": row.replies_count,
+        "views_count": row.views_count,
+        "pinned": row.pinned,
+        "ai_summary": row.ai_summary,
+        "duplicate_of": row.duplicate_of,
+        "last_activity_at": row.last_activity_at,
+        "created_at": row.created_at,
+    }
+
+
+def _thread_order(sort: str) -> list:
+    """Pinned threads stay on top whatever the sort."""
+    if sort == "trending":
+        cutoff = datetime.now(timezone.utc) - TRENDING_WINDOW
+        return [
+            models.Thread.pinned.desc(),
+            case((models.Thread.last_activity_at >= cutoff, 1), else_=0).desc(),
+            models.Thread.replies_count.desc(),
+            models.Thread.last_activity_at.desc(),
+            models.Thread.id.desc(),
+        ]
+    # `id` last: threads created in the same instant must not swap places
+    # between two pages of the same listing.
+    return [models.Thread.pinned.desc(), models.Thread.last_activity_at.desc(), models.Thread.id.desc()]
+
+
 @app.get("/forums/{forum_id}/threads", tags=["forums"])
 def list_threads(
     forum_id: str,
     principal: MaybeUser,
     limit: int = 30,
     offset: int = 0,
+    sort: ThreadSort = "recent",
     db: OrmSession = Depends(get_db),
 ):
     """Threads in a forum, age-filtered before ordering and paging.
+
+    `sort` narrows or reorders what the viewer may already see; it never widens
+    it. The age filter and the forum's door both run before it.
 
     This endpoint took no viewer at all until now, which is why it needed
     fixing: a surface with no idea who is asking cannot decide what they may
@@ -845,36 +950,23 @@ def list_threads(
     # Unknown and out-of-reach forums answer the same 404, so the answer cannot
     # be used to tell a secret forum from one that was never created.
     _forum_access(db, _get_forum_or_404(db, forum_id), principal)
+    limit, offset = min(max(limit, 1), 100), max(offset, 0)
 
     age = agecommunity.viewer(principal.user_id if principal else None)
     stmt = select(models.Thread).where(
         models.Thread.forum_id == forum_id, models.Thread.status == "open"
     )
     stmt = agecommunity.restrict_query(stmt, models.Thread, age)
+    if sort == "solved":
+        stmt = stmt.where(models.Thread.id.in_(_solved_filter(db, age, forum_id)))
+    elif sort == "unanswered":
+        stmt = stmt.where(models.Thread.replies_count == 0)
     rows = db.scalars(
-        stmt.order_by(models.Thread.pinned.desc(), models.Thread.last_activity_at.desc())
-        .limit(min(limit, 100))
-        .offset(offset)
+        stmt.order_by(*_thread_order(sort)).limit(limit).offset(offset)
     ).all()
     profiles = _profiles({r.author_id for r in rows})
-    return {
-        "items": [
-            {
-                "id": r.id,
-                "title": r.title,
-                "author_id": r.author_id,
-                "author": profiles.get(r.author_id),
-                "replies_count": r.replies_count,
-                "views_count": r.views_count,
-                "pinned": r.pinned,
-                "ai_summary": r.ai_summary,
-                "duplicate_of": r.duplicate_of,
-                "last_activity_at": r.last_activity_at,
-                "created_at": r.created_at,
-            }
-            for r in rows
-        ]
-    }
+    solved = _solved_threads(db, age, among=[r.id for r in rows])
+    return {"items": [_thread_card(r, profiles, solved) for r in rows]}
 
 
 @app.get("/threads/{thread_id}", tags=["forums"])
@@ -898,9 +990,11 @@ def get_thread(thread_id: str, principal: MaybeUser, db: OrmSession = Depends(ge
     # thread should remove that answer, not the whole discussion.
     replies = _visible_replies(db, age, replies)
     profiles = _profiles({thread.author_id} | {r.author_id for r in replies})
+    voted = _voted_by(db, principal.user_id if principal else None, [r.id for r in replies])
     db.commit()
     return {
         "id": thread.id,
+        "forum_id": thread.forum_id,
         "title": thread.title,
         "body": thread.body,
         "author_id": thread.author_id,
@@ -917,6 +1011,7 @@ def get_thread(thread_id: str, principal: MaybeUser, db: OrmSession = Depends(ge
                 "parent_id": r.parent_id,
                 "body": r.body,
                 "upvotes": r.upvotes,
+                "voted_by_me": r.id in voted,
                 "accepted_answer": r.accepted_answer,
                 "created_at": r.created_at,
             }
@@ -985,6 +1080,136 @@ def add_reply(thread_id: str, payload: ReplyIn, principal: CurrentUser, db: OrmS
             link=f"/forums?thread={thread_id}",
         )
     return {"id": reply.id}
+
+
+def _voted_by(db: OrmSession, user_id: str | None, reply_ids: list[str]) -> set[str]:
+    """Which of these replies this member has upvoted. One query, not one per reply."""
+    if not user_id or not reply_ids:
+        return set()
+    return set(
+        db.scalars(
+            select(models.ReplyVote.reply_id).where(
+                models.ReplyVote.user_id == user_id, models.ReplyVote.reply_id.in_(reply_ids)
+            )
+        )
+    )
+
+
+def _reply_in_reach(db: OrmSession, reply_id: str, principal) -> tuple[models.Reply, models.Thread]:
+    """A reply the member could read right now, with its thread, or 404.
+
+    Voting and accepting act on content, so they follow the same gates as
+    reading it: the forum's door, the thread's rating and the reply's own
+    rating. Anything out of reach is a 404, the same as an id that never
+    existed, so these endpoints cannot be used to probe for hidden replies.
+    A locked thread refuses both, with a 403 once it is known to be readable.
+    """
+    reply = db.get(models.Reply, reply_id)
+    if reply is None or reply.status != "published":
+        raise HTTPException(status_code=404, detail="Reply not found")
+    try:
+        thread = _thread_for(db, reply.thread_id, principal)
+    except HTTPException as exc:
+        raise HTTPException(status_code=404, detail="Reply not found") from exc
+    age = agecommunity.viewer(principal.user_id)
+    if not agecommunity.visible(db, age, thread.id) or not _visible_replies(db, age, [reply]):
+        raise HTTPException(status_code=404, detail="Reply not found")
+    # Locked means frozen: no new replies, and no change to which reply ranks
+    # first or is the answer. Said only once the viewer is known to be able to
+    # read the thread, so it tells nobody anything they could not already see.
+    if thread.locked:
+        raise HTTPException(status_code=403, detail="This thread is locked")
+    return reply, thread
+
+
+def _recount_votes(db: OrmSession, reply: models.Reply) -> int:
+    """Rebuild the cached count from the votes themselves."""
+    reply.upvotes = db.scalar(
+        select(func.count()).select_from(models.ReplyVote).where(models.ReplyVote.reply_id == reply.id)
+    ) or 0
+    return reply.upvotes
+
+
+@app.post("/replies/{reply_id}/upvote", tags=["forums"])
+def toggle_upvote(reply_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """Upvote a reply, or take the vote back if the member already gave one.
+
+    One vote per member, and never on your own reply: a vote you give yourself
+    says nothing to the people deciding which answer to trust.
+    """
+    reply, thread = _reply_in_reach(db, reply_id, principal)
+    if reply.author_id == principal.user_id:
+        raise HTTPException(status_code=403, detail="You cannot vote on your own reply")
+
+    # Votes on one reply take turns. Without the lock two members voting at the
+    # same moment each count the other's vote as missing, and the cached total
+    # ends one short until somebody votes again.
+    db.scalar(select(models.Reply.id).where(models.Reply.id == reply.id).with_for_update())
+
+    existing = db.scalar(
+        select(models.ReplyVote).where(
+            models.ReplyVote.reply_id == reply.id, models.ReplyVote.user_id == principal.user_id
+        )
+    )
+    if existing is not None:
+        db.delete(existing)
+    else:
+        db.add(models.ReplyVote(reply_id=reply.id, user_id=principal.user_id))
+    try:
+        db.flush()
+    except (IntegrityError, StaleDataError):
+        # A double tap: the other request got there first. Report what is true
+        # now rather than failing the member for being quick.
+        db.rollback()
+    voted = reply.id in _voted_by(db, principal.user_id, [reply.id])
+    upvotes = _recount_votes(db, reply)
+    db.commit()
+
+    _live(
+        f"thread:{thread.id}",
+        "reply_voted",
+        thread_id=thread.id,
+        reply_id=reply.id,
+        upvotes=upvotes,
+    )
+    return {"upvotes": upvotes, "voted": voted}
+
+
+@app.post("/replies/{reply_id}/accept", tags=["forums"])
+def accept_reply(reply_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """Mark a reply as the answer. Only whoever asked the question can.
+
+    One answer per thread: accepting another moves the mark. Accepting the one
+    already accepted changes nothing and tells nobody again.
+    """
+    reply, thread = _reply_in_reach(db, reply_id, principal)
+    if thread.author_id != principal.user_id:
+        raise HTTPException(status_code=403, detail="Only the author of the thread can accept an answer")
+    # One accept at a time per thread, so two quick taps cannot leave two answers.
+    db.scalar(select(models.Thread.id).where(models.Thread.id == thread.id).with_for_update())
+    db.refresh(reply)
+    if reply.accepted_answer:
+        return {"accepted": True, "reply_id": reply.id}
+
+    db.execute(
+        update(models.Reply)
+        .where(models.Reply.thread_id == thread.id, models.Reply.accepted_answer.is_(True))
+        .values(accepted_answer=False)
+    )
+    reply.accepted_answer = True
+    db.commit()
+
+    _live(f"thread:{thread.id}", "answer_accepted", thread_id=thread.id, reply_id=reply.id)
+    if reply.author_id != principal.user_id:
+        notify.notify(
+            reply.author_id,
+            kind="forum_answer_accepted",
+            title="Your reply was accepted as the answer",
+            # No thread title: the recipient may have lost access to this thread
+            # since replying, and a notification would outlive that.
+            link=f"/forums?thread={thread.id}",
+        )
+    return {"accepted": True, "reply_id": reply.id}
 
 
 @app.get("/threads/{thread_id}/summary", tags=["forums"])
@@ -1080,40 +1305,145 @@ def thread_summary(
 
 # --- knowledge base --------------------------------------------------------
 
-@app.get("/forums/{forum_id}/knowledge", tags=["knowledge"])
-def knowledge(
-    forum_id: str,
-    principal: MaybeUser,
-    q: str | None = None,
-    limit: int = 20,
-    db: OrmSession = Depends(get_db),
-):
-    """Structured knowledge distilled from discussions — always with citations."""
-    _forum_access(db, _get_forum_or_404(db, forum_id), principal)
+def _like(term: str) -> str:
+    """A LIKE pattern that matches the term as typed: `%` and `_` are not wildcards here."""
+    escaped = term.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
+def _curated_entries(db: OrmSession, forum_id: str, age, q: str | None, limit: int) -> list[dict]:
     stmt = select(models.KnowledgeEntry).where(models.KnowledgeEntry.forum_id == forum_id)
     if q:
-        like = f"%{q.lower()}%"
+        pattern = _like(q)
         stmt = stmt.where(
             or_(
-                func.lower(models.KnowledgeEntry.question).like(like),
-                func.lower(models.KnowledgeEntry.answer).like(like),
+                func.lower(models.KnowledgeEntry.question).like(pattern, escape="\\"),
+                func.lower(models.KnowledgeEntry.answer).like(pattern, escape="\\"),
             )
         )
-    rows = db.scalars(stmt.order_by(models.KnowledgeEntry.confidence.desc()).limit(min(limit, 100))).all()
-    return {
-        "items": [
+    rows = db.scalars(
+        stmt.order_by(models.KnowledgeEntry.confidence.desc(), models.KnowledgeEntry.id)
+        .limit(KNOWLEDGE_BATCH * KNOWLEDGE_MAX_BATCHES)
+    ).all()
+    source_ids = {s for r in rows for s in r.source_thread_ids.split(",") if s}
+    sources = {
+        th.id: th
+        for th in db.scalars(select(models.Thread).where(models.Thread.id.in_(source_ids))).all()
+        if th.status == "open" and th.forum_id == forum_id
+    } if source_ids else {}
+    readable = {th.id for th in _visible_threads(db, age, list(sources.values()))}
+    entries = []
+    for r in rows:
+        cited = [s for s in r.source_thread_ids.split(",") if s]
+        # An entry quotes the threads it was distilled from. It is only as
+        # readable as all of them, and an entry that cites nothing cannot be
+        # shown to anyone who needs the age check.
+        if age.is_minor:
+            shown = bool(cited) and all(s in readable for s in cited)
+        else:
+            shown = all(s in sources for s in cited)
+        if not shown:
+            continue
+        entries.append(
             {
                 "id": r.id,
+                "origin": "curated",
                 "question": r.question,
                 "answer": r.answer,
                 "lang": r.lang,
                 "confidence": float(r.confidence),
-                "sources": [t for t in r.source_thread_ids.split(",") if t],
+                "votes": 0,
+                "sources": cited,
+                "source_reply_id": None,
                 "reviewed": r.reviewed_by is not None,
             }
-            for r in rows
-        ]
+        )
+        if len(entries) == limit:
+            break
+    return entries
+
+
+def _community_entry(reply: models.Reply, thread: models.Thread) -> dict:
+    return {
+        "id": reply.id,
+        "origin": "community",
+        "question": thread.title,
+        "answer": reply.body,
+        "lang": thread.lang,
+        "confidence": None,
+        "votes": reply.upvotes,
+        "sources": [thread.id],
+        "source_reply_id": reply.id,
+        "reviewed": False,
     }
+
+
+def _community_entries(db: OrmSession, forum_id: str, age, q: str | None, limit: int) -> list[dict]:
+    """Answers the asker accepted and enough members upvoted, as read-time entries.
+
+    Nothing is copied or rewritten: the entry is the thread's title and the
+    reply's own words, so it cannot say anything the community did not. Both
+    the thread and the reply must be readable by the viewer, each by the engine.
+    """
+    stmt = (
+        select(models.Reply, models.Thread)
+        .join(models.Thread, models.Thread.id == models.Reply.thread_id)
+        .where(
+            models.Thread.forum_id == forum_id,
+            models.Thread.status == "open",
+            models.Reply.accepted_answer.is_(True),
+            models.Reply.status == "published",
+            models.Reply.upvotes >= KNOWLEDGE_MIN_VOTES,
+        )
+    )
+    stmt = agecommunity.restrict_query(stmt, models.Thread, age)
+    if q:
+        pattern = _like(q)
+        stmt = stmt.where(
+            or_(
+                func.lower(models.Thread.title).like(pattern, escape="\\"),
+                func.lower(models.Reply.body).like(pattern, escape="\\"),
+            )
+        )
+    stmt = stmt.order_by(models.Reply.upvotes.desc(), models.Reply.created_at.desc(), models.Reply.id)
+    entries: list[dict] = []
+    for batch in range(KNOWLEDGE_MAX_BATCHES):
+        pairs = db.execute(stmt.limit(KNOWLEDGE_BATCH).offset(batch * KNOWLEDGE_BATCH)).all()
+        threads_ok = {th.id for th in _visible_threads(db, age, [th for _, th in pairs])}
+        replies_ok = {r.id for r in _visible_replies(db, age, [r for r, _ in pairs])}
+        for reply, thread in pairs:
+            if thread.id in threads_ok and reply.id in replies_ok:
+                entries.append(_community_entry(reply, thread))
+                if len(entries) == limit:
+                    return entries
+        if len(pairs) < KNOWLEDGE_BATCH:
+            break
+    return entries
+
+
+@app.get("/forums/{forum_id}/knowledge", tags=["knowledge"])
+def knowledge(
+    forum_id: str,
+    principal: MaybeUser,
+    q: str | None = Query(default=None, max_length=KNOWLEDGE_QUERY_MAX),
+    limit: int = 20,
+    db: OrmSession = Depends(get_db),
+):
+    """What this forum knows, always with the discussion it came from.
+
+    Curated entries first, then answers the community settled. Both follow the
+    forum's door and the viewer's age, like the discussions they came from.
+    """
+    _forum_access(db, _get_forum_or_404(db, forum_id), principal)
+    age = agecommunity.viewer(principal.user_id if principal else None)
+    limit = min(max(limit, 1), 100)
+    curated = _curated_entries(db, forum_id, age, q, limit)
+    community = _community_entries(db, forum_id, age, q, limit)
+    # Curated first, but never all of it: half the page stays open to what the
+    # community settled, so a long curated list cannot hide it.
+    keep_curated = limit - min(len(community), limit // 2)
+    items = curated[:keep_curated]
+    return {"items": items + community[: limit - len(items)]}
 
 
 # ---------------------------------------------------------------------------
