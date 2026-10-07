@@ -52,8 +52,8 @@ const ALL_CONTROLS: Control[] = [
     key: 'who_can_add_family',
     icon: TreeDeciduous,
     title: 'Add you to a family tree',
-    hint: 'A relationship claim still needs your confirmation on top of this.',
-    feature: 'familyTree',
+    hint: 'Decides who may put your own node into their family tree. You can remove yourself from a tree at any time.',
+    feature: 'familyTreeApp',
   },
   {
     key: 'who_can_add_community',
@@ -68,7 +68,7 @@ const ALL_CONTROLS: Control[] = [
     hint: 'Applied by family-service on every read — names, dates and relationships, including the dead. "Your family" means people who share the graph with you.',
     choices: FAMILY_CHOICES,
     fallback: 'family',
-    feature: 'familyTree',
+    feature: 'familyTreeApp',
   },
 ]
 
@@ -192,7 +192,7 @@ export default function Privacy() {
               </label>
             </li>
 
-            {FEATURES.familyTree && (
+            {FEATURES.familyTreeApp && (
               <li className="border-t border-white/8 pt-4">
                 <label className="flex items-start gap-2.5">
                   <input
@@ -221,7 +221,7 @@ export default function Privacy() {
 
       <Panel
         title="Connections"
-        subtitle={`Accepting an invitation is what opens messaging, ${FEATURES.familyTree ? 'family links ' : ''}and community invites.`}
+        subtitle={`Accepting an invitation is what opens messaging, ${FEATURES.familyTreeApp ? 'family links ' : ''}and community invites.`}
         action={incoming > 0 ? <Badge tone="warn">{incoming} waiting</Badge> : undefined}
       >
         <PanelState loading={connections.loading} error={connections.error}>

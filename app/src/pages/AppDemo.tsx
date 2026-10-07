@@ -64,7 +64,7 @@ export default function AppDemo() {
             </div>
             <p className="flex items-center gap-1.5 text-sm text-[var(--kl-mid)]">
               <Hand size={14} aria-hidden="true" /> Pin chips · switch feed modes · open{' '}
-              {FEATURES.familyTree ? 'Family Tree & Graveyard' : 'the Graveyard'}
+              {FEATURES.familyTreeApp ? 'Family Tree & Graveyard' : 'the Graveyard'}
             </p>
           </motion.div>
 

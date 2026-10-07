@@ -32,7 +32,7 @@ function label(setting: string) {
 const FAMILY_SETTINGS = new Set(['who_can_add_family', 'who_can_see_family', 'family_tree_shared'])
 
 function shown(setting: string) {
-  return FEATURES.familyTree || !FAMILY_SETTINGS.has(setting)
+  return FEATURES.familyTreeApp || !FAMILY_SETTINGS.has(setting)
 }
 
 export default function Supervision() {

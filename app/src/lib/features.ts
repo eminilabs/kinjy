@@ -17,7 +17,13 @@ export const FEATURES = {
   calls: false,
   /** Buying and selling, and the /commerce page that presents it. */
   marketplace: false,
-  /** The family tree, its settings, and the /family page that presents it. */
+  /** The family tree inside the app: /tree, its privacy settings, the family search. */
+  familyTreeApp: true,
+  /**
+   * The family tree as the public site presents it: the /family page and every line
+   * of copy that advertises it. Off on purpose while that copy promises what is not
+   * built (sharing by branch, export, the Heritage AI screens); see NOT-DONE.md.
+   */
   familyTree: false,
   /** The Kinjy Assistant: the floating orb and the /assistant page. */
   assistant: false,
@@ -28,12 +34,13 @@ export type Feature = keyof typeof FEATURES
 /**
  * How many of the blueprint's fifteen modules are open.
  *
- * The family tree and the marketplace are two of the fifteen; live, calls and
+ * The family tree and the marketplace are two of the fifteen (the tree counts as
+ * open when the app has it, whatever the public site says); live, calls and
  * the assistant live inside other modules. Copy that says "Fifteen modules"
  * while two are hidden would advertise exactly what is being hidden.
  */
 export const OPEN_MODULES =
-  15 - [FEATURES.familyTree, FEATURES.marketplace].filter((open) => !open).length
+  15 - [FEATURES.familyTreeApp, FEATURES.marketplace].filter((open) => !open).length
 
 const WORDS = [
   'Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
@@ -50,7 +57,7 @@ const ROUTE_FEATURE: ReadonlyArray<readonly [string, Feature]> = [
   ['/live', 'live'],
   ['/market', 'marketplace'],
   ['/commerce', 'marketplace'],
-  ['/tree', 'familyTree'],
+  ['/tree', 'familyTreeApp'],
   ['/family', 'familyTree'],
   ['/assistant', 'assistant'],
 ]

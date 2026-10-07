@@ -843,9 +843,60 @@ export interface Person {
   confirmations?: number
 }
 
+/** One person in full, with what the caller may do about them (decided by the server). */
+export interface PersonDetail extends Person {
+  other_names: string | null
+  birth_place: string | null
+  death_place: string | null
+  biography: string | null
+  is_me: boolean
+  /** Derived from the graph, relative to the caller's own node; null when they are not in this family. */
+  relation_to_me: string | null
+  counts: { parents: number; children: number; spouses: number; siblings: number }
+  my_decision: 'confirm' | 'dispute' | null
+  permissions: { can_edit: boolean; can_delete: boolean; can_link: boolean; can_confirm: boolean }
+}
+
+/** What may be sent for a person. `null` clears a field; leaving it out leaves it alone. */
+export interface PersonFields {
+  given_name: string
+  family_name?: string | null
+  other_names?: string | null
+  gender?: string | null
+  birth_date?: string | null
+  birth_place?: string | null
+  death_date?: string | null
+  death_place?: string | null
+  deceased?: boolean
+  biography?: string | null
+}
+
+export type RelativeKind = 'parent' | 'adoptive_parent' | 'child' | 'spouse' | 'sibling'
+
+/** What a parent is to a child. A property of the link; never worked out from anyone's gender. */
+export type ParentRole = 'father' | 'mother'
+
+/** What the extra questions of "add a relative" send. Each applies to one kind of relative. */
+export interface RelativeExtras {
+  /** parent / adoptive_parent: what the new person is to this one. */
+  role?: ParentRole
+  /** child: what this person is to the child, who the other parent is, and what they are. */
+  anchor_role?: ParentRole
+  other_parent_id?: string
+  other_parent_role?: ParentRole
+  /** sibling: the parents of this person who are also the new person's. */
+  shared_parent_ids?: string[]
+}
+
 export interface FamilyTree {
   root: string
   depth: number
+  /** The caller's own node, if they have added themselves. */
+  me: string | null
+  /** Everyone in this family; the view may hold fewer. */
+  family_size: number
+  /** True when someone shown has parents or children that are not. */
+  truncated: boolean
   nodes: Array<{
     person: Person
     /** 0 = the root, positive = ancestors, negative = descendants. */
@@ -853,8 +904,12 @@ export interface FamilyTree {
     relation: string
     closeness: number
     sibling_kind: string | null
+    /** More of the family lies beyond this person. */
+    more: boolean
+    mine: boolean
+    editable: boolean
   }>
-  edges: Array<{ id: string; from: string; to: string; kind: string; status: string }>
+  edges: Array<{ id: string; from: string; to: string; kind: string; role: ParentRole | null; status: string; removable: boolean }>
 }
 
 export interface HowRelated {
@@ -1809,16 +1864,34 @@ export const kaluta = {
   family: {
     /** Searches your own family only — the server scopes it to your graph. */
     search: (q: string) => api.get<{ items: Person[] }>(`/family/search?q=${encodeURIComponent(q)}`),
-    addPerson: (input: Partial<Person> & { given_name: string }) =>
-      api.post<Person>('/family/persons', input),
+    /** Where the member stands: their own node, or null before they have added themselves. */
+    me: () => api.get<{ person: PersonDetail | null }>('/family/me'),
+    addPerson: (input: PersonFields & { user_id?: string }) => api.post<Person>('/family/persons', input),
+    person: (personId: string) => api.get<PersonDetail>(`/family/persons/${personId}`),
+    /** Only the fields sent change; `null` clears one. */
+    updatePerson: (personId: string, changes: Partial<PersonFields>) =>
+      api.patch<PersonDetail>(`/family/persons/${personId}`, changes),
+    /** Takes the person's relationships with them. */
+    deletePerson: (personId: string) => api.delete<void>(`/family/persons/${personId}`),
+    /** The person and the relationship are written together, or not at all. */
+    addRelative: (personId: string, relation: RelativeKind, person: PersonFields, extras: RelativeExtras = {}) =>
+      api.post<{
+        person: Person
+        relationship: { id: string; kind: string; from: string; to: string; role: ParentRole | null }
+        relationships: Array<{ id: string; kind: string; from: string; to: string; role: ParentRole | null }>
+      }>(`/family/persons/${personId}/relatives`, { relation, person, ...extras }),
     tree: (personId: string, depth = 3) =>
       // Authenticated on purpose: the tree is family-only, and the server
       // refuses a caller with no part in it.
       api.get<FamilyTree>(`/family/tree/${personId}?depth=${depth}`),
-    /** Browse — what the tree screen opens with. Search needs a real query. */
+    /** The people in the families you belong to. */
     persons: (limit = 30) => api.get<{ items: Person[] }>(`/family/persons?limit=${limit}`),
-    link: (input: { from_person_id: string; to_person_id: string; kind: string }) =>
+    link: (input: { from_person_id: string; to_person_id: string; kind: string; role?: ParentRole }) =>
       api.post<{ id: string; status: string }>('/family/relationships', input),
+    unlink: (relationshipId: string) => api.delete<void>(`/family/relationships/${relationshipId}`),
+    /** Say, or take back (null), whether a parent is the father or the mother. */
+    setRole: (relationshipId: string, role: ParentRole | null) =>
+      api.patch<{ id: string; role: ParentRole | null }>(`/family/relationships/${relationshipId}`, { role }),
     howRelated: (from: string, to: string) =>
       api.get<HowRelated>(`/family/how-related?from_person=${from}&to_person=${to}`),
     confirm: (personId: string, decision: 'confirm' | 'dispute', note?: string) =>
