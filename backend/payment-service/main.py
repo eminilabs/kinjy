@@ -33,6 +33,7 @@ log = logging.getLogger("payment-service")
 AUTH_URL = "http://auth-service:8000"
 LEDGER_URL = "http://ledger-service:8000"
 COMMERCE_URL = "http://commerce-service:8000"
+COMMUNITY_URL = "http://community-service:8000"
 
 app = create_app(
     name="payment-service",
@@ -42,7 +43,7 @@ app = create_app(
 
 
 class CheckoutIn(BaseModel):
-    purpose: str = Field(pattern="^(order|subscription|ad_credit|kyc_fee|tribute|referral_pool)$")
+    purpose: str = Field(pattern="^(order|subscription|ad_credit|kyc_fee|tribute|referral_pool|community_membership)$")
     amount: Decimal = Field(gt=0)
     reference: str | None = None
     rail: str | None = Field(default=None, pattern="^(nowpayments|mangopay|mock)$")
@@ -84,6 +85,9 @@ def checkout(payload: CheckoutIn, principal: CurrentUser, db: OrmSession = Depen
     # here rather than only on the features that lead to it. A surface that
     # forgot its own check still cannot take a minor's money.
     agefeatures.require(principal.user_id, "payments")
+
+    if payload.purpose == "community_membership":
+        _check_membership_offer(payload, principal.user_id)
 
     rail = rails.choose_rail(payload.rail, "USD")
     intent = models.PaymentIntent(
@@ -131,6 +135,35 @@ def checkout(payload: CheckoutIn, principal: CurrentUser, db: OrmSession = Depen
         "checkout_url": result.get("checkout_url"),
         "status": intent.status,
     }
+
+
+def _check_membership_offer(payload: CheckoutIn, user_id: str) -> None:
+    """The price comes from the community, never from the caller.
+
+    Without this a buyer could open a checkout for a cent and be granted the seat.
+    """
+    if not payload.reference:
+        raise HTTPException(status_code=400, detail="reference must be the community id")
+    try:
+        response = httpx.get(
+            f"{COMMUNITY_URL}/internal/communities/{payload.reference}/offer",
+            params={"user_id": user_id},
+            timeout=8,
+        )
+    except httpx.HTTPError:
+        raise HTTPException(status_code=503, detail="Community service unavailable")
+    if response.status_code == 404:
+        raise HTTPException(status_code=404, detail="Community not found")
+    response.raise_for_status()
+    offer = response.json()
+    if offer["kind"] != "paid" or not offer["price_usd"]:
+        raise HTTPException(status_code=400, detail="This community is not for sale")
+    if offer["member_status"] == "banned":
+        raise HTTPException(status_code=403, detail="You are banned from this community")
+    if offer["member_status"] == "active":
+        raise HTTPException(status_code=409, detail="You are already a member")
+    if Decimal(offer["price_usd"]) != economy.money(payload.amount):
+        raise HTTPException(status_code=400, detail=f"The price is {offer['price_usd']}")
 
 
 @app.post("/payments/ipn/nowpayments", tags=["payments"])
@@ -226,6 +259,35 @@ async def _on_settled(intent: models.PaymentIntent, db: OrmSession) -> None:
                 ).raise_for_status()
         except Exception as exc:
             log.error("referral pool seat failed for payment %s: %s", intent.id, exc)
+
+    elif intent.purpose == "community_membership" and intent.reference:
+        # Seat first, revenue second, as for the referral pool: if the seat
+        # cannot be granted (already a member, banned) the payment is refunded
+        # instead of being booked as revenue.
+        try:
+            response = httpx.post(
+                f"{COMMUNITY_URL}/internal/communities/{intent.reference}/members",
+                json={"user_id": intent.user_id},
+                timeout=8,
+            )
+            if response.status_code in (404, 409):
+                intent.status = "refund_due"
+                log.error("community seat not granted; payment %s must be refunded", intent.id)
+            else:
+                response.raise_for_status()
+                httpx.post(
+                    f"{LEDGER_URL}/internal/post/community-membership",
+                    json={
+                        "buyer_id": intent.user_id,
+                        "owner_id": response.json()["owner_id"],
+                        "amount": str(intent.amount),
+                        "reference": intent.reference,
+                        "idempotency_key": f"payment:{intent.id}",
+                    },
+                    timeout=10,
+                ).raise_for_status()
+        except Exception as exc:
+            log.error("community membership failed for payment %s: %s", intent.id, exc)
 
     elif intent.purpose == "kyc_fee":
         year = date.today().year

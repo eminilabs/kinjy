@@ -51,6 +51,12 @@ def auth(t):
     return {"Authorization": f"Bearer {t}"}
 
 
+def connect(a_tok, b_tok, a_id, b_id):
+    """Invitations to a community are only accepted from connections."""
+    c.post(f"/connections/{b_id}", headers=auth(a_tok), json={}).raise_for_status()
+    c.post(f"/connections/{a_id}/respond?accept=true", headers=auth(b_tok)).raise_for_status()
+
+
 def community(tok, kind):
     r = c.post("/communities", headers=auth(tok), json={
         "name": f"{kind} {tag()}", "description": "Tomatoes, compost and rain", "kind": kind,
@@ -89,6 +95,17 @@ for kind, cid in (("secret", secret_c), ("private", private_c), ("public", publi
     threads[kind] = r.json().get("id")
 
 open_forum = c.post("/forums", headers=auth(owner_tok), json={"name": f"Free {tag()}"}).json()["id"]
+
+print("\n== knowing a secret community's id is not an invitation ==")
+r = c.post(f"/communities/{secret_c}/join", headers=auth(outsider_tok))
+check("joining a secret community by id answers 404", r.status_code == 404, f"{r.status_code} {r.text[:100]}")
+r = c.get(f"/communities/{secret_c}", headers=auth(outsider_tok))
+check("and it is still not readable", r.status_code == 404, f"{r.status_code}")
+connect(owner_tok, member_tok, owner["id"], member["id"])
+r = c.post(f"/communities/{secret_c}/invite", headers=auth(owner_tok), json={"user_id": member["id"]})
+check("a member's invitation does let someone in", r.status_code == 201, f"{r.status_code} {r.text[:100]}")
+r = c.get(f"/communities/{secret_c}", headers=auth(member_tok))
+check("the invited person now reads it", r.status_code == 200, f"{r.status_code}")
 
 print("\n== an outsider is kept out of secret and private forums ==")
 for kind, want in (("secret", 404), ("private", 403), ("public", 200)):

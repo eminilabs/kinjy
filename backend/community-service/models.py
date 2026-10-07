@@ -42,6 +42,9 @@ class Community(Base):
     country: Mapped[str | None] = mapped_column(String(2), index=True)
     city: Mapped[str | None] = mapped_column(String(120))
     members_count: Mapped[int] = mapped_column(Integer, default=0)
+    # Who may open a forum in the community: any active member, or only the
+    # owner and moderators. The owner chooses at creation and may change it.
+    forum_creation: Mapped[str] = mapped_column(String(20), default="members", server_default="members")
     avatar_url: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
@@ -76,6 +79,8 @@ class Forum(Base):
     scope: Mapped[str | None] = mapped_column(String(40))  # global|continent|country|state|city|neighborhood
     scope_value: Mapped[str | None] = mapped_column(String(120))
     community_id: Mapped[str | None] = mapped_column(String(40), index=True)
+    # A sub-forum answers to its parent's door unless its creator opened it.
+    inherit_access: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     threads_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
@@ -116,6 +121,7 @@ class Reply(Base):
     upvotes: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(20), default="published")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class KnowledgeEntry(Base):
@@ -134,6 +140,7 @@ class KnowledgeEntry(Base):
     answer: Mapped[str] = mapped_column(Text)
     lang: Mapped[str] = mapped_column(String(5), default="en")
     source_thread_ids: Mapped[str] = mapped_column(Text)  # csv
+    source_reply_id: Mapped[str | None] = mapped_column(String(40), index=True)
     confidence: Mapped[float] = mapped_column(Numeric(4, 3), default=0)
     reviewed_by: Mapped[str | None] = mapped_column(String(40))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
@@ -180,3 +187,60 @@ class ContentSafetyClassification(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
+
+
+class ReplyVote(Base):
+    """One user's vote on one reply: +1 or -1, replaced when they change it."""
+
+    __tablename__ = "reply_votes"
+    __table_args__ = (
+        UniqueConstraint("reply_id", "user_id", name="uq_reply_vote"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    reply_id: Mapped[str] = mapped_column(String(40), index=True)
+    user_id: Mapped[str] = mapped_column(String(40), index=True)
+    value: Mapped[int] = mapped_column(Integer)  # 1 | -1
+
+
+
+class CommunityInvitation(Base):
+    """An invitation into a secret community that the invitee must accept.
+
+    Nothing is granted by creating one: the invitee becomes a member only when
+    they accept, and an unanswered invitation lapses at `expires_at`.
+    """
+
+    __tablename__ = "community_invitations"
+    __table_args__ = {"schema": SCHEMA}
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("civ"))
+    community_id: Mapped[str] = mapped_column(String(40), index=True)
+    inviter_id: Mapped[str] = mapped_column(String(40), index=True)
+    invitee_id: Mapped[str] = mapped_column(String(40), index=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|accepted|declined
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class CommunityInviteLink(Base):
+    """A shareable way into a secret community.
+
+    Only the sha256 of the token is stored; the raw token is shown once, at
+    creation. It is unrelated to the community id, so the id alone opens nothing.
+    """
+
+    __tablename__ = "community_invite_links"
+    __table_args__ = {"schema": SCHEMA}
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("cil"))
+    community_id: Mapped[str] = mapped_column(String(40), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    created_by: Mapped[str] = mapped_column(String(40))
+    max_uses: Mapped[int | None] = mapped_column(Integer)
+    uses: Mapped[int] = mapped_column(Integer, default=0)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

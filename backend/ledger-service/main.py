@@ -99,6 +99,16 @@ class ServiceFeeIn(BaseModel):
     idempotency_key: str | None = None
 
 
+class CommunityMembershipIn(BaseModel):
+    """A member buying a seat in a paid community."""
+
+    buyer_id: str
+    owner_id: str
+    amount: Decimal = Field(gt=0)
+    reference: str | None = None
+    idempotency_key: str | None = None
+
+
 class PoolEntryIn(BaseModel):
     """A member buying a seat in the referral pool."""
 
@@ -364,6 +374,28 @@ def post_referral_pool_entry(payload: PoolEntryIn, db: OrmSession = Depends(get_
         description=f"Referral pool seat for {payload.member_id}",
         idempotency_key=payload.idempotency_key,
         created_by=payload.member_id,
+    )
+    db.commit()
+    return _journal_out(journal, db)
+
+
+@app.post("/internal/post/community-membership", tags=["postings"])
+def post_community_membership(payload: CommunityMembershipIn, db: OrmSession = Depends(get_db)):
+    """A paid community seat is bought.
+
+    The owner earns the creator share first; the buyer's sponsor and the Leaders
+    pool are paid on what Kinjy keeps, exactly as for any creator revenue.
+    """
+    split = economy.creator_revenue_split(payload.amount, payload.owner_id, _sponsor(payload.buyer_id))
+    journal = posting.post_split(
+        db,
+        kind="community_membership",
+        split=split,
+        revenue_account=models.ACC_REVENUE_SUBSCRIPTION,
+        reference=payload.reference,
+        description=f"Seat in community {payload.reference} for {payload.buyer_id}",
+        idempotency_key=payload.idempotency_key,
+        created_by=payload.buyer_id,
     )
     db.commit()
     return _journal_out(journal, db)

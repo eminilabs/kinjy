@@ -51,6 +51,12 @@ def auth(t):
     return {"Authorization": f"Bearer {t}"}
 
 
+def connect(a_tok, b_tok, a_id, b_id):
+    """Invitations to a community are only accepted from connections."""
+    c.post(f"/connections/{b_id}", headers=auth(a_tok), json={}).raise_for_status()
+    c.post(f"/connections/{a_id}/respond?accept=true", headers=auth(b_tok)).raise_for_status()
+
+
 def community(tok, kind):
     r = c.post("/communities", headers=auth(tok), json={
         "name": f"{kind} {tag()}", "description": "Tomatoes, compost and rain", "kind": kind,
@@ -192,6 +198,43 @@ for name, fid in (("child", ch), ("grandchild", g)):
     check(f"the banned member reading the {name} answers 403", r.status_code == 403, f"{r.status_code}")
 r = c.get(f"/forums/{ch}/threads", headers=auth(out_tok))
 check("another outsider still reads the child (200)", r.status_code == 200, f"{r.status_code}")
+
+print("\n== a creator may open a sub-forum of a secret community ==")
+owner_tok, owner = register()
+out_tok, out = register()
+banned_tok, banned = register()
+sec = community(owner_tok, "secret")
+p = forum(owner_tok, community_id=sec).json().get("id")
+r = forum(owner_tok, parent_id=p, inherit_access=False)
+check("the owner creates an opened sub-forum O", r.status_code == 201, f"{r.status_code} {r.text[:120]}")
+o = r.json().get("id")
+r = forum(owner_tok, parent_id=o)
+check("a sub-forum of O follows O", r.status_code == 201, f"{r.status_code} {r.text[:120]}")
+oc = r.json().get("id")
+r = forum(owner_tok, parent_id=p)
+check("the default sub-forum D still inherits", r.status_code == 201, f"{r.status_code} {r.text[:120]}")
+d = r.json().get("id")
+for fid in (o, oc, d):
+    thread(owner_tok, fid)
+for name, fid, want in (("O", o, 200), ("O's child", oc, 200), ("D (default)", d, 404), ("P", p, 404)):
+    r = c.get(f"/forums/{fid}/threads", headers=auth(out_tok))
+    check(f"outsider reading {name} answers {want}", r.status_code == want, f"{r.status_code}")
+    r = c.get(f"/forums/{fid}/threads")
+    check(f"signed-out visitor reading {name} answers {want}", r.status_code == want, f"{r.status_code}")
+r = forum(out_tok, parent_id=o, inherit_access=False)
+# O is readable by anyone, but it sits in a secret community: someone outside it
+# is answered "not found" (the community must not be confirmed), not "forbidden".
+check("an outsider cannot add to O even though O is open", r.status_code in (403, 404), f"{r.status_code}")
+r = forum(owner_tok, inherit_access=False)
+check("a top-level forum cannot set its own access", r.status_code == 400, f"{r.status_code}")
+# a banned member of the community is still shut out of the opened forum
+connect(owner_tok, banned_tok, owner["id"], banned["id"])
+r = c.post(f"/communities/{sec}/invite", headers=auth(owner_tok), json={"user_id": banned["id"]})
+check("the owner invites a member", r.status_code == 201, f"{r.status_code} {r.text[:100]}")
+r = c.post(f"/communities/{sec}/members/{banned['id']}", headers=auth(owner_tok), json={"action": "ban"})
+check("and bans them", r.status_code == 200, f"{r.status_code}")
+r = c.get(f"/forums/{o}/threads", headers=auth(banned_tok))
+check("a banned member reading O answers 403", r.status_code == 403, f"{r.status_code}")
 
 print("\n" + ("ALL CHECKS PASSED" if ok else "THERE ARE FAILURES ABOVE"))
 sys.exit(0 if ok else 1)
