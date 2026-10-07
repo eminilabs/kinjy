@@ -765,3 +765,34 @@ there is no `todo.md`). Compared with what was built on 06/10, before the second
 - End of a union (`relationships.until`) stays unexposed: the todo does not ask.
 - Labels: Father / Mother when the role is known, otherwise Parent. No attempt
   yet at grandfather, uncle or cousin beyond what the graph already derives.
+
+**Done in this pass (07/10), and what it still does not do:**
+
+- Father / mother as a role of the parent link, gender as a choice on the person; a
+  parent is added by saying father, mother or "parent, role not given". Existing
+  links have no role and read "Parent" until it is set (the Links list lets the
+  member who made a link set or clear it). Gender entered earlier as free text is
+  shown as entered and drawn neutral unless it reads as woman or man.
+- A brother or sister is added by ticking the parents they share; real parent links
+  are written and half/full is derived. A child can name the other parent, so a
+  person with several partners can have children from each union.
+- The tree is drawn as a genealogy: generations in rows, one stem and bar per set of
+  parents, partners side by side, nothing drawn across a card (measured on the
+  rendered page for a simple family, many siblings, half-siblings by the mother and by
+  the father, two unions, three generations, on a wide screen and at 390 px).
+- Phone: Parents / the person and partners / Children as expandable sections; the
+  graph zooms (pinch, Ctrl+wheel, buttons) and pans (drag).
+
+Still open, stated rather than hidden:
+
+- **"One father, one mother" is not enforced** and is proposed only: *within
+  `parent_of`, a child has at most one `father` and one `mother`*. Adoptive links are
+  excluded on purpose. It needs a product decision before it becomes a rule.
+- **Parents on two different generations** (a person reached by two paths at different
+  levels) can make a stem run across a card in between. Not seen in any family built
+  here; the layout does not detect it.
+- **More than two partners in a row**: a person can touch only two of them; the others
+  are joined by a line under the cards.
+- **Pinch and drag were exercised with emulated touch**, not on a real phone.
+- Phases 2 (invite a relative by link, claim the node on sign-up), 3 (oral histories)
+  and 4 (`FEATURES.familyTree`) of the todo are untouched.
