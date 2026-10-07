@@ -9,6 +9,7 @@ import GenerationList from '@/components/family/tree/GenerationList'
 import PersonForm from '@/components/family/tree/PersonForm'
 import { emptyValues, toFields, type FormValues } from '@/components/family/tree/formValues'
 import PersonPanel, { type PanelLink } from '@/components/family/tree/PersonPanel'
+import type { KnownParent } from '@/components/family/tree/relativeExtras'
 import StatusIcon from '@/components/family/tree/Status'
 import TreeCanvas from '@/components/family/tree/TreeCanvas'
 import { fullName } from '@/components/family/tree/layout'
@@ -158,24 +159,40 @@ export default function FamilyTree() {
     return Math.max(0, ...perLevel.values())
   }, [data])
 
-  // The selected person's links, read the way they would read them: "Ama · parent".
-  const linksOf = useMemo<PanelLink[]>(() => {
-    if (!data || !selectedId) return []
+  // The selected person's links, read the way they would read them: "Ama · mother".
+  const around = useMemo(() => {
+    const none = { links: [] as PanelLink[], parents: [] as KnownParent[], partners: [] as Array<{ id: string; name: string }> }
+    if (!data || !selectedId) return none
     const name = new Map(data.nodes.map((n) => [n.person.id, fullName(n.person)]))
-    const roles: Record<string, [string, string]> = {
-      parent_of: ['parent', 'child'],
-      adoptive_parent_of: ['adoptive parent', 'adoptive child'],
-      guardian_of: ['guardian', 'ward'],
-      spouse_of: ['partner', 'partner'],
-      sibling_of: ['sibling (declared)', 'sibling (declared)'],
-    }
-    return data.edges
-      .filter((e) => e.from === selectedId || e.to === selectedId)
-      .map((e) => {
-        const otherId = e.from === selectedId ? e.to : e.from
-        const [asParent, asChild] = roles[e.kind] ?? [e.kind, e.kind]
-        return { id: e.id, otherId, otherName: name.get(otherId) ?? 'Someone', role: e.to === selectedId ? asParent : asChild, removable: e.removable }
+    const parentKinds = new Set(['parent_of', 'adoptive_parent_of', 'guardian_of'])
+    const links: PanelLink[] = []
+    const parents: KnownParent[] = []
+    const partners: Array<{ id: string; name: string }> = []
+    for (const e of data.edges) {
+      if (e.from !== selectedId && e.to !== selectedId) continue
+      const otherId = e.from === selectedId ? e.to : e.from
+      const otherName = name.get(otherId) ?? 'Someone'
+      const isParentOfSelected = parentKinds.has(e.kind) && e.to === selectedId
+      let role: string
+      if (e.kind === 'spouse_of') role = 'partner'
+      else if (e.kind === 'sibling_of') role = 'sibling (declared)'
+      else if (e.kind === 'guardian_of') role = e.to === selectedId ? 'guardian' : 'ward'
+      else {
+        const base = e.kind === 'adoptive_parent_of' ? 'adoptive ' : ''
+        role = isParentOfSelected ? `${base}${e.role ?? 'parent'}` : `${base}child`
+      }
+      links.push({
+        id: e.id,
+        otherId,
+        otherName,
+        role,
+        removable: e.removable,
+        roleOf: isParentOfSelected && e.kind !== 'guardian_of' ? { value: e.role } : undefined,
       })
+      if (isParentOfSelected && e.kind === 'parent_of') parents.push({ id: otherId, name: otherName, role: e.role })
+      if (e.kind === 'spouse_of') partners.push({ id: otherId, name: otherName })
+    }
+    return { links, parents, partners }
   }, [data, selectedId])
 
   const summary = useMemo(() => {
@@ -342,7 +359,9 @@ export default function FamilyTree() {
                     key={selectedId}
                     personId={selectedId}
                     meId={data?.me ?? myId}
-                    links={linksOf}
+                    links={around.links}
+                    parents={around.parents}
+                    partners={around.partners}
                     onCentre={centreOn}
                     onChanged={refresh}
                     onRemoved={(id) => {
@@ -369,7 +388,9 @@ export default function FamilyTree() {
             key={selectedId}
             personId={selectedId}
             meId={data?.me ?? myId}
-            links={linksOf}
+            links={around.links}
+            parents={around.parents}
+            partners={around.partners}
             onCentre={centreOn}
             onChanged={refresh}
             onRemoved={(id) => {

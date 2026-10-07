@@ -873,6 +873,21 @@ export interface PersonFields {
 
 export type RelativeKind = 'parent' | 'adoptive_parent' | 'child' | 'spouse' | 'sibling'
 
+/** What a parent is to a child. A property of the link; never worked out from anyone's gender. */
+export type ParentRole = 'father' | 'mother'
+
+/** What the extra questions of "add a relative" send. Each applies to one kind of relative. */
+export interface RelativeExtras {
+  /** parent / adoptive_parent: what the new person is to this one. */
+  role?: ParentRole
+  /** child: what this person is to the child, who the other parent is, and what they are. */
+  anchor_role?: ParentRole
+  other_parent_id?: string
+  other_parent_role?: ParentRole
+  /** sibling: the parents of this person who are also the new person's. */
+  shared_parent_ids?: string[]
+}
+
 export interface FamilyTree {
   root: string
   depth: number
@@ -894,7 +909,7 @@ export interface FamilyTree {
     mine: boolean
     editable: boolean
   }>
-  edges: Array<{ id: string; from: string; to: string; kind: string; status: string; removable: boolean }>
+  edges: Array<{ id: string; from: string; to: string; kind: string; role: ParentRole | null; status: string; removable: boolean }>
 }
 
 export interface HowRelated {
@@ -1859,20 +1874,24 @@ export const kaluta = {
     /** Takes the person's relationships with them. */
     deletePerson: (personId: string) => api.delete<void>(`/family/persons/${personId}`),
     /** The person and the relationship are written together, or not at all. */
-    addRelative: (personId: string, relation: RelativeKind, person: PersonFields) =>
-      api.post<{ person: Person; relationship: { id: string; kind: string; from: string; to: string } }>(
-        `/family/persons/${personId}/relatives`,
-        { relation, person },
-      ),
+    addRelative: (personId: string, relation: RelativeKind, person: PersonFields, extras: RelativeExtras = {}) =>
+      api.post<{
+        person: Person
+        relationship: { id: string; kind: string; from: string; to: string; role: ParentRole | null }
+        relationships: Array<{ id: string; kind: string; from: string; to: string; role: ParentRole | null }>
+      }>(`/family/persons/${personId}/relatives`, { relation, person, ...extras }),
     tree: (personId: string, depth = 3) =>
       // Authenticated on purpose: the tree is family-only, and the server
       // refuses a caller with no part in it.
       api.get<FamilyTree>(`/family/tree/${personId}?depth=${depth}`),
     /** The people in the families you belong to. */
     persons: (limit = 30) => api.get<{ items: Person[] }>(`/family/persons?limit=${limit}`),
-    link: (input: { from_person_id: string; to_person_id: string; kind: string }) =>
+    link: (input: { from_person_id: string; to_person_id: string; kind: string; role?: ParentRole }) =>
       api.post<{ id: string; status: string }>('/family/relationships', input),
     unlink: (relationshipId: string) => api.delete<void>(`/family/relationships/${relationshipId}`),
+    /** Say, or take back (null), whether a parent is the father or the mother. */
+    setRole: (relationshipId: string, role: ParentRole | null) =>
+      api.patch<{ id: string; role: ParentRole | null }>(`/family/relationships/${relationshipId}`, { role }),
     howRelated: (from: string, to: string) =>
       api.get<HowRelated>(`/family/how-related?from_person=${from}&to_person=${to}`),
     confirm: (personId: string, decision: 'confirm' | 'dispute', note?: string) =>

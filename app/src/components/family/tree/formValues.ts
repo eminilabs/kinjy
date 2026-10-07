@@ -13,6 +13,14 @@ export interface FormValues {
   biography: string
 }
 
+/** What the person says about themselves. Stored as given; the server does not interpret it. */
+export const GENDER_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '', label: 'Not specified' },
+  { value: 'female', label: 'Woman' },
+  { value: 'male', label: 'Man' },
+  { value: 'other', label: 'Other' },
+]
+
 export const emptyValues = (given = '', family = ''): FormValues => ({
   given_name: given,
   family_name: family,

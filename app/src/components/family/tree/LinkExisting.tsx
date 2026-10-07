@@ -1,6 +1,6 @@
 import { useId, useState } from 'react'
 import { useAppTheme } from '@/components/appdemo/theme'
-import type { Person, RelativeKind } from '@/lib/api'
+import type { ParentRole, Person, RelativeKind } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import FamilyFinder from './FamilyFinder'
 import { fullName } from './layout'
@@ -30,19 +30,21 @@ export default function LinkExisting({
   anchorName: string
   busy: boolean
   error: string | null
-  onSubmit: (relation: RelativeKind, other: Person) => void
+  onSubmit: (relation: RelativeKind, other: Person, role?: ParentRole) => void
   onCancel: () => void
 }) {
   const { tok } = useAppTheme()
   const [other, setOther] = useState<Person | null>(null)
   const [relation, setRelation] = useState<RelativeKind>('parent')
+  const [role, setRole] = useState<ParentRole | ''>('')
+  const roleId = useId()
   const selectId = useId()
 
   return (
     <form
       onSubmit={(event) => {
         event.preventDefault()
-        if (other) onSubmit(relation, other)
+        if (other) onSubmit(relation, other, (relation === 'parent' || relation === 'adoptive_parent') && role ? role : undefined)
       }}
       className="space-y-3"
     >
@@ -71,6 +73,18 @@ export default function LinkExisting({
           ))}
         </select>
       </div>
+      {(relation === 'parent' || relation === 'adoptive_parent') && (
+        <div>
+          <label htmlFor={roleId} className={cn('mb-1 block text-xs font-semibold', tok.mid)}>
+            {other ? fullName(other) : 'They'} {relation === 'parent' ? 'are' : 'are'} their …
+          </label>
+          <select id={roleId} value={role} onChange={(e) => setRole(e.target.value as ParentRole | '')} className={cn('w-full rounded-card-sm px-3 py-2 text-sm focus:border-gold/50 focus:outline-none', tok.input, tok.text)}>
+            <option value="">Parent (not specified)</option>
+            <option value="father">Father</option>
+            <option value="mother">Mother</option>
+          </select>
+        </div>
+      )}
       {error && (
         <p role="alert" className="text-sm text-red-200">
           {error}

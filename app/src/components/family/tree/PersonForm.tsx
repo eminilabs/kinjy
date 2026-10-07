@@ -1,7 +1,7 @@
 import { useId, useState } from 'react'
 import { useAppTheme } from '@/components/appdemo/theme'
 import { cn } from '@/lib/utils'
-import type { FormValues } from './formValues'
+import { GENDER_OPTIONS, type FormValues } from './formValues'
 
 function Field({
   label,
@@ -44,6 +44,8 @@ export default function PersonForm({
   error,
   onSubmit,
   onCancel,
+  extra,
+  ready = true,
 }: {
   initial: FormValues
   submitLabel: string
@@ -51,6 +53,10 @@ export default function PersonForm({
   error: string | null
   onSubmit: (values: FormValues) => void
   onCancel?: () => void
+  /** Questions that belong to what is being added, shown before the buttons. */
+  extra?: React.ReactNode
+  /** False while a required extra question is unanswered. */
+  ready?: boolean
 }) {
   const { tok } = useAppTheme()
   const [v, setV] = useState<FormValues>(initial)
@@ -63,7 +69,7 @@ export default function PersonForm({
     <form
       onSubmit={(event) => {
         event.preventDefault()
-        if (!v.given_name.trim() || backwards) return
+        if (!v.given_name.trim() || backwards || !ready) return
         onSubmit(v)
       }}
       className="space-y-3"
@@ -98,8 +104,17 @@ export default function PersonForm({
           {(p) => <input {...p} value={v.birth_place} onChange={(e) => set('birth_place', e.target.value)} maxLength={200} autoComplete="off" className={input} />}
         </Field>
       </div>
-      <Field label="Gender" hint="As they would say it. Never guessed.">
-        {(p) => <input {...p} aria-describedby={p.describedBy} value={v.gender} onChange={(e) => set('gender', e.target.value)} maxLength={20} autoComplete="off" className={input} />}
+      <Field label="Gender" hint="As they would say it. It is never guessed, and it does not decide who is a father or a mother.">
+        {(p) => (
+          <select {...p} aria-describedby={p.describedBy} value={v.gender} onChange={(e) => set('gender', e.target.value)} className={input}>
+            {GENDER_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+            {v.gender && !GENDER_OPTIONS.some((option) => option.value === v.gender) && <option value={v.gender}>{v.gender} (as entered)</option>}
+          </select>
+        )}
       </Field>
       <label className={cn('flex items-start gap-2 text-sm', tok.mid)}>
         <input type="checkbox" checked={v.deceased} onChange={(e) => set('deceased', e.target.checked)} className="mt-0.5" />
@@ -127,6 +142,8 @@ export default function PersonForm({
         {(p) => <textarea {...p} aria-describedby={p.describedBy} value={v.biography} onChange={(e) => set('biography', e.target.value)} maxLength={5000} rows={4} className={input} />}
       </Field>
 
+      {extra}
+
       {error && (
         <p role="alert" className="text-sm text-red-200">
           {error}
@@ -135,7 +152,7 @@ export default function PersonForm({
       <div className="flex flex-wrap gap-2">
         <button
           type="submit"
-          disabled={busy || !v.given_name.trim() || backwards}
+          disabled={busy || !v.given_name.trim() || backwards || !ready}
           className="rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-2 text-sm font-bold text-ink disabled:opacity-40"
         >
           {busy ? 'Saving…' : submitLabel}

@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, ArrowLeft, Crosshair, GitBranch, Link2, Pencil, Plus, ShieldCheck, Trash2 } from 'lucide-react'
 import { useAppTheme } from '@/components/appdemo/theme'
 import { useApi } from '@/hooks/useApi'
-import { ApiError, kaluta, type HowRelated, type PersonDetail, type RelativeKind } from '@/lib/api'
+import { ApiError, kaluta, type HowRelated, type ParentRole, type PersonDetail, type RelativeKind } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import LinkExisting from './LinkExisting'
 import PersonForm from './PersonForm'
+import RelativeQuestions from './RelativeQuestions'
 import { emptyValues, toFields, valuesFrom, type FormValues } from './formValues'
+import { isReady, noAnswers, toExtras, type KnownParent } from './relativeExtras'
 import StatusIcon from './Status'
 import { STATUS_LABEL, fullName, initials, lifespan } from './layout'
 
@@ -15,7 +17,7 @@ const RELATIVES: Array<{ id: RelativeKind; label: string; note?: string }> = [
   { id: 'adoptive_parent', label: 'Adoptive parent' },
   { id: 'child', label: 'Child' },
   { id: 'spouse', label: 'Partner' },
-  { id: 'sibling', label: 'Sibling', note: 'For siblings whose parents are not in the tree. Otherwise add them as a child of the parent.' },
+  { id: 'sibling', label: 'Sibling' },
 ]
 
 /** One link this person has, as they would read it: who, and as what. */
@@ -26,6 +28,8 @@ export interface PanelLink {
   role: string
   /** The server says whether this caller may take the link back. */
   removable: boolean
+  /** A parent link whose father/mother role the caller may set or clear. */
+  roleOf?: { value: ParentRole | null }
 }
 
 type Mode =
@@ -62,6 +66,8 @@ export default function PersonPanel({
   personId,
   meId,
   links,
+  parents,
+  partners,
   onCentre,
   onChanged,
   onRemoved,
@@ -73,6 +79,9 @@ export default function PersonPanel({
   meId: string | null
   /** The links this person has in the tree being shown. */
   links: PanelLink[]
+  /** This person's parents and partners in the tree, for the questions about a new relative. */
+  parents: KnownParent[]
+  partners: Array<{ id: string; name: string }>
   onCentre: (personId: string) => void
   /** Something about the tree changed: reload it. */
   onChanged: () => void
@@ -89,6 +98,7 @@ export default function PersonPanel({
   const [note, setNote] = useState<string | null>(null)
   const [why, setWhy] = useState('')
   const [path, setPath] = useState<HowRelated | null>(null)
+  const [answers, setAnswers] = useState(noAnswers)
   const heading = useRef<HTMLHeadingElement>(null)
 
   useEffect(() => {
@@ -273,7 +283,7 @@ export default function PersonPanel({
               </h3>
               <div className="flex flex-wrap gap-2">
                 {RELATIVES.map((r) => (
-                  <button key={r.id} type="button" onClick={() => setMode({ kind: 'add', relation: r.id })} className={cn('rounded-full border border-white/15 px-3.5 py-1.5 text-xs font-semibold', tok.text, tok.hoverBg)}>
+                  <button key={r.id} type="button" onClick={() => { setAnswers(noAnswers()); setMode({ kind: 'add', relation: r.id }) }} className={cn('rounded-full border border-white/15 px-3.5 py-1.5 text-xs font-semibold', tok.text, tok.hoverBg)}>
                     {r.label}
                   </button>
                 ))}
@@ -296,6 +306,24 @@ export default function PersonPanel({
                       <span className={cn('font-semibold', tok.text)}>{link.otherName}</span>
                       <span className={tok.low}> · {link.role}</span>
                     </span>
+                    {link.roleOf && link.removable && (
+                      <select
+                        aria-label={`What ${link.otherName} is to ${person.given_name}`}
+                        value={link.roleOf.value ?? ''}
+                        disabled={busy}
+                        onChange={(e) =>
+                          void run(async () => {
+                            await kaluta.family.setRole(link.id, (e.target.value || null) as ParentRole | null)
+                            afterChange()
+                          }, 'Could not change that.')
+                        }
+                        className={cn('min-h-9 shrink-0 rounded-card-sm px-2 text-xs focus:border-gold/50 focus:outline-none', tok.input, tok.text)}
+                      >
+                        <option value="">Parent</option>
+                        <option value="father">Father</option>
+                        <option value="mother">Mother</option>
+                      </select>
+                    )}
                     {link.removable && (
                       <button type="button" onClick={() => setMode({ kind: 'unlink', link })} aria-label={`Remove the link with ${link.otherName}`} className="inline-flex min-h-9 shrink-0 items-center px-2 text-xs text-red-200 underline underline-offset-2">
                         Remove link
@@ -359,18 +387,26 @@ export default function PersonPanel({
           <h3 className={cn('mb-1 text-sm font-semibold', tok.text)}>
             Add {RELATIVES.find((r) => r.id === mode.relation)?.label.toLowerCase()} of {person.given_name}
           </h3>
-          {RELATIVES.find((r) => r.id === mode.relation)?.note && (
-            <p className={cn('mb-3 text-xs', tok.low)}>{RELATIVES.find((r) => r.id === mode.relation)?.note}</p>
-          )}
           <PersonForm
             initial={emptyValues()}
             submitLabel="Add to the tree"
             busy={busy}
             error={error}
+            ready={isReady(mode.relation, answers)}
+            extra={
+              <RelativeQuestions
+                relation={mode.relation}
+                anchorName={person.given_name}
+                parents={parents}
+                partners={partners}
+                answers={answers}
+                onChange={setAnswers}
+              />
+            }
             onCancel={() => { setMode({ kind: 'view' }); setError(null) }}
             onSubmit={(values: FormValues) =>
               void run(async () => {
-                const added = await kaluta.family.addRelative(person.id, mode.relation, toFields(values, false))
+                const added = await kaluta.family.addRelative(person.id, mode.relation, toFields(values, false), toExtras(mode.relation, answers))
                 setMode({ kind: 'view' })
                 setNote(`${fullName(added.person)} added.`)
                 afterChange()
@@ -389,7 +425,7 @@ export default function PersonPanel({
             busy={busy}
             error={error}
             onCancel={() => { setMode({ kind: 'view' }); setError(null) }}
-            onSubmit={(relation, other) =>
+            onSubmit={(relation, other, role) =>
               void run(async () => {
                 const kind = { parent: 'parent_of', adoptive_parent: 'adoptive_parent_of', child: 'parent_of', spouse: 'spouse_of', sibling: 'sibling_of' }[relation]
                 const otherIsFrom = relation === 'parent' || relation === 'adoptive_parent'
@@ -397,6 +433,7 @@ export default function PersonPanel({
                   from_person_id: otherIsFrom ? other.id : person.id,
                   to_person_id: otherIsFrom ? person.id : other.id,
                   kind,
+                  ...(role ? { role } : {}),
                 })
                 setMode({ kind: 'view' })
                 setNote(`${fullName(other)} linked.`)
