@@ -140,9 +140,28 @@ export default function MediaGrid({
              that takes a click, and it stops the event so it opens the image
              rather than the post. */
           <>
+            {/* The cut edge, blurred rather than merely darkened. A dark
+                gradient dims the picture; a blur says the picture carries on
+                and you are not being shown all of it, which is the actual
+                state of affairs.
+
+                Masked so the blur fades in going up instead of starting at a
+                hard line - an unmasked backdrop-filter draws a band across the
+                photo, which looks like a defect. */}
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/75 via-black/35 to-transparent"
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-24 backdrop-blur-md"
+              style={{
+                maskImage: 'linear-gradient(to top, #000 45%, transparent)',
+                WebkitMaskImage: 'linear-gradient(to top, #000 45%, transparent)',
+              }}
+            />
+            {/* A little dark under it, so white text on the button holds up
+                over a pale photo. Much lighter than before, because the blur
+                is now doing the work the darkness used to do. */}
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/45 to-transparent"
             />
             <button
               type="button"

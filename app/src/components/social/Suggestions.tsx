@@ -15,9 +15,18 @@ const REASON: Record<string, string> = {
   most_active: 'Most active right now',
 }
 
-function People() {
+/**
+ * People worth following, with the follow and connect actions attached.
+ *
+ * Exported because Explore shows the same list at a different size. The rail
+ * wants four and a discovery page wants a dozen, but the asking, the
+ * optimistic state and the difference between following and connecting are the
+ * same work either way - and a second copy of it would be a second place for
+ * "connect" to quietly start meaning "follow".
+ */
+export function People({ limit = 4, title = 'People to follow' }: { limit?: number; title?: string }) {
   const { tok } = useAppTheme()
-  const suggestions = useApi(() => kaluta.suggestions.people(4), [])
+  const suggestions = useApi(() => kaluta.suggestions.people(limit), [limit])
   const [followed, setFollowed] = useState<Set<string>>(new Set())
   const [invited, setInvited] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState<string | null>(null)
@@ -61,7 +70,7 @@ function People() {
   if (!suggestions.loading && items.length === 0) return null
 
   return (
-    <RailCard title="People to follow">
+    <RailCard title={title}>
       <p className={cn('mb-3 -mt-2 text-[0.68rem]', tok.low)}>
         {REASON[suggestions.data?.reason ?? ''] ?? 'Suggested for you'}
       </p>
@@ -141,9 +150,10 @@ function People() {
   )
 }
 
-function Places() {
+/** Communities and forums to join. Exported for Explore, as People is. */
+export function Places({ limit = 3, title = 'Places to join' }: { limit?: number; title?: string }) {
   const { tok } = useAppTheme()
-  const discover = useApi<Discoveries>(() => kaluta.suggestions.places(3), [])
+  const discover = useApi<Discoveries>(() => kaluta.suggestions.places(limit), [limit])
   const communities = discover.data?.communities ?? []
   const forums = discover.data?.forums ?? []
   if (!discover.loading && communities.length === 0 && forums.length === 0) return null
@@ -151,7 +161,7 @@ function Places() {
   const row = 'flex items-center gap-2 rounded-card-sm px-1.5 py-1.5'
 
   return (
-    <RailCard title="Places to join">
+    <RailCard title={title}>
       {communities.length > 0 && (
         <ul className="space-y-0.5">
           {communities.map((c) => (
