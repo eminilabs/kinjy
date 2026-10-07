@@ -792,7 +792,38 @@ Still open, stated rather than hidden:
   levels) can make a stem run across a card in between. Not seen in any family built
   here; the layout does not detect it.
 - **More than two partners in a row**: a person can touch only two of them; the others
-  are joined by a line under the cards.
+  are joined by a line under the cards (a person with three unions in a row is placed
+  without overlap or crossing, but one of the partners is not adjacent).
 - **Pinch and drag were exercised with emulated touch**, not on a real phone.
 - Phases 2 (invite a relative by link, claim the node on sign-up), 3 (oral histories)
   and 4 (`FEATURES.familyTree`) of the todo are untouched.
+
+### Layout engine rewritten (07/10, third pass)
+
+The positions used to come from a relaxation (order by the parents' average, then a
+least-squares compaction), so nothing guaranteed that a union's children were centred
+or that a subtree stayed together. They now come from `arrange.ts`, a pure function
+of the family structure: unions (the parents of a child) → chains (partners and
+co-parents side by side) → one block per chain with a group of children per union →
+bottom-up packing by contour → each group centred exactly under the point between its
+parents (parents move apart rather than the children together) → top-level families
+packed the same way. Ties are broken by birth date then name, never by the order the
+server lists things in, and the person you are viewing is not the origin.
+`layout.ts` only turns the positions into cards and connectors.
+
+- Data model: unchanged. The one server change: adding a brother or sister with exactly
+  one shared parent can name their *other* parent (someone in the tree who is not a
+  parent of the person added to), so a half-sibling is a child of the other union and is
+  never drawn under the first person's other parent. Parents unknown stays declared siblings.
+- Tests: `app/scripts/test-family-layout.mjs` runs the algorithm on synthetic families
+  (no browser): same generation = same Y, no overlap, no connector through a card,
+  parent above child, each child drawn under its real parents only, children centred
+  on their union to the pixel, half-sibling in the right group, unions not interleaved,
+  same positions for the same data in any input order, and a new grandchild not
+  reordering the rows above. Run: `docker compose exec web node scripts/test-family-layout.mjs`.
+- Honest limits: two families joined by a marriage (a person who is a child of two
+  trees) are drawn as two trees side by side; the second one's parents stand as near as
+  they can to their child and the bar runs longer (`Layout.crossLinked`), it is not
+  centred. A mother between two unions with wide descendants gets a long partner line.
+  A tree this wide shows small cards when fitted on a desktop (zoom floor lowered to 25%).
+
