@@ -961,9 +961,7 @@ def list_threads(
         stmt = stmt.where(models.Thread.id.in_(_solved_filter(db, age, forum_id)))
     elif sort == "unanswered":
         stmt = stmt.where(models.Thread.replies_count == 0)
-    rows = db.scalars(
-        stmt.order_by(*_thread_order(sort)).limit(limit).offset(offset)
-    ).all()
+    rows = agecommunity.readable_page(db, stmt.order_by(*_thread_order(sort)), age, limit=limit, offset=offset)
     profiles = _profiles({r.author_id for r in rows})
     solved = _solved_threads(db, age, among=[r.id for r in rows])
     return {"items": [_thread_card(r, profiles, solved) for r in rows]}
