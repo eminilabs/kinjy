@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Clock, Eye, EyeOff, Link2, ShieldCheck, X } from 'lucide-react'
+import { Clock, Eye, EyeOff, Link2, X } from 'lucide-react'
 import AppShell from '@/components/app/AppShell'
 import { useApi } from '@/hooks/useApi'
 import { ApiError, kaluta, type SupervisedView, type SupervisionState } from '@/lib/api'
@@ -65,65 +65,82 @@ export default function Supervision() {
   const active = links.find((l) => l.status === 'active')
   const invites = links.filter((l) => l.status === 'invited')
 
+  const eyebrow = 'mono-data text-[0.7rem] font-bold uppercase tracking-[0.15em] text-gold-soft'
+  const card = 'cloud-card p-5 md:p-6'
+  const primary =
+    'rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-2.5 text-sm font-bold text-ink shadow-[0_8px_20px_-10px_rgba(166,120,57,0.6)] disabled:opacity-50'
+  const quiet =
+    'rounded-full border border-[var(--cloud-border)] px-5 py-2.5 text-sm font-semibold text-text-mid transition-colors hover:border-gold/50 hover:text-text-hi disabled:opacity-50'
+  const section = 'text-[1.4rem] font-bold leading-tight tracking-[-0.03em] text-text-hi'
+
   return (
     <AppShell>
-      <div className="mx-auto max-w-3xl space-y-8 px-4 py-8">
-        <header className="space-y-2">
-          <h1 className="flex items-center gap-2 text-2xl font-semibold">
-            <ShieldCheck className="size-6 shrink-0" aria-hidden />
-            Supervision
+      <div className="mx-auto max-w-3xl space-y-10 py-2">
+        <header>
+          <p className={eyebrow}>Supervision</p>
+          <h1 className="mt-2 flex items-center gap-3 text-[clamp(38px,5vw,56px)] font-bold leading-[1.02] tracking-[-0.045em] text-text-hi">
+            Safer, together
           </h1>
-          <p className="text-sm opacity-80">
+          <p className="mt-3 max-w-2xl text-[0.95rem] leading-relaxed text-text-low">
             An adult can help keep an account under 18 safer. Both people have to agree,
             either one can end it, and the other is told when they do.
           </p>
         </header>
 
         {error ? (
-          <p role="alert" className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm">
+          <p role="alert" className="rounded-2xl bg-red-500/10 px-4 py-3 text-sm text-red-200">
             {error}
           </p>
         ) : null}
 
         {/* The agreement, before the controls. */}
         {disclosure ? (
-          <section className="grid gap-4 sm:grid-cols-2">
-            <div className="rounded-xl border border-white/10 p-4">
-              <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide">
-                <Eye className="size-4 shrink-0" aria-hidden />
+          <section className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2">
+            <div className={card}>
+              <h2 className="mb-4 flex items-center gap-2.5 text-[1.05rem] font-bold tracking-[-0.02em] text-text-hi">
+                <span className="grid h-9 w-9 place-items-center rounded-[10px] bg-emerald-500/15 text-emerald-300">
+                  <Eye className="size-[18px] shrink-0" aria-hidden />
+                </span>
                 A supervising adult sees
               </h2>
-              <ul className="space-y-1.5 text-sm opacity-90">
+              <ul className="space-y-2.5 text-[0.92rem] leading-relaxed text-text-mid">
                 {disclosure.can_see.map((line) => (
-                  <li key={line}>· {line}</li>
+                  <li key={line} className="flex gap-2.5">
+                    <span aria-hidden="true" className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
+                    {line}
+                  </li>
                 ))}
               </ul>
             </div>
-            <div className="rounded-xl border border-white/10 p-4">
-              <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide">
-                <EyeOff className="size-4 shrink-0" aria-hidden />
+            <div className={card}>
+              <h2 className="mb-4 flex items-center gap-2.5 text-[1.05rem] font-bold tracking-[-0.02em] text-text-hi">
+                <span className="grid h-9 w-9 place-items-center rounded-[10px] bg-gold/20 text-gold-soft">
+                  <EyeOff className="size-[18px] shrink-0" aria-hidden />
+                </span>
                 They never see
               </h2>
-              <ul className="space-y-1.5 text-sm opacity-90">
+              <ul className="space-y-2.5 text-[0.92rem] leading-relaxed text-text-mid">
                 {disclosure.cannot_see.map((line) => (
-                  <li key={line}>· {line}</li>
+                  <li key={line} className="flex gap-2.5">
+                    <span aria-hidden="true" className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-gold" />
+                    {line}
+                  </li>
                 ))}
               </ul>
             </div>
-            <p className="sm:col-span-2 text-sm opacity-75">{disclosure.note}</p>
+            <p className="rounded-2xl bg-text-hi/[0.05] px-5 py-4 text-sm leading-relaxed text-text-mid sm:col-span-2">
+              {disclosure.note}
+            </p>
           </section>
         ) : null}
 
         {/* Invitations waiting on this member. */}
         {invites.length ? (
-          <section className="space-y-3">
-            <h2 className="text-lg font-semibold">Waiting for an answer</h2>
+          <section className="space-y-4">
+            <h2 className={section}>Waiting for an answer</h2>
             {invites.map((link) => (
-              <div
-                key={link.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 p-4"
-              >
-                <p className="text-sm">
+              <div key={link.id} className={cn(card, 'flex flex-wrap items-center justify-between gap-4')}>
+                <p className="text-[0.95rem] text-text-hi">
                   {link.role === 'teen'
                     ? 'An adult asked to supervise this account.'
                     : 'You asked to supervise an account. Waiting for them to accept.'}
@@ -134,7 +151,7 @@ export default function Supervision() {
                       type="button"
                       disabled={busy}
                       onClick={() => run(() => kaluta.supervision.answer(link.id, true))}
-                      className="rounded-lg bg-white/10 px-3 py-1.5 text-sm hover:bg-white/20 disabled:opacity-50"
+                      className={primary}
                     >
                       Accept
                     </button>
@@ -142,7 +159,7 @@ export default function Supervision() {
                       type="button"
                       disabled={busy}
                       onClick={() => run(() => kaluta.supervision.answer(link.id, false))}
-                      className="rounded-lg px-3 py-1.5 text-sm underline opacity-80 disabled:opacity-50"
+                      className={quiet}
                     >
                       Decline
                     </button>
@@ -152,7 +169,7 @@ export default function Supervision() {
                     type="button"
                     disabled={busy}
                     onClick={() => run(() => kaluta.supervision.end(link.id))}
-                    className="rounded-lg px-3 py-1.5 text-sm underline opacity-80 disabled:opacity-50"
+                    className={quiet}
                   >
                     Withdraw
                   </button>
@@ -164,37 +181,35 @@ export default function Supervision() {
 
         {/* The active link. */}
         {active ? (
-          <section className="space-y-3">
-            <h2 className="text-lg font-semibold">
+          <section className="space-y-4">
+            <h2 className={section}>
               {active.role === 'parent' ? 'An account you supervise' : 'Supervision is on'}
             </h2>
-            <div className="space-y-3 rounded-xl border border-white/10 p-4">
-              <p className="text-sm opacity-80">
+            <div className={cn(card, 'space-y-4')}>
+              <p className="flex items-center gap-2 text-sm text-text-low">
+                <span aria-hidden="true" className="h-2 w-2 rounded-full bg-emerald-400" />
                 Started {new Date(active.accepted_at ?? active.created_at).toLocaleDateString()}.
               </p>
-              {active.role === 'parent' ? (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() =>
-                    run(async () => setDetail(await kaluta.supervision.view(active.id)), true)
-                  }
-                  className="rounded-lg bg-white/10 px-3 py-1.5 text-sm hover:bg-white/20 disabled:opacity-50"
-                >
-                  Open what I can see
+              <div className="flex flex-wrap items-center gap-3">
+                {active.role === 'parent' ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      run(async () => setDetail(await kaluta.supervision.view(active.id)), true)
+                    }
+                    className={primary}
+                  >
+                    Open what I can see
+                  </button>
+                ) : null}
+                <button type="button" disabled={busy} onClick={() => run(() => kaluta.supervision.end(active.id))} className={cn(quiet, 'inline-flex items-center gap-1.5')}>
+                  <X className="size-4 shrink-0" aria-hidden />
+                  End supervision
                 </button>
-              ) : null}
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => run(() => kaluta.supervision.end(active.id))}
-                className="flex items-center gap-1.5 text-sm underline opacity-80 disabled:opacity-50"
-              >
-                <X className="size-4 shrink-0" aria-hidden />
-                End supervision
-              </button>
+              </div>
               {active.role === 'teen' ? (
-                <p className="text-xs opacity-70">
+                <p className="text-sm leading-relaxed text-text-low">
                   Ending it does not change what your age already restricts, and the adult is
                   told that it ended.
                 </p>
@@ -205,21 +220,21 @@ export default function Supervision() {
 
         {/* The parent's view, once opened. */}
         {detail ? (
-          <section className="space-y-3">
-            <h2 className="text-lg font-semibold">Everything you can see</h2>
-            <div className="space-y-4 rounded-xl border border-white/10 p-4">
+          <section className="space-y-4">
+            <h2 className={section}>Everything you can see</h2>
+            <div className={cn(card, 'space-y-6')}>
               <div>
-                <h3 className="mb-1.5 flex items-center gap-2 text-sm font-semibold">
-                  <Clock className="size-4 shrink-0" aria-hidden />
+                <h3 className="mb-2 flex items-center gap-2 text-[1.05rem] font-bold tracking-[-0.02em] text-text-hi">
+                  <Clock className="size-[18px] shrink-0 text-gold-soft" aria-hidden />
                   Time today
                 </h3>
-                <p className="text-sm opacity-90">
+                <p className="text-[0.95rem] text-text-mid">
                   {Math.round(detail.time.minutes_today)} minutes used
                   {detail.time.daily_limit_minutes
                     ? ` of a ${detail.time.daily_limit_minutes}-minute limit.`
                     : ', with no limit set.'}
                 </p>
-                <label className="mt-2 flex items-center gap-2 text-sm">
+                <label className="mt-3 flex items-center gap-2.5 text-sm text-text-mid">
                   Daily limit
                   <input
                     type="number"
@@ -238,28 +253,34 @@ export default function Supervision() {
                         true,
                       )
                     }
-                    className="w-24 rounded-lg border border-white/15 bg-transparent px-2 py-1"
+                    className="w-24 rounded-xl border border-transparent bg-text-hi/[0.07] px-3 py-2 text-text-hi focus:border-gold/50 focus:bg-transparent focus:outline-none"
                   />
                   minutes
                 </label>
               </div>
 
-              <div>
-                <h3 className="mb-1.5 text-sm font-semibold">Safety settings</h3>
-                <ul className="space-y-1 text-sm opacity-90">
+              <div className="border-t border-[var(--cloud-border)] pt-5">
+                <h3 className="mb-3 text-[1.05rem] font-bold tracking-[-0.02em] text-text-hi">Safety settings</h3>
+                <ul className="divide-y divide-[var(--cloud-border)] text-[0.92rem]">
                   {Object.entries(detail.settings).filter(([key]) => shown(key)).map(([key, value]) => (
-                    <li key={key}>
-                      {label(key)}: <strong>{String(value)}</strong>
+                    <li key={key} className="flex items-center justify-between gap-4 py-2.5">
+                      <span className="text-text-mid">{label(key)}</span>
+                      <strong className="shrink-0 rounded-full bg-text-hi/[0.07] px-3 py-1 text-xs font-semibold text-text-hi">
+                        {String(value)}
+                      </strong>
                     </li>
                   ))}
                 </ul>
               </div>
 
-              <div>
-                <h3 className="mb-1.5 text-sm font-semibold">Not included, by design</h3>
-                <ul className="space-y-1 text-sm opacity-70">
+              <div className="border-t border-[var(--cloud-border)] pt-5">
+                <h3 className="mb-3 text-[1.05rem] font-bold tracking-[-0.02em] text-text-hi">Not included, by design</h3>
+                <ul className="space-y-2 text-[0.92rem] leading-relaxed text-text-low">
                   {detail.not_included.map((line) => (
-                    <li key={line}>· {line}</li>
+                    <li key={line} className="flex gap-2.5">
+                      <span aria-hidden="true" className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-text-low" />
+                      {line}
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -269,22 +290,19 @@ export default function Supervision() {
 
         {/* Requests, for whichever side is looking. */}
         {requests.length ? (
-          <section className="space-y-3">
-            <h2 className="text-lg font-semibold">Requests</h2>
-            <ul className="space-y-2">
+          <section className="space-y-4">
+            <h2 className={section}>Requests</h2>
+            <ul className="space-y-3">
               {requests.map((r) => (
-                <li
-                  key={r.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 p-4"
-                >
-                  <div className="text-sm">
-                    <p>
+                <li key={r.id} className={cn(card, 'flex flex-wrap items-center justify-between gap-4')}>
+                  <div>
+                    <p className="text-[0.95rem] text-text-hi">
                       {label(r.setting)} → <strong>{r.requested_value}</strong>
                     </p>
                     <p
                       className={cn(
-                        'text-xs opacity-70',
-                        r.status === 'declined' && 'opacity-90',
+                        'mt-1 text-sm',
+                        r.status === 'approved' ? 'text-emerald-300' : r.status === 'declined' ? 'text-red-200' : 'text-text-low',
                       )}
                     >
                       {r.status === 'pending'
@@ -302,7 +320,7 @@ export default function Supervision() {
                         type="button"
                         disabled={busy}
                         onClick={() => run(() => kaluta.supervision.answerRequest(r.id, true))}
-                        className="rounded-lg bg-white/10 px-3 py-1.5 text-sm hover:bg-white/20 disabled:opacity-50"
+                        className={primary}
                       >
                         Allow
                       </button>
@@ -310,7 +328,7 @@ export default function Supervision() {
                         type="button"
                         disabled={busy}
                         onClick={() => run(() => kaluta.supervision.answerRequest(r.id, false))}
-                        className="rounded-lg px-3 py-1.5 text-sm underline opacity-80 disabled:opacity-50"
+                        className={quiet}
                       >
                         Decline
                       </button>
@@ -324,41 +342,41 @@ export default function Supervision() {
 
         {/* Starting one. Either side may, and the ages decide the roles. */}
         {active ? null : (
-          <section className="space-y-3">
-            <h2 className="text-lg font-semibold">Start supervision</h2>
+          <section className="space-y-4">
+            <h2 className={section}>Start supervision</h2>
             <form
               onSubmit={(e) => {
                 e.preventDefault()
                 if (handle.trim()) run(() => kaluta.supervision.invite(handle.trim()))
               }}
-              className="flex flex-wrap items-center gap-2"
+              className={cn(card, 'space-y-4')}
             >
-              <span className="flex items-center gap-1.5 text-sm opacity-80">
-                <Link2 className="size-4 shrink-0" aria-hidden />
-                Their username
-              </span>
-              <input
-                value={handle}
-                onChange={(e) => setHandle(e.target.value)}
-                placeholder="username"
-                className="min-w-40 flex-1 rounded-lg border border-white/15 bg-transparent px-3 py-2 text-sm"
-              />
-              <button
-                type="submit"
-                disabled={busy || !handle.trim()}
-                className="rounded-lg bg-white/10 px-4 py-2 text-sm hover:bg-white/20 disabled:opacity-50"
-              >
-                Send invitation
-              </button>
+              <label className="block">
+                <span className="mb-2 flex items-center gap-2 text-sm font-semibold text-text-mid">
+                  <Link2 className="size-4 shrink-0" aria-hidden />
+                  Their username
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    value={handle}
+                    onChange={(e) => setHandle(e.target.value)}
+                    placeholder="username"
+                    className="min-w-40 flex-1 rounded-full border border-transparent bg-text-hi/[0.07] px-5 py-3 text-[0.95rem] text-text-hi placeholder:text-text-low focus:border-gold/50 focus:bg-transparent focus:outline-none"
+                  />
+                  <button type="submit" disabled={busy || !handle.trim()} className={primary}>
+                    Send invitation
+                  </button>
+                </div>
+              </label>
+              <p className="text-sm leading-relaxed text-text-low">
+                Whoever is under 18 becomes the supervised account, whichever of you sends the
+                invitation.
+              </p>
             </form>
-            <p className="text-xs opacity-70">
-              Whoever is under 18 becomes the supervised account, whichever of you sends the
-              invitation.
-            </p>
           </section>
         )}
 
-        {state.loading ? <p className="text-sm opacity-70">Loading…</p> : null}
+        {state.loading ? <p className="text-sm text-text-low" role="status">Loading…</p> : null}
       </div>
     </AppShell>
   )
