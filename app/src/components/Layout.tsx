@@ -41,7 +41,7 @@ const APP_ROUTES = [
 
 /** Public pages already on the new design: they bring their own navigation and
  *  footer (components/landing/PublicShell), so the old marketing ones step aside. */
-const OWN_CHROME_PAGES = ['/', '/memorials', '/platform', '/feeds', '/creators', '/pricing', '/payments', '/safety', '/developers', '/app', '/join', '/admin']
+const OWN_CHROME_PAGES = ['/', '/memorials', '/platform', '/feeds', '/creators', '/pricing', '/payments', '/safety', '/developers', '/app', '/join', '/admin', '/commerce', '/family', '/assistant']
 
 /** Public pages with a dynamic part (/p/:postId, /memorial/:code) and the sign-in helpers. */
 const OWN_CHROME_PREFIXES = ['/p/', '/memorial/', '/reset-password']

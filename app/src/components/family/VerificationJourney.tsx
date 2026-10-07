@@ -8,12 +8,12 @@ const snapEase = [0.34, 1.56, 0.64, 1] as [number, number, number, number]
 
 function Chip({ tone, children }: { tone: 'pending' | 'verified' | 'dispute'; children: string }) {
   const styles = {
-    pending: 'border-[#E0A33E]/50 bg-[#E0A33E]/10 text-[#9A6B1F]',
-    verified: 'border-[#2F8F66]/50 bg-[#3FB27F]/15 text-[#2F8F66]',
-    dispute: 'border-[#DE5C5C]/50 bg-[#DE5C5C]/10 text-[#B54343]',
+    pending: 'border-[#E0A33E]/50 bg-[#E0A33E]/10 text-[var(--kl-gold-deep)]',
+    verified: 'border-[#2F8F66]/50 bg-[#3FB27F]/15 text-success',
+    dispute: 'border-[#DE5C5C]/50 bg-[#DE5C5C]/10 text-danger',
   } as const
   return (
-    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 mono-data text-[0.68rem] font-semibold tracking-wider ${styles[tone]}`}>
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 kl-mono text-[0.68rem] font-semibold tracking-wider ${styles[tone]}`}>
       {children}
     </span>
   )
@@ -100,20 +100,20 @@ export default function VerificationJourney() {
             initial="hidden"
             whileInView="show"
             viewport={{ once: true, amount: 0.5 }}
-            className="rounded-card-lg border border-[#241F16]/10 bg-[#FFFDF8] p-6 shadow-[0_16px_40px_-16px_rgba(36,31,22,0.25)]"
+            className="rounded-[20px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] p-6 shadow-[0_24px_48px_-34px_var(--kl-shadow)]"
           >
             <div className="flex items-center justify-between">
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#D9A648]/15 text-[#9A6B1F]">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#D9A648]/15 text-[var(--kl-gold-deep)]">
                 <GitPullRequest size={20} />
               </span>
               <Chip tone="pending">PENDING</Chip>
             </div>
-            <h3 className="h3 mt-4 text-paper-ink">1 · Propose</h3>
-            <p className="mt-2 text-[0.95rem] leading-relaxed text-[#5A5245]">
+            <h3 className="kl-serif text-[24px] font-semibold leading-tight mt-4 text-[var(--kl-ink)]">1 · Propose</h3>
+            <p className="mt-2 text-[0.95rem] leading-relaxed text-[var(--kl-mid)]">
               A member adds a relative — a Person Node plus a typed Relationship Edge
-              (<span className="mono-data text-[0.78rem]">parent_of</span>,{' '}
-              <span className="mono-data text-[0.78rem]">spouse_of</span>,{' '}
-              <span className="mono-data text-[0.78rem]">adoptive_parent_of</span>…).
+              (<span className="kl-mono text-[0.78rem]">parent_of</span>,{' '}
+              <span className="kl-mono text-[0.78rem]">spouse_of</span>,{' '}
+              <span className="kl-mono text-[0.78rem]">adoptive_parent_of</span>…).
               Nothing is assumed; the edge enters <strong>PENDING</strong>.
             </p>
           </motion.article>
@@ -125,22 +125,22 @@ export default function VerificationJourney() {
             initial="hidden"
             whileInView="show"
             viewport={{ once: true, amount: 0.5 }}
-            className="rounded-card-lg border border-[#D9A648]/40 bg-[#FFFDF8] p-6 shadow-[0_16px_40px_-16px_rgba(36,31,22,0.25)]"
+            className="rounded-[20px] border border-[#D9A648]/40 bg-[var(--kl-surface)] p-6 shadow-[0_24px_48px_-34px_var(--kl-shadow)]"
           >
             <div className="flex items-center justify-between">
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#3FB27F]/15 text-[#2F8F66]">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#3FB27F]/15 text-success">
                 <CheckCheck size={20} />
               </span>
               <FlippingChip delay={1.75} />
             </div>
-            <h3 className="h3 mt-4 text-paper-ink">2 · Confirm</h3>
-            <p className="mt-2 text-[0.95rem] leading-relaxed text-[#5A5245]">
+            <h3 className="kl-serif text-[24px] font-semibold leading-tight mt-4 text-[var(--kl-ink)]">2 · Confirm</h3>
+            <p className="mt-2 text-[0.95rem] leading-relaxed text-[var(--kl-mid)]">
               The other party confirms the relationship — a gold seal draws in and the
               edge becomes <strong>VERIFIED</strong>. For the deceased, who cannot
               speak for themselves, <strong>3 closely-related members</strong> must
               corroborate:
             </p>
-            <div className="mt-3 flex items-center gap-3 rounded-card-sm bg-[#3FB27F]/8 p-3">
+            <div className="mt-3 flex items-center gap-3 rounded-[12px] bg-[#3FB27F]/8 p-3">
               <div className="flex -space-x-2">
                 {(['rehema', 'pendo', 'kito'] as const).map((id, i) => (
                   <motion.span
@@ -154,7 +154,7 @@ export default function VerificationJourney() {
                   </motion.span>
                 ))}
               </div>
-              <p className="caption !text-[#2F8F66]">
+              <p className="text-[13px] leading-relaxed text-success">
                 3 of 3 corroborations gathered for <strong>Juma</strong> (deceased) → VERIFIED
               </p>
             </div>
@@ -167,16 +167,16 @@ export default function VerificationJourney() {
             initial="hidden"
             whileInView="show"
             viewport={{ once: true, amount: 0.5 }}
-            className="rounded-card-lg border border-[#241F16]/10 bg-[#FFFDF8] p-6 shadow-[0_16px_40px_-16px_rgba(36,31,22,0.25)]"
+            className="rounded-[20px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] p-6 shadow-[0_24px_48px_-34px_var(--kl-shadow)]"
           >
             <div className="flex items-center justify-between">
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#DE5C5C]/12 text-[#B54343]">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#DE5C5C]/10 text-danger">
                 <Scale size={20} />
               </span>
               <Chip tone="dispute">DISPUTED</Chip>
             </div>
-            <h3 className="h3 mt-4 text-paper-ink">3 · Dispute</h3>
-            <p className="mt-2 text-[0.95rem] leading-relaxed text-[#5A5245]">
+            <h3 className="kl-serif text-[24px] font-semibold leading-tight mt-4 text-[var(--kl-ink)]">3 · Dispute</h3>
+            <p className="mt-2 text-[0.95rem] leading-relaxed text-[var(--kl-mid)]">
               Disagreements open a <strong>structured dispute workflow</strong> — evidence
               notes, statements from both branches, and admin review. The edge is held,
               never silently deleted, until the family record is resolved.
@@ -192,17 +192,17 @@ export default function VerificationJourney() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.6 }}
           transition={{ duration: 0.5, ease: cloudEase }}
-          className="rounded-card-md border border-[#241F16]/10 bg-[#FFFDF8]/80 p-4"
+          className="rounded-[14px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] p-4"
         >
-          <Users size={18} className="text-[#9A6B1F]" />
-          <h4 className="mt-2 text-sm font-bold text-paper-ink">Closeness ranking</h4>
-          <p className="caption mt-1 !text-[#6B5F4E]">
+          <Users size={18} className="text-[var(--kl-gold-deep)]" />
+          <h4 className="mt-2 text-sm font-bold text-[var(--kl-ink)]">Closeness ranking</h4>
+          <p className="text-[13px] leading-relaxed mt-1 text-[var(--kl-mid)]">
             Full siblings before half-siblings — computed from shared parents, consistently.
           </p>
           <div className="mt-2 space-y-1">
             {siblings.map((s, i) => (
-              <p key={s.id} className="mono-data text-[0.68rem] text-[#6B5F4E]">
-                {i + 1}. {PERSON_MAP[s.id].name} — <span className={s.kind === 'full' ? 'text-[#2F8F66]' : 'text-[#9A6B1F]'}>{s.kind} sibling</span>
+              <p key={s.id} className="kl-mono text-[0.68rem] text-[var(--kl-mid)]">
+                {i + 1}. {PERSON_MAP[s.id].name} — <span className={s.kind === 'full' ? 'text-success' : 'text-[var(--kl-gold-deep)]'}>{s.kind} sibling</span>
               </p>
             ))}
           </div>
@@ -213,15 +213,15 @@ export default function VerificationJourney() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.6 }}
           transition={{ duration: 0.5, delay: 0.1, ease: cloudEase }}
-          className="rounded-card-md border border-[#241F16]/10 bg-[#FFFDF8]/80 p-4"
+          className="rounded-[14px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] p-4"
         >
-          <Search size={18} className="text-[#9A6B1F]" />
-          <h4 className="mt-2 text-sm font-bold text-paper-ink">Duplicate detection — never auto-merge</h4>
-          <p className="caption mt-1 !text-[#6B5F4E]">
+          <Search size={18} className="text-[var(--kl-gold-deep)]" />
+          <h4 className="mt-2 text-sm font-bold text-[var(--kl-ink)]">Duplicate detection — never auto-merge</h4>
+          <p className="text-[13px] leading-relaxed mt-1 text-[var(--kl-mid)]">
             Suspected duplicates are flagged side-by-side for human confirmation.
             A merge only ever happens when a person decides it.
           </p>
-          <p className="mono-data mt-2 inline-block rounded-full border border-[#E0A33E]/40 bg-[#E0A33E]/10 px-2 py-0.5 text-[0.65rem] text-[#9A6B1F]">
+          <p className="kl-mono mt-2 inline-block rounded-full border border-[#E0A33E]/40 bg-[#E0A33E]/10 px-2 py-0.5 text-[0.65rem] text-[var(--kl-gold-deep)]">
             2 possible matches · awaiting review
           </p>
         </motion.div>
@@ -231,15 +231,15 @@ export default function VerificationJourney() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.6 }}
           transition={{ duration: 0.5, delay: 0.2, ease: cloudEase }}
-          className="rounded-card-md border border-[#241F16]/10 bg-[#FFFDF8]/80 p-4"
+          className="rounded-[14px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] p-4"
         >
-          <ShieldCheck size={18} className="text-[#9A6B1F]" />
-          <h4 className="mt-2 text-sm font-bold text-paper-ink">AI never infers — never fabricates</h4>
-          <p className="caption mt-1 !text-[#6B5F4E]">
+          <ShieldCheck size={18} className="text-[var(--kl-gold-deep)]" />
+          <h4 className="mt-2 text-sm font-bold text-[var(--kl-ink)]">AI never infers — never fabricates</h4>
+          <p className="text-[13px] leading-relaxed mt-1 text-[var(--kl-mid)]">
             AI does not infer paternity, religion or ethnicity, and never invents
             relatives. Only verified edges enter the graph.
           </p>
-          <p className="mono-data mt-2 inline-flex items-center gap-1 rounded-full border border-[#DE5C5C]/40 bg-[#DE5C5C]/8 px-2 py-0.5 text-[0.65rem] text-[#B54343]">
+          <p className="kl-mono mt-2 inline-flex items-center gap-1 rounded-full border border-[#DE5C5C]/40 bg-[#DE5C5C]/8 px-2 py-0.5 text-[0.65rem] text-danger">
             <AlertTriangle size={10} /> inference: blocked
           </p>
         </motion.div>
@@ -249,15 +249,15 @@ export default function VerificationJourney() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.6 }}
           transition={{ duration: 0.5, delay: 0.3, ease: cloudEase }}
-          className="rounded-card-md border border-[#241F16]/10 bg-[#FFFDF8]/80 p-4"
+          className="rounded-[14px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] p-4"
         >
-          <Spline size={18} className="text-[#9A6B1F]" />
-          <h4 className="mt-2 text-sm font-bold text-paper-ink">Common ancestor & path finder</h4>
-          <p className="caption mt-1 !text-[#6B5F4E]">
+          <Spline size={18} className="text-[var(--kl-gold-deep)]" />
+          <h4 className="mt-2 text-sm font-bold text-[var(--kl-ink)]">Common ancestor & path finder</h4>
+          <p className="text-[13px] leading-relaxed mt-1 text-[var(--kl-mid)]">
             Ask “How are we related?” and watch the shortest path light up across
             the graph — try it below.
           </p>
-          <a href="#path-finder" className="mono-data mt-2 inline-block text-[0.68rem] text-[#9A6B1F] underline decoration-[#D9A648]/50 underline-offset-4">
+          <a href="#path-finder" className="kl-mono mt-2 inline-block text-[0.68rem] text-[var(--kl-gold-deep)] underline decoration-[#D9A648]/50 underline-offset-4">
             Open the path finder ↓
           </a>
         </motion.div>

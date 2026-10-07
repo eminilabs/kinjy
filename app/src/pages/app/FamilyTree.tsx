@@ -51,10 +51,10 @@ function PersonPanel({ person, onConfirmed }: { person: Person; onConfirmed: () 
   const status = result?.status ?? person.status ?? 'unconfirmed'
 
   return (
-    <div className="mt-5 rounded-card-md border border-white/10 bg-ink-2/50 p-4">
+    <div className="mt-5 rounded-2xl bg-text-hi/[0.05] p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-text-hi">{fullName(person)}</p>
+          <p className="text-[1.05rem] font-bold tracking-[-0.02em] text-text-hi">{fullName(person)}</p>
           <p className="caption">
             {person.deceased ? 'Deceased · three close relatives required' : 'Living'} ·{' '}
             <span className={status === 'verified' ? 'text-success' : status === 'disputed' ? 'text-warning' : undefined}>
@@ -67,7 +67,7 @@ function PersonPanel({ person, onConfirmed }: { person: Person; onConfirmed: () 
             type="button"
             disabled={busy}
             onClick={() => void decide('confirm')}
-            className="inline-flex items-center gap-1.5 rounded-full border border-success/40 px-3 py-1.5 text-xs font-semibold text-success hover:bg-success/10 disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 rounded-full border border-success/40 px-4 py-2 text-sm font-semibold text-success hover:bg-success/10 disabled:opacity-40"
           >
             <ShieldCheck size={13} aria-hidden="true" />
             Confirm
@@ -76,7 +76,7 @@ function PersonPanel({ person, onConfirmed }: { person: Person; onConfirmed: () 
             type="button"
             disabled={busy}
             onClick={() => void decide('dispute')}
-            className="inline-flex items-center gap-1.5 rounded-full border border-warning/40 px-3 py-1.5 text-xs font-semibold text-warning hover:bg-warning/10 disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 rounded-full border border-warning/40 px-4 py-2 text-sm font-semibold text-warning hover:bg-warning/10 disabled:opacity-40"
           >
             <AlertTriangle size={13} aria-hidden="true" />
             Dispute
@@ -85,7 +85,7 @@ function PersonPanel({ person, onConfirmed }: { person: Person; onConfirmed: () 
       </div>
 
       <div className="mt-3">
-        <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+        <div className="h-1.5 overflow-hidden rounded-full bg-text-hi/10">
           <div
             className="h-full rounded-full bg-success"
             style={{ width: `${Math.min(100, (confirmations / Math.max(1, threshold)) * 100)}%` }}
@@ -96,7 +96,7 @@ function PersonPanel({ person, onConfirmed }: { person: Person; onConfirmed: () 
         </p>
       </div>
 
-      {note && <p className="mt-2 text-xs text-amber-200">{note}</p>}
+      {note && <p className="mt-2 text-sm text-warning">{note}</p>}
     </div>
   )
 }
@@ -204,16 +204,27 @@ export default function FamilyTree() {
   }
 
   return (
-    <AppShell
-      title="Family Tree"
-      subtitle="A graph of person nodes and primitive edges. Grandparent, cousin and half-sibling are computed when you read the tree, never stored."
-    >
-      <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
+    <AppShell>
+      <header className="mb-6">
+        <p className="mono-data text-[0.72rem] font-bold uppercase tracking-[0.15em] text-gold-soft">Family Tree</p>
+        <h1 className="mt-2 text-[clamp(38px,5vw,56px)] font-bold leading-[1.02] tracking-[-0.045em] text-text-hi">
+          Your family, as a graph
+        </h1>
+        <p className="mt-3 max-w-2xl text-[0.95rem] leading-relaxed text-text-low">
+          A graph of person nodes and primitive edges. Grandparent, cousin and half-sibling are computed when you
+          read the tree, never stored.
+        </p>
+      </header>
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
         {/* Tree */}
-        <div className="cloud-card min-h-[460px] p-5">
+        <div className="cloud-card min-h-[460px] p-5 md:p-6">
           {!tree ? (
-            <div className="flex h-full items-center justify-center text-center">
-              <p className="max-w-xs text-sm text-text-low">
+            <div className="flex h-full min-h-[400px] flex-col items-center justify-center text-center">
+              <span aria-hidden="true" className="grid h-14 w-14 place-items-center rounded-2xl bg-emerald-400/15 text-emerald-300">
+                <GitBranch size={24} />
+              </span>
+              <p className="mt-4 text-lg font-bold tracking-[-0.02em] text-text-hi">Start your tree</p>
+              <p className="mt-1 max-w-xs text-sm text-text-low">
                 Begin with one person. Add yourself, then a parent — the graph grows from there.
               </p>
             </div>
@@ -221,7 +232,7 @@ export default function FamilyTree() {
             <>
               <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm text-text-mid">
+                  <p className="text-[0.95rem] text-text-mid">
                     Centred on{' '}
                     <span className="font-semibold text-text-hi">
                       {tree.nodes.find((n) => n.level === 0)?.person.given_name ?? 'this person'}
@@ -241,7 +252,7 @@ export default function FamilyTree() {
                       if (rootId) void loadTree(rootId, next)
                     }}
                     aria-label="How many generations to load"
-                    className="rounded-card-sm border border-white/10 bg-ink-2/60 px-2 py-1 text-xs text-text-hi focus:border-gold/40 focus:outline-none"
+                    className="rounded-full border border-transparent bg-text-hi/[0.07] px-3 py-1.5 text-sm text-text-hi focus:border-gold/50 focus:outline-none"
                   >
                     {[2, 3, 4, 5, 6].map((d) => (
                       <option key={d} value={d}>{d}</option>
@@ -261,7 +272,7 @@ export default function FamilyTree() {
 
               {/* The legend earns its place: without it a dashed edge and a
                   green dot are decoration rather than information. */}
-              <ul className="mt-4 flex flex-wrap gap-x-5 gap-y-1.5 border-t border-white/8 pt-3">
+              <ul className="mt-4 flex flex-wrap gap-x-5 gap-y-1.5 border-t border-[var(--cloud-border)] pt-4">
                 {[
                   ['bg-success', 'verified by relatives'],
                   ['bg-warning', 'disputed'],
@@ -286,9 +297,9 @@ export default function FamilyTree() {
 
         {/* Tools */}
         <div className="space-y-4">
-          <form onSubmit={addPerson} className="cloud-card p-5">
-            <h2 className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-text-hi">
-              <UserPlus size={15} className="text-gold" aria-hidden="true" />
+          <form onSubmit={addPerson} className="cloud-card p-5 md:p-6">
+            <h2 className="mb-4 inline-flex items-center gap-2.5 text-[1.15rem] font-bold tracking-[-0.02em] text-text-hi">
+              <UserPlus size={18} className="text-gold" aria-hidden="true" />
               Add a person
             </h2>
             <input
@@ -296,32 +307,32 @@ export default function FamilyTree() {
               onChange={(e) => setGiven(e.target.value)}
               placeholder="Given name"
               aria-label="Given name"
-              className="w-full rounded-card-sm border border-white/10 bg-ink-2/60 px-3 py-2 text-sm text-text-hi placeholder:text-text-low focus:border-gold/40 focus:outline-none"
+              className="w-full rounded-full border border-transparent bg-text-hi/[0.07] px-5 py-3 text-[0.95rem] text-text-hi placeholder:text-text-low focus:border-gold/50 focus:outline-none"
             />
             <input
               value={family}
               onChange={(e) => setFamily(e.target.value)}
               placeholder="Family name"
               aria-label="Family name"
-              className="mt-2 w-full rounded-card-sm border border-white/10 bg-ink-2/60 px-3 py-2 text-sm text-text-hi placeholder:text-text-low focus:border-gold/40 focus:outline-none"
+              className="mt-2 w-full rounded-full border border-transparent bg-text-hi/[0.07] px-5 py-3 text-[0.95rem] text-text-hi placeholder:text-text-low focus:border-gold/50 focus:outline-none"
             />
-            <label className="mt-2 flex items-center gap-2 text-xs text-text-mid">
+            <label className="mt-3 flex items-center gap-2 text-sm text-text-mid">
               <input type="checkbox" checked={deceased} onChange={(e) => setDeceased(e.target.checked)} />
               Deceased — needs three close relatives to confirm
             </label>
             <button
               type="submit"
               disabled={!given.trim()}
-              className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-2 text-sm font-bold text-ink disabled:opacity-40"
+              className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-3 text-sm font-bold text-ink disabled:opacity-40"
             >
               <Plus size={14} aria-hidden="true" />
               Add
             </button>
           </form>
 
-          <form onSubmit={link} className="cloud-card p-5">
-            <h2 className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-text-hi">
-              <GitBranch size={15} className="text-gold" aria-hidden="true" />
+          <form onSubmit={link} className="cloud-card p-5 md:p-6">
+            <h2 className="mb-4 inline-flex items-center gap-2.5 text-[1.15rem] font-bold tracking-[-0.02em] text-text-hi">
+              <GitBranch size={18} className="text-gold" aria-hidden="true" />
               Link two people
             </h2>
             {[
@@ -334,7 +345,7 @@ export default function FamilyTree() {
                 onChange={(e) => field.set(e.target.value)}
                 aria-label={field.label}
                 className={cn(
-                  'w-full rounded-card-sm border border-white/10 bg-ink-2/60 px-3 py-2 text-sm text-text-hi focus:border-gold/40 focus:outline-none',
+                  'w-full rounded-full border border-transparent bg-text-hi/[0.07] px-5 py-3 text-[0.95rem] text-text-hi focus:border-gold/50 focus:outline-none',
                   index > 0 && 'mt-2',
                 )}
               >
@@ -350,7 +361,7 @@ export default function FamilyTree() {
               value={kind}
               onChange={(e) => setKind(e.target.value)}
               aria-label="Relationship kind"
-              className="mt-2 w-full rounded-card-sm border border-white/10 bg-ink-2/60 px-3 py-2 text-sm text-text-hi focus:border-gold/40 focus:outline-none"
+              className="mt-2 w-full rounded-full border border-transparent bg-text-hi/[0.07] px-5 py-3 text-[0.95rem] text-text-hi focus:border-gold/50 focus:outline-none"
             >
               {EDGE_KINDS.map((k) => (
                 <option key={k.id} value={k.id}>
@@ -362,7 +373,7 @@ export default function FamilyTree() {
               <button
                 type="submit"
                 disabled={!from || !to}
-                className="flex-1 rounded-full border border-white/12 px-3 py-2 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft disabled:opacity-40"
+                className="flex-1 rounded-full border border-[var(--cloud-border)] px-4 py-2.5 text-sm font-semibold text-text-mid hover:border-gold/50 hover:bg-gold/10 hover:text-text-hi disabled:opacity-40"
               >
                 Link
               </button>
@@ -370,7 +381,7 @@ export default function FamilyTree() {
                 type="button"
                 onClick={checkRelation}
                 disabled={!from || !to}
-                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border border-white/12 px-3 py-2 text-xs font-semibold text-text-mid hover:border-sky/40 hover:text-sky disabled:opacity-40"
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border border-[var(--cloud-border)] px-4 py-2.5 text-sm font-semibold text-text-mid hover:border-sky/50 hover:bg-sky/10 hover:text-text-hi disabled:opacity-40"
               >
                 <Link2 size={12} aria-hidden="true" />
                 How related?
@@ -378,7 +389,7 @@ export default function FamilyTree() {
             </div>
 
             {relation && (
-              <div className="mt-3 border-t border-white/8 pt-3">
+              <div className="mt-3 border-t border-[var(--cloud-border)] pt-3">
                 {relation.related ? (
                   <>
                     {/* The chain, one hop per line, each named by its relation to
@@ -419,7 +430,7 @@ export default function FamilyTree() {
             )}
 
             {/* Legend: the two states a link can be in. */}
-            <div className="mt-3 flex items-center gap-3 border-t border-white/8 pt-3 text-[0.65rem] text-text-low">
+            <div className="mt-3 flex items-center gap-3 border-t border-[var(--cloud-border)] pt-3 text-[0.65rem] text-text-low">
               <span className="flex items-center gap-1">
                 <ShieldCheck size={11} className="text-success" aria-hidden="true" /> Verified
               </span>
@@ -429,24 +440,24 @@ export default function FamilyTree() {
             </div>
           </form>
 
-          <div className="cloud-card p-5">
-            <h2 className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-text-hi">
-              <Search size={15} className="text-gold" aria-hidden="true" />
+          <div className="cloud-card p-5 md:p-6">
+            <h2 className="mb-4 inline-flex items-center gap-2.5 text-[1.15rem] font-bold tracking-[-0.02em] text-text-hi">
+              <Search size={18} className="text-gold" aria-hidden="true" />
               People
             </h2>
             <input
               onChange={(e) => void search(e.target.value)}
               placeholder="Search by name…"
               aria-label="Search people"
-              className="w-full rounded-card-sm border border-white/10 bg-ink-2/60 px-3 py-2 text-sm text-text-hi placeholder:text-text-low focus:border-gold/40 focus:outline-none"
+              className="w-full rounded-full border border-transparent bg-text-hi/[0.07] px-5 py-3 text-[0.95rem] text-text-hi placeholder:text-text-low focus:border-gold/50 focus:outline-none"
             />
-            <ul className="mt-3 max-h-56 space-y-1 overflow-y-auto">
+            <ul className="mt-3 max-h-56 space-y-0.5 overflow-y-auto">
               {people.map((p) => (
                 <li key={p.id}>
                   <button
                     type="button"
                     onClick={() => void loadTree(p.id)}
-                    className="w-full truncate rounded-card-sm px-2 py-1.5 text-start text-sm text-text-mid hover:bg-white/5 hover:text-text-hi"
+                    className="w-full truncate rounded-full px-4 py-2 text-start text-sm text-text-mid hover:bg-text-hi/[0.06] hover:text-text-hi"
                   >
                     {fullName(p)}
                     {p.status === 'verified' && <span className="caption"> · verified</span>}
@@ -458,9 +469,9 @@ export default function FamilyTree() {
         </div>
       </div>
 
-      {note && <p className="mt-4 text-sm text-gold-soft">{note}</p>}
+      {note && <p className="mt-4 rounded-2xl bg-gold/10 px-5 py-3 text-sm text-text-hi">{note}</p>}
       {error && (
-        <p role="alert" className="mt-4 text-sm text-red-200">
+        <p role="alert" className="mt-4 rounded-2xl bg-danger/10 px-5 py-3 text-sm text-danger">
           {error}
         </p>
       )}

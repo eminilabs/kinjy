@@ -61,16 +61,15 @@ export default function AdEngineConsole() {
   )
 
   return (
-    <section id="ad-engine" className="noise-overlay twilight-field px-6 py-24 md:py-32">
+    <section id="ad-engine" className="kl-pad-x border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]">
       <div className="mx-auto grid max-w-container items-center gap-14 lg:grid-cols-2">
         {/* Left: backdrop + prompt console */}
-        <div className="relative overflow-hidden rounded-card-xl border border-white/10 shadow-cloud">
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 bg-cover bg-center opacity-45"
-            style={{ backgroundImage: 'url(/ads-engine.jpg)' }}
-          />
-          <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-b from-ink/40 via-ink/70 to-ink/85" />
+        <div
+          className="relative min-h-[480px] overflow-hidden rounded-[20px]"
+          style={{ background: 'linear-gradient(160deg, var(--kl-stage-a), var(--kl-stage-b))' }}
+        >
+          <div aria-hidden="true" className="absolute -right-16 -top-20 h-[280px] w-[280px] rounded-full opacity-35 blur-[90px]" style={{ background: 'var(--kl-sky)' }} />
+          <div aria-hidden="true" className="absolute -bottom-24 -left-16 h-[260px] w-[260px] rounded-full opacity-30 blur-[90px]" style={{ background: '#D9A648' }} />
 
           {/* map radius circle draws at stage 3 */}
           <svg className="absolute inset-0 h-full w-full" viewBox="0 0 600 620" fill="none" aria-hidden="true">
@@ -100,11 +99,11 @@ export default function AdEngineConsole() {
               transition={{ delay: 0.4, duration: 0.35, ease: [0.34, 1.56, 0.64, 1] }}
               style={{ transformOrigin: '300px 260px' }}
             >
-              <circle cx="300" cy="260" r="6" fill="#F0C878" />
-              <circle cx="300" cy="260" r="12" fill="none" stroke="#F0C878" strokeOpacity="0.5" />
+              <circle cx="300" cy="260" r="6" fill="#B8861F" />
+              <circle cx="300" cy="260" r="12" fill="none" stroke="#B8861F" strokeOpacity="0.5" />
             </motion.g>
             {stage >= 3 && (
-              <text x="318" y="255" className="mono-data" fill="#F0C878" fontSize="13" fontFamily="'JetBrains Mono', monospace">
+              <text x="318" y="255" className="mono-data" fill="#B8861F" fontSize="13" fontFamily="'JetBrains Mono', monospace">
                 20 km · Dar es Salaam
               </text>
             )}
@@ -112,18 +111,18 @@ export default function AdEngineConsole() {
 
           {/* console */}
           <div className="relative p-5 sm:p-7">
-            <div className="cloud-glass rounded-card-md p-4">
+            <div className="rounded-[14px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] p-4">
               <div className="flex items-start gap-3">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ background: 'var(--grad-orb)' }}>
-                  <Sparkles size={14} className="text-ink" aria-hidden="true" />
+                  <Sparkles size={14} className="text-[var(--kl-night)]" aria-hidden="true" />
                 </span>
-                <p className="flex-1 text-sm leading-relaxed text-text-hi">{PROMPT}</p>
+                <p className="flex-1 text-sm leading-relaxed text-[var(--kl-ink)]">{PROMPT}</p>
               </div>
               <button
                 type="button"
                 onClick={run}
                 disabled={running}
-                className="mt-4 inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-2.5 text-sm font-bold text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] transition hover:brightness-110 disabled:opacity-60"
+                className="mt-4 inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-[#F0C878] to-[#D9A648] px-5 py-2.5 text-sm font-bold text-[var(--kl-night)] shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] transition hover:brightness-110 disabled:opacity-60"
               >
                 <Play size={14} aria-hidden="true" />
                 {running ? 'Building…' : stage > 0 ? 'Rebuild campaign' : 'Generate campaign'}
@@ -132,44 +131,44 @@ export default function AdEngineConsole() {
 
             <div className="mt-4 space-y-3">
               {stageItem(1, (
-                <div className="flex items-center gap-2.5 rounded-card-sm border border-white/10 bg-ink/70 px-4 py-2.5 backdrop-blur-md">
-                  <Target size={15} className="text-gold" aria-hidden="true" />
-                  <span className="text-xs text-text-mid">Objective</span>
-                  <span className="mono-data ms-auto rounded-full bg-indigo/30 px-3 py-1 text-[0.68rem] text-sky">
+                <div className="flex items-center gap-2.5 rounded-[14px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] px-4 py-2.5 ">
+                  <Target size={15} className="text-[var(--kl-gold-deep)]" aria-hidden="true" />
+                  <span className="text-xs text-[var(--kl-mid)]">Objective</span>
+                  <span className="mono-data ms-auto rounded-full bg-indigo/30 px-3 py-1 text-[0.68rem] text-[#3F6FA8]">
                     Foot traffic / local awareness
                   </span>
                 </div>
               ))}
               {stageItem(2, (
-                <div className="rounded-card-sm border border-white/10 bg-ink/70 p-3 backdrop-blur-md">
-                  <p className="mb-2 flex items-center gap-2 text-xs text-text-mid">
-                    <Megaphone size={14} className="text-gold" aria-hidden="true" /> Creatives — 3 variants generated
+                <div className="rounded-[14px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] p-3 ">
+                  <p className="mb-2 flex items-center gap-2 text-xs text-[var(--kl-mid)]">
+                    <Megaphone size={14} className="text-[var(--kl-gold-deep)]" aria-hidden="true" /> Creatives — 3 variants generated
                   </p>
                   <div className="grid grid-cols-3 gap-2">
                     {CREATIVES.map((c) => (
-                      <div key={c} className="rounded-card-sm border border-white/10 bg-white/[0.04] p-2">
+                      <div key={c} className="rounded-[14px] border border-[var(--kl-paper-2)] bg-[var(--kl-paper)] p-2">
                         <div className="mb-1.5 h-8 rounded-[6px] bg-gradient-to-br from-indigo/50 to-gold/30" aria-hidden="true" />
-                        <p className="text-[0.62rem] leading-tight text-text-mid">{c}</p>
+                        <p className="text-[0.62rem] leading-tight text-[var(--kl-mid)]">{c}</p>
                       </div>
                     ))}
                   </div>
                 </div>
               ))}
               {stageItem(3, (
-                <div className="flex items-center gap-2.5 rounded-card-sm border border-white/10 bg-ink/70 px-4 py-2.5 backdrop-blur-md">
-                  <Users size={15} className="text-gold" aria-hidden="true" />
-                  <span className="text-xs text-text-mid">Audience</span>
-                  <span className="mono-data ms-auto text-[0.7rem] text-gold-soft">age 25–45 · 20 km radius</span>
+                <div className="flex items-center gap-2.5 rounded-[14px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] px-4 py-2.5 ">
+                  <Users size={15} className="text-[var(--kl-gold-deep)]" aria-hidden="true" />
+                  <span className="text-xs text-[var(--kl-mid)]">Audience</span>
+                  <span className="mono-data ms-auto text-[0.7rem] text-[var(--kl-gold-deep)]">age 25–45 · 20 km radius</span>
                 </div>
               ))}
               {stageItem(4, (
-                <div className="rounded-card-sm border border-white/10 bg-ink/70 p-3.5 backdrop-blur-md">
-                  <p className="mb-2 flex items-center gap-2 text-xs text-text-mid">
-                    <Wallet size={14} className="text-gold" aria-hidden="true" /> Budget allocation — $100
+                <div className="rounded-[14px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] p-3.5 ">
+                  <p className="mb-2 flex items-center gap-2 text-xs text-[var(--kl-mid)]">
+                    <Wallet size={14} className="text-[var(--kl-gold-deep)]" aria-hidden="true" /> Budget allocation — $100
                   </p>
-                  <div className="flex h-6 overflow-hidden rounded-full border border-white/10 text-[0.62rem] font-bold">
+                  <div className="flex h-6 overflow-hidden rounded-full border border-[var(--kl-paper-2)] text-[0.62rem] font-bold">
                     <motion.div
-                      className="flex items-center justify-center bg-gold text-ink"
+                      className="flex items-center justify-center bg-gold text-[var(--kl-night)]"
                       initial={{ width: '0%' }}
                       animate={{ width: '70%' }}
                       transition={{ duration: 0.6, ease: [0.65, 0, 0.35, 1] }}
@@ -177,7 +176,7 @@ export default function AdEngineConsole() {
                       70% local posts
                     </motion.div>
                     <motion.div
-                      className="flex items-center justify-center bg-indigo text-text-hi"
+                      className="flex items-center justify-center bg-indigo text-white"
                       initial={{ width: '0%' }}
                       animate={{ width: '30%' }}
                       transition={{ duration: 0.6, delay: 0.15, ease: [0.65, 0, 0.35, 1] }}
@@ -188,29 +187,29 @@ export default function AdEngineConsole() {
                 </div>
               ))}
               {stageItem(5, (
-                <div className="flex items-center gap-2.5 rounded-card-sm border border-white/10 bg-ink/70 px-4 py-2.5 backdrop-blur-md">
-                  <FlaskConical size={15} className="text-gold" aria-hidden="true" />
-                  <span className="text-xs text-text-mid">A/B test plan</span>
-                  <span className="mono-data ms-auto rounded-full bg-sky/15 px-3 py-1 text-[0.68rem] text-sky">
+                <div className="flex items-center gap-2.5 rounded-[14px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] px-4 py-2.5 ">
+                  <FlaskConical size={15} className="text-[var(--kl-gold-deep)]" aria-hidden="true" />
+                  <span className="text-xs text-[var(--kl-mid)]">A/B test plan</span>
+                  <span className="mono-data ms-auto rounded-full bg-sky/15 px-3 py-1 text-[0.68rem] text-[#3F6FA8]">
                     variant A vs B · 50/50
                   </span>
                 </div>
               ))}
               {stageItem(6, (
-                <div className="rounded-card-md border border-gold/40 bg-gold/[0.08] p-4 backdrop-blur-md">
-                  <p className="text-sm font-semibold text-gold-soft">Nothing launches until you approve.</p>
+                <div className="rounded-[14px] border border-gold/40 bg-gold/[0.08] p-4 ">
+                  <p className="text-sm font-semibold text-[var(--kl-gold-deep)]">Nothing launches until you approve.</p>
                   {approved ? (
                     <motion.p
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ duration: 0.3, ease: [0.34, 1.56, 0.64, 1] }}
-                      className="mono-data mt-3 inline-flex items-center gap-2 rounded-full bg-gold/20 px-4 py-1.5 text-xs text-gold-soft"
+                      className="mono-data mt-3 inline-flex items-center gap-2 rounded-full bg-gold/20 px-4 py-1.5 text-xs text-[var(--kl-gold-deep)]"
                     >
                       <motion.span
                         initial={{ scale: 0 }}
                         animate={{ scale: 1 }}
                         transition={{ duration: 0.35, ease: [0.34, 1.56, 0.64, 1] }}
-                        className="flex h-4 w-4 items-center justify-center rounded-full bg-gold text-ink"
+                        className="flex h-4 w-4 items-center justify-center rounded-full bg-gold text-[var(--kl-night)]"
                       >
                         <Check size={10} aria-hidden="true" />
                       </motion.span>
@@ -221,14 +220,14 @@ export default function AdEngineConsole() {
                       <button
                         type="button"
                         onClick={() => setApproved(true)}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-2 text-xs font-bold text-ink transition hover:brightness-110"
+                        className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-[#F0C878] to-[#D9A648] px-4 py-2 text-xs font-bold text-[var(--kl-night)] transition hover:brightness-110"
                       >
                         <Check size={12} aria-hidden="true" /> Approve launch
                       </button>
                       <button
                         type="button"
                         onClick={run}
-                        className="inline-flex items-center gap-1.5 rounded-full cloud-glass px-4 py-2 text-xs font-semibold text-text-hi transition hover:text-gold-soft"
+                        className="inline-flex items-center gap-1.5 rounded-full rounded-[14px] border border-[var(--kl-paper-2)] bg-[var(--kl-paper)] px-4 py-2 text-xs font-semibold text-[var(--kl-ink)] transition hover:text-[var(--kl-gold-deep)]"
                       >
                         <Pencil size={12} aria-hidden="true" /> Edit
                       </button>
@@ -247,9 +246,9 @@ export default function AdEngineConsole() {
           viewport={{ once: true, margin: '-20%' }}
           transition={{ duration: 0.7, ease: EASE }}
         >
-          <p className="eyebrow text-gold">AI Advertising Engine</p>
-          <h2 className="h2 mt-4">Say it plainly. Get a campaign.</h2>
-          <p className="body-lg mt-5 text-text-mid">
+          <p className="kl-mono text-xs uppercase tracking-[.14em] text-[var(--kl-gold-deep)] ">AI Advertising Engine</p>
+          <h2 className="kl-h2 mt-5">Say it plainly. Get a campaign.</h2>
+          <p className="text-[17px] leading-[1.55] mt-5 text-[var(--kl-mid)]">
             Describe your goal in one sentence. The engine drafts the objective, creatives, audience,
             budget split and test plan — then stops.
           </p>
@@ -260,7 +259,7 @@ export default function AdEngineConsole() {
               'Budget allocated across the cheapest floors first',
               'A human approval gate stands between every draft and every launch',
             ].map((b) => (
-              <li key={b} className="flex items-start gap-3 text-text-mid">
+              <li key={b} className="flex items-start gap-3 text-[var(--kl-mid)]">
                 <svg width="18" height="14" viewBox="0 0 18 14" className="mt-1.5 shrink-0" aria-hidden="true">
                   <path d="M1 12 Q 9 -2 17 12" fill="none" stroke="#D9A648" strokeWidth="1.6" strokeLinecap="round" />
                 </svg>
@@ -268,7 +267,7 @@ export default function AdEngineConsole() {
               </li>
             ))}
           </ul>
-          <p className={cn('mono-data mt-6 inline-block rounded-card-sm border border-gold/25 bg-gold/[0.06] px-4 py-3 text-gold-soft')}>
+          <p className={cn('mono-data mt-6 inline-block rounded-[14px] border border-gold/25 bg-gold/[0.06] px-4 py-3 text-[var(--kl-gold-deep)]')}>
             $100 → ~200,000 local impressions or 2,000 clicks at floor
           </p>
         </motion.div>

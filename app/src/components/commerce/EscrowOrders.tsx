@@ -24,10 +24,10 @@ const STATUS: Record<string, { label: string; tone: 'wait' | 'good' | 'warn' | '
 }
 
 const TONE_CLASS = {
-  wait: 'border-sky/35 bg-sky/10 text-sky',
-  good: 'border-emerald-400/35 bg-emerald-400/10 text-emerald-200',
-  warn: 'border-amber-400/35 bg-amber-400/10 text-amber-200',
-  muted: 'border-white/12 bg-white/5 text-text-mid',
+  wait: 'bg-sky/15 text-sky',
+  good: 'bg-emerald-400/15 text-emerald-200',
+  warn: 'bg-amber-400/15 text-amber-200',
+  muted: 'bg-text-hi/[0.07] text-text-mid',
 }
 
 const CATEGORIES = [
@@ -68,7 +68,7 @@ function DisputeForm({ order, onDone }: { order: Order; onDone: () => void }) {
   }
 
   return (
-    <form onSubmit={submit} className="mt-3 rounded-card-sm border border-amber-400/25 bg-amber-400/[0.05] p-4">
+    <form onSubmit={submit} className="mt-4 rounded-2xl bg-amber-400/10 p-5">
       <p className="text-sm font-semibold text-text-hi">Open a dispute</p>
       <p className="caption mt-1">
         The money stays with the custodian while this is open. The other side has a deadline to answer.
@@ -77,7 +77,7 @@ function DisputeForm({ order, onDone }: { order: Order; onDone: () => void }) {
         value={category}
         onChange={(e) => setCategory(e.target.value)}
         aria-label="What went wrong"
-        className="mt-3 w-full rounded-card-sm border border-white/12 bg-ink-2/70 px-3 py-2 text-sm text-text-hi focus:border-gold/40 focus:outline-none"
+        className="mt-3 w-full rounded-full border border-transparent bg-text-hi/[0.07] px-5 py-3 text-[0.95rem] text-text-hi focus:border-gold/50 focus:outline-none"
       >
         {CATEGORIES.map((c) => (
           <option key={c.value} value={c.value}>
@@ -91,7 +91,7 @@ function DisputeForm({ order, onDone }: { order: Order; onDone: () => void }) {
         rows={3}
         placeholder="What happened? Dates, tracking numbers and what you were told all help."
         aria-label="What happened"
-        className="mt-2 w-full rounded-card-sm border border-white/12 bg-ink-2/70 px-3 py-2 text-sm text-text-hi placeholder:text-text-low focus:border-gold/40 focus:outline-none"
+        className="mt-2 w-full rounded-2xl border border-transparent bg-text-hi/[0.07] px-5 py-3 text-[0.95rem] text-text-hi placeholder:text-text-low focus:border-gold/50 focus:outline-none"
       />
       {error && (
         <p role="alert" className="mt-2 text-sm text-red-200">
@@ -102,14 +102,14 @@ function DisputeForm({ order, onDone }: { order: Order; onDone: () => void }) {
         <button
           type="submit"
           disabled={busy}
-          className="rounded-full bg-amber-400/90 px-4 py-2 text-xs font-bold text-ink disabled:opacity-40"
+          className="rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-2.5 text-sm font-bold text-ink disabled:opacity-40"
         >
           {busy ? 'Opening…' : 'Open dispute'}
         </button>
         <button
           type="button"
           onClick={onDone}
-          className="rounded-full border border-white/12 px-4 py-2 text-xs font-semibold text-text-mid"
+          className="rounded-full border border-[var(--cloud-border)] px-5 py-2.5 text-sm font-semibold text-text-mid"
         >
           Cancel
         </button>
@@ -145,16 +145,16 @@ export default function EscrowOrders() {
   }
 
   const items = orders.data?.items ?? []
-  if (orders.loading) return <p className="text-sm text-text-low">Loading your orders…</p>
+  if (orders.loading) return <p className="text-sm text-text-low" role="status">Loading your orders…</p>
   if (items.length === 0) {
-    return <p className="text-sm text-text-low">No orders yet.</p>
+    return <p className="cloud-card px-6 py-10 text-center text-sm text-text-low">No orders yet.</p>
   }
 
   return (
     <section>
       {terms.data && (
-        <p className="caption mb-3 flex items-start gap-2">
-          <ShieldCheck size={14} className="mt-0.5 shrink-0 text-gold" aria-hidden="true" />
+        <p className="mb-4 flex items-start gap-2.5 text-sm leading-relaxed text-text-low">
+          <ShieldCheck size={16} className="mt-0.5 shrink-0 text-gold" aria-hidden="true" />
           <span>
             Your money is held by {terms.data.custodian} — {terms.data.licence} — not by Kinjy. It reaches the seller
             when you confirm receipt, or {terms.data.auto_release_days} days after payment if you neither confirm nor
@@ -163,9 +163,9 @@ export default function EscrowOrders() {
         </p>
       )}
 
-      {note && <p className="mb-3 text-sm text-gold-soft">{note}</p>}
+      {note && <p className="mb-4 rounded-2xl bg-gold/10 px-5 py-3 text-sm text-text-hi">{note}</p>}
       {error && (
-        <p role="alert" className="mb-3 text-sm text-red-200">
+        <p role="alert" className="mb-4 rounded-2xl bg-danger/10 px-5 py-3 text-sm text-danger">
           {error}
         </p>
       )}
@@ -179,12 +179,12 @@ export default function EscrowOrders() {
           const canDispute = order.status === 'in_escrow' || order.status === 'delivered'
 
           return (
-            <li key={order.id} className="cloud-card p-4">
+            <li key={order.id} className="cloud-card p-5 md:p-6">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="mono-data text-sm text-text-hi">{order.id.slice(0, 16)}</span>
+                <span className="mono-data text-sm font-semibold text-text-hi">{order.id.slice(0, 16)}</span>
                 <span
                   className={cn(
-                    'rounded-full border px-2.5 py-1 text-[0.68rem] font-semibold',
+                    'rounded-full px-3 py-1 text-xs font-semibold',
                     TONE_CLASS[status.tone],
                   )}
                 >
@@ -192,27 +192,27 @@ export default function EscrowOrders() {
                 </span>
               </div>
 
-              <p className="caption mt-2">
+              <p className="mt-3 text-sm text-text-low">
                 You are the {isBuyer ? 'buyer' : 'seller'} · seller ${order.vendor_price} + markup ${order.margin} = $
                 {order.customer_price}
                 {Number(order.refunded_amount) > 0 && ` · $${order.refunded_amount} refunded`}
               </p>
 
               {order.status === 'in_escrow' && order.dispute_window_ends && (
-                <p className="caption mt-1 text-sky">
+                <p className="mt-1.5 text-sm text-sky">
                   Releases automatically on {dateLabel(order.dispute_window_ends)} unless you confirm or dispute first.
                 </p>
               )}
               {order.status === 'delivered' && order.delivery_note && (
-                <p className="caption mt-1">Seller’s note: {order.delivery_note}</p>
+                <p className="mt-1.5 text-sm text-text-low">Seller’s note: {order.delivery_note}</p>
               )}
               {order.status === 'disputed' && (
-                <p className="caption mt-1 text-amber-200">
+                <p className="mt-1.5 text-sm text-warning">
                   The release clock is stopped while this is open.
                 </p>
               )}
 
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-4 flex flex-wrap gap-2">
                 {canConfirm && (
                   <button
                     type="button"
@@ -224,7 +224,7 @@ export default function EscrowOrders() {
                         'Confirmed. The seller has been paid.',
                       )
                     }
-                    className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-2 text-xs font-bold text-ink disabled:opacity-40"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-2.5 text-sm font-bold text-ink disabled:opacity-40"
                   >
                     <Check size={13} aria-hidden="true" />
                     Confirm receipt — release the money
@@ -241,7 +241,7 @@ export default function EscrowOrders() {
                         'Marked as delivered. The buyer still has to confirm before the money is released.',
                       )
                     }
-                    className="inline-flex items-center gap-1.5 rounded-full border border-white/12 px-4 py-2 text-xs font-semibold text-text-mid transition-colors hover:border-gold/40 hover:text-gold-soft disabled:opacity-40"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-[var(--cloud-border)] px-5 py-2.5 text-sm font-semibold text-text-mid transition-colors hover:border-gold/50 hover:bg-gold/10 hover:text-text-hi disabled:opacity-40"
                   >
                     {order.status === 'delivered' ? (
                       <PackageCheck size={13} aria-hidden="true" />
@@ -255,7 +255,7 @@ export default function EscrowOrders() {
                   <button
                     type="button"
                     onClick={() => setDisputing(order.id)}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 px-4 py-2 text-xs font-semibold text-amber-200"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 px-5 py-2.5 text-sm font-semibold text-warning hover:bg-amber-400/10"
                   >
                     <AlertTriangle size={13} aria-hidden="true" />
                     Something is wrong
