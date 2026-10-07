@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { AlertCircle, Fingerprint, Globe2, Loader2, MessagesSquare, ShieldCheck, Sparkles, Users, Wallet, Landmark } from 'lucide-react'
+import { AlertCircle, Fingerprint, Loader2, ShieldCheck } from 'lucide-react'
 import '@/components/landing/landing.css'
 import { Eyebrow, KlButton } from '@/components/landing/PageKit'
+import { HeroCollage } from '@/components/landing/LandingHero'
 import { Brand, ThemeToggle } from '@/components/landing/shared'
 import { useLandingTheme } from '@/components/landing/useLandingTheme'
-import { MODULE_TONES } from '@/components/platform/tones'
 import { useAuth } from '@/hooks/useAuth'
 import { ApiError } from '@/lib/api'
 import { clearPendingRef, pendingRef } from '@/lib/share'
@@ -58,15 +58,6 @@ function passwordProblem(value: string): string | null {
     return 'Mix letters with digits or symbols.'
   return null
 }
-
-const SHOWCASE = [
-  { icon: Users, label: 'Circles' },
-  { icon: MessagesSquare, label: 'Messages' },
-  { icon: Landmark, label: 'Memorials' },
-  { icon: Sparkles, label: 'Creator Studio' },
-  { icon: Wallet, label: 'Payments' },
-  { icon: Globe2, label: 'Every language' },
-]
 
 export default function SignIn() {
   const { t } = useTranslation()
@@ -369,28 +360,15 @@ export default function SignIn() {
         >
           <div aria-hidden="true" className="absolute -right-24 -top-24 h-[420px] w-[420px] rounded-full opacity-35 blur-[110px]" style={{ background: 'var(--kl-sky)' }} />
           <div aria-hidden="true" className="absolute -bottom-32 -left-24 h-[420px] w-[420px] rounded-full opacity-40 blur-[110px]" style={{ background: '#D9A648' }} />
-          <div className="relative sticky top-0 flex h-screen flex-col justify-center px-[clamp(32px,5vw,84px)] py-14">
+          <div className="relative sticky top-0 flex h-screen flex-col justify-start overflow-y-auto px-[clamp(32px,5vw,84px)] py-10">
+            <HeroCollage className="relative mb-8 w-[min(100%,340px)] shrink-0 self-start" />
             <Eyebrow>{t('signin.yourSocietyAwaits')}</Eyebrow>
-            <h2 className="kl-serif mt-5 max-w-[640px] text-balance text-[clamp(44px,5vw,76px)] font-semibold leading-[0.98] tracking-[-0.02em]">
+            <h2 className="kl-serif mt-4 max-w-[640px] text-balance text-[clamp(36px,3.8vw,56px)] font-semibold leading-[0.98] tracking-[-0.02em]">
               One account.{' '}
               <span className="text-[var(--kl-gold-deep)]">{spelled(OPEN_MODULES)} modules.</span>
             </h2>
 
-            <div className="mt-10 grid max-w-[560px] grid-cols-3 gap-3" aria-hidden="true">
-              {SHOWCASE.map((m, i) => {
-                const [ink, tile] = MODULE_TONES[i % MODULE_TONES.length]
-                return (
-                  <div key={m.label} className="rounded-[18px] bg-[var(--kl-surface)] p-4 shadow-[0_24px_48px_-32px_var(--kl-shadow)]">
-                    <span className="grid h-10 w-10 place-items-center rounded-[12px]" style={{ background: tile, color: ink }}>
-                      <m.icon size={18} />
-                    </span>
-                    <p className="mt-3 text-sm font-semibold">{m.label}</p>
-                  </div>
-                )
-              })}
-            </div>
-
-            <ul className="mt-8 max-w-[560px] space-y-3">
+            <ul className="mt-6 max-w-[560px] space-y-3">
               <li className="flex items-start gap-4 rounded-[18px] bg-[var(--kl-surface)]/80 p-4">
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-[#F6EBD3] text-[#8A6414]">
                   <Fingerprint size={18} aria-hidden="true" />
