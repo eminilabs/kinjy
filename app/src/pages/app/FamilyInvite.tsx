@@ -98,7 +98,7 @@ export default function FamilyInvite() {
           <>
             <h1 className="h3">You are invited to claim your place in a family tree</h1>
             <p className="mt-2 text-sm leading-relaxed text-text-mid">
-              Sign in or create an account to see whose place this is. Nothing is shared with you until you accept, and the tree stays private.
+              Sign in or create an account to see whose place this is. Nothing of the tree is shown to you until you accept: accepting makes you part of that family tree, and you will be told exactly what you will see before you choose.
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
               <Link to={`/join?mode=signup&next=${NEXT}`} className={button}>Create an account</Link>
@@ -112,9 +112,21 @@ export default function FamilyInvite() {
           <>
             <h1 className="h3">Is this you?</h1>
             <p className="mt-2 text-sm leading-relaxed text-text-mid">
-              A relative has added <strong className="text-text-hi">{look.name}</strong> to their family tree and invites you to claim that place. If you accept,
-              your account is attached to it and you join that family tree. If this is not you, decline.
+              A relative has added <strong className="text-text-hi">{look.name}</strong> to their family tree and invites you to claim that place. If this is not you, decline.
             </p>
+            <div className="mt-4 rounded-card-md border border-white/10 p-4" aria-labelledby="after-accept">
+              <h2 id="after-accept" className="text-sm font-semibold text-text-hi">If you accept, you join this family tree</h2>
+              <p className="mt-2 text-sm text-text-mid">Your account is attached to {look.name}’s place, and you will be able to see:</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-text-mid">
+                <li>every person connected to that place by the family links already recorded: parents, partners, children, brothers and sisters, and the people beyond them;</li>
+                <li>for each of them: name, gender if given, dates and places of birth and death, photo, biography and how they are related to you;</li>
+                <li>the photos, documents and recordings kept for those people.</li>
+              </ul>
+              <p className="mt-2 text-sm text-text-mid">
+                You will also be able to add relatives and links, and to confirm or dispute entries. You can change or remove only what you add yourself, and you can remove your own place later.
+              </p>
+              <p className="mt-2 text-sm text-text-mid">The tree is private by default: it is shown to the people in it, and to others only as its owner’s privacy settings allow.</p>
+            </div>
             {look.own && <p className="mt-3 text-sm text-text-mid" role="status">You made this invitation, so you cannot accept it.</p>}
             {look.hasNode && (
               <p className="mt-3 text-sm text-text-mid" role="status">
@@ -123,7 +135,7 @@ export default function FamilyInvite() {
             )}
             {error && <p className="mt-3 text-sm text-red-300" role="alert">{error}</p>}
             <div className="mt-5 flex flex-wrap gap-3">
-              <button type="button" onClick={accept} disabled={busy || look.own || look.hasNode} className={button}>Yes, this is me</button>
+              <button type="button" onClick={accept} disabled={busy || look.own || look.hasNode} className={button}>Yes, this is me: join this tree</button>
               <button type="button" onClick={decline} disabled={busy} className={quiet}>Decline</button>
             </div>
           </>

@@ -67,7 +67,7 @@ export default function InvitePanel({ personId, name }: { personId: string; name
         <Send size={13} aria-hidden="true" /> Invite {name} to Kinjy
       </h3>
       <p className={cn('mb-2 text-xs', tok.low)}>
-        Make a link and send it to {name} yourself. It works once, for 7 days. It shows nothing of the tree: {name} signs in, sees whose place it is, and chooses to accept or decline.
+        Make a link and send it to {name} yourself. It works once, for 7 days. The link shows nothing of the tree: {name} signs in, sees whose place it is and what they would see, and chooses to accept or decline. If they accept, they join this family tree and can see the people connected to {name}.
       </p>
       {link && (
         <div className="mb-2 space-y-2">

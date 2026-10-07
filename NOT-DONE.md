@@ -853,6 +853,11 @@ Limits, stated rather than hidden:
 - **Accepting makes the member belong to the tree**, so they then read it by the ordinary rule
   (belonging); the link itself never opens anything. Whether a claimed relative should see the
   whole connected family is an FT-02/FT-03 question.
+- The acceptance page now says, before the choice, what joining the tree lets the member see
+  (everyone connected through recorded links, their details, the archive kept for them) and do
+  (add relatives and links, confirm or dispute). Limiting that access (for example to a branch
+  or to the nearest relatives) means changing the read rules in family-service `access.py`;
+  that is FT-03, not done here.
 - The author of a node keeps edit rights on it after the claim (existing `created_by` rule).
 - A node under 18 cannot be invited, and a minor's account cannot accept; there is no
   guardian-led path yet.
