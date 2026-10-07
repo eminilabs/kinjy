@@ -42,6 +42,27 @@ const MAX_RATIO = 1.91
 /** And never taller than this, however wide the column gets. */
 const MAX_MEDIA_HEIGHT = 560
 
+/**
+ * The shape of a multi-picture block, as width/height.
+ *
+ * A ratio rather than a height in pixels. The heights here used to be h-64 and
+ * h-80 - 256 and 320 - chosen when the feed column was about 814px wide. The
+ * column is 560 now, and a fixed height cannot follow it: the same h-80 that
+ * gave reasonable tiles at 814 was producing 278x158 tiles, a ratio of 1.76,
+ * which is a letterbox slot. A portrait photo in one of those is a vertical
+ * strip of its own middle.
+ *
+ * These are chosen so the tiles come out close to square, which is what every
+ * other feed does and what a cropped thumbnail wants to be:
+ *
+ *   two   - side by side, so the block is twice a square tile
+ *   three - one tall beside two stacked; the tall one reads as a portrait
+ *   four  - a two-by-two of squares, so the block is square itself
+ *
+ * Expressed this way they hold at any column width, including a phone's.
+ */
+const BLOCK_RATIO: Record<number, number> = { 2: 2, 3: 1.45, 4: 1 }
+
 export default function MediaGrid({
   media,
   onOpen,
@@ -182,7 +203,10 @@ export default function MediaGrid({
   // Three: one tall beside two stacked.
   if (media.length === 3) {
     return (
-      <div className="-mx-5 mt-3 grid h-80 grid-cols-2 gap-0.5 overflow-hidden border-y border-white/8 bg-ink">
+      <div
+        className="-mx-5 mt-3 grid grid-cols-2 gap-0.5 overflow-hidden border-y border-white/8 bg-ink"
+        style={{ aspectRatio: String(BLOCK_RATIO[3]), maxHeight: MAX_MEDIA_HEIGHT }}
+      >
         {tile(media[0], 0, 'h-full min-h-0')}
         <div className="grid min-h-0 grid-rows-2 gap-0.5">
           {tile(media[1], 1, 'h-full min-h-0')}
@@ -195,10 +219,11 @@ export default function MediaGrid({
   // Two, or four and more.
   return (
     <div
-      className={cn(
-        '-mx-5 mt-3 grid grid-cols-2 gap-0.5 overflow-hidden border-y border-white/8 bg-ink',
-        media.length === 2 ? 'h-64' : 'h-80',
-      )}
+      className="-mx-5 mt-3 grid grid-cols-2 gap-0.5 overflow-hidden border-y border-white/8 bg-ink"
+      style={{
+        aspectRatio: String(BLOCK_RATIO[media.length === 2 ? 2 : 4]),
+        maxHeight: MAX_MEDIA_HEIGHT,
+      }}
     >
       {shown.map((item, index) => tile(item, index, 'h-full min-h-0'))}
     </div>
