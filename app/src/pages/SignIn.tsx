@@ -364,7 +364,12 @@ export default function SignIn() {
             <Link to="/" aria-label="Kinjy home" className="absolute left-[clamp(32px,5vw,84px)] top-6">
               <Brand size={40} text={22} />
             </Link>
-            <HeroCollage className="relative w-[min(100%,min(560px,calc((100vh-80px)/1.08)))] shrink-0" />
+            <div className="flex w-full flex-col items-center">
+              <HeroCollage className="relative w-[min(100%,min(480px,calc((100vh-240px)/1.08)))] shrink-0" />
+              <p className="mt-6 max-w-[420px] text-center text-[17px] leading-[1.55] text-[var(--kl-mid)]" style={{ textWrap: 'pretty' }}>
+                {t('hero.sub')}
+              </p>
+            </div>
           </div>
         </aside>
       </div>
