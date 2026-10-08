@@ -4,6 +4,7 @@ import { useAppTheme } from '@/components/appdemo/theme'
 import { useApi } from '@/hooks/useApi'
 import { ApiError, kaluta, type HowRelated, type ParentRole, type PersonDetail, type RelativeKind } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import ExportPanel from './ExportPanel'
 import InvitePanel from './InvitePanel'
 import LinkExisting from './LinkExisting'
 import MembersPanel from './MembersPanel'
@@ -301,6 +302,8 @@ export default function PersonPanel({
           {perms.can_invite && <InvitePanel personId={person.id} name={person.given_name} roles={perms.invite_roles} />}
 
           {perms.can_manage_members && person.is_me && <MembersPanel personId={person.id} />}
+
+          {perms.role === 'owner' && person.is_me && <ExportPanel personId={person.id} />}
 
           {links.length > 0 && (
             <section className="mt-5 border-t border-white/10 pt-4" aria-labelledby="links-title">

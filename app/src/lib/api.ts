@@ -1927,6 +1927,38 @@ export const kaluta = {
       api.post<{ valid: true; role: TreeRole; person_given_name?: string; already_has_node?: boolean; own?: boolean }>('/family/invitations/lookup', { token }),
     acceptInvitation: (token: string) => api.post<{ person_id: string; role: TreeRole }>('/family/invitations/accept', { token }),
     declineInvitation: (token: string) => api.post<void>('/family/invitations/decline', { token }),
+    /** Owners only: what a GEDCOM export would hold, in numbers. Nothing personal, nothing recorded. */
+    exportPreview: (personId: string) =>
+      api.get<{
+        format: string
+        people: number
+        included: number
+        masked: number
+        masked_unverified: number
+        masked_living: number
+        omitted_links: Record<string, number>
+        omitted_links_total: number
+        omitted_labels: Record<string, string>
+        warning: string | null
+      }>(`/family/persons/${personId}/export/preview`),
+    /** Owners only. The file is not JSON, so it is fetched here with the same sign-in and refresh as everything else. */
+    exportGedcom: async (personId: string): Promise<{ blob: Blob; filename: string }> => {
+      const send = () =>
+        fetch(`${BASE}/family/persons/${personId}/export`, {
+          method: 'POST',
+          headers: tokens.access ? { Authorization: `Bearer ${tokens.access}` } : {},
+        })
+      let response = await send()
+      if (response.status === 401 && (await refreshAccessToken())) response = await send()
+      if (!response.ok) {
+        const body = await response.json().catch(() => null)
+        throw new ApiError(response.status, typeof body?.detail === 'string' ? body.detail : 'The export did not work.')
+      }
+      const named = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') ?? '')
+      // The header is not readable across origins unless the server exposes it, so there is a name of the same shape to fall back on.
+      const today = new Date().toISOString().slice(0, 10).replaceAll('-', '')
+      return { blob: await response.blob(), filename: named?.[1] ?? `kinjy-family-${today}.ged` }
+    },
     /** Owners only. */
     members: (personId: string) =>
       api.get<{ items: Array<{ id: string; role: TreeRole; since: string; is_me: boolean; name: string | null; person_id: string }> }>(

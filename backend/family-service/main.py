@@ -18,6 +18,7 @@ from common.service import create_app
 
 import access
 import graph
+import exports
 import integrity
 import invitations
 import memberships
@@ -58,6 +59,7 @@ app = create_app(
 )
 app.include_router(invitations.router)
 app.include_router(memberships.router)
+app.include_router(exports.router)
 
 
 # --- schemas ---------------------------------------------------------------

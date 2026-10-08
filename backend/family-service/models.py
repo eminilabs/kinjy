@@ -299,3 +299,19 @@ class Marker(Base):
 
     name: Mapped[str] = mapped_column(String(60), primary_key=True)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class ExportEvent(Base):
+    """That a tree was exported, by whom and how much - never what was in the file."""
+
+    __tablename__ = "export_events"
+    __table_args__ = (Index("ix_export_event_time", "at"), {"schema": SCHEMA})
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("exp"))
+    user_id: Mapped[str] = mapped_column(String(40), index=True)
+    person_id: Mapped[str | None] = mapped_column(String(40))  # the person the export was started from
+    format: Mapped[str] = mapped_column(String(20))
+    people: Mapped[int] = mapped_column(Integer)
+    included: Mapped[int] = mapped_column(Integer)
+    masked: Mapped[int] = mapped_column(Integer)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

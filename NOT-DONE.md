@@ -901,3 +901,27 @@ Decisions and limits, stated rather than hidden:
 - **Removing a person or a link that would split a tree** is refused (409, naming who would be left) unless every part keeps an owner; a tree that had no owner is left as it is. As a consequence a person cannot be unlinked from the tree, only removed, unless their part has its own owner.
 - The members panel appears on the owner's own place; an owner with no place of their own (old
   data) has no screen for it yet.
+
+### FT-04: GEDCOM export (built)
+
+An owner can download their tree as GEDCOM 5.5.1 (UTF-8), after a preview with the numbers
+(`POST /family/persons/{id}/export`, preview at `.../export/preview`). Export only: there is no
+import. Only owners may export: being allowed to read a tree is not being allowed to send it out of
+Kinjy (a contributor, a viewer, a reader admitted by `who_can_see_family`, a stranger and platform
+staff are refused). No photos, documents or file links.
+
+- **Hidden by default.** A person is written in full only if explicitly recorded as deceased (flag or
+  death date) *and* verified. Nobody is judged dead by age. Everyone else is `Private`: no name, sex,
+  dates, places or notes, but still in the structure, so the file shows that they exist and how they are
+  related. The preview, the screen and the file's own header say so, with the counts (living or not
+  recorded as deceased; record not verified).
+- **No invented roles.** HUSB/WIFE come only from the father/mother role a parent link records.
+  Unknown or clashing roles are left out of the family and counted; couples with no recorded roles,
+  guardian links, declared siblings and disputed links are left out and counted, in the preview and in the header.
+- **Recorded:** `family.export_events` (who, when, from which person, people, included, hidden;
+  never the content), kept 365 days; five exports an hour per member (in memory, per replica).
+- Limits: a tree over 4000 people is refused rather than cut; the number of people is not hidden by the masking;
+  the file name is `kinjy-family-YYYYMMDD.ged` (the browser builds it if the server header is not readable);
+  GEDCOM files produced were checked with a strict structural reader written for the tests, not with
+  third-party genealogy software.
+- The public `/family` page says "Export anytime": that promise now has a basis for owners (see FT-07).
