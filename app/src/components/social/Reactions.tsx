@@ -96,14 +96,19 @@ export default function Reactions({
           onClick={() => react(summary.mine ?? 'like')}
           onFocus={show}
           aria-pressed={Boolean(summary.mine)}
-          aria-label={mine ? `Your reaction: ${mine.label}. Change or remove it.` : 'React'}
+          aria-label={
+            mine
+              ? `Your reaction: ${mine.label}. ${summary.total} in all. Change or remove it.`
+              : `React. ${summary.total} so far.`
+          }
           className={cn(
             'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold',
             mine ? mine.tint : cn(tok.mid, tok.hoverBg),
           )}
         >
           <Icon size={14} fill={summary.mine ? 'currentColor' : 'none'} aria-hidden="true" />
-          {mine?.label ?? 'React'}
+          {/* The number, not the word: the icon already says which reaction is yours. */}
+          <span className="tabular-nums">{summary.total}</span>
         </button>
 
         {open && (
@@ -132,14 +137,23 @@ export default function Reactions({
         )}
       </div>
 
-      {summary.total > 0 && (
-        <span className={cn('inline-flex items-center gap-0.5 text-xs', tok.low)}>
+      {/* Which reactions this post got — only worth a second display once there is
+          more than one kind, otherwise it repeats the button's own icon. */}
+      {present.length > 1 && (
+        <span className="inline-flex items-center -space-x-1" aria-hidden="true">
           {present.map(([kind]) => {
             const meta = BY_ID.get(kind)
             if (!meta) return null
-            return <meta.icon key={kind} size={11} className={meta.tint} aria-hidden="true" />
+            return (
+              <span
+                key={kind}
+                title={`${meta.label}: ${summary.counts[kind]}`}
+                className={cn('grid h-5 w-5 place-items-center rounded-full ring-2 ring-[var(--cloud-solid,transparent)]', tok.cardSolid, meta.tint)}
+              >
+                <meta.icon size={11} />
+              </span>
+            )
           })}
-          <span className="ms-0.5">{summary.total}</span>
         </span>
       )}
     </div>
