@@ -1,3 +1,4 @@
+import VideoPlayer from '@/components/social/VideoPlayer'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import {
@@ -224,7 +225,9 @@ function Attachment({
     )
   }
   if (url && kind === 'video') {
-    return <video src={url} controls preload="metadata" className="max-h-80 max-w-full rounded-card-sm" />
+    // Our own player rather than the browser's controls, which change shape in
+    // every browser. It waits to be played, with sound: this is a message.
+    return <VideoPlayer src={url} autoplay={false} startMuted={false} compact className="w-full max-w-sm overflow-hidden rounded-card-sm" />
   }
   if (url && kind === 'audio') {
     // The browser draws its own player; `color-scheme` is how it learns the

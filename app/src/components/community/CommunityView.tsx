@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router'
 import { ArrowLeft, Globe, Lock, LogOut, UsersRound } from 'lucide-react'
 import Composer from '@/components/social/Composer'
 import PostCard from '@/components/social/PostCard'
+import VideoReelProvider from '@/components/social/VideoReelProvider'
 import MemberQueue from '@/components/community/MemberQueue'
 import { useApi } from '@/hooks/useApi'
 import { useAuth } from '@/hooks/useAuth'
@@ -104,6 +105,7 @@ export default function CommunityView({
   const posts = [...fresh, ...(feed.data?.items ?? [])]
 
   return (
+    <VideoReelProvider posts={posts} currentUserId={user?.id ?? ''}>
     <div className="space-y-5">
       <button
         type="button"
@@ -278,5 +280,6 @@ export default function CommunityView({
         </>
       )}
     </div>
+    </VideoReelProvider>
   )
 }

@@ -4,6 +4,7 @@ import { Check, Clock, MapPin, MessageSquare, Pencil, UserPlus, Users } from 'lu
 import AppShell from '@/components/app/AppShell'
 import MemberAvatar from '@/components/social/MemberAvatar'
 import PostCard from '@/components/social/PostCard'
+import VideoReelProvider from '@/components/social/VideoReelProvider'
 import { VerifiedBadge } from '@/components/ui-kit'
 import { useAppTheme } from '@/components/appdemo/theme'
 import { useAuth } from '@/hooks/useAuth'
@@ -145,6 +146,7 @@ export default function Profile() {
   const label = 'mono-data mb-3 text-[0.7rem] font-bold uppercase tracking-[0.15em] text-gold-soft'
 
   return (
+    <VideoReelProvider posts={posts} currentUserId={user?.id ?? ''}>
     <AppShell
       aside={
         <>
@@ -353,5 +355,6 @@ export default function Profile() {
         </div>
       )}
     </AppShell>
+    </VideoReelProvider>
   )
 }

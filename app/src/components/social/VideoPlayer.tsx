@@ -145,7 +145,9 @@ export default function VideoPlayer({
         playsInline
         loop={false}
         preload={autoplay ? 'metadata' : 'none'}
-        onClick={toggle}
+        // With somewhere to open it, a click on the picture opens it, as on
+        // Facebook; play and pause stay on the bar and on the centre button.
+        onClick={onExpand ?? toggle}
         className={cn(
           'w-full cursor-pointer bg-black',
           fill ? 'max-h-[88svh] object-contain' : compact ? 'max-h-[38svh] object-contain' : 'max-h-[460px] object-contain',
@@ -155,16 +157,16 @@ export default function VideoPlayer({
       {/* A big target over the middle, for the tap that means play. Only while
           paused: during playback it would swallow a tap meant for the bar. */}
       {!playing && (
-        <button
-          type="button"
-          onClick={toggle}
-          aria-label="Play video"
-          className="absolute inset-0 flex items-center justify-center bg-black/25"
-        >
-          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-black/55 backdrop-blur-sm">
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/25">
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label="Play video"
+            className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-black/55 backdrop-blur-sm"
+          >
             <Play size={24} className="ms-0.5 text-white" aria-hidden="true" />
-          </span>
-        </button>
+          </button>
+        </div>
       )}
 
       <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-2.5 pt-8">

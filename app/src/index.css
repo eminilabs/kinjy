@@ -564,3 +564,13 @@
     height: 0;
   }
 }
+
+
+/* A scrollable box keeps its scroll to itself. Without this, a flick at the end of
+   a comment thread, a list or a panel carries on into whatever is underneath and
+   the page moves as well. The page's own scrolling is not affected. */
+[class*='overflow-y-auto'],
+[class*='overflow-auto'],
+[class*='overflow-y-scroll'] {
+  overscroll-behavior: contain;
+}

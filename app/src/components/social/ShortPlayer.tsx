@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import {
   Eye,
@@ -426,14 +426,28 @@ export default function ShortPlayer({
   currentUserId,
   autoplay = true,
   onReachEnd,
+  startId,
+  className,
 }: {
   posts: Post[]
   currentUserId: string
   autoplay?: boolean
   onReachEnd?: () => void
+  /** Open on this clip rather than the first. */
+  startId?: string
+  className?: string
 }) {
   const containerRef = useRef<HTMLUListElement>(null)
-  const [activeId, setActiveId] = useState<string | null>(posts[0]?.id ?? null)
+  const [activeId, setActiveId] = useState<string | null>(startId ?? posts[0]?.id ?? null)
+
+  // Land on the clip that was asked for, before the first paint of the list.
+  useLayoutEffect(() => {
+    const root = containerRef.current
+    const target = startId ? root?.querySelector<HTMLElement>(`[data-post-id="${startId}"]`) : null
+    if (root && target) root.scrollTop = target.offsetTop
+    // Once, on mount: the reel then belongs to the reader's scrolling.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [muted, setMuted] = useState(true)
 
   useEffect(() => {
@@ -482,10 +496,11 @@ export default function ShortPlayer({
       tabIndex={0}
       aria-label="Shorts reel"
       className={cn(
-        'mx-auto h-[calc(100svh-21rem)] min-h-[460px] w-full max-w-[420px] snap-y snap-mandatory overflow-y-auto',
+        'mx-auto h-[calc(100svh-21rem)] min-h-[460px] w-full max-w-[420px] snap-y snap-mandatory overflow-y-auto overscroll-contain',
         'rounded-[28px] bg-black shadow-[0_30px_60px_-30px_rgba(36,31,22,0.55)] ring-1 ring-black/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60',
         // Scrollbars are hidden platform-wide; scrolling still works.
         '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+        className,
       )}
     >
       {posts.map((post) => (

@@ -11,6 +11,7 @@ import PostCard from '@/components/social/PostCard'
 import PostDialog from '@/components/social/PostDialog'
 import MemberAvatar from '@/components/social/MemberAvatar'
 import AgeDeclaration from '@/components/account/AgeDeclaration'
+import VideoReelProvider from '@/components/social/VideoReelProvider'
 import { ApiError, kaluta, type Algorithm, type FeedMode, type FeedPage, type Post } from '@/lib/api'
 import { FEATURES } from '@/lib/features'
 import { slotAboveOrb } from '@/lib/floating'
@@ -532,6 +533,7 @@ export default function SocialHub() {
   )
 
   return (
+    <VideoReelProvider posts={feed?.items ?? []} currentUserId={user.id}>
     <AppShell aside={rail}>
       <div className="min-w-0">
           {/* Header: which feed this is, and what it promises */}
@@ -729,5 +731,6 @@ export default function SocialHub() {
         </button>
       )}
     </AppShell>
+    </VideoReelProvider>
   )
 }

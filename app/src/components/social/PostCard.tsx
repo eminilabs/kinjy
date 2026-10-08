@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/dialog'
 import { Link } from 'react-router'
 import { useCommunityRef } from './useCommunityRef'
+import { useVideoReel } from './videoReel'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { CommentsDialog, RepostDialog, ShareDialog, TranslationPanel, type TranslationView } from './PostModals'
 
@@ -237,6 +238,7 @@ export default function PostCard({
   // On a phone the comments are always the sheet; the feed's "open the whole
   // post" window is for a computer, where there is room for it.
   const isMobile = useIsMobile()
+  const reel = useVideoReel()
   const target = post.repost_of ?? post
   const community = useCommunityRef(hideCommunity ? null : target.community_id)
   const [reactions, setReactions] = useState(target.reactions ?? { counts: {}, total: 0, mine: null })
@@ -606,7 +608,10 @@ export default function PostCard({
                 <VideoPlayer
                   src={item.url}
                   autoplay={post.autoplay !== false}
-                  onExpand={() => setPreview(index)}
+                  onExpand={() => {
+                    // The page's reel if it has one; the plain viewer otherwise.
+                    if (!reel?.open(target.id)) setPreview(index)
+                  }}
                   className="w-full"
                 />
               ) : (

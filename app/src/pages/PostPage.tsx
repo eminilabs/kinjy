@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { ArrowRight } from 'lucide-react'
 import PostCard from '@/components/social/PostCard'
+import VideoReelProvider from '@/components/social/VideoReelProvider'
 import { useApi } from '@/hooks/useApi'
 import { useAuth } from '@/hooks/useAuth'
 import { kaluta, type Post } from '@/lib/api'
@@ -38,6 +39,7 @@ export default function PostPage() {
   const joinHref = ref ? `/join?mode=signup&ref=${encodeURIComponent(ref)}` : '/join?mode=signup'
 
   return (
+    <VideoReelProvider posts={post.data ? [post.data] : []} currentUserId={user?.id ?? ''}>
     <PublicShell>
       <section className="mx-auto w-full max-w-2xl px-5 pb-16 pt-10 sm:pt-14">
         {post.loading && <p className="text-sm text-[var(--kl-low)]" role="status">Loading…</p>}
@@ -99,5 +101,6 @@ export default function PostPage() {
         )}
       </section>
     </PublicShell>
+    </VideoReelProvider>
   )
 }

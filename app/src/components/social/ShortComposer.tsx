@@ -1,3 +1,4 @@
+import VideoPlayer from './VideoPlayer'
 import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Film, Loader2, RotateCcw, Upload, X } from 'lucide-react'
 import { ApiError, kaluta } from '@/lib/api'
@@ -205,13 +206,7 @@ export default function ShortComposer({
           <div className="mx-auto w-full max-w-[220px]">
             <div className="relative aspect-[9/16] overflow-hidden rounded-card-md border border-white/10 bg-black">
               {previewUrl ? (
-                <video
-                  src={previewUrl}
-                  className="h-full w-full object-contain"
-                  controls
-                  playsInline
-                  loop
-                />
+                <VideoPlayer src={previewUrl} autoplay={false} startMuted={false} fill className="h-full w-full" />
               ) : (
                 <button
                   type="button"
