@@ -10,7 +10,7 @@ function Field({
 }: {
   label: string
   hint?: string
-  children: (props: { id: string; describedBy?: string }) => React.ReactNode
+  children: (props: { id: string; 'aria-describedby'?: string }) => React.ReactNode
 }) {
   const id = useId()
   const { tok } = useAppTheme()
@@ -19,7 +19,7 @@ function Field({
       <label htmlFor={id} className={cn('mb-1 block text-xs font-semibold', tok.mid)}>
         {label}
       </label>
-      {children({ id, describedBy: hint ? `${id}-hint` : undefined })}
+      {children({ id, 'aria-describedby': hint ? `${id}-hint` : undefined })}
       {hint && (
         <p id={`${id}-hint`} className={cn('mt-1 text-[0.7rem]', tok.low)}>
           {hint}
@@ -94,7 +94,7 @@ export default function PersonForm({
         </Field>
       </div>
       <Field label="Other names" hint="A maiden name, a nickname, another spelling.">
-        {(p) => <input {...p} aria-describedby={p.describedBy} value={v.other_names} onChange={(e) => set('other_names', e.target.value)} maxLength={255} autoComplete="off" className={input} />}
+        {(p) => <input {...p} value={v.other_names} onChange={(e) => set('other_names', e.target.value)} maxLength={255} autoComplete="off" className={input} />}
       </Field>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Born">
@@ -106,7 +106,7 @@ export default function PersonForm({
       </div>
       <Field label="Gender" hint="As they would say it. It is never guessed, and it does not decide who is a father or a mother.">
         {(p) => (
-          <select {...p} aria-describedby={p.describedBy} value={v.gender} onChange={(e) => set('gender', e.target.value)} className={input}>
+          <select {...p} value={v.gender} onChange={(e) => set('gender', e.target.value)} className={input}>
             {GENDER_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -139,7 +139,7 @@ export default function PersonForm({
         </p>
       )}
       <Field label="Biography" hint={`${v.biography.length} / 5000`}>
-        {(p) => <textarea {...p} aria-describedby={p.describedBy} value={v.biography} onChange={(e) => set('biography', e.target.value)} maxLength={5000} rows={4} className={input} />}
+        {(p) => <textarea {...p} value={v.biography} onChange={(e) => set('biography', e.target.value)} maxLength={5000} rows={4} className={input} />}
       </Field>
 
       {extra}
