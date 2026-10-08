@@ -264,6 +264,33 @@
     border-color: var(--k-paper-2);
   }
 
+  /* The signature cloud card, inside the app, opaque.
+     Glass over the marketing hero is the whole point of the look; glass over a
+     feed is not. At 7% the page behind every post bled through it, and members
+     read that as a rendering fault rather than as a style. #1C1F2D is the same
+     white-7%-over---ink flattened, so the surface keeps the colour it was
+     designed to have and loses only the see-through.
+
+     What keeps the marketing glass is not this selector - AppThemeProvider
+     wraps the whole tree from main.tsx, so data-theme is set on the landing
+     page too. It is the cascade: .twilight-field and .force-dark declare
+     --cloud on themselves, so their descendants inherit the translucent value
+     from them rather than from :root. Every section that paints its own
+     background already carries one of those classes, which is why the heroes
+     are untouched and only cards sitting on the plain --ink body flatten -
+     and over --ink the two are the same colour. Keep that invariant: a new
+     section with its own background needs .force-dark, or its cards will go
+     opaque against it. */
+  :root[data-theme='cloud'] {
+    --cloud: #1C1F2D;
+    --cloud-border: #2D303D;
+  }
+  /* Opaque now, so there is nothing behind it left to blur. */
+  :root[data-theme='cloud'] .cloud-glass {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
   /* On paper the card is opaque, so blurring what is behind it costs a
      compositing layer for nothing. */
   :root[data-theme='light'] .cloud-glass {
@@ -562,5 +589,53 @@
   *::-webkit-scrollbar {
     width: 0;
     height: 0;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Mobile-first floors.
+
+   The type scale was drawn for a desktop column and then reused on phones, so
+   the smallest tiers - 0.6rem is 9.6px - ended up below what anybody can
+   comfortably read at arm's length, on the labels that matter least to a
+   designer and most to somebody skimming: feed-mode chips, counters, badges.
+
+   Rather than rewrite the ~470 call sites, every tier below 0.72rem gets a
+   floor of 0.72rem (11.5px) on small screens. Text reflows, so raising it
+   cannot push the page sideways - verified by re-running the overflow audit
+   after this landed.
+
+   Scoped to the phone breakpoint: the desktop scale is deliberate and is left
+   exactly as drawn.
+   --------------------------------------------------------------------------- */
+@media (max-width: 767px) {
+  .text-\[0\.5rem\],
+  .text-\[0\.55rem\],
+  .text-\[0\.58rem\],
+  .text-\[0\.6rem\],
+  .text-\[0\.62rem\],
+  .text-\[0\.65rem\],
+  .text-\[0\.66rem\],
+  .text-\[0\.68rem\],
+  .text-\[0\.7rem\],
+  .text-\[11px\] {
+    font-size: 0.72rem;
+  }
+}
+
+/* A thumb is not a mouse pointer. The icon buttons are 36px squares, which is
+   fine for a cursor and under every touch-target guideline there is (44pt on
+   iOS, 48dp on Android) - so on a touch device they grow to 44px.
+
+   pointer: coarse rather than a width breakpoint, because what matters is the
+   input device, not the screen: a touch laptop deserves the bigger target and
+   a narrow desktop window does not. */
+@media (pointer: coarse) {
+  button.h-9.w-9,
+  a.h-9.w-9,
+  button.h-8.w-8,
+  a.h-8.w-8 {
+    height: 2.75rem;
+    width: 2.75rem;
   }
 }

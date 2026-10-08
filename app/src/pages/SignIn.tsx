@@ -24,15 +24,18 @@ import { cn } from '@/lib/utils'
  * be the sign-in page itself, which would loop.
  */
 function safeNext(value: string | null): string {
-  if (!value) return '/dashboard'
+  // The feed, not the dashboard. Somebody who has just signed in came to read
+  // what is new, not to look at their own earnings and settings - landing them
+  // on their profile makes them navigate once before the product starts.
+  if (!value) return '/hub'
   let path: string
   try {
     path = decodeURIComponent(value)
   } catch {
-    return '/dashboard'
+    return '/hub'
   }
-  if (!path.startsWith('/') || path.startsWith('//')) return '/dashboard'
-  if (path.startsWith('/join')) return '/dashboard'
+  if (!path.startsWith('/') || path.startsWith('//')) return '/hub'
+  if (path.startsWith('/join')) return '/hub'
   return path
 }
 

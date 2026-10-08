@@ -80,16 +80,10 @@ class Message(Base):
     media_type: Mapped[str | None] = mapped_column(String(100))
     media_size: Mapped[int | None] = mapped_column(BigInteger)
     lang: Mapped[str | None] = mapped_column(String(5))
-    # The message this one answers. Only the id is kept: the quoted text is
-    # built by the client from what it already holds, because in an end-to-end
-    # conversation the server cannot read it and must not copy it in the clear.
-    # No foreign key on purpose: an expired message is really deleted, and this
-    # id must outlive it so the API can say "the original is gone".
-    reply_to_id: Mapped[str | None] = mapped_column(String(40))
-    # A standalone sticker message (kind "sticker"): an id from stickers.py and
-    # nothing else, never a URL or an image. Public catalogue data, so it is
-    # stored as is in every conversation, end-to-end encrypted ones included.
-    sticker_id: Mapped[str | None] = mapped_column(String(64))
+    # The message this one answers, in the same conversation. A pointer rather
+    # than a copy of the quoted text: a copy would outlive the original, so a
+    # deleted or expired message would stay readable inside every reply to it.
+    reply_to_id: Mapped[str | None] = mapped_column(String(40), index=True)
     # Chosen by the sending device before the request goes out. A retry after
     # a dropped response carries the same id, so it finds the message already
     # stored instead of sending it twice. Unique per sender (partial index in
@@ -105,30 +99,21 @@ class Message(Base):
     # database has not disappeared, it has only stopped being shown — which is
     # the opposite of what the promise means to the people in the room.
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    # An edit keeps the message and replaces its text, and says so. A silently
+    # edited message is a way to change what somebody appears to have agreed
+    # to after they agreed to it.
+    edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # A deleted message keeps its row and loses its words. The row is what lets
+    # the thread say "this was deleted" instead of silently resequencing a
+    # conversation; the words are gone from the database, not merely hidden,
+    # which is the same promise `expires_at` makes above.
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # A sticker from the server's catalogue. Only the id is stored: the picture
+    # is the server's, so a message cannot point at an arbitrary image, and a
+    # sticker withdrawn from the catalogue stops rendering everywhere at once.
+    sticker_id: Mapped[str | None] = mapped_column(String(40))
     delivered: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
-
-
-class MessageReaction(Base):
-    """One sticker a member put under one message.
-
-    One row per (message, member): choosing another sticker replaces the row,
-    choosing the same one removes it. The sticker is an id from ``stickers.py``,
-    never a URL or an image. No foreign key: an expired message is really
-    deleted by ``_purge_expired``, which deletes its reactions first.
-    """
-
-    __tablename__ = "message_reactions"
-    __table_args__ = (
-        UniqueConstraint("message_id", "user_id", name="uq_reaction_message_user"),
-        {"schema": SCHEMA},
-    )
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    message_id: Mapped[str] = mapped_column(String(40), index=True)
-    user_id: Mapped[str] = mapped_column(String(40))
-    sticker_id: Mapped[str] = mapped_column(String(64))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
 class Notification(Base):
@@ -174,3 +159,59 @@ class ContactAttempt(Base):
     sender_tier: Mapped[str] = mapped_column(String(30), default="")
     recipient_tier: Mapped[str] = mapped_column(String(30), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class MessageReaction(Base):
+    """One person's reaction to one message.
+
+    One per person per message, enforced by the constraint rather than by the
+    client: tapping a second emoji replaces the first. Letting somebody stack
+    reactions turns a quiet acknowledgement into a way to flood a thread.
+    """
+
+    __tablename__ = "message_reactions"
+    __table_args__ = (
+        UniqueConstraint("message_id", "user_id", name="uq_message_reaction"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    message_id: Mapped[str] = mapped_column(String(40), index=True)
+    conversation_id: Mapped[str] = mapped_column(String(40), index=True)
+    user_id: Mapped[str] = mapped_column(String(40), index=True)
+    emoji: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class PushSubscription(Base):
+    """One browser that has agreed to receive notifications.
+
+    A member has as many of these as they have devices, and each is an opaque
+    endpoint at the browser vendor's push service plus the two keys that
+    message is encrypted to. Those keys are what make Web Push private: the
+    payload is sealed to this subscription, so Google or Mozilla relay it
+    without being able to read it.
+
+    `failures` is kept because a subscription does not announce that it is
+    dead. A browser that is uninstalled, or permission that is revoked, shows
+    up as a 404 or 410 from the push service, and those are deleted at once -
+    but a run of softer failures means the same thing more slowly, and pushing
+    forever to an endpoint that never answers is how a sending reputation is
+    spent.
+    """
+
+    __tablename__ = "push_subscriptions"
+    __table_args__ = {"schema": SCHEMA}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(40), index=True)
+    # The push service's URL for this browser. Unique: re-subscribing the same
+    # browser must update the row rather than add a second one, or every
+    # notification arrives twice.
+    endpoint: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    p256dh: Mapped[str] = mapped_column(String(255), nullable=False)
+    auth: Mapped[str] = mapped_column(String(255), nullable=False)
+    user_agent: Mapped[str | None] = mapped_column(Text)
+    failures: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

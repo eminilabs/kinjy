@@ -6,6 +6,7 @@ import MemberAvatar from '@/components/social/MemberAvatar'
 import { useApi } from '@/hooks/useApi'
 import { ApiError, kaluta, type ConnectionEntry } from '@/lib/api'
 import { announce, onChange } from '@/lib/live'
+import ConfirmDialog from '@/components/ui-kit/ConfirmDialog'
 import { cn } from '@/lib/utils'
 
 type Tab = 'incoming' | 'outgoing' | 'accepted'
@@ -36,6 +37,8 @@ export default function Connections() {
   const [pending, setPending] = useState<{ userId: string; data: unknown } | null>(null)
   const busy = pending && pending.data === connections.data ? pending.userId : null
   const [error, setError] = useState<string | null>(null)
+  // The connection awaiting a yes, so the dialog can name the person.
+  const [confirmRemove, setConfirmRemove] = useState<ConnectionEntry | null>(null)
 
   const requested = params.get('tab')
   const incoming = connections.data?.incoming ?? []
@@ -71,8 +74,7 @@ export default function Connections() {
   }
 
   const remove = (entry: ConnectionEntry) => {
-    const name = entry.profile?.display_name ?? 'this person'
-    if (!window.confirm(`Remove ${name} from your connections? You will no longer be able to message each other.`)) return
+    setConfirmRemove(null)
     void run(entry, () => kaluta.connections.remove(entry.user_id), 'Could not remove the connection')
   }
 
@@ -118,7 +120,7 @@ export default function Connections() {
         <IconButton label={`Message ${name}`} disabled={disabled} tone="neutral" onClick={() => message(entry)}>
           <MessageCircle size={17} />
         </IconButton>
-        <IconButton label={`Remove ${name}`} disabled={disabled} tone="bad" onClick={() => remove(entry)}>
+        <IconButton label={`Remove ${name}`} disabled={disabled} tone="bad" onClick={() => setConfirmRemove(entry)}>
           <UserMinus size={17} />
         </IconButton>
       </>
@@ -239,6 +241,20 @@ export default function Connections() {
         </Link>
         .
       </p>
+      <ConfirmDialog
+        open={Boolean(confirmRemove)}
+        onOpenChange={(open) => !open && setConfirmRemove(null)}
+        title="Remove this connection?"
+        description={
+          <>
+            {confirmRemove?.profile?.display_name ?? 'This person'} will be removed from your
+            connections, and you will no longer be able to message each other. You can connect
+            again later.
+          </>
+        }
+        confirmLabel="Remove connection"
+        onConfirm={() => confirmRemove && remove(confirmRemove)}
+      />
     </AppShell>
   )
 }

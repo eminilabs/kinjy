@@ -8,6 +8,7 @@ import { AppChipBar, AppTopBar } from './AppChrome'
 import ProfileCard from './ProfileCard'
 import UnreadBadge from './UnreadBadge'
 import { useUnreadMessages } from '@/hooks/useUnreadMessages'
+import MessageToast from './MessageToast'
 import WellbeingBar from './WellbeingBar'
 
 /** Mobile bottom bar — the blueprint's five, Create in the middle. */
@@ -133,7 +134,14 @@ export default function AppShell({
         {/* Right rail */}
         {aside && (
           <aside className="hidden xl:block">
-            <div className="sticky top-[156px] space-y-3">{aside}</div>
+            {/* Scrolls on its own. Sticky alone meant a rail taller than the
+                window had its bottom permanently out of reach - which is what
+                happens to anybody who zooms, and to anybody on a short laptop
+                screen. No visible scrollbar (the base layer hides them), but
+                wheel, trackpad, touch and keyboard all still scroll it. */}
+            <div className="sticky top-[156px] max-h-[calc(100svh-176px)] space-y-3 overflow-y-auto overscroll-contain">
+              {aside}
+            </div>
           </aside>
         )}
       </div>
@@ -176,6 +184,11 @@ export default function AppShell({
           })}
         </ul>
       </nav>
+
+      {/* Mounted on the shell, so a message that arrives while you are reading
+          the feed or looking at a profile still shows itself. It takes itself
+          off on the Messages page, where the thread is the better answer. */}
+      <MessageToast />
     </div>
   )
 }

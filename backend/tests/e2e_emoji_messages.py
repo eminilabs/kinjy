@@ -112,15 +112,17 @@ check("markup next to an emoji is returned verbatim, not interpreted", items[r.j
 print("\nEmoji and stickers are different things")
 r = send(alice_h, cid, kind="sticker", sticker_id="😀")
 check("an emoji is not a valid sticker id (400)", r.status_code == 400, f"{r.status_code} {r.text[:100]}")
-r = send(alice_h, cid, kind="sticker", sticker_id="classic.like", body="😀")
+r = send(alice_h, cid, kind="sticker", sticker_id="react.yes", body="😀")
 check("a sticker cannot carry emoji text (400)", r.status_code == 400, f"{r.status_code} {r.text[:100]}")
-r = send(alice_h, cid, body="classic.like")
+r = send(alice_h, cid, body="react.yes")
 raw, items = thread(bob_h, cid)
 m = items[r.json()["id"]]
 check("the text of a sticker id stays a text message, not a sticker", m["kind"] == "text" and not m.get("sticker_id"), str(m))
 mid = next(iter(items))
-r = c.put(f"/conversations/{cid}/messages/{mid}/reaction", headers=bob_h, json={"sticker_id": "👍"})
-check("an emoji is not a valid reaction either (400)", r.status_code == 400, f"{r.status_code} {r.text[:100]}")
+r = c.post(f"/conversations/{cid}/messages/{mid}/reactions", headers=bob_h, json={"emoji": "react.yes"})
+check("a sticker id is not a valid reaction (422)", r.status_code == 422, f"{r.status_code} {r.text[:100]}")
+r = c.post(f"/conversations/{cid}/messages/{mid}/reactions", headers=bob_h, json={"emoji": "👍"})
+check("an emoji from the reaction set is (200)", r.status_code == 200, f"{r.status_code} {r.text[:100]}")
 
 print("\nPreview")
 convos = c.get("/conversations", headers=bob_h).json()["items"]

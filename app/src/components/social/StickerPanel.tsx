@@ -1,17 +1,18 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Clock, Search, Smile } from 'lucide-react'
-import type { Sticker, StickerCatalogue } from '@/lib/api'
-import { loadRecents, matchesQuery, rememberRecent, stickerUrl } from '@/lib/stickers'
+import type { Sticker, StickerPack } from '@/lib/api'
+import { loadRecents, matchesQuery, rememberRecent } from '@/lib/stickers'
+import StickerFace from '@/components/social/StickerFace'
 import { cn } from '@/lib/utils'
 
 /**
  * The sticker panel: one tab per pack, the stickers used lately, and a search
- * over the local catalogue. It has two jobs and one implementation - the
- * composer opens it to send a sticker, a message's reaction button opens it to
- * react - so both read the same catalogue and behave the same.
+ * over the packs. The composer opens it to send a sticker, which goes out as a
+ * message of its own.
  *
- * The catalogue is the server's (GET /stickers); nothing here invents a
- * sticker, an id or a picture address. Keyboard: arrows move across the grid
+ * The packs are the server's (GET /stickers); nothing here invents a sticker,
+ * an id or a picture address. A sticker is drawn from its glyph, or from its
+ * artwork when the server provides some. Keyboard: arrows move across the grid
  * and between tabs, Enter picks, Escape closes (and focus goes back to what
  * opened it). Every sticker has the name a screen reader announces.
  */
@@ -19,38 +20,38 @@ import { cn } from '@/lib/utils'
 const RECENT = 'recent'
 
 export default function StickerPanel({
-  catalogue,
-  current,
+  packs,
   onPick,
 }: {
-  catalogue: StickerCatalogue
-  /** The sticker already chosen, when the panel is used for a reaction. */
-  current?: string
+  packs: StickerPack[]
   onPick: (id: string) => void
 }) {
-  const byId = useMemo(() => new Map(catalogue.items.map((s) => [s.id, s])), [catalogue])
+  const items = useMemo(
+    () => packs.flatMap((pack) => pack.stickers.map((sticker) => ({ ...sticker, pack: pack.id }))),
+    [packs],
+  )
+  const byId = useMemo(() => new Map(items.map((s) => [s.id, s])), [items])
   const [recents, setRecents] = useState<Sticker[]>(() =>
     loadRecents().flatMap((id) => (byId.has(id) ? [byId.get(id)!] : [])),
   )
-  const [tab, setTab] = useState<string>(() => (recents.length ? RECENT : (catalogue.packs[0]?.id ?? RECENT)))
+  const [tab, setTab] = useState<string>(() => (recents.length ? RECENT : (packs[0]?.id ?? RECENT)))
   const [query, setQuery] = useState('')
   const grid = useRef<HTMLDivElement>(null)
   const ids = useId()
 
   const searching = query.trim() !== ''
   const shown = useMemo(() => {
-    if (searching) return catalogue.items.filter((s) => matchesQuery(s, query))
+    if (searching) return items.filter((s) => matchesQuery({ name: s.label, keywords: [] }, query))
     if (tab === RECENT) return recents
-    return catalogue.items.filter((s) => s.pack === tab)
-  }, [catalogue, query, searching, tab, recents])
+    return items.filter((s) => s.pack === tab)
+  }, [items, query, searching, tab, recents])
 
   const stickerButtons = () => [...(grid.current?.querySelectorAll<HTMLButtonElement>('button[data-sticker]') ?? [])]
 
-  // Focus goes to the sticker already chosen, else the first one, so a
-  // keyboard user can pick straight away; Shift+Tab reaches search and tabs.
+  // Focus goes to the first sticker, so a keyboard user can pick straight
+  // away; Shift+Tab reaches search and tabs.
   useEffect(() => {
-    const buttons = stickerButtons()
-    ;(buttons.find((b) => b.dataset.sticker === current) ?? buttons[0])?.focus()
+    stickerButtons()[0]?.focus()
     // Once, on open.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -97,7 +98,7 @@ export default function StickerPanel({
 
   const tabs = [
     ...(recents.length ? [{ id: RECENT, name: 'Recent', sample: null as Sticker | null }] : []),
-    ...catalogue.packs.map((p) => ({ id: p.id, name: p.name, sample: catalogue.items.find((s) => s.pack === p.id) ?? null })),
+    ...packs.map((p) => ({ id: p.id, name: p.name, sample: p.stickers[0] ?? null })),
   ]
   const onTabKey = (e: React.KeyboardEvent) => {
     const at = tabs.findIndex((t) => t.id === tab)
@@ -143,22 +144,19 @@ export default function StickerPanel({
         className="grid max-h-[15rem] min-h-[7rem] grid-cols-[repeat(auto-fill,minmax(3.25rem,1fr))] content-start gap-1 overflow-y-auto overflow-x-hidden"
       >
         {shown.map((s) => {
-          const url = stickerUrl(s.id)
           return (
             <button
               key={s.id}
               type="button"
               data-sticker={s.id}
-              aria-label={s.name}
-              aria-pressed={current === undefined ? undefined : s.id === current}
-              title={s.name}
+              aria-label={s.label}
+              title={s.label}
               onClick={() => pick(s.id)}
               className={cn(
                 'flex aspect-square items-center justify-center rounded-card-sm p-1 hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold/60',
-                s.id === current && 'bg-gold/20',
               )}
             >
-              {url && <img src={url} alt="" draggable={false} className="h-full w-full object-contain" />}
+              <StickerFace sticker={s} className="text-[1.9rem]" imageClassName="h-full w-full object-contain" />
             </button>
           )
         })}
@@ -175,7 +173,6 @@ export default function StickerPanel({
       <div role="tablist" aria-label="Sticker packs" onKeyDown={onTabKey} className="flex flex-wrap gap-1 border-t border-white/8 pt-1.5">
         {tabs.map((t) => {
           const selected = !searching && t.id === tab
-          const sampleUrl = t.sample ? stickerUrl(t.sample.id) : null
           return (
             <button
               key={t.id}
@@ -197,8 +194,8 @@ export default function StickerPanel({
             >
               {t.id === RECENT ? (
                 <Clock size={16} aria-hidden="true" />
-              ) : sampleUrl ? (
-                <img src={sampleUrl} alt="" draggable={false} className="h-6 w-6" />
+              ) : t.sample ? (
+                <StickerFace sticker={t.sample} className="text-xl" imageClassName="h-6 w-6" />
               ) : (
                 <Smile size={16} aria-hidden="true" />
               )}

@@ -502,6 +502,9 @@ export interface UploadedMedia {
   provenance_signed: boolean
   alt_text?: string | null
   deduplicated?: boolean
+  /** Measured in the browser when the file is picked, so the feed can reserve its box. */
+  width?: number
+  height?: number
 }
 
 export interface LinkCard {
@@ -523,6 +526,8 @@ export interface KnownActors {
   }>
   /** Everyone else who acted, so a post can say "and 40 others" without naming them. */
   others: number
+  /** What those others did, so the line never has to say "reacted or commented". */
+  others_action?: 'reacted' | 'commented' | 'both'
 }
 
 export interface NewPost {
@@ -801,33 +806,40 @@ export interface Message {
   media_size?: number | null
   /** The message this one answers; the quote itself is built client-side. */
   reply_to_id?: string | null
-  /** True when the original has expired. Its content is never sent. */
+  /** True when the original has expired or been deleted. Its content is never sent. */
   reply_to_deleted?: boolean
   /** For kind "sticker": the catalogue id, and nothing else. */
   sticker_id?: string | null
-  /** Who put which catalogue sticker under this message. Members only. */
-  reactions?: Reaction[]
+  /** Resolved by the server from its catalogue; a message only stores the id. */
+  sticker?: Sticker | null
+  /** Set when the text has been changed. Shown, never silent. */
+  edited_at?: string | null
+  /** The message was deleted: it keeps its place and has lost its words. */
+  deleted?: boolean
+  /** Emoji to count, across everyone in the room. */
+  reactions?: Record<string, number>
+  /** Which one is mine, if any. */
+  my_reaction?: string | null
   created_at: string
 }
 
-export interface Reaction {
-  user_id: string
-  sticker_id: string
-}
-
 export interface Sticker {
-  /** `<pack>.<name>`; the image is /stickers/<pack>/<name>.svg, see lib/stickers.ts. */
   id: string
-  pack: string
-  /** What a screen reader announces. */
-  name: string
-  keywords: string[]
+  glyph: string
+  label: string
+  pack?: string
+  /** Real artwork when there is some; the client draws the glyph large when not. */
+  image_url: string | null
 }
 
-export interface StickerCatalogue {
-  packs: { id: string; name: string }[]
-  items: Sticker[]
+export interface StickerPack {
+  id: string
+  name: string
+  stickers: Sticker[]
 }
+
+/** The reactions a message may carry. The server refuses anything else. */
+export const MESSAGE_REACTIONS = ['👍', '👎', '❤️', '😂', '😮', '😢', '🙏', '🔥'] as const
 
 export interface Person {
   id: string
@@ -1784,6 +1796,19 @@ export const kaluta = {
       api.post<{ accepted: boolean; reply_id: string }>(`/replies/${replyId}/accept`),
   },
 
+  /**
+   * Browser notifications. The key is public and says whether this
+   * installation can push at all, so the switch is never offered when it
+   * cannot work.
+   */
+  push: {
+    key: () => api.get<{ available: boolean; public_key: string | null }>('/push/key', { auth: false }),
+    subscribe: (subscription: { endpoint: string; p256dh: string; auth: string }) =>
+      api.post<{ subscribed: boolean }>('/push/subscribe', subscription),
+    unsubscribe: (endpoint: string) =>
+      api.delete<void>(`/push/subscribe?endpoint=${encodeURIComponent(endpoint)}`),
+  },
+
   messages: {
     /** Turn disappearing messages on (seconds) or off (0) for a conversation. */
     setDisappearing: (conversationId: string, seconds: number) =>
@@ -1838,18 +1863,31 @@ export const kaluta = {
           sticker_id: message.stickerId || undefined,
         },
       ),
-    /** The sticker catalogue: the only ids the server accepts as a reaction. */
-    stickers: () => api.get<StickerCatalogue>('/stickers'),
-    /** Put a catalogue sticker under a message, replacing this member's previous one. */
-    react: (conversationId: string, messageId: string, stickerId: string) =>
-      api.put<{ message_id: string; sticker_id: string }>(
-        `/conversations/${conversationId}/messages/${messageId}/reaction`,
-        { sticker_id: stickerId },
+
+    /** The sticker packs, as the server curates them. */
+    stickers: () => api.get<{ packs: StickerPack[] }>('/stickers'),
+
+    /** Change the text of your own message. The result is marked as edited. */
+    edit: (conversationId: string, messageId: string, body: string) =>
+      api.patch<{ id: string; body: string; edited_at: string }>(
+        `/conversations/${conversationId}/messages/${messageId}`,
+        { body },
       ),
-    /** Take this member's reaction back. */
-    unreact: (conversationId: string, messageId: string) =>
-      api.delete<{ message_id: string; sticker_id: null }>(
-        `/conversations/${conversationId}/messages/${messageId}/reaction`,
+
+    /** Delete your own message. The row stays, the words go. */
+    remove: (conversationId: string, messageId: string) =>
+      api.delete<{ id: string; deleted: boolean }>(
+        `/conversations/${conversationId}/messages/${messageId}`,
+      ),
+
+    /**
+     * React, swap the reaction, or take it back - the server decides which,
+     * from what is already there. One per person per message.
+     */
+    react: (conversationId: string, messageId: string, emoji: string) =>
+      api.post<{ message_id: string; counts: Record<string, number>; mine: string | null }>(
+        `/conversations/${conversationId}/messages/${messageId}/reactions`,
+        { emoji },
       ),
     /** The thread is on screen: record it as read and tell the room. */
     markRead: (conversationId: string) =>

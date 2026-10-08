@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link,useNavigate, useParams } from 'react-router'
 import { Check, Clock, MapPin, MessageSquare, Pencil, UserPlus, Users } from 'lucide-react'
 import AppShell from '@/components/app/AppShell'
+import MediaLightbox from '@/components/social/MediaLightbox'
 import MemberAvatar from '@/components/social/MemberAvatar'
 import PostCard from '@/components/social/PostCard'
 import { VerifiedBadge } from '@/components/ui-kit'
@@ -31,6 +32,10 @@ export default function Profile() {
   const { user } = useAuth()
   const { tok, lang } = useAppTheme()
 
+  // The picture being looked at full size, if any. A profile picture is
+  // usually the only photograph of somebody on their page, and an 80px circle
+  // is a thumbnail of it rather than the thing itself.
+  const [zoom, setZoom] = useState<{ url: string; alt: string } | null>(null)
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [permissions, setPermissions] = useState<Permissions | null>(null)
   const [posts, setPosts] = useState<Post[]>([])
@@ -209,18 +214,44 @@ export default function Profile() {
       {/* Header card */}
       <div className={cn('overflow-hidden rounded-[20px]', tok.card)}>
         {profile.cover_url ? (
-          <img src={profile.cover_url} alt="" className="h-40 w-full object-cover sm:h-52" />
+          <button
+            type="button"
+            onClick={() => setZoom({ url: profile.cover_url as string, alt: `${profile.display_name}'s cover photo` })}
+            className="block w-full cursor-zoom-in"
+            aria-label="View cover photo"
+          >
+            <img src={profile.cover_url} alt="" className="h-40 w-full object-cover sm:h-52" />
+          </button>
         ) : (
           <div className="h-32 bg-gradient-to-r from-[#F0C878] via-[#F2B8A2] to-[#C9CDF5] sm:h-44" aria-hidden="true" />
         )}
         <div className="px-5 pb-6 sm:px-7">
           <div className="-mt-14 mb-4 flex items-end justify-between gap-3">
-            <MemberAvatar
-              displayName={profile.display_name}
-              avatarUrl={profile.avatar_url}
-              size={112}
-              ring
-            />
+            {/* Only a real photograph is worth opening. Without one the
+                avatar is generated initials, and zooming those is a joke at
+                the member's expense. */}
+            {profile.avatar_url ? (
+              <button
+                type="button"
+                onClick={() => setZoom({ url: profile.avatar_url as string, alt: `${profile.display_name}'s profile picture` })}
+                className="cursor-zoom-in rounded-full"
+                aria-label="View profile picture"
+              >
+                <MemberAvatar
+                  displayName={profile.display_name}
+                  avatarUrl={profile.avatar_url}
+                  size={112}
+                  ring
+                />
+              </button>
+            ) : (
+              <MemberAvatar
+                displayName={profile.display_name}
+                avatarUrl={profile.avatar_url}
+                size={112}
+                ring
+              />
+            )}
             {isSelf && (
               <Link
                 to="/dashboard?tab=profile"
@@ -351,6 +382,17 @@ export default function Profile() {
             />
           ))}
         </div>
+      )}
+
+      {/* The same viewer the feed uses: full size, arrow keys, escape to
+          close. A second one would be a second set of those behaviours to
+          keep in step. */}
+      {zoom && (
+        <MediaLightbox
+          media={[{ url: zoom.url, kind: 'image', alt_text: zoom.alt }]}
+          index={0}
+          onClose={() => setZoom(null)}
+        />
       )}
     </AppShell>
   )

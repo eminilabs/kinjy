@@ -346,7 +346,27 @@ def _verified_media(items: list[dict], author_id: str) -> list[dict]:
             # The same answer whether it is missing or somebody else's: telling
             # them apart would confirm which ids exist.
             raise HTTPException(status_code=400, detail=NOT_YOUR_MEDIA)
-        checked.append({**item, "media_id": asset["id"], "url": asset["url"], "kind": asset.get("kind") or "image"})
+        # width and height come from the asset for the same reason url and kind
+        # do: media-service read them off the file's own header, so they are a
+        # measurement rather than a claim. A client's numbers decide how much
+        # room the feed reserves for a picture, and a wrong pair - careless or
+        # deliberate - is a post that reserves a screen and a half.
+        #
+        # Only when the asset actually has them: nothing was measured before
+        # this existed, and video and audio have no header to read, so the
+        # client's value is still better than dropping to none.
+        measured = {
+            key: asset[key]
+            for key in ("width", "height")
+            if isinstance(asset.get(key), int) and asset[key] > 0
+        }
+        checked.append({
+            **item,
+            "media_id": asset["id"],
+            "url": asset["url"],
+            "kind": asset.get("kind") or "image",
+            **measured,
+        })
     return checked
 
 
@@ -512,18 +532,24 @@ def _known_actors(
         return {}
 
     # Totals first, for everyone - the "and N others" part does not depend on
-    # who the viewer knows.
+    # who the viewer knows. Kept per verb as well as in total, because
+    # "1 person reacted or commented" is what a program says when it knows the
+    # count and not the action, and the action is right here.
     totals: dict[str, set[str]] = {}
+    reacted: dict[str, set[str]] = {}
+    commented: dict[str, set[str]] = {}
     for post_id, user_id in db.execute(
         select(models.Reaction.post_id, models.Reaction.user_id)
         .where(models.Reaction.post_id.in_(ids))
     ).all():
         totals.setdefault(post_id, set()).add(user_id)
+        reacted.setdefault(post_id, set()).add(user_id)
     for post_id, user_id in db.execute(
         select(models.Comment.post_id, models.Comment.author_id)
         .where(models.Comment.post_id.in_(ids), models.Comment.status == "published")
     ).all():
         totals.setdefault(post_id, set()).add(user_id)
+        commented.setdefault(post_id, set()).add(user_id)
 
     known = set(following)
     named: dict[str, list[tuple[str, str]]] = {}
@@ -569,7 +595,21 @@ def _known_actors(
                 "action": action,
             })
         named_ids = {u for u, _ in bucket}
-        out[post_id] = {"people": people, "others": max(0, len(everyone - named_ids))}
+        rest = everyone - named_ids
+        # What the unnamed ones did. Only "both" when it is genuinely both -
+        # otherwise the line says the thing that actually happened.
+        rest_reacted = bool(rest & reacted.get(post_id, set()))
+        rest_commented = bool(rest & commented.get(post_id, set()))
+        action = (
+            "both" if rest_reacted and rest_commented
+            else "commented" if rest_commented
+            else "reacted"
+        )
+        out[post_id] = {
+            "people": people,
+            "others": max(0, len(rest)),
+            "others_action": action,
+        }
     return out
 
 
@@ -2964,4 +3004,72 @@ def stats(db: OrmSession = Depends(get_db)):
         "posts": db.scalar(select(func.count()).select_from(models.Post)) or 0,
         "comments": db.scalar(select(func.count()).select_from(models.Comment)) or 0,
         "algorithms": db.scalar(select(func.count()).select_from(models.Algorithm)) or 0,
+    }
+
+
+@app.post("/internal/posts/backfill-media-dimensions", tags=["internal"])
+def backfill_media_dimensions(limit: int = 200, dry_run: bool = True, db: OrmSession = Depends(get_db)):
+    """Copy sizes media-service has measured onto the post media that lack them.
+
+    The feed lays a picture out from what is stored on the post, not from the
+    asset, so backfilling media-service alone changes nothing a reader sees.
+    This is the second half: for every post image with no size, ask
+    media-service what it now knows and write it down.
+
+    Asked rather than joined across the schema, for the same reason attaching
+    does: what the size is, is media-service's answer to give.
+
+    Only rows with no size, so running it again finds nothing left to do.
+    Reaching this needs access to the container; /internal is not routed
+    through the gateway.
+    """
+    rows = db.scalars(
+        select(models.PostMedia)
+        .where(models.PostMedia.kind == "image", models.PostMedia.width.is_(None))
+        .limit(max(1, min(limit, 1000)))
+    ).all()
+
+    # One call per distinct asset: a picture posted twice is one question.
+    wanted = {row.media_id for row in rows if row.media_id}
+    sizes: dict[str, tuple[int, int]] = {}
+    unknown = 0
+    for media_id in wanted:
+        try:
+            response = httpx.get(f"{MEDIA_URL}/internal/media/{media_id}", timeout=5)
+        except httpx.HTTPError as exc:
+            log.warning("backfill could not ask about media %s: %s", media_id, exc)
+            continue
+        if response.status_code != 200:
+            unknown += 1
+            continue
+        asset = response.json()
+        width, height = asset.get("width"), asset.get("height")
+        if isinstance(width, int) and isinstance(height, int) and width > 0 and height > 0:
+            sizes[media_id] = (width, height)
+        else:
+            unknown += 1
+
+    updated = 0
+    for row in rows:
+        size = sizes.get(row.media_id or "")
+        if size is None:
+            continue
+        if not dry_run:
+            row.width, row.height = size
+        updated += 1
+    if not dry_run:
+        db.commit()
+
+    remaining = db.scalar(
+        select(func.count())
+        .select_from(models.PostMedia)
+        .where(models.PostMedia.kind == "image", models.PostMedia.width.is_(None))
+    )
+    return {
+        "dry_run": dry_run,
+        "examined": len(rows),
+        "assets_asked": len(wanted),
+        "updated": updated,
+        "asset_had_no_size": unknown,
+        "still_without_size": remaining,
     }

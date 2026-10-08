@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 import logging
 
 import httpx
-from fastapi import Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import BackgroundTasks, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, or_, select, true
 from sqlalchemy.exc import IntegrityError
@@ -18,9 +18,9 @@ from sqlalchemy.orm import Session as OrmSession
 
 import threading
 
-from common import crypto, permissions
+from common import crypto, permissions, settings
 from common.auth import AdminUser, CurrentUser
-from common.database import SessionLocal, get_db
+from common.database import SessionLocal, create_all, get_db
 from common.ids import new_id
 from common.security import decode_token, ACCESS
 from common.service import create_app
@@ -29,6 +29,7 @@ import agecheck
 import agenotify
 import models
 import stickers
+import webpush
 
 log = logging.getLogger("messaging-service")
 USER_URL = "http://user-service:8000"
@@ -62,6 +63,10 @@ MIGRATIONS = [
     f"ALTER TABLE {models.SCHEMA}.conversations "
     "ADD COLUMN IF NOT EXISTS disappear_after_seconds INTEGER DEFAULT 0",
     f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ",
+    f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS reply_to_id VARCHAR(40)",
+    f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ",
+    f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ",
+    f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS sticker_id VARCHAR(40)",
     # Conversations that already exist predate the request model, so everyone
     # in them is treated as having accepted. Retro-fitting a request state onto
     # live threads would silently block attachments between people who have
@@ -85,18 +90,44 @@ MIGRATIONS = [
     ),
     # A sealed name is longer than the name it hides.
     f"ALTER TABLE {models.SCHEMA}.messages ALTER COLUMN media_name TYPE TEXT",
-    # Replies: the id of the message being answered. Not a foreign key, see the model.
-    f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS reply_to_id VARCHAR(40)",
-    # Standalone stickers: the catalogue id, nothing else.
-    f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS sticker_id VARCHAR(64)",
+    # Reactions used to point at a sticker (a `sticker_id` column); they are emoji
+    # now. create_all never changes a table that exists, so a database that still
+    # has the old shape would fail on the first reaction. The old table is set
+    # aside - renamed, never dropped, so what it holds can still be read - and
+    # _rebuild_reactions builds the new one right after these statements.
+    f"""DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = '{models.SCHEMA}' AND table_name = 'message_reactions' AND column_name = 'sticker_id'
+      ) THEN
+        ALTER TABLE {models.SCHEMA}.message_reactions RENAME CONSTRAINT message_reactions_pkey TO message_reactions_legacy_pkey;
+        ALTER INDEX IF EXISTS {models.SCHEMA}.ix_messaging_message_reactions_message_id RENAME TO ix_message_reactions_legacy_message_id;
+        ALTER SEQUENCE IF EXISTS {models.SCHEMA}.message_reactions_id_seq RENAME TO message_reactions_legacy_id_seq;
+        ALTER TABLE {models.SCHEMA}.message_reactions RENAME TO message_reactions_legacy;
+      END IF;
+    END $$""",
 ]
+
+
+def _rebuild_reactions() -> None:
+    """Runs after the migrations: builds the reactions table if they set the old one aside.
+
+    Never fatal: a service that refuses to start over this is worse than one that
+    starts and says what needs attention, which is the rule the migrations follow.
+    """
+    try:
+        create_all(models.SCHEMA)
+    except Exception:
+        log.exception("could not rebuild the reactions table after the migrations")
+
 
 app = create_app(
     name="messaging-service",
     schema=models.SCHEMA,
     migrations=MIGRATIONS,
     description="End-to-end encrypted direct messages, group conversations, notifications.",
-    on_startup=[lambda: _start_sealing()],
+    on_startup=[_rebuild_reactions, lambda: _start_sealing()],
 )
 
 # --- the realtime hub ------------------------------------------------------
@@ -914,6 +945,206 @@ def _preview(message: models.Message) -> str:
     return text
 
 
+async def _tell_room(db: OrmSession, conversation_id: str, payload: dict) -> None:
+    """Tell everyone in the room, the actor included.
+
+    Their other tabs and devices have the same thread open and must not keep
+    showing a message that has just been edited, deleted or reacted to.
+    """
+    await _publish_to_users(_participant_ids(db, conversation_id), payload)
+
+
+class MessageEditIn(BaseModel):
+    body: str = Field(min_length=1, max_length=10_000)
+
+
+class ReactionIn(BaseModel):
+    # A short allowlist rather than "any string": an emoji field that accepts
+    # arbitrary text is a second message box with no length limit and no
+    # moderation, sitting under every message.
+    emoji: str = Field(pattern="^(\U0001F44D|\U0001F44E|\u2764\ufe0f|\U0001F602|\U0001F62E|\U0001F622|\U0001F64F|\U0001F525)$")
+
+
+@app.get("/stickers", tags=["messages"])
+def sticker_catalogue(principal: CurrentUser):
+    """The sticker packs. Signed in only, like everything else in here."""
+    return {"packs": stickers.catalogue()}
+
+
+@app.patch("/conversations/{conversation_id}/messages/{message_id}", tags=["messages"])
+async def edit_message(
+    conversation_id: str,
+    message_id: str,
+    payload: MessageEditIn,
+    principal: CurrentUser,
+    db: OrmSession = Depends(get_db),
+):
+    """Change the text of a message you sent.
+
+    Only your own, only text, and never silently: `edited_at` is returned with
+    the message and the client marks it. An edit nobody can see is a way to
+    change what somebody appears to have agreed to after they agreed to it.
+
+    An end-to-end encrypted message cannot be edited here - the server holds
+    ciphertext it cannot open, so there is nothing to replace. Saying so is
+    better than appearing to accept the edit and discarding it.
+    """
+    # The same standing check as sending: somebody who was blocked, or whose
+    # messages were closed to this member, must not be able to rewrite what
+    # this member sees by going back to an old message.
+    message = await _react_guard(db, conversation_id, message_id, principal)
+    if message.deleted_at:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if message.sender_id != principal.user_id:
+        raise HTTPException(status_code=403, detail="You can only edit your own messages")
+    if message.encrypted:
+        raise HTTPException(
+            status_code=409, detail="An end-to-end encrypted message cannot be edited")
+    if message.kind == "sticker":
+        raise HTTPException(status_code=409, detail="A sticker has no text to edit")
+
+    # The attachment's name is kept: editing a caption must not erase what the file is called.
+    _seal(message, payload.body, _plain(message)[1])
+    message.edited_at = datetime.now(timezone.utc)
+    db.commit()
+
+    await _tell_room(db, conversation_id, {
+        "type": "message_edited", "conversation_id": conversation_id,
+        "message_id": message.id, "body": payload.body,
+        "edited_at": message.edited_at.isoformat(),
+    })
+    return {"id": message.id, "body": payload.body, "edited_at": message.edited_at}
+
+
+@app.delete("/conversations/{conversation_id}/messages/{message_id}", tags=["messages"])
+async def delete_message(
+    conversation_id: str,
+    message_id: str,
+    principal: CurrentUser,
+    db: OrmSession = Depends(get_db),
+):
+    """Delete a message you sent.
+
+    The row stays and the words go. The row is what lets the thread say "this
+    was deleted" rather than silently resequencing a conversation somebody is
+    reading - but the text, the ciphertext and the attachment reference are
+    cleared from the database, not merely hidden, which is the same promise
+    disappearing messages make a few lines up. A message that vanishes from the
+    screen while sitting in the database has not been deleted.
+
+    Reactions to it go too: a row of thumbs-ups attached to nothing is a
+    reminder of what was there, which is the opposite of deleting it.
+    """
+    _member(db, conversation_id, principal.user_id)
+    message = db.get(models.Message, message_id)
+    if message is None or message.conversation_id != conversation_id:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if message.sender_id != principal.user_id:
+        raise HTTPException(status_code=403, detail="You can only delete your own messages")
+    if message.deleted_at:
+        return {"id": message.id, "deleted": True, "already": True}
+
+    message.deleted_at = datetime.now(timezone.utc)
+    message.body = None
+    message.ciphertext = None
+    message.media_url = None
+    message.media_id = None
+    message.media_kind = None
+    message.media_name = None
+    message.media_type = None
+    message.media_size = None
+    message.sticker_id = None
+    message.sealed_with = None
+    db.execute(delete(models.MessageReaction).where(models.MessageReaction.message_id == message.id))
+    db.commit()
+
+    await _tell_room(db, conversation_id, {
+        "type": "message_deleted", "conversation_id": conversation_id, "message_id": message.id,
+    })
+    return {"id": message.id, "deleted": True}
+
+
+@app.post("/conversations/{conversation_id}/messages/{message_id}/reactions", tags=["messages"])
+async def react_to_message(
+    conversation_id: str,
+    message_id: str,
+    payload: ReactionIn,
+    principal: CurrentUser,
+    db: OrmSession = Depends(get_db),
+):
+    """React, change the reaction, or take it back.
+
+    Tapping the one already there removes it; tapping a different one replaces
+    it. One per person per message, so a reaction stays a quiet acknowledgement
+    rather than a way to fill somebody's thread.
+    """
+    message = await _react_guard(db, conversation_id, message_id, principal)
+    if message.deleted_at:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    for attempt in (1, 2):
+        existing = db.scalar(
+            select(models.MessageReaction).where(
+                models.MessageReaction.message_id == message_id,
+                models.MessageReaction.user_id == principal.user_id,
+            )
+        )
+        mine: str | None = payload.emoji
+        if existing and existing.emoji == payload.emoji:
+            db.delete(existing)
+            mine = None
+        elif existing:
+            existing.emoji = payload.emoji
+        else:
+            db.add(models.MessageReaction(
+                message_id=message_id, conversation_id=conversation_id,
+                user_id=principal.user_id, emoji=payload.emoji,
+            ))
+        try:
+            db.commit()
+            break
+        except IntegrityError:
+            # Two taps raced past the lookup and the unique constraint kept one.
+            # Look again: the second tap now finds the first and acts on it.
+            db.rollback()
+            if attempt == 2:
+                raise HTTPException(status_code=409, detail="Try that reaction again")
+
+    counts = _reaction_counts(db, [message_id]).get(message_id, {})
+    await _tell_room(db, conversation_id, {
+        "type": "message_reaction", "conversation_id": conversation_id,
+        "message_id": message_id, "counts": counts,
+    })
+    return {"message_id": message_id, "counts": counts, "mine": mine}
+
+
+def _reaction_counts(db: OrmSession, message_ids: list[str]) -> dict[str, dict[str, int]]:
+    """How many of each emoji, per message, in one query for the page."""
+    if not message_ids:
+        return {}
+    rows = db.execute(
+        select(models.MessageReaction.message_id, models.MessageReaction.emoji, func.count())
+        .where(models.MessageReaction.message_id.in_(message_ids))
+        .group_by(models.MessageReaction.message_id, models.MessageReaction.emoji)
+    ).all()
+    out: dict[str, dict[str, int]] = {}
+    for message_id, emoji, count in rows:
+        out.setdefault(message_id, {})[emoji] = count
+    return out
+
+
+def _my_reactions(db: OrmSession, viewer: str, message_ids: list[str]) -> dict[str, str]:
+    if not message_ids:
+        return {}
+    rows = db.execute(
+        select(models.MessageReaction.message_id, models.MessageReaction.emoji).where(
+            models.MessageReaction.message_id.in_(message_ids),
+            models.MessageReaction.user_id == viewer,
+        )
+    ).all()
+    return {message_id: emoji for message_id, emoji in rows}
+
+
 @app.post("/conversations/{conversation_id}/messages", status_code=201, tags=["messages"])
 async def send_message(
     conversation_id: str,
@@ -958,12 +1189,17 @@ async def send_message(
                 "duplicate": True,
             }
 
+    if payload.sticker_id and "kind" not in payload.model_fields_set:
+        # A client that names a sticker and no kind means a sticker. Naming a
+        # different kind with a sticker_id is still refused below.
+        payload.kind = "sticker"
+
     if payload.kind == "sticker":
         # A sticker message is a catalogue id and nothing else: no text, no
         # ciphertext, no attachment, no URL. That is what lets it be sent in an
         # end-to-end encrypted room too - there is nothing private in it to
         # protect, and nothing the client chose that the server has not checked.
-        if not stickers.is_valid(payload.sticker_id):
+        if stickers.get(payload.sticker_id) is None:
             raise HTTPException(status_code=400, detail="Unknown sticker")
         if payload.body or payload.ciphertext_b64 or payload.media_id:
             raise HTTPException(status_code=400, detail="A sticker message carries only a sticker id")
@@ -1096,6 +1332,7 @@ async def send_message(
             "reply_to_id": message.reply_to_id,
             "sticker_id": message.sticker_id,
             **_media_fields(message),
+            "sticker": stickers.get(message.sticker_id),
             "created_at": message.created_at.isoformat(),
         },
     )
@@ -1136,19 +1373,10 @@ async def send_message(
 
 # --- reactions -----------------------------------------------------------------
 #
-# One sticker per member per message, picked from the catalogue in stickers.py.
-# Members of the conversation only, for reading and for writing: a reaction is
-# a small piece of information about who is in the room and how they took a
-# message, so it is held to the same rule as the message itself.
-
-class ReactionIn(BaseModel):
-    sticker_id: str = Field(max_length=64)
-
-
-@app.get("/stickers", tags=["messages"])
-def sticker_catalogue(principal: CurrentUser):
-    return stickers.listing()
-
+# One emoji per member per message (see react_to_message above). Members of the
+# conversation only, for reading and for writing: a reaction is a small piece of
+# information about who is in the room and how they took a message, so it is
+# held to the same rule as the message itself.
 
 async def _react_guard(
     db: OrmSession, conversation_id: str, message_id: str, principal
@@ -1178,85 +1406,6 @@ async def _react_guard(
             if not allowed:
                 raise HTTPException(status_code=403, detail=reason)
     return message
-
-
-async def _announce_reaction(
-    db: OrmSession, conversation_id: str, message_id: str, user_id: str, sticker_id: str | None
-) -> None:
-    await _publish_to_users(
-        _participant_ids(db, conversation_id),
-        {
-            "type": "reaction",
-            "conversation_id": conversation_id,
-            "message_id": message_id,
-            "user_id": user_id,
-            # None means this member took their reaction back.
-            "sticker_id": sticker_id,
-        },
-    )
-
-
-@app.put("/conversations/{conversation_id}/messages/{message_id}/reaction", tags=["messages"])
-async def react(
-    conversation_id: str,
-    message_id: str,
-    payload: ReactionIn,
-    principal: CurrentUser,
-    db: OrmSession = Depends(get_db),
-):
-    """Put a sticker under a message, replacing this member's previous one."""
-    await _react_guard(db, conversation_id, message_id, principal)
-    if not stickers.is_valid(payload.sticker_id):
-        # Anything that is not a catalogue id - a URL, a name, an image - ends here.
-        raise HTTPException(status_code=400, detail="Unknown sticker")
-    row = db.scalar(
-        select(models.MessageReaction).where(
-            models.MessageReaction.message_id == message_id,
-            models.MessageReaction.user_id == principal.user_id,
-        )
-    )
-    if row is None:
-        db.add(models.MessageReaction(
-            message_id=message_id, user_id=principal.user_id, sticker_id=payload.sticker_id
-        ))
-    else:
-        row.sticker_id = payload.sticker_id
-    try:
-        db.commit()
-    except IntegrityError:
-        # Two taps raced past the lookup; the unique constraint kept one row.
-        db.rollback()
-        row = db.scalar(
-            select(models.MessageReaction).where(
-                models.MessageReaction.message_id == message_id,
-                models.MessageReaction.user_id == principal.user_id,
-            )
-        )
-        row.sticker_id = payload.sticker_id
-        db.commit()
-    await _announce_reaction(db, conversation_id, message_id, principal.user_id, payload.sticker_id)
-    return {"message_id": message_id, "sticker_id": payload.sticker_id}
-
-
-@app.delete("/conversations/{conversation_id}/messages/{message_id}/reaction", tags=["messages"])
-async def unreact(
-    conversation_id: str,
-    message_id: str,
-    principal: CurrentUser,
-    db: OrmSession = Depends(get_db),
-):
-    """Take this member's reaction back. Idempotent."""
-    await _react_guard(db, conversation_id, message_id, principal)
-    removed = db.execute(
-        delete(models.MessageReaction).where(
-            models.MessageReaction.message_id == message_id,
-            models.MessageReaction.user_id == principal.user_id,
-        )
-    ).rowcount
-    db.commit()
-    if removed:
-        await _announce_reaction(db, conversation_id, message_id, principal.user_id, None)
-    return {"message_id": message_id, "sticker_id": None}
 
 
 @app.post("/conversations/{conversation_id}/read", tags=["messages"])
@@ -1327,29 +1476,27 @@ def list_messages(
         ).all()))
 
     # One query for the whole page: which of the quoted messages still exist.
+    # A message deleted by its sender keeps its row but not its words, so it
+    # counts as gone here: a reply must not keep pointing at something that was
+    # deleted.
     quoted_ids = {r.reply_to_id for r in rows if r.reply_to_id}
     alive = (
         set(db.scalars(
             select(models.Message.id).where(
                 models.Message.id.in_(quoted_ids),
                 models.Message.conversation_id == conversation_id,
+                models.Message.deleted_at.is_(None),
             )
         ).all())
         if quoted_ids
         else set()
     )
 
-    # Who put which sticker under which message of this page, in one query.
-    reactions: dict[str, list[dict]] = {}
-    if rows:
-        for rx in db.scalars(
-            select(models.MessageReaction)
-            .where(models.MessageReaction.message_id.in_([r.id for r in rows]))
-            .order_by(models.MessageReaction.created_at)
-        ).all():
-            reactions.setdefault(rx.message_id, []).append(
-                {"user_id": rx.user_id, "sticker_id": rx.sticker_id}
-            )
+    # How many of each emoji under each message of this page, and which one is
+    # the reader's own: two queries for the whole page.
+    ids = [r.id for r in rows]
+    counts = _reaction_counts(db, ids)
+    mine = _my_reactions(db, principal.user_id, ids)
 
     # Fetching is not reading. A catch-up in a background tab, or a page of
     # history, must not tell the other side "Seen": the client posts /read
@@ -1362,14 +1509,20 @@ def list_messages(
                 "encrypted": r.encrypted,
                 # The server hands back what it stored; only the client can decrypt.
                 "ciphertext_b64": base64.b64encode(r.ciphertext).decode() if r.ciphertext else None,
-                "body": _plain(r)[0],
+                "body": None if r.deleted_at else _plain(r)[0],
                 "kind": r.kind,
                 "reply_to_id": r.reply_to_id,
                 "sticker_id": r.sticker_id,
                 # Whether the original is gone (expired). Never its content.
                 "reply_to_deleted": bool(r.reply_to_id) and r.reply_to_id not in alive,
-                "reactions": reactions.get(r.id, []),
                 **_media_fields(r),
+                "sticker": stickers.get(r.sticker_id),
+                "edited_at": r.edited_at,
+                # A deleted message keeps its place in the thread and loses its
+                # words; the client draws the tombstone.
+                "deleted": bool(r.deleted_at),
+                "reactions": counts.get(r.id, {}),
+                "my_reaction": mine.get(r.id),
                 "created_at": r.created_at,
             }
             for r in rows
@@ -1607,9 +1760,150 @@ def mark_read(principal: CurrentUser, db: OrmSession = Depends(get_db)):
     return {"read": True}
 
 
+class PushSubscriptionIn(BaseModel):
+    endpoint: str = Field(min_length=10, max_length=2000)
+    p256dh: str = Field(min_length=10, max_length=255)
+    auth: str = Field(min_length=4, max_length=255)
+
+
+@app.get("/push/key", tags=["push"])
+def push_public_key():
+    """The VAPID public key, which a browser needs to create a subscription.
+
+    Not a secret - it identifies this server to the push services and nothing
+    else. `available` lets the client ask once rather than offer a switch that
+    cannot work: an installation with no keys configured should say so, not
+    collect subscriptions it can never send to.
+    """
+    return {
+        "available": webpush.available(),
+        "public_key": settings.VAPID_PUBLIC_KEY if webpush.available() else None,
+    }
+
+
+@app.post("/push/subscribe", status_code=201, tags=["push"])
+def push_subscribe(
+    payload: PushSubscriptionIn,
+    principal: CurrentUser,
+    request: Request,
+    db: OrmSession = Depends(get_db),
+):
+    """Remember this browser so it can be reached when the app is closed.
+
+    Keyed on the endpoint, which is the browser's own identifier for the
+    subscription. Re-subscribing the same browser updates the row rather than
+    adding one, because two rows for one browser is every notification arriving
+    twice.
+
+    An endpoint that already belongs to somebody else is reassigned, not
+    refused: it means this browser was signed in as another member and is now
+    signed in as this one, and the notifications must follow who is actually
+    using it.
+    """
+    if not webpush.available():
+        raise HTTPException(
+            status_code=503, detail="Push notifications are not available on this installation")
+    if not webpush.endpoint_allowed(payload.endpoint):
+        # The server will POST to this address, so only a browser vendor's push
+        # service is accepted (see webpush.ALLOWED_PUSH_HOSTS).
+        raise HTTPException(status_code=400, detail="That is not a supported push service")
+
+    existing = db.scalar(
+        select(models.PushSubscription).where(models.PushSubscription.endpoint == payload.endpoint)
+    )
+    if existing is None:
+        existing = models.PushSubscription(endpoint=payload.endpoint)
+        db.add(existing)
+    existing.user_id = principal.user_id
+    existing.p256dh = payload.p256dh
+    existing.auth = payload.auth
+    existing.user_agent = request.headers.get("user-agent")
+    existing.failures = 0
+    db.commit()
+    # Keep a member's most recent devices only.
+    surplus = db.scalars(
+        select(models.PushSubscription.id)
+        .where(models.PushSubscription.user_id == principal.user_id)
+        .order_by(models.PushSubscription.id.desc())
+        .offset(webpush.MAX_SUBSCRIPTIONS_PER_MEMBER)
+    ).all()
+    if surplus:
+        db.execute(delete(models.PushSubscription).where(models.PushSubscription.id.in_(surplus)))
+        db.commit()
+    return {"subscribed": True}
+
+
+@app.delete("/push/subscribe", status_code=204, tags=["push"])
+def push_unsubscribe(
+    endpoint: str,
+    principal: CurrentUser,
+    db: OrmSession = Depends(get_db),
+):
+    """Forget this browser.
+
+    Only your own: the endpoint is not a secret worth relying on, so the
+    member is checked rather than the string.
+    """
+    db.execute(
+        delete(models.PushSubscription).where(
+            models.PushSubscription.endpoint == endpoint,
+            models.PushSubscription.user_id == principal.user_id,
+        )
+    )
+    db.commit()
+
+
+def _push_to_member(user_id: str, payload: dict) -> None:
+    """Send one notification to every browser this member has registered.
+
+    Runs in a background task with its own session: it talks to three or four
+    external services over the network, and a notification must never be what
+    makes storing a message slow.
+
+    A subscription the push service calls gone is deleted at once. Anything
+    else is counted, and counted enough times it is deleted too - a browser
+    that was uninstalled looks exactly like one that is briefly unreachable,
+    and the only difference is how long it keeps failing.
+    """
+    if not webpush.available():
+        return
+    session = SessionLocal()
+    try:
+        rows = session.scalars(
+            select(models.PushSubscription).where(models.PushSubscription.user_id == user_id)
+        ).all()
+        for row in rows:
+            if not webpush.endpoint_allowed(row.endpoint):
+                # Registered before the allowlist existed, or by hand: never sent to.
+                session.delete(row)
+                continue
+            subscription = {
+                "endpoint": row.endpoint,
+                "keys": {"p256dh": row.p256dh, "auth": row.auth},
+            }
+            try:
+                webpush.send(subscription, payload)
+                row.failures = 0
+                row.last_sent_at = datetime.now(timezone.utc)
+            except webpush.Gone:
+                session.delete(row)
+            except Exception as exc:
+                row.failures += 1
+                log.info("push failed for a subscription (%s): %s", row.failures, type(exc).__name__)
+                if row.failures >= webpush.MAX_FAILURES:
+                    session.delete(row)
+        session.commit()
+    except Exception as exc:
+        log.warning("push delivery failed: %s", exc)
+        session.rollback()
+    finally:
+        session.close()
+
+
 @app.post("/internal/notify", status_code=201, tags=["internal"])
 async def internal_notify(
     user_id: str,
+    background: BackgroundTasks,
     kind: str,
     title: str,
     body: str | None = None,
@@ -1657,6 +1951,25 @@ async def internal_notify(
             "link": link,
             "unread": unread,
             "created_at": notification.created_at.isoformat(),
+        },
+    )
+    # And to the devices that are not looking. Queued rather than awaited: this
+    # reaches out to the browser vendors' push services, and the caller is a
+    # service that has already committed the thing being announced.
+    #
+    # The screened title and body, not the originals - a notification that
+    # arrives on a lock screen must not carry what the age gate removed from
+    # the one in the app.
+    background.add_task(
+        _push_to_member,
+        user_id,
+        {
+            "title": title,
+            "body": body or "",
+            "link": link or "/",
+            "kind": kind,
+            "unread": unread,
+            "tag": f"{kind}:{notification.id}",
         },
     )
     return {"id": notification.id, "unread": unread, "redacted": redacted}

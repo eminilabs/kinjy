@@ -12,6 +12,7 @@ import {
   Lock,
   MessageSquare,
   Mic,
+  Pencil,
   Plus,
   Search,
   Send,
@@ -20,6 +21,8 @@ import {
   Trash2,
   UserRound,
   Users,
+  Volume2,
+  VolumeX,
   Wifi,
   WifiOff,
   X,
@@ -30,13 +33,17 @@ import AttachmentMenu from '@/components/social/AttachmentMenu'
 import MediaLightbox from '@/components/social/MediaLightbox'
 import VoiceNotePlayer from '@/components/social/VoiceNotePlayer'
 import {
+  OptionsButton,
+  OwnMessageMenu,
   ReactButton,
   ReactionChips,
-  ReactionList,
-  StickerPicker,
+  ReactionPicker,
 } from '@/components/social/MessageReactions'
 import EmojiStickerButton from '@/components/social/EmojiStickerPanel'
-import { stickerUrl } from '@/lib/stickers'
+import StickerFace from '@/components/social/StickerFace'
+import ConfirmDialog from '@/components/ui-kit/ConfirmDialog'
+import PushToggle from '@/components/app/PushToggle'
+import { playMessageChime, primeSound, setSoundEnabled, soundEnabled } from '@/lib/chime'
 import {
   ReplyBanner,
   ReplyButton,
@@ -56,6 +63,7 @@ import {
   type Message,
   type PersonBrief,
   type Presence,
+  type Sticker,
 } from '@/lib/api'
 import { FEATURES } from '@/lib/features'
 import { realtime } from '@/lib/realtime'
@@ -236,6 +244,9 @@ function MessageMeta({
             ? `Uploading ${Math.round((message.progress ?? 0) * 100)}%`
             : 'Sending…'
           : timeOf(message.created_at, locale)}
+        {/* Said, not hidden: an edit nobody can see is a way to change what
+            somebody appears to have agreed to after they agreed to it. */}
+        {message.edited_at && !message.deleted && ' · edited'}
       </span>
       {mine && !failed && (
         <span className="inline-flex items-center">
@@ -447,10 +458,30 @@ export default function Messages() {
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
   const [highlightId, setHighlightId] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  // The sticker picker and the "who reacted" list, each anchored to a bubble.
+  // The reaction picker and the menu of your own message, each anchored to a bubble.
   const [picker, setPicker] = useState<{ id: string; rect: DOMRect; withReply: boolean } | null>(null)
-  const [reactionList, setReactionList] = useState<{ id: string; rect: DOMRect } | null>(null)
-  const catalogue = useApi(() => kaluta.messages.stickers(), [])
+  const [ownMenu, setOwnMenu] = useState<{ id: string; rect: DOMRect } | null>(null)
+  // The sticker packs, as the server curates them.
+  const stickerPacks = useApi(() => kaluta.messages.stickers(), [])
+  /** A sticker from the catalogue by its id, for a bubble drawn before the server has answered. */
+  const stickerById = (id: string | null | undefined): Sticker | null => {
+    if (!id) return null
+    for (const pack of stickerPacks.data?.packs ?? []) {
+      const found = pack.stickers.find((s) => s.id === id)
+      if (found) return found
+    }
+    return null
+  }
+  // The message being edited and the text so far - apart from the composer's
+  // draft, so abandoning an edit does not swallow what was already typed below.
+  const [editing, setEditing] = useState<ChatMessage | null>(null)
+  const [editDraft, setEditDraft] = useState('')
+  // The message awaiting a yes, so the dialog can name what is about to happen.
+  const [confirmDelete, setConfirmDelete] = useState<ChatMessage | null>(null)
+  const [sound, setSound] = useState(soundEnabled())
+  // Message ids already announced. A reconnect replays everything missed, and
+  // without this the catch-up is a burst of chimes.
+  const seenForSound = useRef<Set<string>>(new Set())
   const [peer, setPeer] = useState('')
   const [composing, setComposing] = useState(false)
   // Narrowing the list you already have: nothing is fetched.
@@ -522,6 +553,10 @@ export default function Messages() {
    */
   const openThread = useCallback(
     async (conversationId: string, how: 'user' | 'url' = 'user') => {
+      // Opening a thread by hand is a gesture, and a gesture is the only moment a
+      // browser lets audio start. Unlocking here means the first message to
+      // arrive can be heard; doing it later means the first one is always silent.
+      if (how === 'user') primeSound()
       setActiveId(conversationId)
       activeIdRef.current = conversationId
       setReplyTo(null)
@@ -810,6 +845,7 @@ export default function Messages() {
         body: null,
         kind: 'sticker',
         sticker_id: stickerId,
+        sticker: stickerById(stickerId),
         reply_to_id: replyToId,
         created_at: new Date().toISOString(),
       },
@@ -1016,32 +1052,64 @@ export default function Messages() {
     })
   }, [sortedFriends, friendQuery, onlineOnly, presence])
 
-  // --- reactions -------------------------------------------------------------------
-  /** One reaction per member: replace theirs, or remove it when `stickerId` is null. */
-  const setReaction = useCallback((messageId: string, userId: string, stickerId: string | null) => {
-    setMessages((current) =>
-      current.map((m) => {
-        if (m.id !== messageId) return m
-        const others = (m.reactions ?? []).filter((r) => r.user_id !== userId)
-        return { ...m, reactions: stickerId ? [...others, { user_id: userId, sticker_id: stickerId }] : others }
-      }),
-    )
-  }, [])
-
-  /** Choosing your current sticker again takes it back; another one replaces it. */
-  const toggleReaction = (message: ChatMessage, stickerId: string) => {
+  // --- reactions, edit, delete ---------------------------------------------------
+  /** React, swap, or take it back - the server decides which from what is there. */
+  const react = async (message: ChatMessage, emoji: string) => {
     const conversationId = activeIdRef.current
-    if (!conversationId || !user || message.status || message.id.startsWith('local_')) return
-    const previous = message.reactions?.find((r) => r.user_id === user.id)?.sticker_id ?? null
-    const next = previous === stickerId ? null : stickerId
-    setReaction(message.id, user.id, next)
-    const call = next
-      ? kaluta.messages.react(conversationId, message.id, next)
-      : kaluta.messages.unreact(conversationId, message.id)
-    call.catch((err) => {
-      setReaction(message.id, user.id, previous)
+    if (!conversationId || message.status || message.id.startsWith('local_')) return
+    try {
+      const result = await kaluta.messages.react(conversationId, message.id, emoji)
+      setMessages((current) =>
+        current.map((m) =>
+          m.id === message.id ? { ...m, reactions: result.counts, my_reaction: result.mine } : m,
+        ),
+      )
+    } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not react — check your connection.')
-    })
+    }
+  }
+
+  /** Save an edit. The thread updates from the server's answer, not from the draft. */
+  const saveEdit = async () => {
+    const conversationId = activeIdRef.current
+    const target = editing
+    const text = editDraft.trim()
+    if (!conversationId || !target) return
+    if (!text || text === (target.body ?? '')) {
+      setEditing(null)
+      return
+    }
+    setEditing(null)
+    try {
+      const saved = await kaluta.messages.edit(conversationId, target.id, text)
+      setMessages((current) =>
+        current.map((m) => (m.id === target.id ? { ...m, body: saved.body, edited_at: saved.edited_at } : m)),
+      )
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not save that edit.')
+    }
+  }
+
+  /**
+   * Delete a message. Confirmed first: there is no undo, by design - the words
+   * are removed from the database rather than hidden.
+   */
+  const removeMessage = async (message: ChatMessage) => {
+    const conversationId = activeIdRef.current
+    if (!conversationId) return
+    setConfirmDelete(null)
+    try {
+      await kaluta.messages.remove(conversationId, message.id)
+      setMessages((current) =>
+        current.map((m) =>
+          m.id === message.id
+            ? { ...m, deleted: true, body: null, media_kind: null, media_url: null, sticker: null, reactions: {}, my_reaction: null }
+            : m,
+        ),
+      )
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not delete that message.')
+    }
   }
 
   // --- live events ---------------------------------------------------------------
@@ -1060,6 +1128,7 @@ export default function Messages() {
                 body: event.body ?? null,
                 kind: event.kind ?? 'text',
                 sticker_id: event.kind === 'sticker' ? (event.sticker_id ?? null) : null,
+                sticker: event.kind === 'sticker' ? (event.sticker ?? null) : null,
                 reply_to_id: event.reply_to_id ?? null,
                 media_url: event.media_url ?? null,
                 media_kind: event.media_kind ?? null,
@@ -1071,6 +1140,19 @@ export default function Messages() {
             ]),
           )
           if (event.sender_id !== user?.id) markRead(event.conversation_id)
+        }
+        // A sound for a message somebody else sent. Not for your own, which you
+        // just watched leave, and not for a frame echoing a message already on
+        // screen - a reconnect replays what was missed, and a thread that chimes
+        // six times on catch-up is a thread people mute.
+        if (
+          event.sender_id &&
+          event.sender_id !== user?.id &&
+          event.message_id &&
+          !seenForSound.current.has(event.message_id)
+        ) {
+          seenForSound.current.add(event.message_id)
+          playMessageChime()
         }
         // Whoever sent a message has stopped typing it.
         if (event.conversation_id && event.sender_id) {
@@ -1085,10 +1167,40 @@ export default function Messages() {
         conversations.reload()
         break
       }
-      case 'reaction': {
-        if (event.conversation_id === activeIdRef.current && event.message_id && event.user_id) {
-          setReaction(event.message_id, event.user_id, event.sticker_id ?? null)
-        }
+      case 'message_reaction': {
+        if (!event.message_id) break
+        const { message_id: reacted } = event
+        setMessages((current) =>
+          current.map((m) => (m.id === reacted ? { ...m, reactions: (event.counts as Record<string, number>) ?? {} } : m)),
+        )
+        break
+      }
+      case 'message_edited': {
+        if (!event.message_id) break
+        const { message_id: edited } = event
+        setMessages((current) =>
+          current.map((m) =>
+            m.id === edited
+              ? { ...m, body: (event.body as string) ?? m.body, edited_at: (event.edited_at as string) ?? new Date().toISOString() }
+              : m,
+          ),
+        )
+        break
+      }
+      case 'message_deleted': {
+        if (!event.message_id) break
+        const { message_id: removed } = event
+        // The bubble stays and empties, rather than vanishing: a message
+        // disappearing out of the middle of a thread somebody is reading
+        // resequences the conversation under them.
+        setMessages((current) =>
+          current.map((m) =>
+            m.id === removed
+              ? { ...m, deleted: true, body: null, media_kind: null, media_url: null, sticker: null, reactions: {}, my_reaction: null }
+              : m,
+          ),
+        )
+        conversations.reload()
         break
       }
       case 'read': {
@@ -1236,19 +1348,49 @@ export default function Messages() {
                   Reconnecting…
                 </span>
               )}
-              <button
-                type="button"
-                onClick={() => setComposing((v) => !v)}
-                aria-expanded={composing}
-                aria-label="New conversation"
-                title="New conversation"
-                className={cn(
-                  'ms-auto grid h-9 w-9 place-items-center rounded-full text-text-hi transition-colors hover:bg-text-hi/[0.1]',
-                  composing ? 'bg-gold/20 text-gold-soft' : 'bg-text-hi/[0.07]',
-                )}
-              >
-                <Plus size={17} aria-hidden="true" />
-              </button>
+              <div className="ms-auto flex items-center gap-2">
+                {/* Renders nothing when the browser or this installation cannot
+                    push, so it never offers a switch that does nothing. */}
+                <PushToggle />
+                {/* A sound nobody can switch off is a reason to close the tab. */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !sound
+                    setSound(next)
+                    setSoundEnabled(next)
+                    // Turning it on is a gesture, the only moment a browser lets
+                    // audio start: unlock here, and play it once - which doubles
+                    // as showing what it sounds like.
+                    if (next) {
+                      primeSound()
+                      playMessageChime()
+                    }
+                  }}
+                  aria-pressed={sound}
+                  aria-label={sound ? 'Sound on for new messages' : 'Sound off for new messages'}
+                  title={sound ? 'Sound on for new messages' : 'Sound off for new messages'}
+                  className={cn(
+                    'grid h-9 w-9 place-items-center rounded-full transition-colors hover:bg-text-hi/[0.1]',
+                    sound ? 'bg-text-hi/[0.07] text-text-hi' : 'text-text-low',
+                  )}
+                >
+                  {sound ? <Volume2 size={16} aria-hidden="true" /> : <VolumeX size={16} aria-hidden="true" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setComposing((v) => !v)}
+                  aria-expanded={composing}
+                  aria-label="New conversation"
+                  title="New conversation"
+                  className={cn(
+                    'grid h-9 w-9 place-items-center rounded-full text-text-hi transition-colors hover:bg-text-hi/[0.1]',
+                    composing ? 'bg-gold/20 text-gold-soft' : 'bg-text-hi/[0.07]',
+                  )}
+                >
+                  <Plus size={17} aria-hidden="true" />
+                </button>
+              </div>
             </div>
 
             <label className="relative flex items-center">
@@ -1757,11 +1899,9 @@ export default function Messages() {
                   const mediaOnly = Boolean(message.media_kind) && !hasText
                   // A sticker stands on its own, without a bubble, unless it answers a message
                   // (then the quote needs one to sit in).
-                  const isSticker = message.kind === 'sticker' && Boolean(message.sticker_id)
-                  const bareSticker = isSticker && !message.reply_to_id
-                  const stickerSrc = isSticker ? stickerUrl(message.sticker_id!) : null
-                  const stickerName =
-                    catalogue.data?.items.find((s) => s.id === message.sticker_id)?.name ?? 'Sticker'
+                  const isSticker = !message.deleted && message.kind === 'sticker' && Boolean(message.sticker_id)
+                  const sticker = isSticker ? (message.sticker ?? stickerById(message.sticker_id)) : null
+                  const bareSticker = Boolean(sticker) && !message.reply_to_id
                   // Is the next bubble part of the same run? Decides the corners and
                   // where the sender's avatar and the time are drawn.
                   const following = messages[index + 1]
@@ -1772,7 +1912,9 @@ export default function Messages() {
                     new Date(following.created_at).getTime() - new Date(message.created_at).getTime() < BURST_MS
                   const isAudio = message.media_kind === 'audio'
                   // A run shows one time, on its last bubble; hover has the full stamp.
-                  const showMeta = !burstNext || Boolean(message.status)
+                  // An edited message always shows its time, which is where "edited" is said:
+                  // a change nobody can see is a way to alter what somebody agreed to.
+                  const showMeta = !burstNext || Boolean(message.status) || Boolean(message.edited_at)
                   // Where the time goes: inside a voice note, at the end of the text's last
                   // line, or (a photo, a sticker) on a row of its own. Never a row after text.
                   const metaInPlayer = isAudio && !hasText && !message.encrypted
@@ -1827,14 +1969,22 @@ export default function Messages() {
                         <div className="group/bubble relative flex min-w-0 max-w-[min(75%,34rem)] items-stretch">
                         {/* Beside the bubble, out of the flow: they must not widen it or push the reactions off its edge. */}
                         <div className={cn('absolute inset-y-0 flex items-center', mine ? 'end-full' : 'start-full')}>
-                          <ReplyButton
-                            onClick={() => startReply(message)}
-                            label={`Reply to ${nameOf(message)}`}
-                          />
-                          {!message.status && !message.id.startsWith('local_') && (
+                          {!message.deleted && (
+                            <ReplyButton
+                              onClick={() => startReply(message)}
+                              label={`Reply to ${nameOf(message)}`}
+                            />
+                          )}
+                          {!message.deleted && !message.status && !message.id.startsWith('local_') && (
                             <ReactButton
                               label={`React to ${nameOf(message)}`}
                               onOpen={(rect) => setPicker({ id: message.id, rect, withReply: false })}
+                            />
+                          )}
+                          {mine && !message.deleted && !message.status && !message.id.startsWith('local_') && (
+                            <OptionsButton
+                              label="Edit or delete this message"
+                              onOpen={(rect) => setOwnMenu({ id: message.id, rect })}
                             />
                           )}
                         </div>
@@ -1844,7 +1994,7 @@ export default function Messages() {
                             const rect = document.getElementById(`msg-${message.id}`)?.getBoundingClientRect()
                             if (rect) setPicker({ id: message.id, rect, withReply: true })
                           }}
-                          disabled={Boolean(message.status)}
+                          disabled={Boolean(message.status) || Boolean(message.deleted)}
                         >
                         <div
                           className={cn(
@@ -1860,22 +2010,31 @@ export default function Messages() {
                             message.status === 'failed' && 'border border-red-400/40',
                           )}
                         >
-                          {quoteOf(message) && (
+                          {!message.deleted && quoteOf(message) && (
                             <ReplyQuote
                               target={quoteOf(message)!}
                               mine={mine}
                               onJump={() => message.reply_to_id && jumpTo(message.reply_to_id)}
                             />
                           )}
-                          {isSticker && stickerSrc && (
-                            <img
-                              src={stickerSrc}
-                              alt={stickerName}
-                              width={128}
-                              height={128}
-                              draggable={false}
-                              className="h-32 w-32 max-w-full object-contain"
-                            />
+                          {message.deleted && (
+                            <p className={cn('text-[15px] italic leading-snug', mine ? 'text-[#0b0e1d]/70' : 'text-text-low')}>
+                              This message was deleted
+                            </p>
+                          )}
+                          {sticker && (
+                            <span role="img" aria-label={sticker.label} title={sticker.label} className="block">
+                              <StickerFace
+                                sticker={sticker}
+                                className="block text-[3.75rem]"
+                                imageClassName="h-28 w-28 max-w-full object-contain"
+                              />
+                            </span>
+                          )}
+                          {isSticker && !sticker && (
+                            <p className={cn('text-[15px] italic leading-snug', mine ? 'text-[#0b0e1d]/70' : 'text-text-low')}>
+                              Sticker no longer available
+                            </p>
                           )}
                           {message.media_kind && (
                             <div className={cn('relative', hasText && '-mx-2 -mt-0.5 mb-1.5')}>
@@ -1927,12 +2086,13 @@ export default function Messages() {
                         </SwipeToReply>
                         </div>
                         </div>
-                        <ReactionChips
-                          reactions={message.reactions ?? []}
-                          myId={user?.id}
-                          catalogue={catalogue.data?.items ?? []}
-                          onOpen={(rect) => setReactionList({ id: message.id, rect })}
-                        />
+                        {!message.deleted && (
+                          <ReactionChips
+                            counts={message.reactions ?? {}}
+                            mine={message.my_reaction}
+                            onToggle={(emoji) => void react(message, emoji)}
+                          />
+                        )}
                         {message.status === 'failed' && (
                           <button
                             type="button"
@@ -2007,6 +2167,47 @@ export default function Messages() {
                   rests in the bottom-end corner (lib/floating.ts, slot 0) —
                   exactly where a full-height thread puts its composer. No
                   orb, no gap: Send keeps the full width. */}
+              {/* Editing happens where the message is read, not in a dialog over it:
+                  the point of an edit is the words around it. */}
+              {editing && (
+                <div className="mx-3 mb-1 rounded-card-sm border border-gold/35 bg-gold/[0.07] px-3 py-2 sm:mx-5">
+                  <p className="mb-1.5 inline-flex items-center gap-1 text-xs font-semibold text-text-mid">
+                    <Pencil size={11} aria-hidden="true" />
+                    Editing a message
+                  </p>
+                  <input
+                    value={editDraft}
+                    onChange={(e) => setEditDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        void saveEdit()
+                      }
+                      if (e.key === 'Escape') setEditing(null)
+                    }}
+                    autoFocus
+                    aria-label="Edit message"
+                    className="w-full rounded-xl border border-transparent bg-text-hi/[0.07] px-4 py-2.5 text-[0.95rem] text-text-hi focus:border-gold/50 focus:outline-none"
+                  />
+                  <div className="mt-2 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void saveEdit()}
+                      className="rounded-full bg-gradient-to-br from-gold-soft to-gold px-3 py-1 text-xs font-bold text-[#0b0e1d]"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditing(null)}
+                      className="rounded-full border border-[var(--cloud-border)] px-3 py-1 text-xs font-semibold text-text-mid hover:text-text-hi"
+                    >
+                      Cancel
+                    </button>
+                    <span className="text-xs text-text-low">Everyone will see it was edited.</span>
+                  </div>
+                </div>
+              )}
               {replyTo && (
                 <ReplyBanner name={nameOf(replyTo)} message={replyTo} onCancel={() => setReplyTo(null)} />
               )}
@@ -2037,7 +2238,7 @@ export default function Messages() {
                 ) : (
                   <>
                     <AttachmentMenu onFiles={stage} />
-                    <EmojiStickerButton catalogue={catalogue.data} onEmoji={insertEmoji} onSticker={sendSticker} />
+                    <EmojiStickerButton packs={stickerPacks.data?.packs ?? null} onEmoji={insertEmoji} onSticker={sendSticker} />
                     <input
                       ref={inputRef}
                       value={draft}
@@ -2091,33 +2292,31 @@ export default function Messages() {
       </div>
       {picker && (() => {
         const target = messages.find((m) => m.id === picker.id)
-        if (!target || !catalogue.data) return null
+        if (!target || target.deleted) return null
         return (
-          <StickerPicker
+          <ReactionPicker
             anchor={picker.rect}
-            catalogue={catalogue.data}
-            current={target.reactions?.find((r) => r.user_id === user?.id)?.sticker_id}
-            onPick={(stickerId) => toggleReaction(target, stickerId)}
+            current={target.my_reaction}
+            onPick={(emoji) => void react(target, emoji)}
             onReply={picker.withReply ? () => startReply(target) : undefined}
             onClose={() => setPicker(null)}
           />
         )
       })()}
-      {reactionList && (() => {
-        const target = messages.find((m) => m.id === reactionList.id)
-        if (!target?.reactions?.length) return null
+      {ownMenu && (() => {
+        const target = messages.find((m) => m.id === ownMenu.id)
+        if (!target || target.deleted) return null
         return (
-          <ReactionList
-            anchor={reactionList.rect}
-            reactions={target.reactions}
-            catalogue={catalogue.data?.items ?? []}
-            nameOf={(id) => (id === user?.id ? 'You' : (active?.profiles?.[id]?.display_name ?? 'Member'))}
-            myId={user?.id}
-            onRemove={() => {
-              const mine = target.reactions?.find((r) => r.user_id === user?.id)
-              if (mine) toggleReaction(target, mine.sticker_id)
+          <OwnMessageMenu
+            anchor={ownMenu.rect}
+            // Text the server can read: not a sticker, not an end-to-end encrypted message.
+            canEdit={!target.encrypted && target.kind !== 'sticker' && Boolean(target.body?.trim())}
+            onEdit={() => {
+              setEditing(target)
+              setEditDraft(target.body ?? '')
             }}
-            onClose={() => setReactionList(null)}
+            onDelete={() => setConfirmDelete(target)}
+            onClose={() => setOwnMenu(null)}
           />
         )
       })()}
@@ -2128,6 +2327,14 @@ export default function Messages() {
           onClose={() => setLightbox(null)}
         />
       )}
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        onOpenChange={(open) => !open && setConfirmDelete(null)}
+        title="Delete this message?"
+        description="The text is removed for everyone in this conversation, not hidden. It cannot be recovered."
+        confirmLabel="Delete message"
+        onConfirm={() => confirmDelete && void removeMessage(confirmDelete)}
+      />
     </AppShell>
   )
 }

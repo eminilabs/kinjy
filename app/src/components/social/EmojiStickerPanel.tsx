@@ -3,7 +3,7 @@ import { Smile, Sticker } from 'lucide-react'
 import EmojiPanel from '@/components/social/EmojiPanel'
 import FloatingPanel from '@/components/social/FloatingPanel'
 import StickerPanel from '@/components/social/StickerPanel'
-import type { StickerCatalogue } from '@/lib/api'
+import type { StickerPack } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 /**
@@ -43,11 +43,11 @@ const SECTIONS: { id: Section; label: string; Icon: typeof Smile }[] = [
 ]
 
 function PanelBody({
-  catalogue,
+  packs,
   onEmoji,
   onSticker,
 }: {
-  catalogue: StickerCatalogue | null
+  packs: StickerPack[] | null
   onEmoji: (char: string) => void
   onSticker: (id: string) => void
 }) {
@@ -104,8 +104,8 @@ function PanelBody({
       <div id={`${ids}-panel`} role="tabpanel" aria-labelledby={`${ids}-tab-${section}`}>
         {section === 'emoji' ? (
           <EmojiPanel onPick={onEmoji} autoFocus={focusContent} />
-        ) : catalogue ? (
-          <StickerPanel catalogue={catalogue} onPick={onSticker} />
+        ) : packs ? (
+          <StickerPanel packs={packs} onPick={onSticker} />
         ) : (
           <p className="px-2 py-8 text-center text-sm text-text-low">Stickers are unavailable right now.</p>
         )}
@@ -120,11 +120,11 @@ function PanelBody({
  * closes the panel; choosing an emoji only inserts it.
  */
 export default function EmojiStickerButton({
-  catalogue,
+  packs,
   onEmoji,
   onSticker,
 }: {
-  catalogue: StickerCatalogue | null
+  packs: StickerPack[] | null
   onEmoji: (char: string) => void
   onSticker: (stickerId: string) => void
 }) {
@@ -151,7 +151,7 @@ export default function EmojiStickerButton({
       {anchor && (
         <FloatingPanel anchor={anchor} label="Emojis and stickers" onClose={close}>
           <PanelBody
-            catalogue={catalogue}
+            packs={packs}
             onEmoji={onEmoji}
             onSticker={(id) => {
               onSticker(id)

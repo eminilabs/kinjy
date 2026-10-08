@@ -830,3 +830,65 @@ server lists things in, and the person you are viewing is not the origin.
   from the final positions; a `spouse_of` link is not needed to draw it (and none is
   created). When the pair are also recorded spouses, the spouse line is the one drawn.
 
+## Layout, cards and the black /hub (06/10)
+
+- ~~`/hub` went black on refresh.~~ Fixed on 06/10: three paging hooks sat
+  after SocialHub's `if (authLoading)` return, so the first render ran fewer
+  hooks than the second — React error #310, unmounted tree. It only ever showed
+  on a *fresh* load, because that is the only time auth starts in a loading
+  state; reaching /hub from inside the app had auth already resolved and looked
+  fine. Verified on production by hard-refreshing /hub signed in.
+- ~~The feed card was see-through and the columns wasted a third of the
+  screen.~~ Fixed: `--cloud` is opaque `#1C1F2D` under `[data-theme='cloud']`,
+  the shell is `max-w-app` (1600px), and the right rail scrolls on its own.
+- **The opaque card depends on `.force-dark` / `.twilight-field` being on every
+  section that paints its own background.** Those classes redeclare `--cloud`,
+  which is the only reason the marketing heroes keep their glass — the
+  `[data-theme]` selector scopes nothing, since AppThemeProvider wraps the
+  whole tree from main.tsx. A new dark section without one of those classes
+  will get opaque cards against its background and look wrong. Verified on
+  /creators, not on every marketing page.
+- **The layout, dialog and push-toggle work was verified on production, not
+  locally.** `app/node_modules` was empty for part of this session, so the
+  local dev server could not be trusted; it has since been reinstalled (253
+  packages) and `tsc -b` is clean.
+- **`demo.diag.fbirbgei@example.com` is a real account on production**, created
+  for these checks. It should be removed.
+- **The imported `$2y$` hash prefixes still have not been verified against a
+  real production row.** One query; it has been blocked twice.
+
+## Mobile (06/10)
+
+- ~~The site could be dragged sideways on a phone.~~ Fixed: `min-w-0` on the
+  nav-demo column (/platform was 1535px wide on a 375px screen), and
+  `overflow-x-clip` on the page shell for the scroll-reveal sections that sit
+  at a translateX until they animate in.
+- ~~Text bottomed out at 8px and icon buttons at 36px.~~ Floors added: 0.72rem
+  (11.5px) under the phone breakpoint, 44px targets on a coarse pointer.
+- **This is not a mobile-first redesign.** What was done is remedial: no
+  sideways scroll, a legible type floor, thumb-sized targets - measured on
+  every route at 375px. The layouts themselves are still desktop layouts that
+  collapse to one column, and several pages deserve a phone-first pass in their
+  own right rather than a `lg:` prefix removed here and there.
+- **The floors are blanket CSS overrides, not corrected call sites.** ~470
+  usages of the small tiers still say `text-[0.6rem]` in the markup and only
+  look right because of the media query in index.css. Somebody changing the
+  type scale needs to know that rule is there.
+- **Verified by measurement, not by eye.** Screenshots timed out for most of
+  this session because the browser pane was hidden, so the evidence is
+  geometry: `scrollWidth`, bounding boxes, computed font sizes. Nobody has
+  actually looked at these pages on a phone.
+- **`pointer: coarse` was exercised in emulation only.** A real touch device
+  may match differently.
+
+## Sync of main into develop (08/10)
+
+What came from where: replies, the composer's emoji/sticker panel, the redesign and the voice-note player are develop's; reactions (one emoji per person, counts not names), edit, delete, the sticker catalogue (glyphs, packs, age tier), push notifications, the arrival sound and the message toast are main's. A sticker reaction (BART's) no longer exists.
+
+- **Anything that deletes a message leaves its attachment behind.** `DELETE /conversations/{id}/messages/{id}` clears the text and the reference, but media-service keeps the file, and a signed link issued before stays valid for up to its lifetime. Both `/internal/media/*/discard` endpoints exclude chat attachments on purpose. It belongs with the chat-attachment lifecycle work (`e2e_chat_attachment_expiry.py`), not with a patch on delete.
+- **Deleting is allowed to a blocked member, and nothing keeps what was deleted.** Retracting your own words is a feature, but on a platform that takes child safety seriously it also means a message can be wiped after it was reported. A decision, not an oversight: either keep a short-lived evidence copy for reported messages, or accept it.
+- **`/internal/*` authenticates nobody.** The gateway not routing them is the only protection, which is why one server-side request forgery (the push endpoint, fixed in this sync) reached order funding and age review. A shared-secret header on internal calls would make the next one harmless.
+- **A push endpoint known to somebody else can be re-registered under their account** (the row is reassigned by design, so a browser that changes account keeps working). The endpoint is a long unguessable URL, so it takes a leak first; not changed.
+- **`/forums` and `/tree` have the redesign's layout only partly**: both were rewritten on develop while the redesign restyled the old versions, so develop's pages were kept whole.
+- **Explore's empty state** shows main's discovery lists (people to connect with, spaces to join) instead of the redesign's "Start typing to explore" card.
+- **Legacy sticker reactions** are kept in `messaging.message_reactions_legacy` after the migration renames them; nothing reads them. Drop the table once nobody needs them.

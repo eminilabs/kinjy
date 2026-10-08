@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { BadgeCheck, ChevronRight, Compass, Package, Search, TreeDeciduous, UserRound, UsersRound } from 'lucide-react'
 import AppShell from '@/components/app/AppShell'
+import { People, Places } from '@/components/social/Suggestions'
 import MemberAvatar from '@/components/social/MemberAvatar'
 import { kaluta, type Community, type Person, type PersonBrief, type Product } from '@/lib/api'
 import { FEATURES } from '@/lib/features'
@@ -189,15 +190,14 @@ export default function Explore() {
         </label>
       </form>
 
+      {/* Nothing typed yet. A search box on an empty page tells somebody who
+          has just arrived to go away and think of a word; the point of a
+          discovery page is that it answers before it is asked. These are the
+          same two lists the feed's rail carries, at a size that suits a page. */}
       {!active && (
-        <div className="cloud-card mt-6 px-6 py-14 text-center">
-          <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-gold/15 text-gold-soft">
-            <Compass size={26} aria-hidden="true" />
-          </span>
-          <p className="mt-5 text-lg font-bold tracking-[-0.02em] text-text-hi">Start typing to explore</p>
-          <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-text-low">
-            Results appear as you type. Enter at least {MIN_QUERY} characters.
-          </p>
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <People limit={12} title="People to connect with" />
+          <Places limit={8} title="Community spaces to join" />
         </div>
       )}
 
