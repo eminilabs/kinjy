@@ -32,18 +32,20 @@ export type LanguageCode = (typeof LANGUAGES)[number]['code']
 
 const STORAGE_KEY = 'kinjy.lang'
 
-/** The language to open with: what they chose last, else what the browser asks for. */
+/**
+ * The language to open with: what they chose last, else English.
+ *
+ * The browser's preferred language is deliberately not consulted. The site is
+ * English first, and a visitor whose browser asks for French used to get a
+ * French header over English pages. Anybody who wants another language picks it
+ * from the language menu, and that choice is remembered.
+ */
 function initialLanguage(): string {
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved && LANGUAGES.some((l) => l.code === saved)) return saved
   } catch {
-    /* private window, blocked storage: fall through to the browser's preference */
-  }
-  const preferred = typeof navigator !== 'undefined' ? navigator.languages ?? [navigator.language] : []
-  for (const tag of preferred) {
-    const base = (tag || '').toLowerCase().split('-')[0]
-    if (LANGUAGES.some((l) => l.code === base)) return base
+    /* private window, blocked storage: fall back to English */
   }
   return 'en'
 }

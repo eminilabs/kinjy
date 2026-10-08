@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { AlertTriangle, Loader2 } from 'lucide-react'
+import { AlertTriangle, Loader2, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function Panel({
@@ -16,11 +16,11 @@ export function Panel({
   className?: string
 }) {
   return (
-    <section className={cn('cloud-card p-6', className)}>
-      <header className="mb-5 flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-[19px] font-bold tracking-[-0.02em] text-text-hi">{title}</h2>
-          {subtitle && <p className="caption mt-1">{subtitle}</p>}
+    <section className={cn('cloud-card p-6 md:p-7', className)}>
+      <header className="mb-6 flex items-start justify-between gap-4 border-b border-[var(--cloud-border)] pb-5">
+        <div className="min-w-0">
+          <h2 className="text-[1.25rem] font-bold tracking-[-0.025em] text-text-hi">{title}</h2>
+          {subtitle && <p className="mt-1.5 text-sm leading-relaxed text-text-low">{subtitle}</p>}
         </div>
         {action}
       </header>
@@ -58,18 +58,60 @@ export function Stat({
   )
 }
 
+const KPI_TONES = {
+  gold: 'bg-gold/20 text-gold-soft',
+  sky: 'bg-sky/20 text-sky',
+  coral: 'bg-coral/20 text-coral',
+  emerald: 'bg-emerald-400/20 text-emerald-300',
+}
+
+/** A headline number on its own card: what it is, how much, and a short note. */
+export function KpiCard({
+  icon: Icon,
+  label,
+  value,
+  hint,
+  tone = 'sky',
+  featured = false,
+}: {
+  icon: LucideIcon
+  label: string
+  value: ReactNode
+  hint?: ReactNode
+  tone?: keyof typeof KPI_TONES
+  featured?: boolean
+}) {
+  return (
+    <div className={cn('cloud-card relative overflow-hidden p-4 sm:p-5', featured && '!border-gold/60')}>
+      {featured && (
+        <span aria-hidden="true" className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-gold/20 blur-2xl" />
+      )}
+      <div className="relative flex items-start justify-between gap-3">
+        <p className="mono-data text-[0.68rem] font-bold uppercase tracking-[0.14em] text-text-low">{label}</p>
+        <span aria-hidden="true" className={cn('grid h-9 w-9 shrink-0 place-items-center rounded-xl', KPI_TONES[tone])}>
+          <Icon size={17} />
+        </span>
+      </div>
+      <p className="relative mt-4 text-[1.6rem] font-bold leading-none sm:text-[2rem] tracking-[-0.035em] tabular-nums text-text-hi">{value}</p>
+      {hint && <p className="relative mt-2 text-sm text-text-low">{hint}</p>}
+    </div>
+  )
+}
+
 /** One consistent place for the three states every panel can be in. */
 export function PanelState({
   loading,
   error,
   empty,
   emptyLabel = 'Nothing here yet.',
+  emptyNode,
   children,
 }: {
   loading: boolean
   error: string | null
   empty?: boolean
   emptyLabel?: string
+  emptyNode?: ReactNode
   children: ReactNode
 }) {
   if (loading) {
@@ -84,14 +126,14 @@ export function PanelState({
     return (
       <div
         role="alert"
-        className="flex items-start gap-2.5 rounded-card-sm border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
+        className="flex items-start gap-2.5 rounded-2xl bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
       >
         <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
         <span>{error}</span>
       </div>
     )
   }
-  if (empty) return <p className="py-4 text-sm text-text-low">{emptyLabel}</p>
+  if (empty) return emptyNode ? <>{emptyNode}</> : <p className="py-4 text-sm text-text-low">{emptyLabel}</p>
   return <>{children}</>
 }
 
@@ -123,4 +165,4 @@ export function Badge({
 }
 
 export const inputClass =
-  'w-full rounded-[12px] border border-white/10 bg-ink-2/70 px-4 py-2.5 text-sm text-text-hi placeholder:text-text-low focus:border-gold/60 focus:outline-none focus:ring-2 focus:ring-gold/20'
+  'w-full rounded-[14px] border border-transparent bg-text-hi/[0.07] px-4 py-3 text-[0.95rem] text-text-hi placeholder:text-text-low focus:border-gold/60 focus:bg-transparent focus:outline-none focus:ring-2 focus:ring-gold/20'

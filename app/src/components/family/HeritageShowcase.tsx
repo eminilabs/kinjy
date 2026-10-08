@@ -52,16 +52,16 @@ export default function HeritageShowcase() {
         whileInView={{ opacity: 1, rotate: -2, y: 0 }}
         viewport={{ once: true, amount: 0.5 }}
         transition={{ duration: 0.6, ease: cloudEase }}
-        className="mx-auto max-w-md rounded-card-md bg-[#FFFDF8] p-3 pb-5 shadow-[0_24px_50px_-18px_rgba(36,31,22,0.4)]"
+        className="mx-auto max-w-md rounded-[14px] bg-[var(--kl-surface)] p-3 pb-5 shadow-[0_24px_50px_-18px_rgba(36,31,22,0.4)]"
       >
         <img
           src="/family-archive-2.jpg"
           alt="Archival flat-lay: old letters, a fountain pen, a sepia portrait and an audio cassette on cream linen"
-          className="aspect-[16/9] w-full rounded-card-sm object-cover"
+          className="aspect-[16/9] w-full rounded-[12px] object-cover"
           loading="lazy"
         />
         <figcaption className="mt-3 flex items-center justify-between px-1">
-          <span className="font-display text-sm italic text-[#5A5245]">The Mushi family archive — scanned, searchable</span>
+          <span className="kl-serif text-sm italic text-[var(--kl-mid)]">The Mushi family archive — scanned, searchable</span>
           <ProvenanceTag kind="original" />
         </figcaption>
       </motion.figure>
@@ -70,7 +70,7 @@ export default function HeritageShowcase() {
       <div>
         <div
           ref={boxRef}
-          className="relative aspect-[16/9] w-full cursor-ew-resize touch-none select-none overflow-hidden rounded-card-lg border border-[#241F16]/10 shadow-[0_24px_50px_-18px_rgba(36,31,22,0.35)]"
+          className="relative aspect-[16/9] w-full cursor-ew-resize touch-none select-none overflow-hidden rounded-[20px] border border-[var(--kl-paper-2)] shadow-[0_24px_50px_-18px_rgba(36,31,22,0.35)]"
           onPointerDown={(e) => {
             setInteracted(true)
             dragRef.current = true
@@ -119,14 +119,14 @@ export default function HeritageShowcase() {
               ◂ ▸
             </span>
           </div>
-          <span className="absolute left-3 top-3 rounded-full bg-[#241F16]/80 px-3 py-1 text-[0.68rem] font-semibold text-[#F6F1E7] backdrop-blur-sm">
+          <span className="absolute left-3 top-3 rounded-full bg-[#241F16]/80 px-3 py-1 text-[0.68rem] font-semibold text-[#F6F1E7]">
             Original — preserved
           </span>
           <span className="absolute right-3 top-3">
-            <ProvenanceTag kind="ai-assisted" className="!bg-[#241F16]/80 backdrop-blur-sm" />
+            <ProvenanceTag kind="ai-assisted" className="!bg-[#241F16]/80" />
           </span>
         </div>
-        <p className="caption mt-2 !text-[#6B5F4E]">
+        <p className="text-[13px] leading-relaxed mt-2 text-[var(--kl-mid)]">
           Enhanced copy — <strong>AI Assisted</strong>. The original file is never altered;
           both live side-by-side in the archive.
         </p>
@@ -145,11 +145,11 @@ export default function HeritageShowcase() {
               transition={{ delay: i * 0.12, duration: 0.45, ease: [0.34, 1.56, 0.64, 1] }}
               className="flex flex-col items-center text-center"
             >
-              <span className="z-10 flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#D9A648] bg-[#FFFDF8]">
+              <span className="z-10 flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#D9A648] bg-[var(--kl-surface)]">
                 <span className="h-2 w-2 rounded-full bg-[#D9A648]" />
               </span>
-              <span className="mono-data mt-2 text-[0.72rem] font-semibold text-[#9A6B1F]">{t.year}</span>
-              <span className="caption mt-0.5 !text-[#6B5F4E]">{t.label}</span>
+              <span className="kl-mono mt-2 text-[0.72rem] font-semibold text-[var(--kl-gold-deep)]">{t.year}</span>
+              <span className="text-[13px] leading-relaxed mt-0.5 text-[var(--kl-mid)]">{t.label}</span>
             </motion.li>
           ))}
         </ol>
