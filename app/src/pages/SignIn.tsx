@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { AlertCircle, Fingerprint, Loader2, ShieldCheck } from 'lucide-react'
-import PublicShell from '@/components/landing/PublicShell'
-import { Eyebrow, KlButton, Stage } from '@/components/landing/PageKit'
+import { AlertCircle, Loader2 } from 'lucide-react'
+import '@/components/landing/landing.css'
+import { KlButton } from '@/components/landing/PageKit'
+import { HeroCollage } from '@/components/landing/LandingHero'
+import { Brand, ThemeToggle } from '@/components/landing/shared'
+import { useLandingTheme } from '@/components/landing/useLandingTheme'
 import { useAuth } from '@/hooks/useAuth'
 import { ApiError } from '@/lib/api'
 import { clearPendingRef, pendingRef } from '@/lib/share'
@@ -57,10 +60,13 @@ function passwordProblem(value: string): string | null {
 }
 
 export default function SignIn() {
-  const { t } = useTranslation()
+  // This page is English only, whatever language the browser asks for.
+  const { i18n } = useTranslation()
+  const t = i18n.getFixedT('en')
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const { user, signIn, signUp } = useAuth()
+  const { theme } = useLandingTheme()
 
   const [mode, setMode] = useState<Mode>(params.get('mode') === 'signup' ? 'signup' : 'signin')
   const [email, setEmail] = useState(params.get('email') ?? '')
@@ -165,199 +171,210 @@ export default function SignIn() {
   const fieldError = 'mt-1.5 block text-[13px] text-[#B23B3B]'
 
   return (
-    <PublicShell>
-      <section className="kl-pad-x py-[clamp(40px,6vw,80px)]">
-        <div className="grid grid-cols-[minmax(0,1fr)] items-center gap-[clamp(40px,6vw,96px)] lg:grid-cols-[minmax(0,1fr)_minmax(0,480px)]">
-          {/* Left: promise */}
-          <div className="hidden min-w-0 lg:block">
-            <Eyebrow>{t('signin.yourSocietyAwaits')}</Eyebrow>
-            <h1 className="kl-serif mt-6 max-w-[620px] text-balance text-[clamp(44px,5.4vw,80px)] font-semibold leading-[0.98] tracking-[-0.02em]">
-              One account.{' '}
-              <span className="text-[var(--kl-gold-deep)]">{spelled(OPEN_MODULES)} modules.</span>
-            </h1>
-            <ul className="mt-10 max-w-[520px] border-t border-[var(--kl-paper-2)]">
-              <li className="flex items-start gap-4 border-b border-[var(--kl-paper-2)] py-5">
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-[#F6EBD3] text-[#8A6414]">
-                  <Fingerprint size={18} aria-hidden="true" />
-                </span>
-                <span className="text-[16px] leading-relaxed text-[var(--kl-mid)]">
-                  <strong className="text-[var(--kl-ink)]">{t('signin.passkeysNotABiometric')}</strong> {t('signin.yourFingerprintOrFace')}
-                </span>
-              </li>
-              <li className="flex items-start gap-4 border-b border-[var(--kl-paper-2)] py-5">
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-[#E3ECF7] text-[#2F6BA8]">
-                  <ShieldCheck size={18} aria-hidden="true" />
-                </span>
-                <span className="text-[16px] leading-relaxed text-[var(--kl-mid)]">
-                  <strong className="text-[var(--kl-ink)]">{t('signin.leaveWheneverYouWant')}</strong> {t('signin.deactivateOrDeleteFrom')}
-                </span>
-              </li>
-            </ul>
+    <div
+      className={`kl kl-plain ${theme === 'dark' ? 'force-dark' : 'force-light'} min-h-screen bg-[var(--kl-bg)] text-[var(--kl-ink)] lg:h-screen lg:overflow-hidden`}
+      data-kl-theme={theme}
+    >
+      <div className="grid min-h-screen grid-cols-[minmax(0,1fr)] lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+        {/* Right: the form */}
+        <main className="flex min-w-0 flex-col lg:order-2 lg:h-full lg:overflow-y-auto px-[clamp(20px,5vw,72px)] py-6">
+          <div className="flex items-center justify-between">
+            <Link to="/" aria-label="Kinjy home" className="lg:invisible">
+              <Brand size={40} text={22} />
+            </Link>
+            <ThemeToggle />
           </div>
 
-          {/* Right: the form, on a stage */}
-          <Stage className="min-w-0 p-[clamp(14px,3vw,32px)]" glows={['var(--kl-sky)', '#D9A648']}>
-            <div className="rounded-[20px] bg-[var(--kl-surface)] p-6 shadow-[0_30px_60px_-34px_var(--kl-shadow)] md:p-8">
-              <div className="flex gap-1 rounded-full bg-[var(--kl-paper)] p-1">
-                {(['signin', 'signup'] as Mode[]).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => {
-                      setMode(m)
-                      setError(null)
-                    }}
-                    className={cn(
-                      'flex-1 rounded-full px-4 py-2.5 text-sm font-semibold transition-colors',
-                      mode === m ? 'kl-sheen' : 'text-[var(--kl-mid)] hover:text-[var(--kl-ink)]',
-                    )}
-                  >
-                    {m === 'signin' ? 'Sign in' : 'Create account'}
-                  </button>
-                ))}
-              </div>
+          <div className="mx-auto flex w-full max-w-[460px] flex-1 flex-col justify-center py-10">
+            <h1 className="text-[clamp(30px,3.4vw,42px)] font-bold leading-[1.05] tracking-[-0.035em]">
+              {mode === 'signin' ? 'Welcome back' : 'Create your account'}
+            </h1>
+            <p className="mt-2 text-[15px] leading-relaxed text-[var(--kl-mid)]">
+              {mode === 'signin'
+                ? 'Sign in to pick up where you left off.'
+                : `One account opens ${spelled(OPEN_MODULES).toLowerCase()} modules.`}
+            </p>
 
-              <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
-                {mode === 'signup' && (
-                  <>
-                    <label className="block">
-                      <span className={label}>{t('signin.yourName')}</span>
-                      <input
-                        className={field}
-                        value={displayName}
-                        onChange={(e) => setDisplayName(e.target.value)}
-                        placeholder={t('signin.yourFullName')}
-                        autoComplete="name"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className={label}>{t('signin.dateOfBirth')}</span>
-                      <input
-                        type="date"
-                        className={field}
-                        value={birthDate}
-                        onChange={(e) => setBirthDate(e.target.value)}
-                        autoComplete="bday"
-                        max={new Date().toISOString().slice(0, 10)}
-                        aria-describedby="dob-why"
-                      />
-                      {/* Says what it is for, and nothing about what would qualify.
-                          Telling someone the minimum age is telling them which date
-                          to type instead. */}
-                      <span id="dob-why" className={hint}>
-                        {t('signin.weUseThisTo')}
-                      </span>
-                    </label>
-                    <label className="block">
-                      <span className={label}>{t('signin.handle')}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[var(--kl-low)]">@</span>
-                        <input
-                          className={field}
-                          value={handle}
-                          onChange={(e) => {
-                            setHandleEdited(true)
-                            setHandle(e.target.value.toLowerCase())
-                          }}
-                          placeholder="your.handle"
-                          autoComplete="username"
-                          aria-invalid={Boolean(handleError)}
-                        />
-                      </div>
-                      {handleError && <span className={fieldError}>{handleError}</span>}
-                    </label>
-                  </>
-                )}
-
-                <label className="block">
-                  <span className={label}>{t('signin.email')}</span>
-                  <input
-                    className={field}
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    autoComplete="email"
-                    required
-                  />
-                </label>
-
-                <label className="block">
-                  <span className={label}>{t('signin.password')}</span>
-                  <input
-                    className={field}
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder={mode === 'signup' ? 'At least 10 characters' : '••••••••••'}
-                    autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-                    aria-invalid={Boolean(passwordError)}
-                    required
-                  />
-                  {passwordError && <span className={fieldError}>{passwordError}</span>}
-                  {mode === 'signin' && (
-                    <Link
-                      to="/reset-password"
-                      className="mt-2 inline-block text-[13px] text-[var(--kl-mid)] hover:text-[var(--kl-gold-deep)]"
-                    >
-                      {t('signin.forgotPassword')}
-                    </Link>
+            <div className="mt-7 flex gap-1 rounded-full bg-[var(--kl-paper)] p-1">
+              {(['signin', 'signup'] as Mode[]).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => {
+                    setMode(m)
+                    setError(null)
+                  }}
+                  className={cn(
+                    'flex-1 rounded-full px-4 py-2.5 text-sm font-semibold transition-colors',
+                    mode === m ? 'kl-sheen' : 'text-[var(--kl-mid)] hover:text-[var(--kl-ink)]',
                   )}
-                </label>
+                >
+                  {m === 'signin' ? 'Sign in' : 'Create account'}
+                </button>
+              ))}
+            </div>
 
-                {mode === 'signup' && (
+            <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
+              {mode === 'signup' && (
+                <>
                   <label className="block">
-                    <span className={label}>{t('signin.referralCodeOptional')}</span>
+                    <span className={label}>{t('signin.yourName')}</span>
                     <input
                       className={field}
-                      value={referral}
-                      onChange={(e) => setReferral(e.target.value.toUpperCase())}
-                      placeholder="ABCD1234"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      placeholder={t('signin.yourFullName')}
+                      autoComplete="name"
                     />
-                    <span className={hint}>
-                      {t('signin.creditsWhoeverInvitedYou')}
+                  </label>
+                  <label className="block">
+                    <span className={label}>{t('signin.dateOfBirth')}</span>
+                    <input
+                      type="date"
+                      className={field}
+                      value={birthDate}
+                      onChange={(e) => setBirthDate(e.target.value)}
+                      autoComplete="bday"
+                      max={new Date().toISOString().slice(0, 10)}
+                      aria-describedby="dob-why"
+                    />
+                    {/* Says what it is for, and nothing about what would qualify.
+                        Telling someone the minimum age is telling them which date
+                        to type instead. */}
+                    <span id="dob-why" className={hint}>
+                      {t('signin.weUseThisTo')}
                     </span>
                   </label>
-                )}
+                  <label className="block">
+                    <span className={label}>{t('signin.handle')}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[var(--kl-low)]">@</span>
+                      <input
+                        className={field}
+                        value={handle}
+                        onChange={(e) => {
+                          setHandleEdited(true)
+                          setHandle(e.target.value.toLowerCase())
+                        }}
+                        placeholder="your.handle"
+                        autoComplete="username"
+                        aria-invalid={Boolean(handleError)}
+                      />
+                    </div>
+                    {handleError && <span className={fieldError}>{handleError}</span>}
+                  </label>
+                </>
+              )}
 
-                {error && (
-                  <div
-                    role="alert"
-                    className="flex items-start gap-2.5 rounded-[12px] border border-[#B23B3B]/40 bg-[#B23B3B]/10 px-4 py-3 text-sm text-[#B23B3B]"
+              <label className="block">
+                <span className={label}>{t('signin.email')}</span>
+                <input
+                  className={field}
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  required
+                />
+              </label>
+
+              <label className="block">
+                <span className={label}>{t('signin.password')}</span>
+                <input
+                  className={field}
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={mode === 'signup' ? 'At least 10 characters' : '••••••••••'}
+                  autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                  aria-invalid={Boolean(passwordError)}
+                  required
+                />
+                {passwordError && <span className={fieldError}>{passwordError}</span>}
+                {mode === 'signin' && (
+                  <Link
+                    to="/reset-password"
+                    className="mt-2 inline-block text-[13px] text-[var(--kl-mid)] hover:text-[var(--kl-gold-deep)]"
                   >
-                    <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
-                    <span>{error}</span>
-                  </div>
+                    {t('signin.forgotPassword')}
+                  </Link>
                 )}
+              </label>
 
-                <KlButton size="lg" className="w-full" disabled={!canSubmit} type="submit">
-                  {submitting && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
-                  {mode === 'signin' ? 'Sign in' : 'Create your account'}
-                </KlButton>
-              </form>
+              {mode === 'signup' && (
+                <label className="block">
+                  <span className={label}>{t('signin.referralCodeOptional')}</span>
+                  <input
+                    className={field}
+                    value={referral}
+                    onChange={(e) => setReferral(e.target.value.toUpperCase())}
+                    placeholder="ABCD1234"
+                  />
+                  <span className={hint}>
+                    {t('signin.creditsWhoeverInvitedYou')}
+                  </span>
+                </label>
+              )}
 
-              <p className="mt-5 text-center text-[13px] text-[var(--kl-low)]">
-                {mode === 'signin' ? (
-                  <>
-                    No account yet?{' '}
-                    <button type="button" onClick={() => setMode('signup')} className="font-semibold text-[var(--kl-gold-deep)] hover:underline">
-                      {t('signin.createOne')}
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    By creating an account you accept the{' '}
-                    <Link to="/safety" className="font-semibold text-[var(--kl-gold-deep)] hover:underline">
-                      {t('signin.communityStandards')}
-                    </Link>
-                    .
-                  </>
-                )}
+              {error && (
+                <div
+                  role="alert"
+                  className="flex items-start gap-2.5 rounded-[12px] border border-[#B23B3B]/40 bg-[#B23B3B]/10 px-4 py-3 text-sm text-[#B23B3B]"
+                >
+                  <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <KlButton size="lg" className="w-full" disabled={!canSubmit} type="submit">
+                {submitting && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
+                {mode === 'signin' ? 'Sign in' : 'Create your account'}
+              </KlButton>
+            </form>
+
+            <p className="mt-5 text-center text-[13px] text-[var(--kl-low)]">
+              {mode === 'signin' ? (
+                <>
+                  No account yet?{' '}
+                  <button type="button" onClick={() => setMode('signup')} className="font-semibold text-[var(--kl-gold-deep)] hover:underline">
+                    {t('signin.createOne')}
+                  </button>
+                </>
+              ) : (
+                <>
+                  By creating an account you accept the{' '}
+                  <Link to="/safety" className="font-semibold text-[var(--kl-gold-deep)] hover:underline">
+                    {t('signin.communityStandards')}
+                  </Link>
+                  .
+                </>
+              )}
+            </p>
+          </div>
+        </main>
+
+        {/* Left: the landing, as a showcase */}
+        <aside
+          aria-label="About Kinjy"
+          className="relative hidden min-w-0 overflow-hidden lg:order-1 lg:block lg:h-full"
+          style={{ background: 'linear-gradient(160deg, var(--kl-stage-a), var(--kl-stage-b))' }}
+        >
+          <div aria-hidden="true" className="absolute -right-24 -top-24 h-[420px] w-[420px] rounded-full opacity-35 blur-[110px]" style={{ background: 'var(--kl-sky)' }} />
+          <div aria-hidden="true" className="absolute -bottom-32 -left-24 h-[420px] w-[420px] rounded-full opacity-40 blur-[110px]" style={{ background: '#D9A648' }} />
+          <div className="relative flex h-full items-center justify-center px-[clamp(32px,5vw,84px)] py-10">
+            <Link to="/" aria-label="Kinjy home" className="absolute left-[clamp(32px,5vw,84px)] top-6">
+              <Brand size={40} text={22} />
+            </Link>
+            <div className="flex w-full flex-col items-center">
+              <HeroCollage english className="relative w-[min(100%,min(480px,calc((100vh-240px)/1.08)))] shrink-0" />
+              <p className="mt-6 max-w-[420px] text-center text-[17px] leading-[1.55] text-[var(--kl-mid)]" style={{ textWrap: 'pretty' }}>
+                {t('hero.sub')}
               </p>
             </div>
-          </Stage>
-        </div>
-      </section>
-    </PublicShell>
+          </div>
+        </aside>
+      </div>
+    </div>
   )
 }

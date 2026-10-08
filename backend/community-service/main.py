@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from typing import Literal
 
 from fastapi import Depends, HTTPException, Query
@@ -961,9 +962,7 @@ def list_threads(
         stmt = stmt.where(models.Thread.id.in_(_solved_filter(db, age, forum_id)))
     elif sort == "unanswered":
         stmt = stmt.where(models.Thread.replies_count == 0)
-    rows = db.scalars(
-        stmt.order_by(*_thread_order(sort)).limit(limit).offset(offset)
-    ).all()
+    rows = agecommunity.readable_page(db, stmt.order_by(*_thread_order(sort)), age, limit=limit, offset=offset)
     profiles = _profiles({r.author_id for r in rows})
     solved = _solved_threads(db, age, among=[r.id for r in rows])
     return {"items": [_thread_card(r, profiles, solved) for r in rows]}
@@ -1455,6 +1454,40 @@ def knowledge(
 # decide who may read a community post without knowing who is in the community,
 # and it must not keep its own copy of that - a stale copy of a membership list
 # is somebody reading a group they were removed from.
+
+class ReadableThreadsIn(BaseModel):
+    viewer: str | None = None
+    thread_ids: list[str] = Field(default_factory=list)
+
+
+@app.post("/internal/readable-threads", tags=["internal"])
+def readable_threads(payload: ReadableThreadsIn, db: OrmSession = Depends(get_db)):
+    """Which of these threads this member may read: the same rules as opening one.
+
+    For the realtime hub. A `thread:<id>` topic carries who replied, voted or had
+    an answer accepted, and when; subscribing used to need nothing but the id.
+    The forum's door (a secret community's thread is not for outsiders) and the
+    age engine both apply, and a thread that is not open, or does not exist, is
+    simply absent from the answer. One call for the whole batch.
+    """
+    ids = list(dict.fromkeys(i for i in payload.thread_ids if i))[:200]
+    if not ids:
+        return {"thread_ids": []}
+    threads = db.scalars(
+        select(models.Thread).where(models.Thread.id.in_(ids), models.Thread.status == "open")
+    ).all()
+    viewer = SimpleNamespace(user_id=payload.viewer) if payload.viewer else None
+    doors: dict[str, bool] = {}
+    through = []
+    for thread in threads:
+        if thread.forum_id not in doors:
+            forum = db.get(models.Forum, thread.forum_id)
+            doors[thread.forum_id] = forum is not None and _can_enter(db, forum, viewer)
+        if doors[thread.forum_id]:
+            through.append(thread)
+    age = agecommunity.viewer(payload.viewer)
+    return {"thread_ids": [t.id for t in _visible_threads(db, age, through)]}
+
 
 @app.get("/internal/member-communities/{user_id}", tags=["internal"])
 def member_communities(user_id: str, db: OrmSession = Depends(get_db)):

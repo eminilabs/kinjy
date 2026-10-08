@@ -6,7 +6,7 @@ export default function OrderStatusChip({ status, className }: { status: string;
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[0.68rem] font-semibold',
+        'inline-flex shrink-0 items-center rounded-full px-3 py-1 text-xs font-semibold',
         TONE_CLASS[info.tone],
         className,
       )}

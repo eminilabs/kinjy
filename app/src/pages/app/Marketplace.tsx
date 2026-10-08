@@ -86,34 +86,35 @@ export default function Marketplace() {
   }
 
   return (
-    <AppShell
-      title="Marketplace"
-      action={
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <Link
-            to="/market/orders"
-            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-white/12 px-4 text-sm font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
-          >
+    <AppShell>
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+        <div className="min-w-0">
+          <p className="mono-data text-[0.72rem] font-bold uppercase tracking-[0.15em] text-gold-soft">Marketplace</p>
+          <h1 className="mt-2 text-[clamp(38px,5vw,56px)] font-bold leading-[1.02] tracking-[-0.045em] text-text-hi">
+            Buy and sell, safely
+          </h1>
+          <p className="mt-3 max-w-2xl text-[0.95rem] leading-relaxed text-text-low">
+            Sellers set their price; Kinjy adds a 20% markup on top. Buyer money is held by a licensed custodian
+            until the buyer confirms receipt.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link to="/market/orders" className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-[var(--cloud-border)] px-5 text-sm font-semibold text-text-mid transition-colors hover:border-gold/50 hover:bg-gold/10 hover:text-text-hi">
             <ClipboardList size={14} aria-hidden="true" />
             My orders
           </Link>
-          <Link
-            to="/market/seller"
-            className="inline-flex min-h-[44px] items-center rounded-full border border-white/12 px-4 text-sm font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
-          >
+          <Link to="/market/seller" className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-[var(--cloud-border)] px-5 text-sm font-semibold text-text-mid transition-colors hover:border-gold/50 hover:bg-gold/10 hover:text-text-hi">
             My shop
           </Link>
           <Link
             to="/market/sell"
-            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 text-sm font-bold text-ink"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full bg-gradient-to-br from-gold-soft to-gold px-6 text-sm font-bold text-ink"
           >
             <Plus size={14} aria-hidden="true" />
             Sell
           </Link>
         </div>
-      }
-      subtitle="Sellers set their price; Kinjy adds a 20% markup on top. Buyer money is held by a licensed custodian until the buyer confirms receipt."
-    >
+      </header>
       <form
         onSubmit={(e) => {
           e.preventDefault()
@@ -121,7 +122,7 @@ export default function Marketplace() {
           setOffset(0)
         }}
       >
-        <label className="flex min-h-[44px] items-center gap-2.5 rounded-full border border-white/10 bg-ink-2/60 px-4">
+        <label className="flex min-h-[44px] items-center gap-2.5 rounded-full bg-text-hi/[0.07] px-5">
           <Search size={15} className="shrink-0 text-text-low" aria-hidden="true" />
           <input
             value={query}

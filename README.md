@@ -318,6 +318,16 @@ opens its own page against a live service.
 | Marketplace | `/market` | commerce |
 | Earnings | `/dashboard` | ledger + payment + auth |
 
+**Family tree.** `/tree` shows the family around one person (a drawing on a wide
+screen, a list by generation on a phone) and lets a member add, link, edit and
+remove people and confirm what they know. The rules live in family-service, not
+the screen: you read a tree you belong to (or one its owner opened, through
+`who_can_see_family`), you write only where you belong, and a member's node needs
+that member's `who_can_add_family`. The server refuses relations that contradict
+each other and tells the screen what each person may do. `FEATURES.familyTreeApp`
+opens the app side; the public `/family` page stays behind `FEATURES.familyTree`.
+What is not built is listed in `NOT-DONE.md` ("Family tree").
+
 Live is the one entry with no backend. Rather than a convincing mock, its page
 states plainly that nothing runs behind it — a screen that looks finished is how
 a gap survives until someone demos it.

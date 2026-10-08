@@ -127,7 +127,7 @@ export default function ProfileImagePicker({
     purpose === 'avatar' ? (
       <MemberAvatar displayName={displayName} avatarUrl={shown} size={88} ring />
     ) : (
-      <div className="relative h-28 w-full overflow-hidden rounded-card-sm sm:h-32">
+      <div className="relative h-28 w-full overflow-hidden rounded-2xl sm:h-32">
         {shown ? (
           <img src={shown} alt="" className="h-full w-full object-cover" />
         ) : (
@@ -162,7 +162,7 @@ export default function ProfileImagePicker({
             aria-disabled={disabled || busy}
             className={cn(
               button,
-              'cursor-pointer border-white/12 text-text-mid hover:border-gold/40 hover:text-gold-soft',
+              'cursor-pointer border-[var(--cloud-border)] text-text-mid hover:border-gold/40 hover:text-gold-soft',
               'peer-focus-visible:ring-2 peer-focus-visible:ring-gold/50',
               (disabled || busy) && 'pointer-events-none opacity-40',
             )}
@@ -175,7 +175,7 @@ export default function ProfileImagePicker({
             <button
               type="button"
               onClick={() => controllerRef.current?.abort()}
-              className={cn(button, 'border-white/12 text-text-mid hover:text-text-hi')}
+              className={cn(button, 'border-[var(--cloud-border)] text-text-mid hover:text-text-hi')}
             >
               <X size={13} aria-hidden="true" />
               Cancel
@@ -214,7 +214,7 @@ export default function ProfileImagePicker({
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={Math.round(phase.progress * 100)}
-              className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/10"
+              className="mt-1.5 h-1 overflow-hidden rounded-full bg-text-hi/10"
             >
               <div
                 className="h-full origin-left rounded-full transition-transform"

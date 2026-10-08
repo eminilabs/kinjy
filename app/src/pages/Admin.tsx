@@ -9,6 +9,8 @@ import AiWatchSection from '@/components/admin/AiWatchSection'
 import ModerationSection from '@/components/admin/ModerationSection'
 import PlatformQualitySection from '@/components/admin/PlatformQualitySection'
 import { FEATURES } from '@/lib/features'
+import PublicShell from '@/components/landing/PublicShell'
+import { Eyebrow } from '@/components/landing/PageKit'
 
 /**
  * Admin Console — /admin (role-gated demo view).
@@ -18,24 +20,22 @@ import { FEATURES } from '@/lib/features'
  */
 export default function Admin() {
   return (
-    <div className="noise-overlay bg-ink">
+    <PublicShell>
       {/* Console hero */}
-      <header className="px-6 pb-8 pt-14 md:pt-20">
-        <div className="mx-auto max-w-container">
-          <div className="flex flex-wrap items-center gap-3">
-            <p className="eyebrow text-gold">Admin Console</p>
-            <span className="mono-data rounded-full border border-gold/50 bg-gold/15 px-2.5 py-0.5 text-[0.65rem] tracking-[0.18em] text-gold-soft">
-              ADMIN DEMO
-            </span>
-          </div>
-          <h1 className="h1 mt-3 max-w-3xl">
-            Mission control for a <span className="text-gold-grad">global society</span>.
-          </h1>
-          <p className="body-lg mt-4 max-w-2xl text-text-mid">
-            An immutable ledger, a KYC-gated economy, anti-fraud radar and Kinjy Leaders
-            pipeline — run with calm, verifiable precision.
-          </p>
+      <header className="kl-pad-x pb-10 pt-14">
+        <div className="flex flex-wrap items-center gap-3">
+          <Eyebrow>Admin Console</Eyebrow>
+          <span className="kl-mono rounded-full bg-[#F6EBD3] px-3 py-1 text-[11px] tracking-[0.16em] text-[#8A6414]">
+            ADMIN DEMO
+          </span>
         </div>
+        <h1 className="mt-6 max-w-4xl text-balance text-[clamp(40px,6vw,84px)] font-bold leading-[0.98] tracking-[-0.04em]">
+          Mission control for a <span className="text-[var(--kl-gold-deep)]">global society</span>.
+        </h1>
+        <p className="mt-6 max-w-2xl text-[19px] leading-[1.55] text-[var(--kl-mid)]">
+          An immutable ledger, a KYC-gated economy, anti-fraud radar and Kinjy Leaders
+          pipeline — run with calm, verifiable precision.
+        </p>
       </header>
 
       {/* The console frame — scales 0.97 → 1 and fades in on load */}
@@ -43,23 +43,21 @@ export default function Admin() {
         initial={{ opacity: 0, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
-        className="px-4 pb-24 md:px-6"
+        className="kl-pad-x pb-24"
       >
-        <div className="mx-auto max-w-container">
-          <ConsoleFrame>
-            <KpiStrip />
-            <LedgerSection />
-            <KycSection />
-            <FraudSection />
-            <LeadersPoolSection />
-            {/* "Kinjy Assistant · Admin operations": the assistant's own inbox,
-                hidden with it (lib/features.ts). */}
-            {FEATURES.assistant && <AiWatchSection />}
-            <ModerationSection />
-            <PlatformQualitySection />
-          </ConsoleFrame>
-        </div>
+        <ConsoleFrame>
+          <KpiStrip />
+          <LedgerSection />
+          <KycSection />
+          <FraudSection />
+          <LeadersPoolSection />
+          {/* "Kinjy Assistant · Admin operations": the assistant's own inbox,
+              hidden with it (lib/features.ts). */}
+          {FEATURES.assistant && <AiWatchSection />}
+          <ModerationSection />
+          <PlatformQualitySection />
+        </ConsoleFrame>
       </motion.div>
-    </div>
+    </PublicShell>
   )
 }

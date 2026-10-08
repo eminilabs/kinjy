@@ -14,10 +14,10 @@ export const STATUS: Record<string, { label: string; tone: Tone }> = {
 }
 
 export const TONE_CLASS: Record<Tone, string> = {
-  wait: 'border-sky/35 bg-sky/10 text-sky',
-  good: 'border-emerald-400/35 bg-emerald-400/10 text-emerald-200',
-  warn: 'border-amber-400/35 bg-amber-400/10 text-amber-200',
-  muted: 'border-white/12 bg-white/5 text-text-mid',
+  wait: 'bg-sky/15 text-sky',
+  good: 'bg-emerald-400/15 text-emerald-200',
+  warn: 'bg-amber-400/15 text-amber-200',
+  muted: 'bg-text-hi/[0.07] text-text-mid',
 }
 
 export function statusInfo(status: string): { label: string; tone: Tone } {
