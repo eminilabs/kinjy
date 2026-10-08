@@ -4,6 +4,6 @@ import { useAuth } from '@/hooks/useAuth'
 export function useJoinTarget() {
   const { user } = useAuth()
   return user
-    ? { to: '/hub', label: 'Ouvrir Kinjy' }
-    : { to: '/join?mode=signup', label: 'S’inscrire' }
+    ? { to: '/hub', label: 'Open Kinjy' }
+    : { to: '/join?mode=signup', label: 'Sign up' }
 }

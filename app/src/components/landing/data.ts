@@ -252,41 +252,41 @@ export const NAV_MORE = openLinks([
 
 const ALL_FOOTER_COLUMNS: { title: string; links: PageLink[] }[] = [
   {
-    title: 'Plateforme',
+    title: 'Platform',
     links: [
-      { to: '/platform', label: 'Tous les modules' },
-      { to: '/feeds', label: 'Fils et algorithmes' },
-      { to: '/family', label: 'Arbre familial' },
-      { to: '/memorials', label: 'Cimetière numérique' },
-      { to: '/app', label: 'L’application' },
+      { to: '/platform', label: 'All modules' },
+      { to: '/feeds', label: 'Feeds & algorithms' },
+      { to: '/family', label: 'Family tree' },
+      { to: '/memorials', label: 'Digital graveyard' },
+      { to: '/app', label: 'The app' },
     ],
   },
   {
-    title: 'Confiance',
+    title: 'Trust',
     links: [
-      { to: '/safety', label: 'Sécurité et modération' },
-      { to: '/safety', label: 'Confidentialité' },
-      { to: '/safety', label: 'Transparence' },
-      { to: '/safety', label: 'Suppression du compte' },
+      { to: '/safety', label: 'Safety & moderation' },
+      { to: '/safety', label: 'Privacy' },
+      { to: '/safety', label: 'Transparency' },
+      { to: '/safety', label: 'Account deletion' },
     ],
   },
   {
-    title: 'Économie',
+    title: 'Economy',
     links: [
       { to: '/creators', label: 'Creator Studio' },
       { to: '/commerce', label: 'Marketplace' },
-      { to: '/commerce', label: 'Publicité' },
-      { to: '/payments', label: 'Paiements et crypto' },
+      { to: '/commerce', label: 'Advertising' },
+      { to: '/payments', label: 'Payments & crypto' },
       { to: '/creators', label: 'Kinjy Leaders' },
     ],
   },
   {
-    title: 'Développeurs',
+    title: 'Developers',
     links: [
-      { to: '/developers', label: 'Développeurs' },
+      { to: '/developers', label: 'Developers' },
       { to: '/developers', label: 'AI Gateway' },
-      { to: '/feeds', label: 'Marketplace d’algorithmes' },
-      { to: '/assistant', label: 'Assistant Kinjy' },
+      { to: '/feeds', label: 'Algorithm marketplace' },
+      { to: '/assistant', label: 'Kinjy Assistant' },
     ],
   },
 ]
