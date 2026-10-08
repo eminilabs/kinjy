@@ -1,149 +1,291 @@
-import { useState } from 'react'
-import { Package, Plus, Search, ShoppingBag } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router'
+import { ClipboardList, PackageSearch, Plus, Search, SlidersHorizontal, Store } from 'lucide-react'
 import AppShell from '@/components/app/AppShell'
 import { useApi } from '@/hooks/useApi'
-import EscrowOrders from '@/components/commerce/EscrowOrders'
-import { ApiError, kaluta, type Product } from '@/lib/api'
+import { useAuth } from '@/hooks/useAuth'
+import CheckoutSheet from '@/components/commerce/CheckoutSheet'
+import OrderRecent from '@/components/commerce/OrderRecent'
+import FilterSheet, { NO_FILTERS, countFilters, type MarketFilters } from '@/components/commerce/FilterSheet'
+import ProductCard, { ProductCardSkeleton } from '@/components/commerce/ProductCard'
+import { kaluta, type Product } from '@/lib/api'
+import { cn } from '@/lib/utils'
+
+const TABS = [
+  { id: '', label: 'All' },
+  { id: 'product', label: 'Products' },
+  { id: 'service', label: 'Services' },
+  { id: 'digital', label: 'Digital' },
+] as const
+
+const SORTS = [
+  { id: 'recent', label: 'Newest' },
+  { id: 'price_asc', label: 'Price: low to high' },
+  { id: 'price_desc', label: 'Price: high to low' },
+] as const
+
+const PAGE = 24
 
 export default function Marketplace() {
+  const { user } = useAuth()
   const [query, setQuery] = useState('')
   const [search, setSearch] = useState('')
-  const products = useApi(() => kaluta.market.products({ q: search || undefined }), [search])
+  const [kind, setKind] = useState<string>('')
+  const [sort, setSort] = useState<(typeof SORTS)[number]['id']>('recent')
+  const [filters, setFilters] = useState<MarketFilters>(NO_FILTERS)
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  // Only my own listings. The page stays public: signed out, the pill is simply absent.
+  const [mine, setMine] = useState(false)
+  // Pages are appended: the next one starts where the loaded ones end.
+  const [offset, setOffset] = useState(0)
+  const [loaded, setLoaded] = useState<Product[]>([])
+  const [ordering, setOrdering] = useState<Product | null>(null)
   // Bumped after a purchase so the escrow list refetches; it owns its own data.
   const [orderTick, setOrderTick] = useState(0)
 
-  const [title, setTitle] = useState('')
-  const [price, setPrice] = useState('')
-  const [note, setNote] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const products = useApi(
+    () =>
+      kaluta.market.products({
+        q: search || undefined,
+        kind: kind || undefined,
+        sort,
+        country: filters.country || undefined,
+        city: filters.city || undefined,
+        min_price: filters.min_price || undefined,
+        max_price: filters.max_price || undefined,
+        mine: mine || undefined,
+        limit: PAGE,
+        offset,
+      }),
+    [search, kind, sort, filters, mine, offset],
+  )
 
-  const list = async (event: React.FormEvent) => {
-    event.preventDefault()
-    if (!title.trim() || !price) return
-    setError(null)
-    try {
-      const created = await kaluta.market.createProduct({ title: title.trim(), vendor_price: price })
-      setNote(
-        `Listed. You asked ${created.pricing.vendor_price}; the customer pays ${created.pricing.customer_price} — the ${created.pricing.margin} markup is Kinjy's, and the buyer's sponsor is paid out of it.`,
-      )
-      setTitle('')
-      setPrice('')
-      products.reload()
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not list the product')
-    }
+  useEffect(() => {
+    const page = products.data
+    if (!page) return
+    setLoaded((previous) =>
+      offset === 0
+        ? page.items
+        : [...previous, ...page.items.filter((item) => !previous.some((known) => known.id === item.id))],
+    )
+  }, [products.data, offset])
+
+  const items = loaded
+  const total = products.data?.total ?? 0
+  const activeFilters = countFilters(filters)
+  const dirty = activeFilters > 0 || search !== '' || kind !== '' || mine
+  const firstLoad = products.loading && !products.data
+
+  const reset = () => {
+    setFilters(NO_FILTERS)
+    setQuery('')
+    setSearch('')
+    setKind('')
+    setMine(false)
+    setOffset(0)
   }
-
-  const buy = async (product: Product) => {
-    setError(null)
-    try {
-      const order = await kaluta.market.order(product.id)
-      setNote(
-        `Order ${order.id.slice(0, 12)} created at ${order.customer_price} — the custodian holds it until you confirm receipt.`,
-      )
-      setOrderTick((n) => n + 1)
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not order')
-    }
-  }
-
-  const field =
-    'w-full rounded-full border border-white/10 bg-ink-2/60 px-4 py-2.5 text-sm text-text-hi placeholder:text-text-low focus:border-gold/40 focus:outline-none'
 
   return (
     <AppShell
       title="Marketplace"
+      action={
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Link
+            to="/market/orders"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-white/12 px-4 text-sm font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
+          >
+            <ClipboardList size={14} aria-hidden="true" />
+            My orders
+          </Link>
+          <Link
+            to="/market/seller"
+            className="inline-flex min-h-[44px] items-center rounded-full border border-white/12 px-4 text-sm font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
+          >
+            My shop
+          </Link>
+          <Link
+            to="/market/sell"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 text-sm font-bold text-ink"
+          >
+            <Plus size={14} aria-hidden="true" />
+            Sell
+          </Link>
+        </div>
+      }
       subtitle="Sellers set their price; Kinjy adds a 20% markup on top. Buyer money is held by a licensed custodian until the buyer confirms receipt."
     >
       <form
         onSubmit={(e) => {
           e.preventDefault()
           setSearch(query.trim())
+          setOffset(0)
         }}
       >
-        <label className="flex items-center gap-2.5 rounded-full border border-white/10 bg-ink-2/60 px-4 py-2.5">
+        <label className="flex min-h-[44px] items-center gap-2.5 rounded-full border border-white/10 bg-ink-2/60 px-4">
           <Search size={15} className="shrink-0 text-text-low" aria-hidden="true" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search the marketplace…"
+            placeholder="Search the marketplace..."
             aria-label="Search products"
-            className="w-full bg-transparent text-sm text-text-hi placeholder:text-text-low focus:outline-none"
+            className="w-full bg-transparent text-base text-text-hi placeholder:text-text-low focus:outline-none sm:text-sm"
           />
         </label>
       </form>
 
-      <form onSubmit={list} className="cloud-card mt-4 flex flex-wrap gap-2 p-5">
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Sell something — Kanga cloth"
-          aria-label="Product title"
-          className={`${field} flex-1`}
-        />
-        <input
-          value={price}
-          onChange={(e) => setPrice(e.target.value.replace(/[^\d.]/g, ''))}
-          placeholder="Your price (USD)"
-          aria-label="Vendor price"
-          inputMode="decimal"
-          className={`${field} w-44`}
-        />
-        <button
-          type="submit"
-          disabled={!title.trim() || !price}
-          className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-2.5 text-sm font-bold text-ink disabled:opacity-40"
-        >
-          <Plus size={14} aria-hidden="true" />
-          List
-        </button>
-      </form>
+      <div
+        role="tablist"
+        aria-label="Listing type"
+        className="-mx-4 mt-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={kind === tab.id}
+            onClick={() => {
+              setKind(tab.id)
+              setOffset(0)
+            }}
+            className={cn(
+              'min-h-[44px] shrink-0 rounded-full border px-5 text-sm font-semibold',
+              kind === tab.id
+                ? 'border-gold/60 bg-gold/[0.12] text-gold-soft'
+                : 'border-white/12 text-text-mid hover:border-gold/40',
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+        {user && (
+          <button
+            type="button"
+            aria-pressed={mine}
+            onClick={() => {
+              setMine((on) => !on)
+              setOffset(0)
+            }}
+            className={cn(
+              'inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border px-5 text-sm font-semibold',
+              mine
+                ? 'border-gold/60 bg-gold/[0.12] text-gold-soft'
+                : 'border-white/12 text-text-mid hover:border-gold/40',
+            )}
+          >
+            <Store size={14} aria-hidden="true" />
+            My listings
+          </button>
+        )}
+      </div>
 
-      {note && <p className="mt-4 text-sm text-gold-soft">{note}</p>}
-      {error && (
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setFiltersOpen(true)}
+          className="relative inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-white/12 px-4 text-sm font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
+        >
+          <SlidersHorizontal size={14} aria-hidden="true" />
+          Filters
+          {activeFilters > 0 && (
+            <span
+              aria-label={`${activeFilters} active`}
+              className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-gold px-1 text-[11px] font-bold text-ink"
+            >
+              {activeFilters}
+            </span>
+          )}
+        </button>
+        <label className="ms-auto">
+          <span className="sr-only">Sort by</span>
+          <select
+            value={sort}
+            onChange={(e) => {
+              setSort(e.target.value as typeof sort)
+              setOffset(0)
+            }}
+            className="min-h-[44px] rounded-full border border-white/12 bg-ink-2/60 px-4 text-base text-text-hi focus:border-gold/40 focus:outline-none sm:text-sm"
+          >
+            {SORTS.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {products.error && (
         <p role="alert" className="mt-4 text-sm text-red-200">
-          {error}
+          {products.error}
         </p>
       )}
 
-      <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {products.loading && <p className="text-sm text-text-low">Loading…</p>}
-        {products.data?.items.length === 0 && (
-          <p className="text-sm text-text-low">Nothing listed yet.</p>
-        )}
-        {(products.data?.items ?? []).map((product) => (
-          <article key={product.id} className="cloud-card flex flex-col p-5">
-            <span
-              aria-hidden="true"
-              className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-indigo/25 text-sky"
-            >
-              <Package size={17} />
-            </span>
-            <h2 className="text-sm font-semibold text-text-hi">{product.title}</h2>
-            {product.description && (
-              <p className="mt-1.5 line-clamp-2 text-sm text-text-mid">{product.description}</p>
-            )}
-            <p className="mono-data mt-3 text-lg text-gold-soft">
-              ${product.customer_price}
-              <span className="caption ms-1.5">customer price</span>
-            </p>
-            <button
-              type="button"
-              onClick={() => buy(product)}
-              className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-full border border-white/12 px-4 py-2 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
-            >
-              <ShoppingBag size={13} aria-hidden="true" />
-              Order — held in escrow
-            </button>
-          </article>
+      <div className="mt-4 grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 xl:grid-cols-3">
+        {firstLoad && Array.from({ length: 6 }, (_, i) => <ProductCardSkeleton key={i} />)}
+        {items.map((product) => (
+          <ProductCard
+            key={product.id}
+            product={product}
+            onOrder={setOrdering}
+            mine={user != null && product.vendor_id === user.id}
+          />
         ))}
       </div>
 
-      <section className="mt-8">
-        <h2 className="mb-3 text-sm font-semibold text-text-hi">Your orders</h2>
-        <EscrowOrders key={orderTick} />
+      {!products.loading && !products.error && items.length === 0 && (
+        <div className="cloud-card mt-4 flex flex-col items-center p-8 text-center">
+          <PackageSearch size={30} className="text-text-low" aria-hidden="true" />
+          <p className="mt-3 text-sm text-text-mid">
+            {dirty ? 'Nothing matches these filters.' : 'Nothing listed yet.'}
+          </p>
+          {dirty && (
+            <button
+              type="button"
+              onClick={reset}
+              className="mt-4 min-h-[44px] rounded-full border border-white/12 px-5 text-sm font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+      )}
+
+      {items.length > 0 && items.length < total && (
+        <div className="mt-5 flex justify-center">
+          <button
+            type="button"
+            disabled={products.loading}
+            onClick={() => setOffset(items.length)}
+            className="min-h-[44px] rounded-full border border-white/12 px-6 text-sm font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft disabled:opacity-50"
+          >
+            {products.loading ? 'Loading...' : `Load more (${items.length} of ${total})`}
+          </button>
+        </div>
+      )}
+
+      <section id="orders" className="mt-8 scroll-mt-24">
+        <h2 className="mb-3 text-sm font-semibold text-text-hi">Your recent orders</h2>
+        <OrderRecent key={orderTick} />
       </section>
 
+      {filtersOpen && (
+        <FilterSheet
+          value={filters}
+          onApply={(next) => {
+            setFilters(next)
+            setOffset(0)
+          }}
+          onClose={() => setFiltersOpen(false)}
+        />
+      )}
+      {ordering && (
+        <CheckoutSheet
+          product={ordering}
+          onClose={() => setOrdering(null)}
+          onOrdered={() => setOrderTick((n) => n + 1)}
+        />
+      )}
     </AppShell>
   )
 }
