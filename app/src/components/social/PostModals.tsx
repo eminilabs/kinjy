@@ -19,10 +19,10 @@ function plain(text: string): string {
 }
 
 /** Who wrote it and the first lines of it, so a dialog never loses the post it is about. */
-function PostPreview({ post }: { post: Post }) {
+function PostPreview({ post, framed = true }: { post: Post; framed?: boolean }) {
   const snippet = plain(post.body)
   return (
-    <div className="flex items-start gap-3 rounded-2xl bg-text-hi/[0.05] p-4">
+    <div className={cn('flex items-start gap-3', framed && 'rounded-2xl bg-text-hi/[0.05] p-4')}>
       <MemberAvatar
         handle={post.author?.handle}
         displayName={post.author?.display_name}
@@ -367,7 +367,7 @@ function CommentsBody({
           the sheet is for the thread. */}
       {!mobile && (
         <div className={cn(PAD, 'shrink-0 pb-4')}>
-          <PostPreview post={post} />
+          <PostPreview post={post} framed={false} />
         </div>
       )}
       <Comments postId={post.id} currentUserId={currentUserId} onCountChange={onCountChange} variant="sheet" />

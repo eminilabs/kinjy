@@ -30,7 +30,7 @@ export default function PostDialog({
     <ResponsiveDialog open onOpenChange={(open) => !open && onClose()} layout="scroll" width="2xl">
       <DialogHeading className="sr-only">Post and comments</DialogHeading>
       <DialogSubheading className="sr-only">A post, with its comments underneath.</DialogSubheading>
-      <div className="p-3 sm:p-4">
+      <div>
         <PostCard
           post={post}
           algorithmId="chronological"
@@ -45,6 +45,7 @@ export default function PostDialog({
           // Inside the dialog the comments are the point, so they are already
           // open and the card does not offer a second way to toggle them.
           commentsAlwaysOpen
+          bare
         />
       </div>
     </ResponsiveDialog>

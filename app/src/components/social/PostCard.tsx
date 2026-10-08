@@ -211,6 +211,7 @@ export default function PostCard({
   commentsAlwaysOpen = false,
   onOpen,
   hideCommunity = false,
+  bare = false,
 }: {
   post: Post
   algorithmId: string
@@ -229,6 +230,8 @@ export default function PostCard({
   onOpen?: () => void
   /** Inside the community's own page the group is already the heading. */
   hideCommunity?: boolean
+  /** Inside a dialog the window is the frame; a card in a card is two frames. */
+  bare?: boolean
 }) {
   const { i18n } = useTranslation()
   // On a phone the comments are always the sheet; the feed's "open the whole
@@ -409,7 +412,7 @@ export default function PostCard({
   const bodyLink = firstLink(plainBody)
 
   return (
-    <article className="cloud-card p-5" data-post-id={post.id}>
+    <article className={bare ? 'p-5' : 'cloud-card p-5'} data-post-id={post.id}>
       {shared && (
         <p className="caption mb-2.5 flex items-center gap-1.5 border-b border-white/8 pb-2.5">
           <Repeat2 size={13} aria-hidden="true" className="text-success" />
