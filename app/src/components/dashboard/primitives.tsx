@@ -166,3 +166,126 @@ export function Badge({
 
 export const inputClass =
   'w-full rounded-[14px] border border-transparent bg-text-hi/[0.07] px-4 py-3 text-[0.95rem] text-text-hi placeholder:text-text-low focus:border-gold/60 focus:bg-transparent focus:outline-none focus:ring-2 focus:ring-gold/20'
+
+const ROW_TONES = {
+  gold: 'bg-gold/20 text-gold-soft',
+  sky: 'bg-sky/20 text-sky',
+  coral: 'bg-coral/20 text-coral',
+  emerald: 'bg-emerald-400/20 text-emerald-300',
+}
+
+/**
+ * One setting: an icon tile, what it is, what it does — and the control, either
+ * beside the text (a switch) or underneath it (a choice between a few options).
+ */
+export function SettingRow({
+  icon: Icon,
+  tone = 'gold',
+  title,
+  hint,
+  saving = false,
+  control,
+  children,
+}: {
+  icon: LucideIcon
+  tone?: keyof typeof ROW_TONES
+  title: ReactNode
+  hint?: ReactNode
+  saving?: boolean
+  /** Sits to the right of the text. */
+  control?: ReactNode
+  /** Sits under the text, full width. */
+  children?: ReactNode
+}) {
+  return (
+    <li className="flex gap-4 border-b border-[var(--cloud-border)] py-5 first:pt-0 last:border-b-0 last:pb-0">
+      <span aria-hidden="true" className={cn('grid h-10 w-10 shrink-0 place-items-center rounded-xl', ROW_TONES[tone])}>
+        <Icon size={18} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[0.98rem] font-semibold text-text-hi">
+              {title}
+              {saving && <span className="ms-2 text-xs font-normal text-text-low">saving…</span>}
+            </p>
+            {hint && <p className="mt-1 text-sm leading-relaxed text-text-low">{hint}</p>}
+          </div>
+          {control}
+        </div>
+        {children && <div className="mt-3">{children}</div>}
+      </div>
+    </li>
+  )
+}
+
+/** An on/off switch. A checkbox in a costume would not announce itself as one. */
+export function Switch({
+  checked,
+  onChange,
+  disabled,
+  label,
+}: {
+  checked: boolean
+  onChange: (next: boolean) => void
+  disabled?: boolean
+  label: string
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        'relative mt-0.5 h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-50',
+        checked ? 'bg-gradient-to-br from-gold-soft to-gold' : 'bg-text-hi/20',
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          'absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all',
+          checked ? 'start-6' : 'start-1',
+        )}
+      />
+    </button>
+  )
+}
+
+/** A few options in one pill: the chosen one is gold. */
+export function Segmented<T extends string>({
+  value,
+  options,
+  onChange,
+  disabled,
+}: {
+  value: T
+  options: ReadonlyArray<{ id: T; label: string }>
+  onChange: (next: T) => void
+  disabled?: boolean
+}) {
+  return (
+    <div className="inline-flex max-w-full flex-wrap gap-1 rounded-[22px] bg-text-hi/[0.06] p-1">
+      {options.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          disabled={disabled}
+          aria-pressed={value === option.id}
+          onClick={() => onChange(option.id)}
+          className={cn(
+            'rounded-full px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-60',
+            value === option.id
+              ? 'bg-gradient-to-br from-gold-soft to-gold text-ink shadow-[0_6px_14px_-8px_rgba(169,118,28,.6)]'
+              : 'text-text-mid hover:text-text-hi',
+          )}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )
+}

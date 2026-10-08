@@ -6,8 +6,7 @@ import { useApi } from '@/hooks/useApi'
 import { ApiError, kaluta } from '@/lib/api'
 import { FEATURES, type Feature } from '@/lib/features'
 import { announce, onChange } from '@/lib/live'
-import { Badge, Panel, PanelState } from './primitives'
-import { cn } from '@/lib/utils'
+import { Badge, Panel, PanelState, Segmented, SettingRow, Switch } from './primitives'
 
 const CHOICES = [
   { id: 'everyone', label: 'Anyone' },
@@ -108,112 +107,79 @@ export default function Privacy() {
   const accepted = connections.data?.accepted.length ?? 0
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:items-start">
       <Panel
         title="Who can reach you"
         subtitle="Following is always open. Everything below is your call."
       >
         <PanelState loading={prefs.loading} error={prefs.error}>
-          <ul className="space-y-4">
-            {CONTROLS.map((control) => {
+          <ul>
+            {CONTROLS.map((control, i) => {
               const value = String(prefs.data?.[control.key] ?? control.fallback ?? 'connections')
               const choices = control.choices ?? CHOICES
               return (
-                <li key={control.key}>
-                  <p className="flex items-center gap-2 text-sm font-medium text-text-hi">
-                    <control.icon size={14} className="shrink-0 text-gold" aria-hidden="true" />
-                    {control.title}
-                    {saving === control.key && <span className="caption">saving…</span>}
-                  </p>
-                  <p className="caption mt-0.5 ps-6">{control.hint}</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5 ps-6">
-                    {choices.map((choice) => (
-                      <button
-                        key={choice.id}
-                        type="button"
-                        onClick={() => set(control.key, choice.id)}
-                        aria-pressed={value === choice.id}
-                        className={cn(
-                          'rounded-full border px-3 py-1 text-xs font-semibold',
-                          value === choice.id
-                            ? 'border-gold/50 bg-gold/10 text-gold-soft'
-                            : 'border-[var(--cloud-border)] text-text-mid hover:text-text-hi',
-                        )}
-                      >
-                        {choice.label}
-                      </button>
-                    ))}
-                  </div>
-                </li>
+                <SettingRow
+                  key={control.key}
+                  icon={control.icon}
+                  tone={(['gold', 'sky', 'coral', 'emerald'] as const)[i % 4]}
+                  title={control.title}
+                  hint={control.hint}
+                  saving={saving === control.key}
+                >
+                  <Segmented
+                    value={value}
+                    options={choices}
+                    disabled={saving === control.key}
+                    onChange={(next) => set(control.key, next)}
+                  />
+                </SettingRow>
               )
             })}
 
             {FEATURES.assistant && (
-              <li className="border-t border-[var(--cloud-border)] pt-4">
-                <label className="flex items-start gap-2.5">
-                  <input
-                    type="checkbox"
+              <SettingRow
+                icon={Sparkles}
+                tone="coral"
+                title="Show the Kinjy Assistant"
+                hint="The floating orb. Turning it off hides it everywhere — it is always-on-top UI, so dismissing it should be a real setting, not a close button that comes back."
+                control={
+                  <Switch
+                    label="Show the Kinjy Assistant"
                     checked={Boolean(prefs.data?.assistant_visible ?? true)}
-                    onChange={(e) => set('assistant_visible', e.target.checked)}
-                    className="mt-0.5"
+                    onChange={(next) => set('assistant_visible', next)}
                   />
-                  <span>
-                    <span className="flex items-center gap-2 text-sm font-medium text-text-hi">
-                      <Sparkles size={14} className="text-gold" aria-hidden="true" />
-                      Show the Kinjy Assistant
-                    </span>
-                    <span className="caption mt-0.5 block">
-                      The floating orb. Turning it off hides it everywhere — it is always-on-top UI,
-                      so dismissing it should be a real setting, not a close button that comes back.
-                    </span>
-                  </span>
-                </label>
-              </li>
+                }
+              />
             )}
 
-            <li className="border-t border-[var(--cloud-border)] pt-4">
-              <label className="flex items-start gap-2.5">
-                <input
-                  type="checkbox"
+            <SettingRow
+              icon={Eye}
+              tone="sky"
+              title="Suggest me to other members"
+              hint="Turning this off keeps you out of the “People to follow” rail. It does not hide your posts — visibility per post is set when you publish."
+              control={
+                <Switch
+                  label="Suggest me to other members"
                   checked={Boolean(prefs.data?.discoverable ?? true)}
-                  onChange={(e) => set('discoverable', e.target.checked)}
-                  className="mt-0.5"
+                  onChange={(next) => set('discoverable', next)}
                 />
-                <span>
-                  <span className="flex items-center gap-2 text-sm font-medium text-text-hi">
-                    <Eye size={14} className="text-gold" aria-hidden="true" />
-                    Suggest me to other members
-                  </span>
-                  <span className="caption mt-0.5 block">
-                    Turning this off keeps you out of the “People to follow” rail. It does not hide
-                    your posts — visibility per post is set when you publish.
-                  </span>
-                </span>
-              </label>
-            </li>
+              }
+            />
 
             {FEATURES.familyTree && (
-              <li className="border-t border-[var(--cloud-border)] pt-4">
-                <label className="flex items-start gap-2.5">
-                  <input
-                    type="checkbox"
+              <SettingRow
+                icon={TreeDeciduous}
+                tone="emerald"
+                title="Share your family tree at all"
+                hint="Turning this off closes the tree to everyone regardless of the audience above, without losing the choice you made there. You always keep full access to the people you added yourself."
+                control={
+                  <Switch
+                    label="Share your family tree at all"
                     checked={Boolean(prefs.data?.family_tree_shared ?? true)}
-                    onChange={(e) => set('family_tree_shared', e.target.checked)}
-                    className="mt-0.5"
+                    onChange={(next) => set('family_tree_shared', next)}
                   />
-                  <span>
-                    <span className="flex items-center gap-2 text-sm font-medium text-text-hi">
-                      <TreeDeciduous size={14} className="text-gold" aria-hidden="true" />
-                      Share your family tree at all
-                    </span>
-                    <span className="caption mt-0.5 block">
-                      Turning this off closes the tree to everyone regardless of the audience above,
-                      without losing the choice you made there. You always keep full access to the
-                      people you added yourself.
-                    </span>
-                  </span>
-                </label>
-              </li>
+                }
+              />
             )}
           </ul>
         </PanelState>
@@ -225,23 +191,27 @@ export default function Privacy() {
         action={incoming > 0 ? <Badge tone="warn">{incoming} waiting</Badge> : undefined}
       >
         <PanelState loading={connections.loading} error={connections.error}>
-          <p className="text-sm text-text-mid">
-            <span className="mono-data text-gold-soft">{incoming}</span>{' '}
-            {incoming === 1 ? 'invitation' : 'invitations'} waiting ·{' '}
-            <span className="mono-data text-gold-soft">{accepted}</span>{' '}
-            {accepted === 1 ? 'connection' : 'connections'}
-          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-2xl bg-text-hi/[0.05] p-4">
+              <p className="mono-data text-[2rem] font-bold leading-none text-gold-soft">{incoming}</p>
+              <p className="mt-2 text-sm text-text-low">{incoming === 1 ? 'invitation' : 'invitations'} waiting</p>
+            </div>
+            <div className="rounded-2xl bg-text-hi/[0.05] p-4">
+              <p className="mono-data text-[2rem] font-bold leading-none text-text-hi">{accepted}</p>
+              <p className="mt-2 text-sm text-text-low">{accepted === 1 ? 'connection' : 'connections'}</p>
+            </div>
+          </div>
           <Link
             to={incoming > 0 ? '/connections?tab=incoming' : '/connections'}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-gold/40 px-3.5 py-1.5 text-xs font-semibold text-gold-soft hover:bg-gold/10"
+            className="mt-5 inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-gold-soft to-gold px-6 py-3 text-sm font-bold text-ink"
           >
             Manage your connections
-            <ArrowRight size={13} aria-hidden="true" />
+            <ArrowRight size={15} aria-hidden="true" />
           </Link>
         </PanelState>
       </Panel>
 
-      {note && <p className="text-sm text-gold-soft lg:col-span-2">{note}</p>}
+      {note && <p className="rounded-2xl bg-gold/10 px-5 py-3 text-sm text-text-hi lg:col-span-2">{note}</p>}
     </div>
   )
 }
