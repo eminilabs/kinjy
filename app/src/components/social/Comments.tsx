@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CornerDownRight, Loader2, Send } from 'lucide-react'
+import { ChevronDown, ChevronUp, CornerDownRight, Loader2, Send } from 'lucide-react'
 import { useAppTheme } from '@/components/appdemo/theme'
 import { ApiError, kaluta, type CommentNode } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -69,6 +69,14 @@ export default function Comments({
   const [body, setBody] = useState('')
   const [replyTo, setReplyTo] = useState<CommentNode | null>(null)
   const [sending, setSending] = useState(false)
+  // Replies stay folded behind a preview until somebody asks for them.
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
+  const toggleReplies = (id: string) =>
+    setExpanded((current) => {
+      const next = new Set(current)
+      if (!next.delete(id)) next.add(id)
+      return next
+    })
   const inputRef = useRef<HTMLInputElement>(null)
 
   const load = async () => {
@@ -123,6 +131,12 @@ export default function Comments({
     setError(null)
     try {
       await kaluta.posts.comment(postId, text, replyTo?.id)
+      if (replyTo) {
+        // Show the member their own reply: open the comment they answered and
+        // the one it hangs under.
+        const opened = [replyTo.id, replyTo.parent_id].filter((id): id is string => Boolean(id))
+        setExpanded((current) => new Set([...current, ...opened]))
+      }
       setBody('')
       setReplyTo(null)
       onCountChange(1)
@@ -182,13 +196,55 @@ export default function Comments({
             </button>
           </div>
 
-          {node.children.length > 0 && (
-            <ul className={cn('mt-2.5 space-y-2.5 border-s ps-3', tok.divider, 'border-s-current/10')}>
-              {node.children.map((child) => (
-                <Row key={child.id} node={child} />
-              ))}
-            </ul>
-          )}
+          {node.children.length > 0 &&
+            (expanded.has(node.id) ? (
+              <>
+                <ul className={cn('mt-2.5 space-y-2.5 border-s ps-3', tok.divider, 'border-s-current/10')}>
+                  {node.children.map((child) => (
+                    <Row key={child.id} node={child} />
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => toggleReplies(node.id)}
+                  className={cn('mt-2 inline-flex items-center gap-1 ps-1 text-xs font-semibold hover:text-gold-soft', tok.low)}
+                >
+                  <ChevronUp size={13} aria-hidden="true" />
+                  Hide replies
+                </button>
+              </>
+            ) : (
+              <div className="mt-2">
+                {/* Just a taste of the conversation: who answered, and how it starts. */}
+                <button
+                  type="button"
+                  onClick={() => toggleReplies(node.id)}
+                  aria-label={`Show ${node.children.length === 1 ? 'the reply' : `all ${node.children.length} replies`}`}
+                  className={cn('flex w-full min-w-0 items-center gap-2 rounded-full px-2 py-1.5 text-start transition-colors hover:bg-text-hi/[0.06]', tok.subtleBg)}
+                >
+                  <MemberAvatar
+                    handle={node.children[0].author?.handle}
+                    displayName={node.children[0].author?.display_name}
+                    avatarUrl={node.children[0].author?.avatar_url}
+                    size={20}
+                  />
+                  <span className={cn('min-w-0 flex-1 truncate text-xs', tok.mid)}>
+                    <span className={cn('font-semibold', tok.text)}>
+                      {node.children[0].author_id === currentUserId ? 'You' : node.children[0].author?.display_name ?? 'Someone'}
+                    </span>{' '}
+                    {node.children[0].body}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleReplies(node.id)}
+                  className={cn('mt-1.5 inline-flex items-center gap-1 ps-1 text-xs font-semibold hover:text-gold-soft', tok.low)}
+                >
+                  <ChevronDown size={13} aria-hidden="true" />
+                  {node.children.length === 1 ? 'View reply' : `View all ${node.children.length} replies`}
+                </button>
+              </div>
+            ))}
         </div>
       </div>
     </li>
