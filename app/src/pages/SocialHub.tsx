@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Navigate, Link, useSearchParams } from 'react-router'
-import { Loader2, PenLine, RefreshCw, Sparkles, TrendingUp } from 'lucide-react'
+import { ArrowUp, Loader2, PenLine, Sparkles, TrendingUp } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import AppShell, { RailCard } from '@/components/app/AppShell'
 import { useViewTracking } from '@/hooks/useViewTracking'
@@ -9,6 +9,7 @@ import FeedModeMenu from '@/components/social/FeedModeMenu'
 import Suggestions from '@/components/social/Suggestions'
 import PostCard from '@/components/social/PostCard'
 import PostDialog from '@/components/social/PostDialog'
+import MemberAvatar from '@/components/social/MemberAvatar'
 import { ApiError, kaluta, type Algorithm, type FeedMode, type FeedPage, type Post } from '@/lib/api'
 import { FEATURES } from '@/lib/features'
 import { slotAboveOrb } from '@/lib/floating'
@@ -145,14 +146,10 @@ export default function SocialHub() {
   // feed comes back empty, falls back again, and the button does nothing.
   const insistedOn = useRef<string | null>(null)
   // New posts are announced, not injected. Splicing a stranger's post into the
-  // list while somebody is reading moves the text under their eyes; a banner
-  // lets them choose the moment.
-  const [pending, setPending] = useState(0)
-  useTopic('feed', (event) => {
-    if (event.type !== 'post') return
-    if (event.author_id === user?.id) return
-    setPending((n) => n + 1)
-  })
+  // list while somebody is reading moves the text under their eyes; a pill
+  // lets them choose the moment, as on Facebook. The posts are fetched ahead
+  // and held here, so choosing the moment shows them at once.
+  const [incoming, setIncoming] = useState<Post[]>([])
 
   // Past the first screenful the composer card has served its purpose, so it
   // gives the width back to the posts and becomes a floating button instead.
@@ -188,6 +185,7 @@ export default function SocialHub() {
     inFlight.current = controller
     setLoading(true)
     setError(null)
+    setIncoming([])
     try {
       const page = await kaluta.feeds.page(
         {
@@ -233,6 +231,75 @@ export default function SocialHub() {
     if (user && defaultsReady) void load()
   }, [user, defaultsReady, load])
   useEffect(() => () => inFlight.current?.abort(), [])
+
+  /**
+   * Look for posts newer than the newest one on screen, quietly.
+   *
+   * Asked of the server for this very feed (same mode, algorithm and filters)
+   * rather than counted from "somebody posted" events: Following does not want
+   * to hear about a stranger's post, and a ranked feed may re-score old posts
+   * into its first page, which are not new. Only a post that is both absent
+   * and newer than everything shown counts. Your own posts are skipped; the
+   * composer already put them at the top.
+   */
+  const checkForNew = useCallback(async () => {
+    if (!feed || loading || !user) return
+    try {
+      const page = await kaluta.feeds.page({
+        mode,
+        algorithm_id: algorithmId,
+        city: mode === 'local' ? city || undefined : undefined,
+        country: mode === 'country' ? country || undefined : undefined,
+        topic: mode === 'topics' ? topic || undefined : undefined,
+      })
+      // A feed that was thinned while the age lookup was down heals itself.
+      if (feed.degraded && !page.degraded) {
+        setFeed(page)
+        setIncoming([])
+        return
+      }
+      const seen = new Set(feed.items.map((item) => item.id))
+      const newest = feed.items.reduce((latest, item) => Math.max(latest, Date.parse(item.created_at)), 0)
+      const fresh = page.items
+        .filter((item) => !seen.has(item.id) && item.author_id !== user.id && Date.parse(item.created_at) > newest)
+        .sort((x, y) => Date.parse(y.created_at) - Date.parse(x.created_at))
+      setIncoming((previous) =>
+        previous.length === fresh.length && previous.every((post, index) => post.id === fresh[index].id)
+          ? previous
+          : fresh,
+      )
+    } catch {
+      /* Nothing to say: the next check tries again. */
+    }
+  }, [feed, loading, user, mode, algorithmId, city, country, topic])
+
+  const checkRef = useRef(checkForNew)
+  useEffect(() => {
+    checkRef.current = checkForNew
+  })
+
+  // Somebody posted: look, a moment later, so a burst of posts is one request.
+  const checkTimer = useRef<number | undefined>(undefined)
+  useTopic('feed', (event) => {
+    if (event.type !== 'post' || event.author_id === user?.id) return
+    window.clearTimeout(checkTimer.current)
+    checkTimer.current = window.setTimeout(() => void checkRef.current(), 1200)
+  })
+  useEffect(() => () => window.clearTimeout(checkTimer.current), [])
+
+  // And without a live connection: when the tab comes back, and every so often
+  // while it is open and in front.
+  useEffect(() => {
+    const check = () => {
+      if (document.visibilityState === 'visible') void checkRef.current()
+    }
+    const every = window.setInterval(check, 45000)
+    document.addEventListener('visibilitychange', check)
+    return () => {
+      window.clearInterval(every)
+      document.removeEventListener('visibilitychange', check)
+    }
+  }, [])
 
   if (authLoading) {
     return (
@@ -310,6 +377,40 @@ export default function SocialHub() {
   )
 
   useEffect(() => () => observer.current?.disconnect(), [])
+
+  const showIncoming = () => {
+    setFeed((current) => {
+      if (!current) return current
+      const shown = new Set(current.items.map((item) => item.id))
+      return { ...current, items: [...incoming.filter((post) => !shown.has(post.id)), ...current.items] }
+    })
+    setIncoming([])
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  /** "3 new posts", with the faces of the people who wrote them. */
+  const newPosts = incoming.length > 0 && (
+    <button
+      type="button"
+      onClick={showIncoming}
+      className="inline-flex items-center gap-2.5 rounded-full bg-gradient-to-br from-gold-soft to-gold py-2 pe-4 ps-2 text-sm font-bold text-ink shadow-[0_14px_30px_-12px_rgba(169,118,28,.65)] transition-transform hover:-translate-y-0.5"
+    >
+      <span className="flex -space-x-2" aria-hidden="true">
+        {[...new Map(incoming.map((post) => [post.author_id, post.author])).values()].slice(0, 3).map((author, index) => (
+          <MemberAvatar
+            key={author?.handle ?? index}
+            handle={author?.handle}
+            displayName={author?.display_name}
+            avatarUrl={author?.avatar_url}
+            size={24}
+            className="ring-2 ring-[#F0C878]"
+          />
+        ))}
+      </span>
+      <ArrowUp size={14} aria-hidden="true" />
+      {incoming.length === 1 ? '1 new post' : `${incoming.length} new posts`}
+    </button>
+  )
 
   const prepend = (post: Post) => setFeed((f) => (f ? { ...f, items: [post, ...f.items] } : f))
   const drop = (postId: string) =>
@@ -444,14 +545,7 @@ export default function SocialHub() {
                 </p>
               )}
             </div>
-            <button
-              type="button"
-              onClick={() => void load()}
-              aria-label="Refresh the feed"
-              className="mb-1 grid h-9 w-9 shrink-0 place-items-center rounded-full text-text-mid transition-colors hover:bg-text-hi/5"
-            >
-              <RefreshCw size={17} className={cn(loading && 'animate-spin')} aria-hidden="true" />
-            </button>
+            {!scrolled && <div className="mb-1 shrink-0">{newPosts}</div>}
           </header>
 
           <div className="mb-4">
@@ -493,19 +587,11 @@ export default function SocialHub() {
 
           <Composer onPosted={prepend} collapsed={scrolled} openSignal={openComposer} />
 
-          {pending > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                setPending(0)
-                void load()
-                window.scrollTo({ top: 0, behavior: 'auto' })
-              }}
-              className="mx-auto mt-4 flex items-center gap-2 rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-2 text-sm font-bold text-ink shadow-cloud hover:brightness-110"
-            >
-              <Sparkles size={14} aria-hidden="true" />
-              {pending === 1 ? '1 new post' : `${pending} new posts`}
-            </button>
+          {/* Once the header has scrolled away, the pill follows the reader. */}
+          {scrolled && incoming.length > 0 && (
+            <div className="pointer-events-none fixed inset-x-0 top-[150px] z-30 flex justify-center">
+              <div className="pointer-events-auto">{newPosts}</div>
+            </div>
           )}
 
           {/* Feed */}
@@ -530,17 +616,10 @@ export default function SocialHub() {
                 Said out loud: a thinner feed with no reason given looks like
                 the app losing posts. */}
             {!loading && !error && feed?.degraded && (
-              <div className="flex items-center justify-between gap-3 rounded-card-sm border border-sky/25 bg-sky/10 px-4 py-3 text-sm text-sky">
+              <div className="rounded-card-sm border border-sky/25 bg-sky/10 px-4 py-3 text-sm text-sky">
                 <span role="status">
-                  Some posts may be missing for a moment. Refresh in a little while to see everything.
+                  Some posts may be missing for a moment. The feed fills in on its own.
                 </span>
-                <button
-                  type="button"
-                  onClick={() => void load()}
-                  className="shrink-0 rounded-full border border-sky/40 px-3 py-1 text-xs font-semibold hover:bg-sky/10"
-                >
-                  Refresh
-                </button>
               </div>
             )}
 
