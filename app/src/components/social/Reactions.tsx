@@ -84,6 +84,8 @@ export default function Reactions({
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3)
 
+  const breakdown = present.map(([kind]) => `${BY_ID.get(kind)?.label ?? kind}: ${summary.counts[kind]}`).join(' · ')
+
   return (
     <div className="flex items-center gap-1.5">
       <div
@@ -95,6 +97,7 @@ export default function Reactions({
           type="button"
           onClick={() => react(summary.mine ?? 'like')}
           onFocus={show}
+          title={breakdown || undefined}
           aria-pressed={Boolean(summary.mine)}
           aria-label={
             mine
@@ -138,11 +141,12 @@ export default function Reactions({
       </div>
 
       {/* The second display: which kinds of reaction the post got, beside the
-          button that carries the total. */}
-      {present.length > 0 && (
+          button that carries the total. Once you have reacted, your own icon is
+          already on the button, so a second one beside it would only repeat it. */}
+      {!summary.mine && present.length > 0 && (
         <span
           className="inline-flex items-center gap-1 rounded-full bg-text-hi/[0.06] px-2 py-1"
-          title={present.map(([kind]) => `${BY_ID.get(kind)?.label ?? kind}: ${summary.counts[kind]}`).join(' · ')}
+          title={breakdown}
         >
           {present.map(([kind]) => {
             const meta = BY_ID.get(kind)
