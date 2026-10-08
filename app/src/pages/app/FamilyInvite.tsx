@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { ApiError, kaluta } from '@/lib/api'
+import { ApiError, kaluta, type TreeRole } from '@/lib/api'
 import { useAuth } from '@/hooks/useAuth'
 import { forgetInvite, pendingInvite, rememberInvite, tokenFromHash } from '@/components/family/tree/inviteToken'
 
-type Look = { state: 'loading' } | { state: 'invalid' } | { state: 'visitor' } | { state: 'member'; name: string; hasNode: boolean; own: boolean }
+type Look = { state: 'loading' } | { state: 'invalid' } | { state: 'visitor' } | { state: 'member'; name: string; hasNode: boolean; own: boolean; role: TreeRole }
 
 const NEXT = encodeURIComponent('/tree/invite')
 
@@ -39,7 +39,7 @@ export default function FamilyInvite() {
       .lookupInvitation(token)
       .then((r) => {
         if (!live) return
-        setLook(signedIn ? { state: 'member', name: r.person_given_name ?? '', hasNode: Boolean(r.already_has_node), own: Boolean(r.own) } : { state: 'visitor' })
+        setLook(signedIn ? { state: 'member', name: r.person_given_name ?? '', hasNode: Boolean(r.already_has_node), own: Boolean(r.own), role: r.role } : { state: 'visitor' })
       })
       .catch(() => live && setLook({ state: 'invalid' }))
     return () => {
@@ -115,16 +115,24 @@ export default function FamilyInvite() {
               A relative has added <strong className="text-text-hi">{look.name}</strong> to their family tree and invites you to claim that place. If this is not you, decline.
             </p>
             <div className="mt-4 rounded-card-md border border-white/10 p-4" aria-labelledby="after-accept">
-              <h2 id="after-accept" className="text-sm font-semibold text-text-hi">If you accept, you join this family tree</h2>
+              <h2 id="after-accept" className="text-sm font-semibold text-text-hi">
+                If you accept, you join this family tree as {look.role === 'viewer' ? 'a viewer' : 'a contributor'}
+              </h2>
               <p className="mt-2 text-sm text-text-mid">Your account is attached to {look.name}’s place, and you will be able to see:</p>
               <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-text-mid">
                 <li>every person connected to that place by the family links already recorded: parents, partners, children, brothers and sisters, and the people beyond them;</li>
                 <li>for each of them: name, gender if given, dates and places of birth and death, photo, biography and how they are related to you;</li>
                 <li>the photos, documents and recordings kept for those people.</li>
               </ul>
-              <p className="mt-2 text-sm text-text-mid">
-                You will also be able to add relatives and links, and to confirm or dispute entries. You can change or remove only what you add yourself, and you can remove your own place later.
-              </p>
+              {look.role === 'viewer' ? (
+                <p className="mt-2 text-sm text-text-mid">
+                  You will only be able to look: you will not be able to add, change, confirm or dispute anything. An owner of the tree can change your role later, and you can leave at any time.
+                </p>
+              ) : (
+                <p className="mt-2 text-sm text-text-mid">
+                  You will also be able to add relatives and links, and to confirm or dispute entries. You can change or remove only what you add yourself. An owner of the tree can change your role later, and you can leave at any time.
+                </p>
+              )}
               <p className="mt-2 text-sm text-text-mid">The tree is private by default: it is shown to the people in it, and to others only as its owner’s privacy settings allow.</p>
             </div>
             {look.own && <p className="mt-3 text-sm text-text-mid" role="status">You made this invitation, so you cannot accept it.</p>}

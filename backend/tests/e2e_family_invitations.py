@@ -72,9 +72,9 @@ check("a node under 18 cannot be invited (403)", invite(owner_h, kid["id"]).stat
 check("the self node cannot be invited (already attached, 409)", invite(owner_h, me["id"]).status_code == 409)
 
 print("\nWhat a link reveals")
-check("a visitor learns only that it is valid", c.post("/family/invitations/lookup", json={"token": token}).json() == {"valid": True})
+check("a visitor learns only that it is valid", c.post("/family/invitations/lookup", json={"token": token}).json() == {"valid": True, "role": "viewer"})
 r = c.post("/family/invitations/lookup", headers=guest_h, json={"token": token})
-check("a signed-in member also learns whom it offers, and nothing of the tree", r.status_code == 200 and r.json() == {"valid": True, "person_given_name": "Cousin", "already_has_node": False, "own": False}, r.text)
+check("a signed-in member also learns whom it offers, and nothing of the tree", r.status_code == 200 and r.json() == {"valid": True, "role": "viewer", "person_given_name": "Cousin", "already_has_node": False, "own": False}, r.text)
 for bad in ("x" * 43, token[:-1] + ("A" if token[-1] != "A" else "B")):
     r = c.post("/family/invitations/lookup", json={"token": bad})
     check("a wrong token is a plain 404, the same as any other invalid link", r.status_code == 404 and r.json()["detail"] == "This invitation is not valid")

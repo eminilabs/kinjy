@@ -20,7 +20,7 @@ import time
 from collections import defaultdict, deque
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session as OrmSession
 
 import access
 import models
+import roles
 from common import ageclient, events, notify
 from common.auth import CurrentUser, MaybeUser
 from common.database import get_db
@@ -106,13 +107,17 @@ def _is_minor_by_birth(person: models.Person) -> bool:
     return age < ADULT_AGE
 
 
-def can_invite(principal, person: models.Person) -> bool:
-    """Who may offer this node to someone: its author or staff, for a living adult nobody has claimed yet."""
+def can_invite(principal, person: models.Person, family: access.Family) -> bool:
+    """Who may offer this node to someone: an owner of the tree, or a contributor for a node they added.
+
+    Only for a living adult nobody has claimed yet. A viewer invites nobody, and platform staff
+    do not mint access to a family's tree.
+    """
     return (
         person.user_id is None
         and not person.deceased
         and not _is_minor_by_birth(person)
-        and (person.created_by == principal.user_id or bool(principal.is_admin))
+        and (family.can("owner") or (family.can("contributor") and person.created_by == principal.user_id))
     )
 
 
@@ -139,13 +144,27 @@ class TokenIn(BaseModel):
     token: str = Field(min_length=20, max_length=128)
 
 
+class InviteIn(BaseModel):
+    """What the invitee becomes. Viewer unless the inviter, being an owner, says contributor."""
+
+    role: str = Field(default="viewer", pattern="^(viewer|contributor)$")
+
+
 # --- the inviter's side ----------------------------------------------------
 
 @router.post("/family/persons/{person_id}/invitations", status_code=201)
-def create_invitation(person_id: str, principal: CurrentUser, request: Request, db: OrmSession = Depends(get_db)):
+def create_invitation(
+    person_id: str,
+    principal: CurrentUser,
+    request: Request,
+    payload: InviteIn = Body(default_factory=InviteIn),
+    db: OrmSession = Depends(get_db),
+):
     person = access.person_or_404(db, person_id)
     family = access.load_family(db, principal.user_id, person_id)
-    access.require_belongs(family)
+    access.require_role(family, "contributor")
+    if payload.role not in roles.invitable_roles(family.role):
+        raise HTTPException(status_code=403, detail="With your role you can invite people only to view this tree")
     _limit(f"inv:create:{principal.user_id}", 10, 3600)
 
     if person.user_id is not None:
@@ -154,8 +173,8 @@ def create_invitation(person_id: str, principal: CurrentUser, request: Request, 
         raise HTTPException(status_code=400, detail="A deceased person cannot be invited")
     if _is_minor_by_birth(person):
         raise HTTPException(status_code=403, detail="A person under 18 cannot be invited from the tree")
-    if not can_invite(principal, person):
-        raise HTTPException(status_code=403, detail="Only the person who added them can invite them")
+    if not can_invite(principal, person, family):
+        raise HTTPException(status_code=403, detail="Only an owner, or the contributor who added them, can invite them")
 
     now = _now()
     _purge(db)
@@ -177,13 +196,14 @@ def create_invitation(person_id: str, principal: CurrentUser, request: Request, 
         created_by=principal.user_id,
         token_hash=hash_token(token),
         expires_at=now + timedelta(days=TTL_DAYS),
+        role=payload.role,
     )
     db.add(inv)
     db.flush()
     _audit(db, inv.id, "created", principal.user_id, person.id)
     db.commit()
     # The only time the token exists outside the invitee's copy.
-    return {"id": inv.id, "token": token, "expires_at": inv.expires_at, "path": f"/tree/invite#t={token}"}
+    return {"id": inv.id, "token": token, "role": inv.role, "expires_at": inv.expires_at, "path": f"/tree/invite#t={token}"}
 
 
 @router.get("/family/persons/{person_id}/invitations")
@@ -191,7 +211,7 @@ def list_invitations(person_id: str, principal: CurrentUser, db: OrmSession = De
     person = access.person_or_404(db, person_id)
     family = access.load_family(db, principal.user_id, person_id)
     access.require_belongs(family)
-    if not (person.created_by == principal.user_id or principal.is_admin):
+    if not (family.can("owner") or (family.can("contributor") and person.created_by == principal.user_id)):
         raise access.not_found()
     rows = db.scalars(
         select(models.Invitation)
@@ -199,15 +219,20 @@ def list_invitations(person_id: str, principal: CurrentUser, db: OrmSession = De
         .order_by(models.Invitation.created_at.desc())
         .limit(20)
     ).all()
-    return {"items": [{"id": r.id, "status": status_of(r), "created_at": r.created_at, "expires_at": r.expires_at} for r in rows]}
+    return {"items": [{"id": r.id, "role": r.role, "status": status_of(r), "created_at": r.created_at, "expires_at": r.expires_at} for r in rows]}
 
 
 @router.delete("/family/invitations/{invitation_id}", status_code=204)
 def revoke_invitation(invitation_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
     inv = db.get(models.Invitation, invitation_id)
     # Someone else's invitation is not found, not forbidden: its existence is not theirs to learn.
-    if inv is None or not (inv.created_by == principal.user_id or principal.is_admin):
+    if inv is None:
         raise access.not_found()
+    # The one who made it, or an owner of the tree it opens a place in.
+    if inv.created_by != principal.user_id:
+        family = access.load_family(db, principal.user_id, inv.person_id)
+        if not family.can("owner"):
+            raise access.not_found()
     if status_of(inv) == "active":
         inv.revoked_at = _now()
         _audit(db, inv.id, "revoked", principal.user_id, inv.person_id)
@@ -223,7 +248,7 @@ def lookup_invitation(payload: TokenIn, request: Request, principal: MaybeUser, 
     inv = _active_for_token(db, payload.token)
     if inv is None:
         raise _invalid()
-    result: dict = {"valid": True}
+    result: dict = {"valid": True, "role": inv.role}
     if principal is not None:
         person = db.get(models.Person, inv.person_id)
         if person is None or person.user_id is not None:
@@ -255,6 +280,11 @@ async def accept_invitation(payload: TokenIn, request: Request, principal: Curre
         raise _invalid()
     person = db.get(models.Person, inv.person_id)
     if person is None or person.user_id is not None or person.deceased:
+        raise _invalid()
+
+    # The link carries its inviter's authority, so it stops working when they lose it (removed, demoted).
+    family = access.load_family(db, inv.created_by, person.id)
+    if inv.role not in roles.invitable_roles(family.role):
         raise _invalid()
 
     # A minor cannot be attached through a link; unknown age is treated as a minor.
@@ -289,6 +319,7 @@ async def accept_invitation(payload: TokenIn, request: Request, principal: Curre
         db.rollback()
         raise _invalid()
 
+    roles.grant(db, principal.user_id, person.id, inv.role, inv.created_by)
     person.user_id = principal.user_id
     person.status = "verified"  # the person themselves has said it is them
     person.verified_at = now
@@ -301,4 +332,4 @@ async def accept_invitation(payload: TokenIn, request: Request, principal: Curre
 
     await events.publish("family.person_claimed", {"person_id": person.id, "by": principal.user_id})
     notify.notify(inv.created_by, "family", "Your family invitation was accepted", link="/tree")
-    return {"person_id": person.id}
+    return {"person_id": person.id, "role": inv.role}

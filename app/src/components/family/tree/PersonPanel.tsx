@@ -6,6 +6,8 @@ import { ApiError, kaluta, type HowRelated, type ParentRole, type PersonDetail, 
 import { cn } from '@/lib/utils'
 import InvitePanel from './InvitePanel'
 import LinkExisting from './LinkExisting'
+import MembersPanel from './MembersPanel'
+import { ROLE_LABEL, ROLE_MEANING } from './treeRoles'
 import PersonForm from './PersonForm'
 import RelativeQuestions from './RelativeQuestions'
 import { emptyValues, toFields, valuesFrom, type FormValues } from './formValues'
@@ -221,6 +223,7 @@ export default function PersonPanel({
         {person.other_names && <Fact label="Also known as">{person.other_names}</Fact>}
         {person.gender && <Fact label="Gender">{person.gender}</Fact>}
         {relatives.length > 0 && <Fact label="In the tree">{relatives.join(' · ')}</Fact>}
+        {perms.role && <Fact label="Your role">{ROLE_LABEL[perms.role]}: {ROLE_MEANING[perms.role]}</Fact>}
         {person.biography && (
           <Fact label="About">
             <span className="whitespace-pre-wrap break-words">{person.biography}</span>
@@ -295,7 +298,9 @@ export default function PersonPanel({
             </section>
           )}
 
-          {perms.can_invite && <InvitePanel personId={person.id} name={person.given_name} />}
+          {perms.can_invite && <InvitePanel personId={person.id} name={person.given_name} roles={perms.invite_roles} />}
+
+          {perms.can_manage_members && person.is_me && <MembersPanel personId={person.id} />}
 
           {links.length > 0 && (
             <section className="mt-5 border-t border-white/10 pt-4" aria-labelledby="links-title">

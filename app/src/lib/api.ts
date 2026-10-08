@@ -854,7 +854,18 @@ export interface PersonDetail extends Person {
   relation_to_me: string | null
   counts: { parents: number; children: number; spouses: number; siblings: number }
   my_decision: 'confirm' | 'dispute' | null
-  permissions: { can_edit: boolean; can_delete: boolean; can_link: boolean; can_confirm: boolean; can_invite: boolean }
+  permissions: {
+    can_edit: boolean
+    can_delete: boolean
+    can_link: boolean
+    can_confirm: boolean
+    can_invite: boolean
+    /** What the caller may invite someone as: owners both, contributors only a viewer, a viewer nothing. */
+    invite_roles: TreeRole[]
+    can_manage_members: boolean
+    /** The caller's role in this tree; null when they hold none (read through the owner's privacy setting). */
+    role: TreeRole | null
+  }
 }
 
 /** What may be sent for a person. `null` clears a field; leaving it out leaves it alone. */
@@ -888,9 +899,13 @@ export interface RelativeExtras {
   shared_parent_ids?: string[]
 }
 
+/** What a member may do in a tree: read; read and contribute; also manage members. */
+export type TreeRole = 'viewer' | 'contributor' | 'owner'
+
 export interface FamilyTree {
   root: string
   depth: number
+  my_role: TreeRole | null
   /** The caller's own node, if they have added themselves. */
   me: string | null
   /** Everyone in this family; the view may hold fewer. */
@@ -1900,18 +1915,26 @@ export const kaluta = {
         { decision, note },
       ),
     /** Invite someone to claim a person node as themselves. The link is returned once. */
-    invite: (personId: string) =>
-      api.post<{ id: string; token: string; expires_at: string; path: string }>(`/family/persons/${personId}/invitations`, {}),
+    invite: (personId: string, role: 'viewer' | 'contributor' = 'viewer') =>
+      api.post<{ id: string; token: string; role: TreeRole; expires_at: string; path: string }>(`/family/persons/${personId}/invitations`, { role }),
     invitations: (personId: string) =>
-      api.get<{ items: Array<{ id: string; status: 'active' | 'accepted' | 'revoked' | 'declined' | 'expired'; created_at: string; expires_at: string }> }>(
+      api.get<{ items: Array<{ id: string; role: TreeRole; status: 'active' | 'accepted' | 'revoked' | 'declined' | 'expired'; created_at: string; expires_at: string }> }>(
         `/family/persons/${personId}/invitations`,
       ),
     revokeInvitation: (invitationId: string) => api.delete<void>(`/family/invitations/${invitationId}`),
     /** Public on purpose: a visitor learns only that a link is valid. */
     lookupInvitation: (token: string) =>
-      api.post<{ valid: true; person_given_name?: string; already_has_node?: boolean; own?: boolean }>('/family/invitations/lookup', { token }),
-    acceptInvitation: (token: string) => api.post<{ person_id: string }>('/family/invitations/accept', { token }),
+      api.post<{ valid: true; role: TreeRole; person_given_name?: string; already_has_node?: boolean; own?: boolean }>('/family/invitations/lookup', { token }),
+    acceptInvitation: (token: string) => api.post<{ person_id: string; role: TreeRole }>('/family/invitations/accept', { token }),
     declineInvitation: (token: string) => api.post<void>('/family/invitations/decline', { token }),
+    /** Owners only. */
+    members: (personId: string) =>
+      api.get<{ items: Array<{ id: string; role: TreeRole; since: string; is_me: boolean; name: string | null; person_id: string }> }>(
+        `/family/persons/${personId}/members`,
+      ),
+    setMemberRole: (membershipId: string, role: TreeRole) =>
+      api.patch<{ id: string; role: TreeRole }>(`/family/members/${membershipId}`, { role }),
+    removeMember: (membershipId: string) => api.delete<void>(`/family/members/${membershipId}`),
   },
 
   memorials: {

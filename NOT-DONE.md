@@ -868,3 +868,37 @@ Limits, stated rather than hidden:
   is created, and registration proceeds as it does today.
 - Browser flows (inviter panel, visitor, sign-in round trip, accept, phone) were run with
   headless Chrome scripts kept outside the repository.
+
+### FT-02: roles in a family tree (built)
+
+A role is held through a membership (`family.memberships`), anchored on the member's own place;
+being a relative gives nothing. **Viewer** reads. **Contributor** adds relatives and links, edits
+and removes what they added, confirms or disputes, adds to the archive, and invites Viewers onto
+nodes they added. **Owner** also edits or removes any node that is not a member's, removes any
+link, manages members (list, change role, remove) and invites Viewers or Contributors. A tree
+always keeps an owner (no demoting, removing or leaving as the last one, and a last owner's own
+place cannot be deleted while others hold roles). Readers admitted only by the owner's
+`who_can_see_family` stay outside membership and read-only. Invitations carry the role (Viewer by
+default) and stop working if the inviter loses the authority to grant it. Confirmations only count
+from members who may still contribute. The server decides everything; `permissions` returns
+`role`, `can_manage_members`, `invite_roles` and the existing flags.
+
+Migration (once, at startup; `family.markers`): existing members become Contributors, so nobody
+loses what they could do. An Owner is named only when exactly one member of a tree added their
+*own* place themselves; any other tree is written to `family.ownership_reviews` and has no owner
+until a person settles it (there is no tool for that yet). People without an account, or without a
+recorded author, never get a membership.
+
+Decisions and limits, stated rather than hidden:
+- **Joining two trees is not done by linking.** A link between two trees is refused unless the
+  second tree is the caller's alone (nobody else holds a role in it); that one is absorbed and the
+  role it gave them goes with it. Linking into another member's tree (previously allowed with the
+  member's `who_can_add_family` consent) now returns 404: use an invitation. Real fusion needs its own design.
+- **Platform admins** keep the edit/delete access family-service already gave them. Not touched; to decide.
+- **A member keeps the right to edit and remove their own place** whatever their role (their own data),
+  including a Viewer.
+- **Trees left without an owner** by the migration (see `ownership_reviews`) cannot have members
+  managed or contributors invited; contributors keep what they had.
+- **Deleting a node can split a tree**: a part may end up with no owner. Not guarded.
+- The members panel appears on the owner's own place; an owner with no place of their own (old
+  data) has no screen for it yet.

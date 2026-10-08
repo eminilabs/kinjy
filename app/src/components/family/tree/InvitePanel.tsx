@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Copy, Send } from 'lucide-react'
 import { useAppTheme } from '@/components/appdemo/theme'
 import { useApi } from '@/hooks/useApi'
-import { ApiError, kaluta } from '@/lib/api'
+import { ApiError, kaluta, type TreeRole } from '@/lib/api'
+import { ROLE_LABEL, ROLE_MEANING } from './treeRoles'
 import { cn } from '@/lib/utils'
 
 const when = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
@@ -12,11 +13,12 @@ const when = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day:
  * Kinjy sends nothing. The link works once, expires, and can be withdrawn; it opens no tree.
  * Shown only when the server says this node can be invited.
  */
-export default function InvitePanel({ personId, name }: { personId: string; name: string }) {
+export default function InvitePanel({ personId, name, roles }: { personId: string; name: string; roles: TreeRole[] }) {
   const { tok } = useAppTheme()
   const list = useApi(() => kaluta.family.invitations(personId), [personId])
   const [link, setLink] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [role, setRole] = useState<'viewer' | 'contributor'>('viewer')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -26,7 +28,7 @@ export default function InvitePanel({ personId, name }: { personId: string; name
     setBusy(true)
     setError(null)
     try {
-      const made = await kaluta.family.invite(personId)
+      const made = await kaluta.family.invite(personId, role)
       setLink(`${window.location.origin}${made.path}`)
       setCopied(false)
       list.reload()
@@ -69,6 +71,18 @@ export default function InvitePanel({ personId, name }: { personId: string; name
       <p className={cn('mb-2 text-xs', tok.low)}>
         Make a link and send it to {name} yourself. It works once, for 7 days. The link shows nothing of the tree: {name} signs in, sees whose place it is and what they would see, and chooses to accept or decline. If they accept, they join this family tree and can see the people connected to {name}.
       </p>
+      {roles.length > 1 && (
+        <label className={cn('mb-2 block text-xs', tok.mid)}>
+          {name} will be
+          <select value={role} onChange={(e) => setRole(e.target.value as 'viewer' | 'contributor')} className={cn('ml-2 rounded-card-sm px-2 py-1.5 text-xs', tok.input, tok.text)}>
+            {roles.map((r) => (
+              <option key={r} value={r}>{ROLE_LABEL[r]}</option>
+            ))}
+          </select>
+          <span className={cn('mt-1 block', tok.low)}>{ROLE_LABEL[role]}: {ROLE_MEANING[role]}.</span>
+        </label>
+      )}
+      {roles.length === 1 && <p className={cn('mb-2 text-xs', tok.low)}>{name} will be a Viewer: {ROLE_MEANING.viewer}.</p>}
       {link && (
         <div className="mb-2 space-y-2">
           <input readOnly value={link} aria-label="Invitation link" onFocus={(e) => e.currentTarget.select()} className={cn('w-full rounded-card-sm px-3 py-2 text-xs', tok.input, tok.text)} />

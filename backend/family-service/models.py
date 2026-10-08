@@ -223,6 +223,8 @@ class Invitation(Base):
     accepted_by: Mapped[str | None] = mapped_column(String(40))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     declined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # What the invitee becomes on accepting. The least there is, unless the inviter says more.
+    role: Mapped[str] = mapped_column(String(20), default="viewer", server_default="viewer")
 
 
 class InvitationEvent(Base):
@@ -240,4 +242,60 @@ class InvitationEvent(Base):
     person_id: Mapped[str | None] = mapped_column(String(40))
     actor_id: Mapped[str | None] = mapped_column(String(40))
     kind: Mapped[str] = mapped_column(String(30))
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class Membership(Base):
+    """A member's role in the tree their person node belongs to.
+
+    There is no stored "tree": a tree is whatever is connected to a person. A membership
+    is therefore anchored on a person, the member's own place (or, for old data, a node
+    they added), and its role applies to everyone connected to that person. Being someone's
+    parent, child or partner gives nothing: only a row here does.
+
+    Roles: viewer (reads), contributor (adds and changes what the rules let them), owner
+    (also manages members). A person with no Kinjy account is never a member.
+    """
+
+    __tablename__ = "memberships"
+    __table_args__ = (
+        UniqueConstraint("user_id", "person_id", name="uq_membership"),
+        Index("ix_membership_user", "user_id"),
+        Index("ix_membership_person", "person_id"),
+        {"schema": SCHEMA},
+    )
+
+    ROLES = ("viewer", "contributor", "owner")
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("mem"))
+    user_id: Mapped[str] = mapped_column(String(40))
+    person_id: Mapped[str] = mapped_column(ForeignKey(f"{SCHEMA}.persons.id", ondelete="CASCADE"))
+    role: Mapped[str] = mapped_column(String(20))
+    granted_by: Mapped[str | None] = mapped_column(String(40))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class OwnershipReview(Base):
+    """A tree that existed before roles and whose owner the history does not show.
+
+    Written by the one-time migration instead of inventing an owner. Nothing reads it to
+    grant anything: it is a list for a person to settle.
+    """
+
+    __tablename__ = "ownership_reviews"
+    __table_args__ = {"schema": SCHEMA}
+
+    person_id: Mapped[str] = mapped_column(String(40), primary_key=True)  # the smallest id in the tree
+    people: Mapped[int] = mapped_column(Integer)
+    reason: Mapped[str] = mapped_column(String(200))
+    noted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class Marker(Base):
+    """One-time work already done, so a restart never repeats it."""
+
+    __tablename__ = "markers"
+    __table_args__ = {"schema": SCHEMA}
+
+    name: Mapped[str] = mapped_column(String(60), primary_key=True)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
