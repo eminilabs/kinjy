@@ -264,6 +264,7 @@ export default function CommunityView({
                 <PostCard
                   key={post.id}
                   post={post}
+                  hideCommunity
                   algorithmId="chronological"
                   mode="new"
                   isOwn={post.author_id === user?.id}

@@ -16,6 +16,7 @@ import {
   Link2,
   Check,
   Share2,
+  UsersRound,
 } from 'lucide-react'
 import { ApiError, kaluta, type Post, type WhyFactor } from '@/lib/api'
 import { useTopic } from '@/hooks/useRealtime'
@@ -37,6 +38,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Link } from 'react-router'
+import { useCommunityRef } from './useCommunityRef'
 
 /** Who can read a restricted post, said on the card so nobody has to guess. */
 const AUDIENCE: Record<string, { label: string; hint: string }> = {
@@ -209,6 +211,7 @@ export default function PostCard({
   onChangeAlgorithm,
   commentsAlwaysOpen = false,
   onOpen,
+  hideCommunity = false,
 }: {
   post: Post
   algorithmId: string
@@ -225,9 +228,12 @@ export default function PostCard({
    * itself, where the card must not be able to open another copy of itself.
    */
   onOpen?: () => void
+  /** Inside the community's own page the group is already the heading. */
+  hideCommunity?: boolean
 }) {
   const { i18n } = useTranslation()
   const target = post.repost_of ?? post
+  const community = useCommunityRef(hideCommunity ? null : target.community_id)
   const [reactions, setReactions] = useState(target.reactions ?? { counts: {}, total: 0, mine: null })
   const [comments, setComments] = useState(target.comments_count)
   const [showComments, setShowComments] = useState(commentsAlwaysOpen)
@@ -439,6 +445,18 @@ export default function PostCard({
               </Link>
             ) : (
               `@${source.author_id.slice(0, 12)}`
+            )}
+            {community && (
+              <>
+                <span className="font-normal text-text-low"> in </span>
+                <Link
+                  to={`/communities/${community.slug}`}
+                  className="inline-flex max-w-full items-center gap-1 rounded-full bg-gold/15 px-2 py-0.5 align-middle text-xs font-semibold text-gold-soft hover:bg-gold/25"
+                >
+                  <UsersRound size={11} aria-hidden="true" />
+                  <span className="truncate">{community.name}</span>
+                </Link>
+              </>
             )}
           </p>
           <p className="caption flex flex-wrap items-center gap-x-2">
