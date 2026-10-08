@@ -53,11 +53,15 @@ export default function Comments({
   postId,
   currentUserId,
   onCountChange,
+  variant = 'inline',
 }: {
   postId: string
   currentUserId: string
   onCountChange: (delta: number) => void
+  /** `sheet`: fills its container, the thread scrolls and the input stays at the bottom. */
+  variant?: 'inline' | 'sheet'
 }) {
+  const sheet = variant === 'sheet'
   const { tok } = useAppTheme()
   const [items, setItems] = useState<CommentNode[] | null>(null)
   const [maxDepth, setMaxDepth] = useState(1)
@@ -191,7 +195,14 @@ export default function Comments({
   )
 
   return (
-    <div className={cn('mt-3 border-t pt-3', tok.divider, 'border-t-current/10')}>
+    <div
+      className={cn(
+        sheet ? 'flex min-h-0 flex-1 flex-col border-t' : 'mt-3 border-t pt-3',
+        tok.divider,
+        'border-t-current/10',
+      )}
+    >
+      <div className={cn(sheet && 'min-h-0 flex-1 overflow-y-auto px-6 py-4')}>
       {items === null && !error && (
         <p className={cn('flex items-center gap-2 py-2 text-xs', tok.low)}>
           <Loader2 size={12} className="animate-spin" aria-hidden="true" />
@@ -203,9 +214,23 @@ export default function Comments({
         <p className={cn('py-1 text-xs', tok.low)}>No replies yet. Start the conversation.</p>
       )}
 
-      {tree.length > 0 && <ul className="max-h-[420px] space-y-3 overflow-y-auto pe-1">{tree.map((node) => <Row key={node.id} node={node} />)}</ul>}
+      {tree.length > 0 && (
+        <ul className={cn('space-y-3', !sheet && 'max-h-[420px] overflow-y-auto pe-1')}>
+          {tree.map((node) => (
+            <Row key={node.id} node={node} />
+          ))}
+        </ul>
+      )}
+      </div>
 
-      <form onSubmit={submit} className="mt-3">
+      <form
+        onSubmit={submit}
+        className={cn(
+          sheet
+            ? 'shrink-0 border-t border-[var(--cloud-border)] bg-ink-2 px-6 pb-4 pt-3'
+            : 'mt-3',
+        )}
+      >
         {replyTo && (
           <p className={cn('mb-1.5 flex items-center gap-1.5 ps-1 text-[0.68rem]', tok.low)}>
             <CornerDownRight size={11} aria-hidden="true" />
@@ -233,7 +258,7 @@ export default function Comments({
             onChange={(e) => setBody(e.target.value)}
             placeholder={replyTo ? 'Write a reply…' : 'Write a comment…'}
             aria-label={replyTo ? 'Write a reply' : 'Write a comment'}
-            className={cn('w-full rounded-full px-4 py-2 text-sm focus:outline-none', tok.input, tok.text)}
+            className={cn('w-full rounded-full px-4 py-2 text-base focus:outline-none sm:text-sm', tok.input, tok.text)}
           />
           <button
             type="submit"

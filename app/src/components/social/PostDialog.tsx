@@ -1,5 +1,5 @@
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import PostCard from './PostCard'
+import { DialogHeading, DialogSubheading, ResponsiveDialog } from './ResponsiveDialog'
 import type { Post } from '@/lib/api'
 
 /**
@@ -27,12 +27,10 @@ export default function PostDialog({
   onHidden: (postId: string) => void
 }) {
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent
-        className="max-h-[90vh] gap-0 overflow-y-auto rounded-[24px] border-[var(--cloud-border)] bg-ink-2 p-3 text-text-hi shadow-[0_40px_80px_-30px_rgba(0,0,0,.45)] sm:max-w-2xl sm:p-4"
-      >
-        <DialogTitle className="sr-only">Post and comments</DialogTitle>
-        <DialogDescription className="sr-only">A post, with its comments underneath.</DialogDescription>
+    <ResponsiveDialog open onOpenChange={(open) => !open && onClose()} layout="scroll" width="2xl">
+      <DialogHeading className="sr-only">Post and comments</DialogHeading>
+      <DialogSubheading className="sr-only">A post, with its comments underneath.</DialogSubheading>
+      <div className="p-3 sm:p-4">
         <PostCard
           post={post}
           algorithmId="chronological"
@@ -48,7 +46,7 @@ export default function PostDialog({
           // open and the card does not offer a second way to toggle them.
           commentsAlwaysOpen
         />
-      </DialogContent>
-    </Dialog>
+      </div>
+    </ResponsiveDialog>
   )
 }

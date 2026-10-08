@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/dialog'
 import { Link } from 'react-router'
 import { useCommunityRef } from './useCommunityRef'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { CommentsDialog, RepostDialog, ShareDialog, TranslationPanel, type TranslationView } from './PostModals'
 
 /** Who can read a restricted post, said on the card so nobody has to guess. */
@@ -230,6 +231,9 @@ export default function PostCard({
   hideCommunity?: boolean
 }) {
   const { i18n } = useTranslation()
+  // On a phone the comments are always the sheet; the feed's "open the whole
+  // post" window is for a computer, where there is room for it.
+  const isMobile = useIsMobile()
   const target = post.repost_of ?? post
   const community = useCommunityRef(hideCommunity ? null : target.community_id)
   const [reactions, setReactions] = useState(target.reactions ?? { counts: {}, total: 0, mine: null })
@@ -640,7 +644,7 @@ export default function PostCard({
 
         <button
           type="button"
-          onClick={() => (onOpen ? onOpen() : setCommentsOpen(true))}
+          onClick={() => (onOpen && !isMobile ? onOpen() : setCommentsOpen(true))}
           aria-label={`Comments: ${comments}`}
           className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-text-mid hover:text-text-hi"
         >

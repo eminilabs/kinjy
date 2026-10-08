@@ -1,21 +1,13 @@
 import { useState } from 'react'
 import { Check, Copy, Languages, Loader2, Mail, MessageCircle, Repeat2, Send, Share2, X } from 'lucide-react'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { Segmented, Switch } from '@/components/dashboard/primitives'
 import type { Post } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import Comments from './Comments'
 import MemberAvatar from './MemberAvatar'
+import { DialogHeading, DialogSubheading, ResponsiveDialog, SheetClose } from './ResponsiveDialog'
+import { useDialogContext } from './dialogContext'
 
-/** The look shared by every post dialog: a card on the page's own surface. */
-const SURFACE =
-  'gap-0 overflow-hidden rounded-[24px] border-[var(--cloud-border)] bg-ink-2 p-0 text-text-hi shadow-[0_40px_80px_-30px_rgba(0,0,0,.45)]'
 const PAD = 'px-6'
 const pillGold =
   'inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-br from-gold-soft to-gold px-6 py-3 text-sm font-bold text-ink shadow-[0_12px_24px_-12px_rgba(169,118,28,.6)] disabled:opacity-50'
@@ -49,18 +41,20 @@ function PostPreview({ post }: { post: Post }) {
 }
 
 function Header({ icon: Icon, tone, title, description }: { icon: typeof Repeat2; tone: string; title: string; description: string }) {
+  const { mobile } = useDialogContext()
   return (
-    <DialogHeader className={cn(PAD, 'pb-5 pt-6 text-start')}>
-      <div className="flex items-center gap-3 pe-8">
-        <span aria-hidden="true" className={cn('grid h-11 w-11 shrink-0 place-items-center rounded-2xl', tone)}>
+    <header className={cn(PAD, 'shrink-0 pb-4 text-start', mobile ? 'pt-2' : 'pb-5 pt-6')}>
+      <div className={cn('flex items-center gap-3', !mobile && 'pe-8')}>
+        <span aria-hidden="true" className={cn('grid shrink-0 place-items-center rounded-2xl', tone, mobile ? 'h-10 w-10' : 'h-11 w-11')}>
           <Icon size={20} />
         </span>
-        <div className="min-w-0">
-          <DialogTitle className="text-[1.25rem] font-bold tracking-[-0.025em]">{title}</DialogTitle>
-          <DialogDescription className="mt-1 text-sm text-text-low">{description}</DialogDescription>
+        <div className="min-w-0 flex-1">
+          <DialogHeading className="text-[1.25rem] font-bold tracking-[-0.025em]">{title}</DialogHeading>
+          <DialogSubheading className="mt-0.5 text-sm text-text-low">{description}</DialogSubheading>
         </div>
+        <SheetClose />
       </div>
-    </DialogHeader>
+    </header>
   )
 }
 
@@ -83,11 +77,9 @@ export function RepostDialog({
   onUndo: () => Promise<void>
 }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn(SURFACE, 'sm:max-w-md')}>
-        <RepostBody post={post} reposted={reposted} onRepost={onRepost} onUndo={onUndo} onClose={() => onOpenChange(false)} />
-      </DialogContent>
-    </Dialog>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <RepostBody post={post} reposted={reposted} onRepost={onRepost} onUndo={onUndo} onClose={() => onOpenChange(false)} />
+    </ResponsiveDialog>
   )
 }
 
@@ -196,11 +188,9 @@ export function ShareDialog({
   nativeShare: (url: string) => Promise<'shared' | 'copied' | 'cancelled' | 'failed'>
 }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn(SURFACE, 'sm:max-w-md')}>
-        <ShareBody post={post} baseUrl={baseUrl} buildUrl={buildUrl} referralCode={referralCode} nativeShare={nativeShare} />
-      </DialogContent>
-    </Dialog>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <ShareBody post={post} baseUrl={baseUrl} buildUrl={buildUrl} referralCode={referralCode} nativeShare={nativeShare} />
+    </ResponsiveDialog>
   )
 }
 
@@ -347,22 +337,41 @@ export function CommentsDialog({
   onCountChange: (delta: number) => void
 }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn(SURFACE, 'flex max-h-[88vh] flex-col sm:max-w-xl')}>
-        <Header
-          icon={MessageCircle}
-          tone="bg-gold/20 text-gold-soft"
-          title={count === 1 ? '1 comment' : `${count} comments`}
-          description="Join the conversation."
-        />
-        <div className={cn(PAD, 'pb-4')}>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} layout="pinned" width="xl">
+      <CommentsBody post={post} currentUserId={currentUserId} count={count} onCountChange={onCountChange} />
+    </ResponsiveDialog>
+  )
+}
+
+function CommentsBody({
+  post,
+  currentUserId,
+  count,
+  onCountChange,
+}: {
+  post: Post
+  currentUserId: string
+  count: number
+  onCountChange: (delta: number) => void
+}) {
+  const { mobile } = useDialogContext()
+  return (
+    <>
+      <Header
+        icon={MessageCircle}
+        tone="bg-gold/20 text-gold-soft"
+        title={count === 1 ? '1 comment' : `${count} comments`}
+        description="Join the conversation."
+      />
+      {/* On a phone the post is the screen behind the sheet, as on Facebook:
+          the sheet is for the thread. */}
+      {!mobile && (
+        <div className={cn(PAD, 'shrink-0 pb-4')}>
           <PostPreview post={post} />
         </div>
-        <div className={cn(PAD, 'min-h-0 flex-1 overflow-y-auto pb-6')}>
-          <Comments postId={post.id} currentUserId={currentUserId} onCountChange={onCountChange} />
-        </div>
-      </DialogContent>
-    </Dialog>
+      )}
+      <Comments postId={post.id} currentUserId={currentUserId} onCountChange={onCountChange} variant="sheet" />
+    </>
   )
 }
 
