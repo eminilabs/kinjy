@@ -9,14 +9,14 @@ import { FEATURES } from '@/lib/features'
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 
 const TIERS = [
-  { name: 'Free', price: '$0', line: 'Every module, one feed algorithm, ad-supported.' },
-  { name: 'Basic', price: '$3.99', line: 'Three algorithms, priority translation, no ads.' },
+  { name: 'Free', price: '$0', line: 'Every module, one feed algorithm, ads included.' },
+  { name: 'Basic', price: '$3.99', line: 'Three algorithms, priority translation, more AI credits.' },
   {
     name: 'Premium',
     price: '$9.99',
     line: FEATURES.familyTree
-      ? 'All 15 algorithms, Heritage AI, Creator Studio Pro.'
-      : 'All 15 algorithms, 4K video, Creator Studio Pro.',
+      ? 'All 15 algorithms, Heritage AI, Creator Studio Pro, ads on or off.'
+      : 'All 15 algorithms, 4K video, Creator Studio Pro, ads on or off.',
     loved: true,
   },
 ]

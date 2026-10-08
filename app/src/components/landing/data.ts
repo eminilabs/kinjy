@@ -182,17 +182,17 @@ export const ASSISTANT_SKILLS = [
  */
 export const PLANS = [
   {
-    name: 'landing.plan.free', price: '0 $', cta: 'nav.signUp', tone: 'plain' as const,
+    name: 'landing.plan.free', price: '$0', cta: 'nav.signUp', tone: 'plain' as const,
     features: ['landing.plan.free1', 'landing.plan.free2', 'landing.plan.free3'],
   },
   {
-    name: 'landing.plan.basic', price: '3,99 $', cta: 'landing.plan.basicCta', tone: 'paper' as const,
-    features: ['landing.plan.basic1', 'landing.plan.basic2', 'landing.plan.basic3', 'landing.plan.basic4'],
+    name: 'landing.plan.basic', price: '$3.99', cta: 'landing.plan.basicCta', tone: 'paper' as const,
+    features: ['landing.plan.basic1', 'landing.plan.basic2', 'landing.plan.basic3'],
   },
   {
-    name: 'landing.plan.premium', price: '9,99 $', cta: 'landing.plan.premiumCta', tone: 'night' as const,
+    name: 'landing.plan.premium', price: '$9.99', cta: 'landing.plan.premiumCta', tone: 'night' as const,
     // Heritage AI belongs to the family tree; the same swap as PricingTeaser.
-    features: ['landing.plan.premium1', 'landing.plan.premium2', FEATURES.familyTree ? 'landing.plan.premium3a' : 'landing.plan.premium3b', 'landing.plan.premium4'],
+    features: ['landing.plan.premium1', 'landing.plan.premium2', FEATURES.familyTree ? 'landing.plan.premium3a' : 'landing.plan.premium3b', 'landing.plan.premium4', 'landing.plan.premium5'],
   },
 ]
 

@@ -17,7 +17,7 @@ export default function OneOffPurchases() {
     <section className="noise-overlay bg-ink px-6 py-24 md:py-32">
       <div className="mx-auto max-w-container">
         <div className="cloud-card mx-auto max-w-4xl p-8 text-center md:p-12">
-          <h2 className="h3">Prefer à la carte?</h2>
+          <h2 className="h3">Prefer to buy just one thing?</h2>
           <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-text-mid">
             One-off purchases are priced fairly at{' '}
             <span className="mono-data text-gold-soft">2–4× the implied subscription unit cost</span> —
