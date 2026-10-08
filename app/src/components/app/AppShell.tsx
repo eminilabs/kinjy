@@ -10,6 +10,13 @@ import UnreadBadge from './UnreadBadge'
 import { useUnreadMessages } from '@/hooks/useUnreadMessages'
 import WellbeingBar from './WellbeingBar'
 
+/**
+ * One column of the independent layout: as tall as the space it has, scrolling
+ * inside itself, and not handing its scroll on to its neighbours.
+ */
+const COLUMN =
+  'lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:[scrollbar-width:none] lg:[&::-webkit-scrollbar]:hidden'
+
 /** Mobile bottom bar — the blueprint's five, Create in the middle. */
 const MOBILE_NAV = [
   { to: '/hub', label: 'Home', icon: Home },
@@ -33,6 +40,7 @@ export default function AppShell({
   action,
   aside,
   rail = true,
+  independentScroll = false,
   children,
 }: {
   /**
@@ -47,6 +55,13 @@ export default function AppShell({
   aside?: ReactNode
   /** The left rail (profile, pinned modules, circles). A page that is a workspace of its own turns it off. */
   rail?: boolean
+  /**
+   * On a wide screen, each column scrolls on its own and the page does not: the
+   * menu on the left, the feed in the middle and the rail on the right. What is
+   * under the pointer is what moves. Below `lg` it is one column and the page
+   * scrolls as usual.
+   */
+  independentScroll?: boolean
   children: ReactNode
 }) {
   const { user, loading } = useAuth()
@@ -75,7 +90,10 @@ export default function AppShell({
   // the largest gradient in the product — never did.
   return (
     <div
-      className="app-shell relative min-h-[100dvh] noise-overlay"
+      className={cn(
+        'app-shell relative min-h-[100dvh] noise-overlay',
+        independentScroll && 'lg:flex lg:h-[100dvh] lg:flex-col lg:overflow-hidden',
+      )}
       style={
         resolved === 'light'
           ? { background: 'radial-gradient(circle at 70% -20%, #fff 0, #f8f5ef 48%, #f3efe7 100%)' }
@@ -94,6 +112,7 @@ export default function AppShell({
       <div
         className={cn(
           'mx-auto grid w-full max-w-[1320px] gap-[26px] px-4 pb-24 pt-6 md:px-6 lg:pb-16 lg:pt-9',
+          independentScroll && 'lg:min-h-0 lg:flex-1 lg:grid-rows-[minmax(0,1fr)] lg:pb-0 lg:pt-6',
           !rail
             ? 'lg:grid-cols-[minmax(0,1fr)]'
             : aside
@@ -103,15 +122,20 @@ export default function AppShell({
       >
         {/* Left rail — identity and shortcuts */}
         {rail && (
-          <div className="hidden lg:block">
-            <div className="sticky top-[156px]">
+          <div className={cn('hidden lg:block', independentScroll && COLUMN)}>
+            <div className={independentScroll ? 'pb-10' : 'sticky top-[156px]'}>
               <ProfileCard />
             </div>
           </div>
         )}
 
         {/* Centre column */}
-        <main className="min-w-0">
+        <main
+          className={cn('min-w-0', independentScroll && COLUMN)}
+          // Marks the column the feed lives in, for pages that need to know how
+          // far it has scrolled or to take it back to the top.
+          data-scroll-main={independentScroll ? '' : undefined}
+        >
           {(title || action) && (
             <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
               {title ? (
@@ -132,8 +156,8 @@ export default function AppShell({
 
         {/* Right rail */}
         {aside && (
-          <aside className="hidden xl:block">
-            <div className="sticky top-[156px] space-y-3">{aside}</div>
+          <aside className={cn('hidden xl:block', independentScroll && COLUMN)}>
+            <div className={cn('space-y-3', independentScroll ? 'pb-10' : 'sticky top-[156px]')}>{aside}</div>
           </aside>
         )}
       </div>

@@ -157,11 +157,23 @@ export default function SocialHub() {
   // gives the width back to the posts and becomes a floating button instead.
   const [scrolled, setScrolled] = useState(false)
   const [openComposer, setOpenComposer] = useState(0)
+  // How far the feed has scrolled. On a wide screen the feed is a column with its
+  // own scrolling (the page itself does not scroll), on a phone it is the page;
+  // scroll events from other boxes (a rail, a dialog) say nothing about the feed.
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 220)
+    const feedColumn = () => document.querySelector<HTMLElement>('[data-scroll-main]')
+    const read = () => {
+      const column = feedColumn()
+      return column && column.scrollHeight > column.clientHeight ? column.scrollTop : window.scrollY
+    }
+    const onScroll = (event?: Event) => {
+      const source = event?.target
+      if (source instanceof HTMLElement && !source.hasAttribute('data-scroll-main')) return
+      setScrolled(read() > 220)
+    }
     onScroll()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true })
+    return () => document.removeEventListener('scroll', onScroll, { capture: true })
   }, [])
 
   // Arriving from "Change my algorithm": bring the picker into view and focus
@@ -387,6 +399,8 @@ export default function SocialHub() {
       return { ...current, items: [...incoming.filter((post) => !shown.has(post.id)), ...current.items] }
     })
     setIncoming([])
+    // The feed's own column on a wide screen, the page on a phone.
+    document.querySelector<HTMLElement>('[data-scroll-main]')?.scrollTo({ top: 0, behavior: 'smooth' })
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -534,7 +548,7 @@ export default function SocialHub() {
 
   return (
     <VideoReelProvider posts={feed?.items ?? []} currentUserId={user.id}>
-    <AppShell aside={rail}>
+    <AppShell aside={rail} independentScroll>
       <div className="min-w-0">
           {/* Header: which feed this is, and what it promises */}
           <header className="mb-5 flex items-end justify-between gap-4">
