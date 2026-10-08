@@ -36,7 +36,7 @@ export function LandingAssistant() {
         <div className="kl-night-glass max-w-[85%] self-start px-[18px] py-4" style={{ borderRadius: '16px 16px 16px 4px' }}>
           <div className="text-base leading-[1.45]">Mti wa familia unafanyaje kazi?</div>
           <div className="mt-2.5 border-t border-white/15 pt-2.5 text-sm text-[var(--kl-gold-soft)]">
-            Question posée en swahili · réponse en swahili
+            {tr('landing.assistant.caption')}
           </div>
         </div>
         <div className="kl-sheen max-w-[85%] self-end px-[18px] py-3.5 text-base leading-[1.45] text-[var(--kl-night)]" style={{ borderRadius: '16px 16px 4px 16px' }}>
@@ -90,7 +90,7 @@ export function LandingPricing() {
                 className="rounded-[10px] p-3.5 text-center text-[15px] font-bold"
                 style={{ background: t.btnBg, color: t.btnColor }}
               >
-                {join.to.startsWith('/join') ? tr(p.cta) : 'Voir les formules'}
+                {join.to.startsWith('/join') ? tr(p.cta) : tr('landing.pricing.seePlans')}
               </Link>
             </div>
           )
@@ -184,7 +184,7 @@ export function LandingFinalCta() {
           </p>
           <div className="flex flex-col items-center gap-6">
             <Link to={join.to} className="kl-sheen rounded-[10px] px-7 py-3.5 text-[17px] font-bold text-[var(--kl-night)]">
-              {join.to.startsWith('/join') ? 'Créer mon compte' : join.label} →
+              {join.to.startsWith('/join') ? tr('nav.join') : join.label} →
             </Link>
             <div className="max-w-[520px]">
               <StoreBadges framed />
@@ -208,8 +208,8 @@ export function LandingFooter() {
         <p className="max-w-[220px] leading-[1.5]">{tr('landing.cta.sub')}</p>
       </div>
       {FOOTER_COLUMNS.map((col) => (
-        <nav key={col.title} aria-label={col.title}>
-          <h3 className="mb-3 text-[13px] font-semibold uppercase tracking-[.08em] text-[var(--kl-ink)]">{col.title}</h3>
+        <nav key={col.title} aria-label={tr(col.title)}>
+          <h3 className="mb-3 text-[13px] font-semibold uppercase tracking-[.08em] text-[var(--kl-ink)]">{tr(col.title)}</h3>
           <ul className="flex flex-col gap-2">
             {col.links.map((l) => (
               <li key={tr(l.label)}>

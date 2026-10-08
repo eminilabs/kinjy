@@ -6,24 +6,17 @@ import LandingModules from '@/components/landing/LandingModules'
 import LandingStory from '@/components/landing/LandingStory'
 import { LandingNav } from '@/components/landing/shared'
 import { useLandingTheme } from '@/components/landing/useLandingTheme'
+import { useTranslation } from 'react-i18next'
 import { FEATURES } from '@/lib/features'
 
 /**
  * Home — the public landing page, after the "Kinjy Landing" design.
- *
- * It carries its own navigation and footer (Layout suppresses the marketing
- * ones on this route) and its own fixed paper-and-night palette; see
- * components/landing/landing.css. Copy lives in components/landing/data.ts.
- *
- * The copy is French and left-to-right whatever language the rest of the site
- * is in, so the page says so itself: the document's lang and dir follow the
- * site's language and are set by the marketing navbar, which is not on this
- * route — an Arabic visitor would otherwise get this French page mirrored.
  */
 export default function Home() {
   const { theme } = useLandingTheme()
+  const { i18n } = useTranslation()
   return (
-    <div className="kl kl-plain" data-kl-theme={theme} lang="fr" dir="ltr">
+    <div className="kl kl-plain" data-kl-theme={theme} lang={i18n.language} dir={i18n.dir()}>
       <div className="mx-auto max-w-[1320px] px-4 pt-4">
         <div className="relative overflow-hidden rounded-2xl bg-[var(--kl-bg)]">
           <LandingNav />

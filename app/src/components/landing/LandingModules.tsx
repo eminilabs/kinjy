@@ -71,8 +71,8 @@ export default function LandingModules() {
             </span>
             <div className="flex gap-1.5">
               {[
-                { label: 'Module précédent', glyph: '←', step: -1 },
-                { label: 'Module suivant', glyph: '→', step: 1 },
+                { label: t('nav.prevModule'), glyph: '←', step: -1 },
+                { label: t('nav.nextModule'), glyph: '→', step: 1 },
               ].map((b) => (
                 <button
                   key={b.label}
