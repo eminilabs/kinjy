@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router'
-import { Award, ChevronRight, Code2, Crown, LayoutGrid, LifeBuoy, MapPin, Medal, Tag, Users, Wallet } from 'lucide-react'
+import { Award, Code2, Crown, LayoutGrid, LifeBuoy, MapPin, Medal, Tag, Users, Wallet } from 'lucide-react'
 import { VerifiedBadge } from '@/components/ui-kit'
 import { MODULE_ICONS } from '@/components/appdemo/Chrome'
 import { ROUTE_FOR } from './navigation'
@@ -120,11 +120,11 @@ export default function ProfileCard() {
       </div>
 
       {/* Pinned modules */}
-      <div className={cn('rounded-[20px] p-4', tok.card)}>
-        <p className="mono-data mb-3 text-[0.7rem] font-bold uppercase tracking-[0.15em] text-gold-soft">
+      <div className={cn('rounded-card-lg p-3.5', tok.card)}>
+        <p className={cn('mb-2 text-[0.65rem] font-bold uppercase tracking-wider', tok.low)}>
           {t('pinned')}
         </p>
-        <ul className="space-y-0.5">
+        <ul className="space-y-1">
           {PINNED.map((key) => {
             const Icon = MODULE_ICONS[key] ?? Users
             return (
@@ -133,19 +133,14 @@ export default function ProfileCard() {
                   to={ROUTE_FOR[key]}
                   aria-label={key === 'messages' && unread > 0 ? `${t(key)}, ${unread} unread` : undefined}
                   className={cn(
-                    'flex w-full items-center gap-2.5 rounded-[12px] px-2 py-2 text-[0.85rem] font-semibold',
+                    'flex w-full items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold',
                     tok.mid,
                     tok.hoverBg,
                   )}
                 >
-                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[8px] bg-gold/15 text-gold-soft">
-                    <Icon size={14} aria-hidden="true" />
-                  </span>
+                  <Icon size={12} className="text-gold" aria-hidden="true" />
                   {t(key)}
-                  <span className="ms-auto flex items-center gap-2">
-                    {key === 'messages' && <UnreadBadge count={unread} />}
-                    <ChevronRight size={13} className={tok.low} aria-hidden="true" />
-                  </span>
+                  {key === 'messages' && <UnreadBadge count={unread} className="ms-auto" />}
                 </Link>
               </li>
             )
@@ -182,14 +177,13 @@ export default function ProfileCard() {
       </div>
 
       {/* Circles quick-switch */}
-      <div className={cn('rounded-[20px] p-4', tok.card)}>
-        <p className="mono-data mb-3 text-[0.7rem] font-bold uppercase tracking-[0.15em] text-gold-soft">
+      <div className={cn('rounded-card-lg p-3.5', tok.card)}>
+        <p className={cn('mb-2 text-[0.65rem] font-bold uppercase tracking-wider', tok.low)}>
           {t('circles')}
         </p>
         {(circles.data ?? []).length === 0 ? (
-          <Link to="/circles" className={cn('flex items-center gap-1 text-xs leading-relaxed hover:text-gold-soft', tok.low)}>
+          <Link to="/circles" className={cn('text-[0.7rem] hover:text-gold-soft', tok.low)}>
             No circles yet — create one
-            <ChevronRight size={13} className="shrink-0" aria-hidden="true" />
           </Link>
         ) : (
           <div className="flex flex-wrap gap-1.5">
@@ -198,7 +192,7 @@ export default function ProfileCard() {
                 key={circle.id}
                 to={`/circles?open=${circle.id}`}
                 className={cn(
-                  'rounded-full px-3 py-1.5 text-[0.75rem] font-semibold',
+                  'rounded-full px-2.5 py-1 text-[0.68rem] font-semibold',
                   index === 0
                     ? cn('bg-gold/15 ring-1 ring-gold/40', tok.text)
                     : cn(tok.subtleBg, tok.mid, tok.hoverBg),
@@ -215,7 +209,7 @@ export default function ProfileCard() {
           account actually holds it, so an empty row is the honest state for a
           new member rather than three grey trophies. */}
       {(user?.kyc_verified || (data?.followers_count ?? 0) > 0) && (
-        <div className={cn('flex items-center justify-around rounded-[20px] p-4', tok.card)}>
+        <div className={cn('flex items-center justify-around rounded-card-lg p-3', tok.card)}>
           {[
             { icon: Medal, label: 'Member', show: true },
             { icon: Award, label: 'Verified', show: Boolean(user?.kyc_verified) },
