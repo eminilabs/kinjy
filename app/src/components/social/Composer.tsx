@@ -136,6 +136,11 @@ export default function Composer({
   const [kind, setKind] = useState<Kind>('text')
   const [body, setBody] = useState('')
   const [headline, setHeadline] = useState('')
+  // An article is not publishable without a headline. Said next to the field
+  // itself: the generic message at the foot of the dialog is out of sight on a
+  // long article, which is how a missing headline looked like a broken button.
+  const [headlineMissing, setHeadlineMissing] = useState(false)
+  const headlineRef = useRef<HTMLInputElement>(null)
   // previewUrl is local, made from the file the member picked. The server's own
   // address cannot be the preview: an upload nobody has attached to a post yet is
   // served only against a ticket, so it would show as a broken image until posted.
@@ -190,6 +195,12 @@ export default function Composer({
     if (openSignal > 0) setOpen(true)
   }, [openSignal])
 
+  // Opening the article form lands on the headline: it is the first thing an
+  // article needs, so it should be the first thing the cursor is in.
+  useEffect(() => {
+    if (open && kind === 'article') headlineRef.current?.focus()
+  }, [open, kind])
+
   const me = useMyProfile()
   const myAvatar = <MemberAvatar displayName={user?.display_name} avatarUrl={me?.avatar_url} size={40} />
 
@@ -231,6 +242,7 @@ export default function Composer({
   const reset = () => {
     setBody('')
     setHeadline('')
+    setHeadlineMissing(false)
     for (const item of media) if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
     setMedia([])
     setTopics('')
@@ -257,7 +269,9 @@ export default function Composer({
       return
     }
     if (kind === 'article' && !headline.trim()) {
-      setError('An article needs a headline.')
+      setHeadlineMissing(true)
+      headlineRef.current?.focus()
+      headlineRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
       return
     }
 
@@ -464,16 +478,37 @@ export default function Composer({
             )}
 
             {kind === 'article' && (
-              <input
-                value={headline}
-                onChange={(e) => setHeadline(e.target.value)}
-                placeholder="Article headline"
-                aria-label="Article headline"
-                className={cn(
-                  'mt-4 w-full bg-transparent text-lg font-semibold focus:outline-none',
-                  tok.text,
+              <div className="mt-4">
+                <label htmlFor="article-headline" className={cn('mb-1.5 block text-xs font-semibold', tok.mid)}>
+                  Headline <span className="text-gold-soft" aria-hidden="true">*</span>
+                  <span className="sr-only"> (required)</span>
+                </label>
+                <input
+                  id="article-headline"
+                  ref={headlineRef}
+                  value={headline}
+                  onChange={(e) => {
+                    setHeadline(e.target.value)
+                    if (headlineMissing) setHeadlineMissing(false)
+                  }}
+                  placeholder="Give your article a headline"
+                  aria-invalid={headlineMissing}
+                  aria-describedby={headlineMissing ? 'article-headline-error' : undefined}
+                  maxLength={200}
+                  className={cn(
+                    'w-full rounded-2xl border bg-text-hi/[0.05] px-4 py-3 text-lg font-semibold focus:outline-none focus:ring-2',
+                    headlineMissing
+                      ? 'border-red-400/70 focus:ring-red-400/30'
+                      : 'border-transparent focus:border-gold/50 focus:ring-gold/20',
+                    tok.text,
+                  )}
+                />
+                {headlineMissing && (
+                  <p id="article-headline-error" role="alert" className="mt-1.5 text-sm text-red-400">
+                    An article needs a headline.
+                  </p>
                 )}
-              />
+              </div>
             )}
 
             {kind === 'article' ? (
