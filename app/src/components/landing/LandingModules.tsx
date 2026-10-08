@@ -87,9 +87,9 @@ export default function LandingModules() {
             </div>
           </div>
           <div className="kl-serif mb-2.5 text-[34px] font-medium italic leading-[1.05] text-[var(--kl-gold-soft)]">
-            {focus.name}
+            {t(focus.name)}
           </div>
-          <div className="mb-[18px] min-h-[50px] text-base leading-[1.55] text-[var(--kl-night-mid)]">{focus.desc}</div>
+          <div className="mb-[18px] min-h-[50px] text-base leading-[1.55] text-[var(--kl-night-mid)]">{t(focus.desc)}</div>
           <div className="flex items-center gap-3 border-t border-white/15 pt-4">
             <div className="flex">
               <span className="grid h-[30px] w-[30px] place-items-center rounded-full border-2 border-[var(--kl-invert)] bg-[#F6EBD3] text-[11px] font-bold text-[var(--kl-on-pastel)]">
@@ -99,7 +99,7 @@ export default function LandingModules() {
                 {focus.b}
               </span>
             </div>
-            <span className="text-sm">{focus.who}</span>
+            <span className="text-sm">{t(focus.who)}</span>
           </div>
         </div>
       </div>
@@ -175,7 +175,7 @@ export default function LandingModules() {
                     style={{ background: bg, color: fg }}
                     aria-hidden="true"
                   >
-                    {m.name.charAt(0)}
+                    {t(m.name).charAt(0)}
                   </span>
                   {t(m.name)}
                 </button>

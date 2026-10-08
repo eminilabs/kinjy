@@ -27,7 +27,7 @@ export function LandingAssistant() {
         <div className="flex max-w-[480px] flex-wrap gap-2">
           {ASSISTANT_SKILLS.map((k) => (
             <span key={k} className="kl-night-glass rounded-[10px] px-3.5 py-[9px] text-sm">
-              {k}
+              {tr(k)}
             </span>
           ))}
         </div>
@@ -90,7 +90,7 @@ export function LandingPricing() {
                 className="rounded-[10px] p-3.5 text-center text-[15px] font-bold"
                 style={{ background: t.btnBg, color: t.btnColor }}
               >
-                {join.to.startsWith('/join') ? p.cta : 'Voir les formules'}
+                {join.to.startsWith('/join') ? tr(p.cta) : 'Voir les formules'}
               </Link>
             </div>
           )

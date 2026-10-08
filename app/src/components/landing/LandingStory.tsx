@@ -41,10 +41,10 @@ function FeedChooser() {
       </div>
       <div className="w-full max-w-[440px] justify-self-center rounded-2xl bg-[var(--kl-surface)] p-5 shadow-[0_40px_70px_-40px_var(--kl-shadow)]" aria-live="polite">
         <div className="mb-2 flex items-baseline justify-between border-b border-[var(--kl-paper-2)] px-1 pb-4 pt-1">
-          <span className="kl-serif text-[22px] font-semibold">{algo.name}</span>
+          <span className="kl-serif text-[22px] font-semibold">{t(algo.name)}</span>
           <span className="text-[13px] text-[var(--kl-low)]">{t('landing.story.yourFeed')}</span>
         </div>
-        <p className="mx-1 mb-4 mt-2 text-sm leading-[1.5] text-[var(--kl-mid)]">{algo.desc}</p>
+        <p className="mx-1 mb-4 mt-2 text-sm leading-[1.5] text-[var(--kl-mid)]">{t(algo.desc)}</p>
         {algo.posts.map((p) => (
           <div key={p.who + p.what} className="flex items-center gap-3.5 border-t border-[var(--kl-paper)] px-1 py-3.5">
             <div className="grid h-[42px] w-[42px] flex-none place-items-center rounded-full text-sm font-bold text-[var(--kl-on-pastel)]" style={{ background: p.bg }}>
@@ -127,7 +127,7 @@ function Heritage() {
                     {p.i}
                   </div>
                   <div className="leading-[1.25]">
-                    <div className="text-sm font-semibold">{p.n}</div>
+                    <div className="text-sm font-semibold">{t(p.n)}</div>
                     <div className="text-xs text-[var(--kl-low)]">{p.y}</div>
                   </div>
                 </div>
@@ -174,8 +174,8 @@ function Economy() {
             <div key={s.n} className="grid gap-4 border-t border-[var(--kl-paper-2)] py-[22px]" style={{ gridTemplateColumns: '56px minmax(0,1fr)' }}>
               <span className="kl-mono pt-1 text-[13px] text-[var(--kl-gold-deep)]">{s.n}</span>
               <div>
-                <div className="kl-serif mb-1.5 text-[22px] font-semibold">{s.t}</div>
-                <div className="text-base leading-[1.55] text-[var(--kl-mid)]">{s.d}</div>
+                <div className="kl-serif mb-1.5 text-[22px] font-semibold">{t(s.t)}</div>
+                <div className="text-base leading-[1.55] text-[var(--kl-mid)]">{t(s.d)}</div>
               </div>
             </div>
           ))}
