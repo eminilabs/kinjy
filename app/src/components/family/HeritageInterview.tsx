@@ -115,30 +115,30 @@ export default function HeritageInterview() {
     <div className="grid items-start gap-12 lg:grid-cols-12">
       {/* copy column */}
       <div className="lg:col-span-4">
-        <p className="eyebrow text-[#9A6B1F]">Heritage Interview Agent</p>
-        <h2 className="h2 mt-3 text-paper-ink">It asks gently, in her own language.</h2>
-        <p className="body-lg mt-4 text-[#5A5245]">
+        <p className="kl-mono text-xs uppercase tracking-[.14em] text-[var(--kl-gold-deep)]">Heritage Interview Agent</p>
+        <h2 className="kl-h2 mt-3 text-[var(--kl-ink)]">It asks gently, in her own language.</h2>
+        <p className="text-[18px] leading-[1.6] mt-4 text-[var(--kl-mid)]">
           Sit an elder down with the Interview Agent. It asks warm, patient questions in
           Kiswahili, English, French or Arabic — transcribes live, glosses for the
           grandchildren, and files every answer where it belongs.
         </p>
-        <ul className="mt-7 space-y-4 text-[0.98rem] leading-relaxed text-[#5A5245]">
+        <ul className="mt-7 space-y-4 text-[0.98rem] leading-relaxed text-[var(--kl-mid)]">
           <li className="flex gap-3">
-            <ShieldCheck size={18} className="mt-1 shrink-0 text-[#9A6B1F]" />
+            <ShieldCheck size={18} className="mt-1 shrink-0 text-[var(--kl-gold-deep)]" />
             <span>
-              <strong className="text-paper-ink">The original recording is always preserved</strong> —
+              <strong className="text-[var(--kl-ink)]">The original recording is always preserved</strong> —
               untouched, playable by the family forever.
             </span>
           </li>
           <li className="flex gap-3">
-            <Quote size={18} className="mt-1 shrink-0 text-[#9A6B1F]" />
+            <Quote size={18} className="mt-1 shrink-0 text-[var(--kl-gold-deep)]" />
             <span>
-              <strong className="text-paper-ink">AI never invents history</strong> — the transcript
+              <strong className="text-[var(--kl-ink)]">AI never invents history</strong> — the transcript
               is labeled, and every filed answer cites its moment in the recording.
             </span>
           </li>
           <li className="flex gap-3">
-            <Languages size={18} className="mt-1 shrink-0 text-[#9A6B1F]" />
+            <Languages size={18} className="mt-1 shrink-0 text-[var(--kl-gold-deep)]" />
             <span>
               Her words stay in her language; the English gloss is a courtesy copy,
               never the source of truth.
@@ -150,10 +150,10 @@ export default function HeritageInterview() {
       {/* demo column */}
       <div className="lg:col-span-8">
         {/* interview console */}
-        <div className="rounded-card-lg border border-[#241F16]/10 bg-[#FFFDF8]/85 p-6 shadow-[0_16px_40px_-16px_rgba(36,31,22,0.2)] backdrop-blur-sm lg:p-8">
+        <div className="rounded-[20px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] p-6 shadow-[0_24px_48px_-34px_var(--kl-shadow)] lg:p-8">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <span className="relative flex h-11 w-11 items-center justify-center rounded-full bg-[#D9A648]/15 text-[#9A6B1F]">
+              <span className="relative flex h-11 w-11 items-center justify-center rounded-full bg-[#D9A648]/15 text-[var(--kl-gold-deep)]">
                 <Mic size={19} />
                 {playing && !reduced && (
                   <motion.span
@@ -165,10 +165,10 @@ export default function HeritageInterview() {
                 )}
               </span>
               <div>
-                <p className="font-semibold text-paper-ink">Interview in progress</p>
-                <p className="caption !text-[#6B5F4E]">
+                <p className="font-semibold text-[var(--kl-ink)]">Interview in progress</p>
+                <p className="text-[13px] leading-relaxed text-[var(--kl-mid)]">
                   Mama Zawadi Odhiambo · Kiswahili ·{' '}
-                  <span className="mono-data text-[0.72rem]">
+                  <span className="kl-mono text-[0.72rem]">
                     {done ? SCRIPT[SCRIPT.length - 1].t : step > 0 ? SCRIPT[step - 1].t : '00:00'}
                   </span>
                 </p>
@@ -180,7 +180,7 @@ export default function HeritageInterview() {
           {/* transcript */}
           <div className="mt-6 min-h-[248px] space-y-4" aria-live="polite">
             {step === 0 && (
-              <p className="caption py-16 text-center !text-[#6B5F4E]">
+              <p className="text-[13px] leading-relaxed py-16 text-center text-[var(--kl-mid)]">
                 Press play — the agent begins with respect: <em>“Shikamoo.”</em>
               </p>
             )}
@@ -201,28 +201,28 @@ export default function HeritageInterview() {
                     className={cn(
                       'mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[0.62rem] font-bold uppercase tracking-wider',
                       turn.speaker === 'agent'
-                        ? 'bg-[#D9A648]/15 text-[#9A6B1F]'
-                        : 'bg-[#241F16]/8 text-[#5A5245]',
+                        ? 'bg-[#D9A648]/15 text-[var(--kl-gold-deep)]'
+                        : 'bg-[var(--kl-paper)] text-[var(--kl-mid)]',
                     )}
                   >
                     {turn.speaker === 'agent' ? 'AI' : 'MZ'}
                   </span>
                   <div
                     className={cn(
-                      'max-w-[85%] rounded-card-md border p-3.5',
+                      'max-w-[85%] rounded-[14px] border p-3.5',
                       turn.speaker === 'agent'
                         ? 'border-[#D9A648]/35 bg-[#D9A648]/8'
-                        : 'border-[#241F16]/10 bg-white/70',
+                        : 'border-[var(--kl-paper-2)] bg-[var(--kl-paper)]',
                     )}
                   >
-                    <p className="text-[0.95rem] font-medium leading-relaxed text-paper-ink">
+                    <p className="text-[0.95rem] font-medium leading-relaxed text-[var(--kl-ink)]">
                       {turn.sw}
                     </p>
-                    <p className="mt-1.5 flex items-start gap-1.5 text-[0.8rem] italic leading-relaxed text-[#6B5F4E]">
+                    <p className="mt-1.5 flex items-start gap-1.5 text-[0.8rem] italic leading-relaxed text-[var(--kl-mid)]">
                       <Languages size={12} className="mt-0.5 shrink-0" />
                       {turn.en}
                     </p>
-                    <p className="mono-data mt-2 text-[0.62rem] tracking-wider text-[#9A6B1F]">
+                    <p className="kl-mono mt-2 text-[0.62rem] tracking-wider text-[var(--kl-gold-deep)]">
                       REC {turn.t}
                     </p>
                   </div>
@@ -235,13 +235,13 @@ export default function HeritageInterview() {
             <button
               type="button"
               onClick={start}
-              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-gold-soft to-gold px-6 py-3 text-sm font-bold text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] transition hover:brightness-110"
+              className="kl-sheen inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-bold transition hover:brightness-105"
             >
               {done ? <RotateCcw size={15} /> : <Play size={15} />}
               {done ? 'Replay the interview' : playing ? 'Playing…' : 'Play the interview'}
             </button>
             {playing && (
-              <span className="mono-data text-[0.68rem] tracking-widest text-[#9A6B1F]">
+              <span className="kl-mono text-[0.68rem] tracking-widest text-[var(--kl-gold-deep)]">
                 ● RECORDING — ORIGINAL SAVED
               </span>
             )}
@@ -256,11 +256,11 @@ export default function HeritageInterview() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.55, ease: cloudEase, delay: reduced ? 0 : 0.4 }}
-              className="mt-6 rounded-card-lg border border-[#D9A648]/40 bg-[#FFFDF8] p-6 shadow-[0_20px_50px_-20px_rgba(36,31,22,0.3)] lg:p-7"
+              className="mt-6 rounded-[20px] border border-[#D9A648]/40 bg-[var(--kl-surface)] p-6 shadow-[0_20px_50px_-20px_rgba(36,31,22,0.3)] lg:p-7"
             >
               <div className="flex items-center gap-2.5">
-                <Archive size={18} className="text-[#9A6B1F]" />
-                <h3 className="h3 text-paper-ink">Filed into the Family Heritage Archive</h3>
+                <Archive size={18} className="text-[var(--kl-gold-deep)]" />
+                <h3 className="kl-serif text-[24px] font-semibold leading-tight text-[var(--kl-ink)]">Filed into the Family Heritage Archive</h3>
               </div>
 
               <div className="mt-5 grid gap-4 md:grid-cols-2">
@@ -269,19 +269,19 @@ export default function HeritageInterview() {
                   initial={reduced ? false : { opacity: 0, scale: 0.94 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: reduced ? 0 : 0.55, duration: 0.5, ease: snapEase }}
-                  className="rounded-card-md border border-[#241F16]/10 bg-white/70 p-4"
+                  className="rounded-[14px] border border-[var(--kl-paper-2)] bg-[var(--kl-paper)] p-4"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="flex items-center gap-2 text-sm font-semibold text-paper-ink">
-                      <FileAudio size={15} className="text-[#9A6B1F]" />
+                    <span className="flex items-center gap-2 text-sm font-semibold text-[var(--kl-ink)]">
+                      <FileAudio size={15} className="text-[var(--kl-gold-deep)]" />
                       Original recording
                     </span>
-                    <ProvenanceTag kind="original" className="!border-[#241F16]/20 !bg-[#241F16]/5 !text-[#5A5245]" />
+                    <ProvenanceTag kind="original" className="!text-[var(--kl-mid)]" />
                   </div>
-                  <p className="mono-data mt-2 text-[0.72rem] text-[#6B5F4E]">
+                  <p className="kl-mono mt-2 text-[0.72rem] text-[var(--kl-mid)]">
                     mama-zawadi-2026-01-04.m4a · 4:12
                   </p>
-                  <p className="caption mt-1.5 !text-[#6B5F4E]">
+                  <p className="text-[13px] leading-relaxed mt-1.5 text-[var(--kl-mid)]">
                     Preserved byte-for-byte. Never edited, never re-generated.
                   </p>
                 </motion.div>
@@ -291,16 +291,16 @@ export default function HeritageInterview() {
                   initial={reduced ? false : { opacity: 0, scale: 0.94 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: reduced ? 0 : 0.68, duration: 0.5, ease: snapEase }}
-                  className="rounded-card-md border border-[#241F16]/10 bg-white/70 p-4"
+                  className="rounded-[14px] border border-[var(--kl-paper-2)] bg-[var(--kl-paper)] p-4"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="flex items-center gap-2 text-sm font-semibold text-paper-ink">
-                      <Languages size={15} className="text-[#9A6B1F]" />
+                    <span className="flex items-center gap-2 text-sm font-semibold text-[var(--kl-ink)]">
+                      <Languages size={15} className="text-[var(--kl-gold-deep)]" />
                       Transcript + English gloss
                     </span>
                     <ProvenanceTag kind="ai-assisted" />
                   </div>
-                  <p className="caption mt-2 !text-[#6B5F4E]">
+                  <p className="text-[13px] leading-relaxed mt-2 text-[var(--kl-mid)]">
                     Kiswahili verbatim, English courtesy translation — clearly labeled as
                     AI-assisted, always beside the original.
                   </p>
@@ -314,21 +314,21 @@ export default function HeritageInterview() {
                 transition={{ delay: reduced ? 0 : 0.82, duration: 0.5, ease: cloudEase }}
                 className="mt-4 flex flex-wrap gap-2"
               >
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#241F16]/15 bg-[#D9A648]/10 px-3 py-1.5 text-[0.72rem] font-semibold text-paper-ink">
-                  <Link2 size={12} className="text-[#9A6B1F]" />
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--kl-paper-2)] bg-[#D9A648]/10 px-3 py-1.5 text-[0.72rem] font-semibold text-[var(--kl-ink)]">
+                  <Link2 size={12} className="text-[var(--kl-gold-deep)]" />
                   Person Record · Mama Zawadi Odhiambo (Level 1)
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#241F16]/15 bg-[#D9A648]/10 px-3 py-1.5 text-[0.72rem] font-semibold text-paper-ink">
-                  <Link2 size={12} className="text-[#9A6B1F]" />
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--kl-paper-2)] bg-[#D9A648]/10 px-3 py-1.5 text-[0.72rem] font-semibold text-[var(--kl-ink)]">
+                  <Link2 size={12} className="text-[var(--kl-gold-deep)]" />
                   Family timeline · 1956 — “Father’s first shop”, Kisumu
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#9A6B1F]/30 bg-white/70 px-3 py-1.5 text-[0.72rem] font-semibold text-[#9A6B1F]">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#9A6B1F]/30 bg-[var(--kl-paper)] px-3 py-1.5 text-[0.72rem] font-semibold text-[var(--kl-gold-deep)]">
                   <Quote size={12} />
                   Answer cites the recording · 00:58
                 </span>
               </motion.div>
 
-              <p className="caption mt-4 border-t border-[#241F16]/10 pt-3 !text-[#6B5F4E]">
+              <p className="text-[13px] leading-relaxed mt-4 border-t border-[var(--kl-paper-2)] pt-3 text-[var(--kl-mid)]">
                 Nothing here was invented by AI — every archive entry traces back to her
                 voice, at her timestamp.
               </p>

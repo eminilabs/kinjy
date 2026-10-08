@@ -32,7 +32,7 @@ function Initials({ name, size }: { name: string; size: number }) {
   return (
     <span
       aria-hidden="true"
-      className="flex shrink-0 items-center justify-center rounded-full bg-text-low/20 font-display text-text-hi"
+      className="flex shrink-0 items-center justify-center rounded-full bg-text-low/20 font-bold text-text-hi"
       style={{ width: size, height: size, fontSize: size * 0.34 }}
     >
       {letters}
@@ -435,7 +435,7 @@ export default function MemorialView({ memorial, onChanged }: { memorial: Memori
             )}
           </div>
           <div className="min-w-0 flex-1 pt-3">
-            <h2 className="font-display text-2xl text-text-hi sm:text-3xl">{memorial.full_name}</h2>
+            <h2 className="text-2xl font-bold tracking-[-0.035em] text-text-hi sm:text-3xl">{memorial.full_name}</h2>
             <p className="mt-1 text-sm text-text-mid">{lifeSpan(memorial.birth_date, memorial.death_date)}</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {status.tone !== 'none' && (

@@ -48,32 +48,39 @@ export default function Marketplace() {
   }
 
   const field =
-    'w-full rounded-full border border-white/10 bg-ink-2/60 px-4 py-2.5 text-sm text-text-hi placeholder:text-text-low focus:border-gold/40 focus:outline-none'
+    'w-full rounded-full border border-transparent bg-text-hi/[0.07] px-5 py-3 text-[0.95rem] text-text-hi placeholder:text-text-low focus:border-gold/50 focus:bg-transparent focus:outline-none'
 
   return (
-    <AppShell
-      title="Marketplace"
-      subtitle="Sellers set their price; Kinjy adds a 20% markup on top. Buyer money is held by a licensed custodian until the buyer confirms receipt."
-    >
+    <AppShell>
+      <header className="mb-6">
+        <p className="mono-data text-[0.72rem] font-bold uppercase tracking-[0.15em] text-gold-soft">Marketplace</p>
+        <h1 className="mt-2 text-[clamp(38px,5vw,56px)] font-bold leading-[1.02] tracking-[-0.045em] text-text-hi">
+          Buy and sell, safely
+        </h1>
+        <p className="mt-3 max-w-2xl text-[0.95rem] leading-relaxed text-text-low">
+          Sellers set their price; Kinjy adds a 20% markup on top. Buyer money is held by a licensed custodian
+          until the buyer confirms receipt.
+        </p>
+      </header>
       <form
         onSubmit={(e) => {
           e.preventDefault()
           setSearch(query.trim())
         }}
       >
-        <label className="flex items-center gap-2.5 rounded-full border border-white/10 bg-ink-2/60 px-4 py-2.5">
+        <label className="flex items-center gap-2.5 rounded-full bg-text-hi/[0.07] px-5 py-3">
           <Search size={15} className="shrink-0 text-text-low" aria-hidden="true" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search the marketplace…"
             aria-label="Search products"
-            className="w-full bg-transparent text-sm text-text-hi placeholder:text-text-low focus:outline-none"
+            className="w-full bg-transparent text-[0.95rem] text-text-hi placeholder:text-text-low focus:outline-none"
           />
         </label>
       </form>
 
-      <form onSubmit={list} className="cloud-card mt-4 flex flex-wrap gap-2 p-5">
+      <form onSubmit={list} className="cloud-card mt-4 flex flex-wrap gap-3 p-5 md:p-6">
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -87,50 +94,56 @@ export default function Marketplace() {
           placeholder="Your price (USD)"
           aria-label="Vendor price"
           inputMode="decimal"
-          className={`${field} w-44`}
+          className={`${field} sm:w-48`}
         />
         <button
           type="submit"
           disabled={!title.trim() || !price}
-          className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-2.5 text-sm font-bold text-ink disabled:opacity-40"
+          className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-gold-soft to-gold px-6 py-3 text-sm font-bold text-ink disabled:opacity-40"
         >
           <Plus size={14} aria-hidden="true" />
           List
         </button>
       </form>
 
-      {note && <p className="mt-4 text-sm text-gold-soft">{note}</p>}
+      {note && <p className="mt-4 rounded-2xl bg-gold/10 px-5 py-3 text-sm text-text-hi">{note}</p>}
       {error && (
-        <p role="alert" className="mt-4 text-sm text-red-200">
+        <p role="alert" className="mt-4 rounded-2xl bg-danger/10 px-5 py-3 text-sm text-danger">
           {error}
         </p>
       )}
 
-      <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {products.loading && <p className="text-sm text-text-low">Loading…</p>}
+      <div className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {products.loading && <p className="text-sm text-text-low" role="status">Loading…</p>}
         {products.data?.items.length === 0 && (
-          <p className="text-sm text-text-low">Nothing listed yet.</p>
+          <div className="cloud-card col-span-full flex flex-col items-center px-6 py-14 text-center">
+            <span aria-hidden="true" className="grid h-14 w-14 place-items-center rounded-2xl bg-sky/15 text-sky">
+              <ShoppingBag size={24} />
+            </span>
+            <p className="mt-4 text-lg font-bold tracking-[-0.02em] text-text-hi">Nothing listed yet</p>
+            <p className="mt-1 max-w-sm text-sm text-text-low">List the first product above and it shows up here.</p>
+          </div>
         )}
         {(products.data?.items ?? []).map((product) => (
-          <article key={product.id} className="cloud-card flex flex-col p-5">
+          <article key={product.id} className="cloud-card flex flex-col p-5 md:p-6">
             <span
               aria-hidden="true"
-              className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-indigo/25 text-sky"
+              className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-sky/15 text-sky"
             >
               <Package size={17} />
             </span>
-            <h2 className="text-sm font-semibold text-text-hi">{product.title}</h2>
+            <h2 className="text-[1.05rem] font-bold tracking-[-0.02em] text-text-hi">{product.title}</h2>
             {product.description && (
               <p className="mt-1.5 line-clamp-2 text-sm text-text-mid">{product.description}</p>
             )}
-            <p className="mono-data mt-3 text-lg text-gold-soft">
+            <p className="mono-data mt-4 text-[1.4rem] font-bold text-text-hi">
               ${product.customer_price}
-              <span className="caption ms-1.5">customer price</span>
+              <span className="ms-2 text-xs font-medium text-text-low">customer price</span>
             </p>
             <button
               type="button"
               onClick={() => buy(product)}
-              className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-full border border-white/12 px-4 py-2 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
+              className="mt-5 inline-flex items-center justify-center gap-1.5 rounded-full border border-[var(--cloud-border)] px-5 py-2.5 text-sm font-semibold text-text-mid transition-colors hover:border-gold/50 hover:bg-gold/10 hover:text-text-hi"
             >
               <ShoppingBag size={13} aria-hidden="true" />
               Order — held in escrow
@@ -139,8 +152,8 @@ export default function Marketplace() {
         ))}
       </div>
 
-      <section className="mt-8">
-        <h2 className="mb-3 text-sm font-semibold text-text-hi">Your orders</h2>
+      <section className="mt-10">
+        <h2 className="mb-4 text-[1.4rem] font-bold tracking-[-0.03em] text-text-hi">Your orders</h2>
         <EscrowOrders key={orderTick} />
       </section>
 

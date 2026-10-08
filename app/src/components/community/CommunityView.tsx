@@ -108,7 +108,7 @@ export default function CommunityView({
       <button
         type="button"
         onClick={onBack}
-        className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-mid hover:text-gold-soft"
+        className="inline-flex items-center gap-1.5 text-sm font-semibold text-text-mid hover:text-gold-soft"
       >
         <ArrowLeft size={13} aria-hidden="true" />
         All communities
@@ -119,39 +119,51 @@ export default function CommunityView({
 
       {community && (
         <>
-          <header className="cloud-card p-5">
-            <div className="flex items-start gap-3">
+          <header className="cloud-card overflow-hidden">
+            <div
+              aria-hidden="true"
+              className={cn(
+                'h-28 sm:h-36',
+                community.kind === 'public'
+                  ? 'bg-gradient-to-r from-[#C9D6F2] via-[#E3ECF7] to-[#F6EBD3]'
+                  : community.kind === 'private'
+                    ? 'bg-gradient-to-r from-[#F2B8A2] via-[#F7E1D8] to-[#F0C878]'
+                    : 'bg-gradient-to-r from-[#F0C878] via-[#F6EBD3] to-[#F2B8A2]',
+              )}
+            />
+            <div className="px-5 pb-6 sm:px-7">
+            <div className="-mt-9 flex items-end gap-4">
               <span
                 aria-hidden="true"
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-indigo/25 text-sky"
+                className="flex h-[72px] w-[72px] shrink-0 items-center justify-center rounded-[20px] border-4 border-[var(--cloud)] bg-gold/25 text-gold-soft"
               >
-                <UsersRound size={20} />
+                <UsersRound size={30} />
               </span>
-              <div className="min-w-0 flex-1">
-                <h1 className="truncate text-lg font-semibold text-text-hi">{community.name}</h1>
-                <p className="caption mt-0.5 inline-flex items-center gap-1.5">
+            </div>
+            <div className="mt-3 min-w-0">
+                <h1 className="text-[clamp(28px,3.4vw,38px)] font-bold leading-[1.05] tracking-[-0.035em] text-text-hi">{community.name}</h1>
+                <p className="mt-2 inline-flex items-center gap-1.5 text-sm text-text-low">
                   {community.kind === 'public' ? (
-                    <Globe size={11} aria-hidden="true" />
+                    <Globe size={13} aria-hidden="true" />
                   ) : (
-                    <Lock size={11} aria-hidden="true" />
+                    <Lock size={13} aria-hidden="true" />
                   )}
                   {KIND_LABEL[community.kind] ?? community.kind}
                   {' · '}
                   {community.members_count} member{community.members_count === 1 ? '' : 's'}
                 </p>
                 {community.description && (
-                  <p className="mt-2 text-sm leading-relaxed text-text-mid">{community.description}</p>
+                  <p className="mt-3 max-w-2xl text-[0.95rem] leading-relaxed text-text-mid">{community.description}</p>
                 )}
-              </div>
             </div>
 
-            <div className="mt-4 flex flex-wrap items-center gap-2">
+            <div className="mt-5 flex flex-wrap items-center gap-2.5">
               {!user ? (
                 // Not signed in. The link carries this page so they come back
                 // to the community they were reading, not to a dashboard.
                 <Link
                   to={`/join?mode=signin&next=${encodeURIComponent(location.pathname)}`}
-                  className="rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-2 text-xs font-bold text-ink"
+                  className="rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-2.5 text-sm font-bold text-ink"
                 >
                   Sign in to join
                 </Link>
@@ -162,7 +174,7 @@ export default function CommunityView({
                     type="button"
                     onClick={join}
                     disabled={busy}
-                    className="rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-2 text-xs font-bold text-ink disabled:opacity-40"
+                    className="rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-2.5 text-sm font-bold text-ink disabled:opacity-40"
                   >
                     {community.kind === 'private'
                       ? 'Request to join'
@@ -173,7 +185,7 @@ export default function CommunityView({
                 )
               )}
               {isPending && (
-                <span className="rounded-full border border-amber-400/30 px-4 py-2 text-xs font-semibold text-amber-200">
+                <span className="rounded-full bg-amber-500/10 px-5 py-2.5 text-sm font-semibold text-amber-200">
                   Waiting for a moderator
                 </span>
               )}
@@ -182,7 +194,7 @@ export default function CommunityView({
                   type="button"
                   onClick={leave}
                   disabled={busy}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-white/12 px-4 py-2 text-xs font-semibold text-text-mid hover:border-red-400/40 hover:text-red-200 disabled:opacity-40"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[var(--cloud-border)] px-5 py-2.5 text-sm font-semibold text-text-mid hover:border-red-400/50 hover:text-red-200 disabled:opacity-40"
                 >
                   <LogOut size={12} aria-hidden="true" />
                   Leave
@@ -192,7 +204,7 @@ export default function CommunityView({
                 <button
                   type="button"
                   onClick={() => setManaging((m) => !m)}
-                  className="rounded-full border border-white/12 px-4 py-2 text-xs font-semibold text-text-low hover:border-sky/40 hover:text-sky"
+                  className="rounded-full border border-[var(--cloud-border)] px-5 py-2.5 text-sm font-semibold text-text-low hover:border-sky/50 hover:text-sky"
                 >
                   {managing ? 'Close' : 'Manage members'}
                 </button>
@@ -210,6 +222,7 @@ export default function CommunityView({
                 <MemberQueue communityId={communityId} canModerate />
               </div>
             )}
+            </div>
           </header>
 
           {isMember ? (

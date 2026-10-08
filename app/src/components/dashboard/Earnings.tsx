@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { ArrowRight, Wallet as WalletIcon } from 'lucide-react'
+import { ArrowRight, Check, CircleDashed, Clock3, HandCoins, Landmark, Sparkles, Wallet as WalletIcon } from 'lucide-react'
 import { useApi } from '@/hooks/useApi'
 import { ApiError, kaluta, type CommissionsPage, type PayoutEligibility, type Wallet } from '@/lib/api'
-import { Badge, Panel, PanelState, Stat, inputClass } from './primitives'
+import { Badge, KpiCard, Panel, PanelState, inputClass } from './primitives'
 
 const usd = (value: string | number) =>
   `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -62,31 +62,31 @@ export default function Earnings() {
   const maxSource = Math.max(1, ...sources.map(([, amount]) => Number(amount)))
 
   return (
-    <div className="grid gap-5 lg:grid-cols-2">
-      <Panel
-        title="Wallet"
-        subtitle="Balances reconcile line-by-line to the immutable ledger."
-        className="lg:col-span-2"
-      >
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
+      <section className="lg:col-span-2" aria-label="Wallet">
+        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4">
+          <h2 className="text-[1.25rem] font-bold tracking-[-0.025em] text-text-hi">Wallet</h2>
+          <p className="text-sm text-text-low">Balances reconcile line-by-line to the immutable ledger.</p>
+        </div>
         <PanelState loading={wallet.loading} error={wallet.error}>
           {wallet.data && (
-            <>
-              <div className="grid gap-6 sm:grid-cols-4">
-                <Stat label="Available" value={usd(wallet.data.available)} tone="gold" />
-                <Stat label="Pending" value={usd(wallet.data.pending)} tone="muted" hint="In a dispute window" />
-                <Stat label="Lifetime earned" value={usd(wallet.data.lifetime_earned)} />
-                <Stat label="Lifetime paid out" value={usd(wallet.data.lifetime_paid)} tone="muted" />
+            <div className="space-y-4">
+              <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-3 sm:gap-4 lg:grid-cols-4">
+                <KpiCard icon={WalletIcon} tone="gold" featured label="Available" value={usd(wallet.data.available)} />
+                <KpiCard icon={Clock3} tone="sky" label="Pending" value={usd(wallet.data.pending)} hint="In a dispute window" />
+                <KpiCard icon={Sparkles} tone="emerald" label="Lifetime earned" value={usd(wallet.data.lifetime_earned)} />
+                <KpiCard icon={Landmark} tone="coral" label="Lifetime paid out" value={usd(wallet.data.lifetime_paid)} />
               </div>
 
               {/* Progress toward the $1 batch threshold */}
-              <div className="mt-6">
-                <div className="flex items-baseline justify-between">
-                  <span className="caption">Payout threshold</span>
+              <div className="cloud-card p-5 md:p-6">
+                <div className="flex items-baseline justify-between gap-4">
+                  <span className="text-[0.95rem] font-semibold text-text-hi">Payout threshold</span>
                   <span className="mono-data text-sm text-text-mid">
                     {usd(wallet.data.available)} / {usd(wallet.data.payout_threshold)}
                   </span>
                 </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/8">
+                <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-text-hi/10">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-gold-soft to-gold"
                     style={{
@@ -97,15 +97,15 @@ export default function Earnings() {
                     }}
                   />
                 </div>
-                <p className="caption mt-2">
+                <p className="mt-3 text-sm text-text-low">
                   Commissions accrue in custody escrow and join the next batch once you clear{' '}
                   {usd(wallet.data.payout_threshold)}.
                 </p>
               </div>
-            </>
+            </div>
           )}
         </PanelState>
-      </Panel>
+      </section>
 
       <Panel
         title="Where your commission came from"
@@ -116,14 +116,23 @@ export default function Earnings() {
           error={commissions.error}
           empty={commissions.data?.total === 0}
           emptyLabel="No commission yet. It appears as the people you sponsored transact."
+          emptyNode={
+            <div className="flex flex-col items-center py-8 text-center">
+              <span aria-hidden="true" className="grid h-12 w-12 place-items-center rounded-2xl bg-sky/15 text-sky">
+                <HandCoins size={22} />
+              </span>
+              <p className="mt-3 font-bold text-text-hi">No commission yet</p>
+              <p className="mt-1 max-w-xs text-sm text-text-low">It appears as the people you sponsored transact.</p>
+            </div>
+          }
         >
           <div className="space-y-2">
             {sources.map(([source, amount]) => (
               <div key={source} className="flex items-center gap-3">
-                <span className="caption w-32 shrink-0 truncate capitalize">
+                <span className="w-32 shrink-0 truncate text-sm capitalize text-text-low">
                   {SOURCE_LABELS[source] ?? source.replace(/_/g, ' ')}
                 </span>
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/6">
+                <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-text-hi/10">
                   <div
                     className="h-full rounded-full bg-sky/70"
                     style={{ width: `${(Number(amount) / maxSource) * 100}%` }}
@@ -152,7 +161,7 @@ export default function Earnings() {
         <PanelState loading={eligibility.loading} error={eligibility.error}>
           {eligibility.data && (
             <>
-              <ul className="space-y-2.5">
+              <ul className="space-y-2">
                 {[
                   { ok: eligibility.data.kyc_verified, label: 'Identity verified with KinjyKYC' },
                   { ok: eligibility.data.wallet_on_file, label: 'Payout wallet address on file' },
@@ -161,18 +170,20 @@ export default function Earnings() {
                     label: `Accrued at least ${usd(eligibility.data.threshold_usd)}`,
                   },
                 ].map((row) => (
-                  <li key={row.label} className="flex items-center gap-2.5 text-sm">
+                  <li key={row.label} className="flex items-center gap-3 rounded-2xl bg-text-hi/[0.05] px-4 py-3 text-[0.95rem]">
                     <span
                       aria-hidden="true"
-                      className={`h-2 w-2 shrink-0 rounded-full ${row.ok ? 'bg-emerald-400' : 'bg-amber-400'}`}
-                    />
-                    <span className={row.ok ? 'text-text-mid' : 'text-text-hi'}>{row.label}</span>
+                      className={`grid h-7 w-7 shrink-0 place-items-center rounded-full ${row.ok ? 'bg-emerald-400/20 text-emerald-300' : 'bg-amber-400/20 text-amber-300'}`}
+                    >
+                      {row.ok ? <Check size={14} /> : <CircleDashed size={14} />}
+                    </span>
+                    <span className={row.ok ? 'text-text-mid' : 'font-medium text-text-hi'}>{row.label}</span>
                   </li>
                 ))}
               </ul>
 
               {eligibility.data.blocked_by && (
-                <p className="mt-4 flex items-center gap-2 text-sm text-amber-200">
+                <p className="mt-4 flex items-center gap-2 text-sm font-medium text-amber-200">
                   <ArrowRight size={14} aria-hidden="true" />
                   {BLOCKER_COPY[eligibility.data.blocked_by] ?? eligibility.data.blocked_by}
                 </p>
@@ -180,7 +191,7 @@ export default function Earnings() {
 
               {!eligibility.data.wallet_on_file && (
                 <form onSubmit={saveAddress} className="mt-5">
-                  <label className="caption mb-1.5 block" htmlFor="payout-address">
+                  <label className="mb-2 block text-sm font-semibold text-text-mid" htmlFor="payout-address">
                     <WalletIcon size={13} className="mr-1 inline" aria-hidden="true" />
                     BSC wallet address (USDT)
                   </label>
@@ -196,7 +207,7 @@ export default function Earnings() {
                     <button
                       type="submit"
                       disabled={saving || !address.trim()}
-                      className="shrink-0 rounded-full bg-gold px-4 py-2.5 text-sm font-semibold text-ink disabled:opacity-40"
+                      className="shrink-0 rounded-full bg-gradient-to-br from-gold-soft to-gold px-6 py-3 text-sm font-bold text-ink disabled:opacity-40"
                     >
                       Save
                     </button>
@@ -204,7 +215,7 @@ export default function Earnings() {
                 </form>
               )}
 
-              {saveMessage && <p className="caption mt-2 text-text-mid">{saveMessage}</p>}
+              {saveMessage && <p className="mt-3 text-sm text-text-mid">{saveMessage}</p>}
             </>
           )}
         </PanelState>

@@ -242,7 +242,7 @@ export default function Security() {
   const active = (sessions.data ?? []).filter((s) => !s.revoked_at)
 
   return (
-    <div className="grid gap-5 lg:grid-cols-2">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
       <PasswordPanel
         onChanged={() => {
           // The change revoked the other sessions, and refreshed the account's
@@ -262,7 +262,7 @@ export default function Security() {
             {active.map((session) => (
               <li
                 key={session.id}
-                className="flex items-start justify-between gap-4 rounded-card-sm border border-white/8 bg-ink-2/40 p-3.5"
+                className="flex items-start justify-between gap-4 rounded-2xl border border-[var(--cloud-border)] bg-ink-2/40 p-3.5"
               >
                 <div className="min-w-0">
                   <p className="flex items-center gap-2 text-sm font-medium text-text-hi">
@@ -277,7 +277,7 @@ export default function Security() {
                   type="button"
                   onClick={() => revoke(session.id)}
                   disabled={busy === session.id}
-                  className="shrink-0 rounded-full border border-white/12 px-3 py-1.5 text-xs font-semibold text-text-mid hover:border-red-400/40 hover:text-red-200 disabled:opacity-40"
+                  className="shrink-0 rounded-full border border-[var(--cloud-border)] px-3 py-1.5 text-xs font-semibold text-text-mid hover:border-red-400/40 hover:text-red-200 disabled:opacity-40"
                 >
                   Sign out
                 </button>
@@ -316,7 +316,7 @@ export default function Security() {
             {(passkeys.data ?? []).map((key) => (
               <li
                 key={key.id}
-                className="flex items-center justify-between gap-4 rounded-card-sm border border-white/8 bg-ink-2/40 p-3.5"
+                className="flex items-center justify-between gap-4 rounded-2xl border border-[var(--cloud-border)] bg-ink-2/40 p-3.5"
               >
                 <div>
                   <p className="flex items-center gap-2 text-sm font-medium text-text-hi">
@@ -333,7 +333,7 @@ export default function Security() {
           </ul>
         </PanelState>
 
-        <div className="mt-5 flex items-start gap-2.5 rounded-card-sm border border-white/8 bg-ink-2/30 p-3.5">
+        <div className="mt-5 flex items-start gap-2.5 rounded-2xl border border-[var(--cloud-border)] bg-ink-2/30 p-3.5">
           <ShieldCheck size={15} className="mt-0.5 shrink-0 text-gold" aria-hidden="true" />
           <p className="text-xs leading-relaxed text-text-mid">
             Your fingerprint or face unlocks the key <strong className="text-text-hi">on your device</strong>.

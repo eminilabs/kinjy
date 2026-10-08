@@ -86,7 +86,7 @@ export default function Experience() {
   )
 
   return (
-    <div className="grid gap-5 lg:grid-cols-2">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
       <Panel title="Data and media" subtitle="What gets downloaded, and when.">
         <PanelState loading={prefs.loading} error={prefs.error}>
           <div className="space-y-4">
@@ -155,7 +155,7 @@ export default function Experience() {
                 <button
                   type="submit"
                   disabled={!topicDraft.trim() || saving === 'interest_topics'}
-                  className="shrink-0 rounded-full border border-white/12 px-4 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft disabled:opacity-40"
+                  className="shrink-0 rounded-full border border-[var(--cloud-border)] px-4 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft disabled:opacity-40"
                 >
                   Add
                 </button>
@@ -228,10 +228,10 @@ export default function Experience() {
                   disabled={saving === 'age_mode'}
                   onClick={() => set('age_mode', mode.id)}
                   className={cn(
-                    'block w-full rounded-card-sm border px-3 py-2 text-start',
+                    'block w-full rounded-2xl border px-3 py-2 text-start',
                     ageMode === mode.id
                       ? 'border-gold/50 bg-gold/10'
-                      : 'border-white/10 hover:bg-white/5',
+                      : 'border-[var(--cloud-border)] hover:bg-text-hi/10',
                   )}
                 >
                   <span className="block text-sm font-medium text-text-hi">{mode.label}</span>

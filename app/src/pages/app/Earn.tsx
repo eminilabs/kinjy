@@ -55,11 +55,19 @@ export default function Earn() {
   }
 
   return (
-    <AppShell
-      title="Earning"
-      subtitle="You are paid 20% of Kinjy's revenue on everything the members you sponsored do here. One level — nobody above you earns on them."
-    >
-      <div className="grid gap-5 lg:grid-cols-2">
+    <AppShell>
+      <header className="mb-6">
+        <p className="mono-data text-[0.72rem] font-bold uppercase tracking-[0.15em] text-gold-soft">Earning</p>
+        <h1 className="mt-2 text-[clamp(38px,5vw,56px)] font-bold leading-[1.02] tracking-[-0.045em] text-text-hi">
+          What you earn here
+        </h1>
+        <p className="mt-3 max-w-2xl text-[0.95rem] leading-relaxed text-text-low">
+          You are paid 20% of Kinjy's revenue on everything the members you sponsored do here. One level — nobody
+          above you earns on them.
+        </p>
+      </header>
+
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
         {/* --- Kinjy Leaders ------------------------------------------- */}
         <Panel
           title="Kinjy Leaders"
@@ -92,8 +100,8 @@ export default function Earn() {
                   />
                 </div>
 
-                <p className="caption mt-5 flex items-start gap-2">
-                  <Info size={13} className="mt-0.5 shrink-0" aria-hidden="true" />
+                <p className="mt-6 flex items-start gap-3 rounded-2xl bg-text-hi/[0.05] px-4 py-3 text-sm leading-relaxed text-text-mid">
+                  <Info size={15} className="mt-0.5 shrink-0 text-gold-soft" aria-hidden="true" />
                   <span>
                     Ranked on commission earned, not on how many people you signed up — and your share is your
                     commission divided by the total of the qualifying 10,000, so it moves as the month goes on.
@@ -123,10 +131,10 @@ export default function Earn() {
             empty={board.data?.items.length === 0}
             emptyLabel="No commission has been earned this month yet."
           >
-            <ol className="space-y-1.5">
+            <ol className="space-y-1">
               {(board.data?.items ?? []).slice(0, 10).map((row) => (
-                <li key={row.member_id} className="flex items-center gap-3 rounded-card-sm px-2 py-1.5">
-                  <span className="mono-data w-7 shrink-0 text-end text-text-low">{row.rank}</span>
+                <li key={row.member_id} className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-text-hi/[0.05]">
+                  <span className={`mono-data grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold ${row.rank <= 3 ? "bg-gold/25 text-gold-soft" : "bg-text-hi/[0.07] text-text-low"}`}>{row.rank}</span>
                   <span className="min-w-0 flex-1 truncate text-sm text-text-mid">
                     {row.member_id === standing.data?.rank?.toString() ? 'You' : row.member_id.slice(0, 16)}
                   </span>
@@ -161,7 +169,7 @@ export default function Earn() {
                   />
                 </div>
 
-                <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/8">
+                <div className="mt-5 h-2.5 overflow-hidden rounded-full bg-text-hi/10">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-gold-soft to-gold"
                     style={{ width: `${Math.min(100, (pool.data.seats_taken / pool.data.cap) * 100)}%` }}
@@ -169,8 +177,8 @@ export default function Earn() {
                 </div>
 
                 {pool.data.my_seat ? (
-                  <p className="mt-4 flex items-center gap-2 text-sm text-gold-soft">
-                    <Crown size={14} aria-hidden="true" />
+                  <p className="mt-5 flex items-center gap-2 rounded-2xl bg-gold/15 px-4 py-3 text-sm font-semibold text-gold-soft">
+                    <Crown size={15} aria-hidden="true" />
                     You hold seat #{pool.data.my_seat.seat_number.toLocaleString()} ({pool.data.my_seat.status}).
                   </p>
                 ) : pool.data.open ? (
@@ -178,13 +186,13 @@ export default function Earn() {
                     type="button"
                     onClick={join}
                     disabled={joining}
-                    className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-2.5 text-sm font-bold text-ink disabled:opacity-40"
+                    className="mt-5 inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-gold-soft to-gold px-6 py-3 text-sm font-bold text-ink shadow-[0_8px_20px_-10px_rgba(166,120,57,0.6)] disabled:opacity-40"
                   >
                     <Dices size={14} aria-hidden="true" />
                     {joining ? 'Starting…' : `Take a seat — ${usd(pool.data.entry_price)}`}
                   </button>
                 ) : (
-                  <p className="mt-4 text-sm text-text-mid">
+                  <p className="mt-5 text-sm leading-relaxed text-text-mid">
                     The pool is full at {pool.data.cap.toLocaleString()} seats and closed to new members. The seats
                     already held keep receiving assignments.
                   </p>
@@ -192,12 +200,12 @@ export default function Earn() {
 
                 {note && <p className="mt-3 text-sm text-gold-soft">{note}</p>}
                 {error && (
-                  <p role="alert" className="mt-3 text-sm text-red-200">
+                  <p role="alert" className="mt-3 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-200">
                     {error}
                   </p>
                 )}
 
-                <p className="caption mt-4">{pool.data.note}</p>
+                <p className="mt-5 text-sm leading-relaxed text-text-low">{pool.data.note}</p>
               </>
             )}
           </PanelState>
@@ -211,10 +219,12 @@ export default function Earn() {
             empty={assignments.data?.items.length === 0}
             emptyLabel="Nobody yet. Assignments happen as uninvited members sign up."
           >
-            <ul className="space-y-1.5">
+            <ul className="space-y-1">
               {(assignments.data?.items ?? []).map((row) => (
-                <li key={row.member_id} className="flex items-center gap-3 rounded-card-sm px-2 py-1.5">
-                  <Users size={13} className="shrink-0 text-text-low" aria-hidden="true" />
+                <li key={row.member_id} className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-text-hi/[0.05]">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-text-hi/[0.07] text-text-low">
+                    <Users size={14} aria-hidden="true" />
+                  </span>
                   <span className="min-w-0 flex-1 truncate text-sm text-text-mid">
                     {row.display_name ?? row.member_id.slice(0, 16)}
                     {row.handle && <span className="text-text-low"> @{row.handle}</span>}
@@ -233,7 +243,7 @@ export default function Earn() {
 
         {/* --- how it works --------------------------------------------- */}
         <Panel title="How the commission works" className="lg:col-span-2">
-          <ul className="space-y-3">
+          <ul className="grid gap-6 md:grid-cols-3">
             {[
               // The seller example is the marketplace's (lib/features.ts); without
               // it the same rule is shown on an ad, which is Kinjy revenue in full.
@@ -259,14 +269,12 @@ export default function Earn() {
                 body: 'Every commission-generating transaction also sets 5% of Kinjy’s revenue aside for Kinjy Leaders. It is real money on the balance sheet before the month ends, not a promise against next month.',
               },
             ].map((row) => (
-              <li key={row.title} className="flex items-start gap-3">
-                <span className="cloud-glass mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-card-sm">
-                  <row.icon size={16} className="text-gold" aria-hidden="true" />
+              <li key={row.title}>
+                <span className="grid h-11 w-11 place-items-center rounded-[14px] bg-gold/15 text-gold-soft">
+                  <row.icon size={20} aria-hidden="true" />
                 </span>
-                <div>
-                  <h3 className="text-sm font-semibold text-text-hi">{row.title}</h3>
-                  <p className="mt-1 text-sm leading-relaxed text-text-mid">{row.body}</p>
-                </div>
+                <h3 className="mt-4 text-[1.05rem] font-bold leading-snug tracking-[-0.015em] text-text-hi">{row.title}</h3>
+                <p className="mt-2 text-[0.92rem] leading-relaxed text-text-mid">{row.body}</p>
               </li>
             ))}
           </ul>

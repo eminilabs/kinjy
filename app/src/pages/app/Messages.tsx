@@ -521,7 +521,7 @@ export default function Messages() {
    * both are visible and the URL only records which thread is open.
    */
   const openThread = useCallback(
-    async (conversationId: string, how: 'user' | 'url' | 'auto' = 'user') => {
+    async (conversationId: string, how: 'user' | 'url' = 'user') => {
       setActiveId(conversationId)
       activeIdRef.current = conversationId
       setReplyTo(null)
@@ -556,24 +556,20 @@ export default function Messages() {
     [markRead, setParams],
   )
 
-  // Which thread to show: the one the URL names (a notification, the Message
-  // button on a profile, a tap on a phone), else — on a wide screen only —
-  // the most recent. A phone shows the list first, and a thread that is not on
-  // screen must not be opened, since opening one marks it read.
+  // Which thread to show: only the one the URL names (a notification, the
+  // Message button on a profile, a tap on the list). Nothing opens by itself:
+  // opening a thread marks it read, so the member chooses what to read — and
+  // on any screen size, the list comes first.
   useEffect(() => {
     if (requestedId) {
       if (requestedId !== activeIdRef.current) void openThread(requestedId, 'url')
       return
     }
-    if (!wide) {
-      // Back on the list (the back button or gesture): nothing is being read.
-      activeIdRef.current = null
-      setActiveId(null)
-      return
-    }
-    const first = conversations.data?.items[0]
-    if (first && !activeIdRef.current) void openThread(first.id, 'auto')
-  }, [requestedId, conversations.data, openThread, wide])
+    // No conversation named (first visit, or back on the list): nothing is open
+    // and nothing is being read.
+    activeIdRef.current = null
+    setActiveId(null)
+  }, [requestedId, openThread])
 
   const backToList = () => {
     if (pushedThread.current) {
@@ -1665,11 +1661,16 @@ export default function Messages() {
             </div>
           )}
           {!active ? (
-            <div className="m-auto text-center">
-              <MessageSquare size={22} className="mx-auto text-text-low" aria-hidden="true" />
-              <p className="mt-2 text-sm text-text-low">
-                {loadingThread ? 'Loading…' : 'Pick a conversation or a friend.'}
+            <div className="m-auto max-w-xs px-6 text-center">
+              <span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-gold/15 text-gold-soft">
+                <MessageSquare size={28} aria-hidden="true" />
+              </span>
+              <p className="mt-5 text-lg font-bold tracking-[-0.02em] text-text-hi">
+                {loadingThread ? 'Loading…' : 'Your messages'}
               </p>
+              {!loadingThread && (
+                <p className="mt-1.5 text-sm leading-relaxed text-text-low">Pick a conversation or a friend.</p>
+              )}
             </div>
           ) : (
             <>
