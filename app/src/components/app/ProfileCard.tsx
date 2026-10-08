@@ -69,51 +69,54 @@ export default function ProfileCard() {
 
   return (
     <div className="space-y-3">
-      <div className={cn('rounded-[20px] p-5 text-center', tok.card)}>
+      <div className={cn('rounded-card-lg p-4 text-center', tok.card)}>
         <div className="flex justify-center">
-          <MemberAvatar handle={user?.handle} displayName={displayName} avatarUrl={data?.avatar_url} size={84} ring />
+          <MemberAvatar handle={user?.handle} displayName={displayName} avatarUrl={data?.avatar_url} size={80} ring />
         </div>
 
-        <p className={cn('mt-4 flex items-center justify-center gap-1.5 text-[17px] font-bold leading-tight tracking-[-0.02em]', tok.text)}>
+        <p className={cn('mt-3 flex items-center justify-center gap-1.5 text-sm font-bold', tok.text)}>
           {displayName}
           {user?.kyc_verified && <VerifiedBadge size={15} />}
         </p>
-        <p className={cn('mono-data mt-1 truncate text-xs', tok.low)}>@{user?.handle}</p>
-        {place && (
-          <p className={cn('mt-1.5 flex items-center justify-center gap-1 text-[0.72rem]', tok.low)}>
-            <MapPin size={11} aria-hidden="true" />
-            {place}
-          </p>
-        )}
+        <div className="mt-1 flex flex-col items-center gap-1.5">
+          <span className="rounded-full bg-gold/10 px-2 py-0.5 text-xs font-medium text-gold-soft">
+            @{user?.handle}
+          </span>
+          {place && (
+            <span className={cn('flex items-center gap-1 text-[0.7rem]', tok.low)}>
+              <MapPin size={10} aria-hidden="true" />
+              {place}
+            </span>
+          )}
+        </div>
 
-        <hr className="my-5 border-0 border-t border-[var(--cloud-border)]" />
-
-        <dl className="grid grid-cols-2 divide-x divide-[var(--cloud-border)]">
+        <dl className={cn('mt-3 flex justify-center gap-5 border-t pt-3', tok.divider, 'border-t-current/10')}>
           <div>
-            <dd className={cn('text-[22px] font-bold leading-none tabular-nums', tok.text)}>
+            <dt className={cn('text-[0.65rem]', tok.low)}>Followers</dt>
+            <dd className="mono-data text-sm font-semibold text-gold-soft">
               {data?.followers_count ?? 0}
             </dd>
-            <dt className={cn('mt-1.5 text-xs', tok.low)}>Followers</dt>
           </div>
           <div>
-            <dd className={cn('text-[22px] font-bold leading-none tabular-nums', tok.text)}>
+            <dt className={cn('text-[0.65rem]', tok.low)}>Following</dt>
+            <dd className="mono-data text-sm font-semibold text-gold-soft">
               {data?.following_count ?? 0}
             </dd>
-            <dt className={cn('mt-1.5 text-xs', tok.low)}>Following</dt>
+          </div>
+          <div>
+            <dt className={cn('text-[0.65rem]', tok.low)}>
+              <Link to="/connections" className="hover:text-gold-soft">
+                {t('connections')}
+              </Link>
+            </dt>
+            <dd className="mono-data text-sm font-semibold text-gold-soft">
+              {/* The label is the link for assistive tech; the number is a bigger target for the pointer. */}
+              <Link to="/connections" tabIndex={-1} aria-hidden="true">
+                {connections.data ? connections.data.accepted.length : '–'}
+              </Link>
+            </dd>
           </div>
         </dl>
-
-        {/* Connections: a row of its own, so it no longer wraps under the two counts. */}
-        <Link
-          to="/connections"
-          className={cn('mt-5 flex items-center gap-2 text-xs transition-colors hover:text-gold-soft', tok.mid)}
-        >
-          <Users size={14} className="shrink-0 text-gold" aria-hidden="true" />
-          <span>{t('connections')}</span>
-          <strong className="mono-data ms-auto text-sm font-bold text-gold-soft">
-            {connections.data ? connections.data.accepted.length : '–'}
-          </strong>
-        </Link>
       </div>
 
       {/* Pinned modules */}
