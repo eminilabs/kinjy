@@ -137,22 +137,17 @@ export default function Reactions({
         )}
       </div>
 
-      {/* Which reactions this post got — only worth a second display once there is
-          more than one kind, otherwise it repeats the button's own icon. */}
-      {present.length > 1 && (
-        <span className="inline-flex items-center -space-x-1" aria-hidden="true">
+      {/* The second display: which kinds of reaction the post got, beside the
+          button that carries the total. */}
+      {present.length > 0 && (
+        <span
+          className="inline-flex items-center gap-1 rounded-full bg-text-hi/[0.06] px-2 py-1"
+          title={present.map(([kind]) => `${BY_ID.get(kind)?.label ?? kind}: ${summary.counts[kind]}`).join(' · ')}
+        >
           {present.map(([kind]) => {
             const meta = BY_ID.get(kind)
             if (!meta) return null
-            return (
-              <span
-                key={kind}
-                title={`${meta.label}: ${summary.counts[kind]}`}
-                className={cn('grid h-5 w-5 place-items-center rounded-full ring-2 ring-[var(--cloud-solid,transparent)]', tok.cardSolid, meta.tint)}
-              >
-                <meta.icon size={11} />
-              </span>
-            )
+            return <meta.icon key={kind} size={13} fill="currentColor" className={meta.tint} aria-hidden="true" />
           })}
         </span>
       )}
