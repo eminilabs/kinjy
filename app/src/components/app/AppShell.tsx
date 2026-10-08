@@ -105,7 +105,7 @@ export default function AppShell({
         {/* Left rail — identity and shortcuts */}
         {rail && (
           <div className="hidden lg:block">
-            <div className="sticky top-[156px]">
+            <div className="sticky top-[156px] max-h-[calc(100svh-176px)] overflow-y-auto overscroll-contain pe-0.5 pb-4">
               <ProfileCard />
             </div>
           </div>
