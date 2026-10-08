@@ -1,4 +1,5 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
+import { useLocation } from 'react-router'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import type { Post } from '@/lib/api'
@@ -26,11 +27,22 @@ export default function ReelViewer({
   autoplay: boolean
   onClose: () => void
 }) {
+  // A caption's hashtag or an author's name is a link, and following it must not
+  // leave the reel standing over the page it led to.
+  const { pathname, search } = useLocation()
+  const arrivedAt = useRef(pathname + search)
+  useEffect(() => {
+    if (pathname + search !== arrivedAt.current) onClose()
+  }, [pathname, search, onClose])
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      // A window opened from the reel (comments, share) takes the key first.
+      if (event.key === 'Escape' && !document.querySelector('[data-slot="dialog-content"], [data-slot="sheet-content"]')) onClose()
     }
-    document.addEventListener('keydown', onKey)
+    // Capture phase: this looks at whether a window is open *before* that window
+    // handles the same key and goes away, or one Escape would close both.
+    document.addEventListener('keydown', onKey, true)
     // The page underneath must not scroll while a reel is: a flick at the end of
     // the list would otherwise move the feed and leave it somewhere else.
     const previous = document.body.style.overflow
@@ -38,7 +50,7 @@ export default function ReelViewer({
     // Arrow keys drive the reel, so the reel has to hold focus.
     requestAnimationFrame(() => document.querySelector<HTMLElement>('[aria-label="Shorts reel"]')?.focus())
     return () => {
-      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('keydown', onKey, true)
       document.body.style.overflow = previous
     }
   }, [onClose])

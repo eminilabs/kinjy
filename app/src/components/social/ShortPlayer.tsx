@@ -3,7 +3,6 @@ import { Link } from 'react-router'
 import {
   Eye,
   Heart,
-  Link2,
   MessageCircle,
   Pause,
   Play,
@@ -16,13 +15,9 @@ import { ApiError, kaluta, type Post } from '@/lib/api'
 import { useTopic } from '@/hooks/useRealtime'
 import { cn } from '@/lib/utils'
 import MemberAvatar from './MemberAvatar'
-import Comments from './Comments'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { useAuth } from '@/hooks/useAuth'
+import { postUrl, shareLink } from '@/lib/share'
+import { CommentsDialog, RepostDialog, ShareDialog } from './PostModals'
 
 function compact(n: number): string {
   if (n < 1000) return String(n)
@@ -78,7 +73,9 @@ function Short({ post, active, muted, onToggleMute, currentUserId, autoplay }: S
   const [reposted, setReposted] = useState(Boolean(post.reposted_by_me))
   const [comments, setComments] = useState(post.comments_count)
   const [showComments, setShowComments] = useState(false)
-  const [note, setNote] = useState<string | null>(null)
+  const [repostOpen, setRepostOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
+  const { user: me } = useAuth()
   const lastTap = useRef(0)
 
   const clip = post.media.find((m) => m.kind === 'video' && m.url)
@@ -159,39 +156,28 @@ function Short({ post, active, muted, onToggleMute, currentUserId, autoplay }: S
     togglePlay()
   }
 
-  const toggleRepost = async () => {
+  const doRepost = async (thoughts: string) => {
     try {
-      if (reposted) {
-        await kaluta.posts.undoRepost(post.id)
-        setReposted(false)
-        setReposts((n) => Math.max(0, n - 1))
-      } else {
-        await kaluta.posts.repost(post.id)
-        setReposted(true)
-        setReposts((n) => n + 1)
-      }
+      await kaluta.posts.repost(post.id, thoughts)
     } catch (err) {
-      setNote(err instanceof ApiError ? err.message : 'Could not repost')
+      throw new Error(err instanceof ApiError ? err.message : 'Could not repost')
     }
+    setReposted(true)
+    setReposts((n) => n + 1)
   }
 
-  const share = async () => {
-    const url = `${window.location.origin}/shorts?post=${post.id}`
+  const undoRepost = async () => {
     try {
-      if (navigator.share) await navigator.share({ url, text: post.body.slice(0, 120) })
-      else {
-        await navigator.clipboard.writeText(url)
-        setNote('Link copied')
-        window.setTimeout(() => setNote(null), 1800)
-      }
+      await kaluta.posts.undoRepost(post.id)
     } catch (err) {
-      // A share sheet the member dismissed is not a failure. Anything else is,
-      // and swallowing it silently is what makes a button look broken.
-      if (err instanceof DOMException && err.name === 'AbortError') return
-      setNote('Could not copy the link')
-      window.setTimeout(() => setNote(null), 2200)
+      throw new Error(err instanceof ApiError ? err.message : 'Could not undo the repost')
     }
+    setReposted(false)
+    setReposts((n) => Math.max(0, n - 1))
   }
+
+  // Only a public post has a link worth giving away; the rest answer 404.
+  const shareable = post.visibility === 'public'
 
   const seek = (event: React.MouseEvent<HTMLDivElement>) => {
     const video = videoRef.current
@@ -282,7 +268,7 @@ function Short({ post, active, muted, onToggleMute, currentUserId, autoplay }: S
 
 
       {/* Caption */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/45 to-transparent p-4 pb-8 pe-20">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/45 to-transparent p-4 pb-14 pe-20">
         <div className="pointer-events-auto flex items-center gap-2.5">
           <MemberAvatar
             handle={post.author?.handle}
@@ -334,7 +320,7 @@ function Short({ post, active, muted, onToggleMute, currentUserId, autoplay }: S
       </div>
 
       {/* Action rail */}
-      <div className="absolute bottom-10 end-3 flex flex-col items-center gap-3.5">
+      <div className="absolute bottom-16 end-3 flex flex-col items-center gap-3.5">
         <RailButton icon={Heart} label="Like" count={likes} onClick={() => void like()} on={liked} fill />
         <RailButton
           icon={MessageCircle}
@@ -346,10 +332,10 @@ function Short({ post, active, muted, onToggleMute, currentUserId, autoplay }: S
           icon={Repeat2}
           label={reposted ? 'Undo repost' : 'Repost'}
           count={reposts}
-          onClick={() => void toggleRepost()}
+          onClick={() => setRepostOpen(true)}
           on={reposted}
         />
-        <RailButton icon={Share2} label="Share" onClick={() => void share()} />
+        {shareable && <RailButton icon={Share2} label="Share" onClick={() => setShareOpen(true)} />}
         <RailButton
           icon={muted ? VolumeX : Volume2}
           label={muted ? 'Unmute' : 'Mute'}
@@ -362,13 +348,6 @@ function Short({ post, active, muted, onToggleMute, currentUserId, autoplay }: S
         />
       </div>
 
-      {note && (
-        <p className="absolute inset-x-0 top-4 mx-auto w-fit rounded-full bg-black/70 px-3 py-1.5 text-xs text-white">
-          <Link2 size={11} className="me-1 inline" aria-hidden="true" />
-          {note}
-        </p>
-      )}
-
       {/* Scrubber */}
       {clip && (
         <div
@@ -377,9 +356,11 @@ function Short({ post, active, muted, onToggleMute, currentUserId, autoplay }: S
             event.stopPropagation()
             seek(event)
           }}
-          className="absolute inset-x-0 bottom-0 h-4 cursor-pointer"
+          // Lifted off the edge: at the very bottom it sits under a phone's home
+          // bar and is hard to hit. The grab area is taller than the line.
+          className="absolute inset-x-3 bottom-[max(0.9rem,env(safe-area-inset-bottom))] flex h-6 cursor-pointer items-center"
         >
-          <div className="absolute inset-x-0 bottom-0 h-1 bg-white/20">
+          <div className="w-full overflow-hidden rounded-full bg-white/25 h-1">
             <div
               className="h-full bg-white"
               style={{ width: `${Math.round(progress * 100)}%` }}
@@ -388,27 +369,39 @@ function Short({ post, active, muted, onToggleMute, currentUserId, autoplay }: S
         </div>
       )}
 
-      {/* Non-modal on purpose.
-          A modal dialog makes Radix set `pointer-events: none` on <body> for as
-          long as it is mounted, so while comments are open every other control
-          on the reel is dead — and if the close animation ever fails to run,
-          the page stays dead. A reel also should not stop the clip to read
-          comments; TikTok does not. Non-modal keeps the video playing, the rail
-          live, and the page clickable no matter what. */}
-      <Dialog open={showComments} onOpenChange={setShowComments} modal={false}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="text-base">
-              {comments} {comments === 1 ? 'comment' : 'comments'}
-            </DialogTitle>
-          </DialogHeader>
-          <Comments
-            postId={post.id}
-            currentUserId={currentUserId}
-            onCountChange={(delta) => setComments((n) => n + delta)}
-          />
-        </DialogContent>
-      </Dialog>
+      {/* The same windows as everywhere else: comments with their input pinned,
+          repost with an optional quote, share with the link. They sit above the
+          reel, and the clip keeps playing underneath. The post is already on
+          screen, so the comments window does not repeat its video. */}
+      <CommentsDialog
+        open={showComments}
+        onOpenChange={setShowComments}
+        post={post}
+        currentUserId={currentUserId}
+        count={comments}
+        media={[]}
+        autoplay={false}
+        onCountChange={(delta) => setComments((n) => n + delta)}
+      />
+      <RepostDialog
+        open={repostOpen}
+        onOpenChange={setRepostOpen}
+        post={post}
+        reposted={reposted}
+        onRepost={doRepost}
+        onUndo={undoRepost}
+      />
+      {shareable && (
+        <ShareDialog
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+          post={post}
+          baseUrl={postUrl(post.id, null)}
+          buildUrl={(withRef) => postUrl(post.id, withRef ? me?.referral_code ?? null : null)}
+          referralCode={me?.referral_code ?? null}
+          nativeShare={(url) => shareLink(url, post.author?.display_name ? `${post.author.display_name} on Kinjy` : 'A post on Kinjy')}
+        />
+      )}
     </li>
   )
 }

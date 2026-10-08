@@ -53,7 +53,8 @@ export function ResponsiveDialog({
     const timer = window.setTimeout(() => {
       const inside = document.querySelector('[data-slot="dialog-content"], [data-slot="sheet-content"]')
       document.querySelectorAll('video').forEach((video) => {
-        if (!inside?.contains(video)) video.pause()
+        // The reel's own clip keeps playing under its comments, as on Facebook.
+        if (!inside?.contains(video) && !video.closest('[aria-label="Video reel"]')) video.pause()
       })
     }, 60)
     return () => window.clearTimeout(timer)
