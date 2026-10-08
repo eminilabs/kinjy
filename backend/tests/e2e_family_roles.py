@@ -185,5 +185,52 @@ join(b_h, b_me["id"], "BsFriend")
 r = c.post("/family/relationships", headers=a_h, json={"from_person_id": a_me["id"], "to_person_id": b_me["id"], "kind": "spouse_of"})
 check("no link across another member's tree (404)", r.status_code == 404, r.text[:100])
 
+print("\nA viewer corrects their own details, nothing else")
+v2h, v2u, v2_node, _ = join(ch, dad["id"], "Viv")
+check("a viewer edits their own place (200)", c.patch(f"/family/persons/{v2_node}", headers=v2h, json={"biography": "mine"}).status_code == 200)
+check("but cannot remove it (403)", c.delete(f"/family/persons/{v2_node}", headers=v2h).status_code == 403)
+check("and still cannot create or link anyone (403)", relative(v2h, v2_node, "child", "K").status_code == 403)
+
+print("\nRemoving a person must not leave a part of the tree without an owner")
+so_h, so_u = register()
+so = c.post("/family/persons", headers=so_h, json={"given_name": "SOwner", "user_id": so_u["id"], "birth_date": "1985-01-01"}).json()
+mid = relative(so_h, so["id"], "parent", "Mid", born="1955-01-01").json()["person"]
+top = relative(so_h, mid["id"], "parent", "Top", born="1930-01-01").json()["person"]
+leaf = relative(so_h, so["id"], "child", "Leaf", born="2015-01-01").json()["person"]
+r = c.delete(f"/family/persons/{leaf['id']}", headers=so_h)
+check("removing a leaf does not split anything and is allowed as before (204)", r.status_code == 204, r.text[:100])
+r = c.delete(f"/family/persons/{mid['id']}", headers=so_h)
+check("removing the middle one would leave Top in a part with no owner: refused (409)", r.status_code == 409 and "Top" in r.text and "owner" in r.text, r.text[:200])
+check("and nothing was removed", c.get(f"/family/persons/{mid['id']}", headers=so_h).status_code == 200 and c.get(f"/family/persons/{top['id']}", headers=so_h).status_code == 200)
+link_id = [e["id"] for e in c.get(f"/family/tree/{so['id']}?depth=3", headers=so_h).json()["edges"] if e["from"] == mid["id"] and e["to"] == so["id"]][0]
+r = c.delete(f"/family/relationships/{link_id}", headers=so_h)
+check("removing the only link to that part is refused too (409)", r.status_code == 409 and "owner" in r.text, r.text[:160])
+tok = invite(so_h, top["id"], "contributor").json()["token"]
+th, tu = register()
+check("someone claims Top's place as a contributor (200)", c.post("/family/invitations/accept", headers=th, json={"token": tok}).status_code == 200)
+r = c.delete(f"/family/persons/{mid['id']}", headers=so_h)
+check("a contributor is not an owner: still refused (409)", r.status_code == 409, r.text[:120])
+row = [m for m in c.get(f"/family/persons/{so['id']}/members", headers=so_h).json()["items"] if m["name"] == "Top"][0]
+check("an owner makes them an owner (200)", c.patch(f"/family/members/{row['id']}", headers=so_h, json={"role": "owner"}).status_code == 200)
+r = c.delete(f"/family/persons/{mid['id']}", headers=so_h)
+check("now both parts keep an owner, so the removal is allowed (204)", r.status_code == 204, r.text[:120])
+check("the part that split off is still read by its owner", c.get(f"/family/tree/{top['id']}", headers=th).status_code == 200)
+check("and the first part by its own", c.get(f"/family/tree/{so['id']}", headers=so_h).status_code == 200)
+check("neither owner reaches the other part now (404)", c.get(f"/family/tree/{top['id']}", headers=so_h).status_code == 404)
+x_h, x_u = register()
+xo = c.post("/family/persons", headers=x_h, json={"given_name": "XOwner", "user_id": x_u["id"], "birth_date": "1985-01-01"}).json()
+xa = relative(x_h, xo["id"], "parent", "XA", born="1955-01-01").json()["person"]
+xb = relative(x_h, xa["id"], "parent", "XB", born="1930-01-01").json()["person"]
+xl = [e["id"] for e in c.get(f"/family/tree/{xo['id']}?depth=3", headers=x_h).json()["edges"] if e["from"] == xb["id"] and e["to"] == xa["id"]][0]
+check("cutting the link to that part is refused (409)", c.delete(f"/family/relationships/{xl}", headers=x_h).status_code == 409)
+xleaf = relative(x_h, xo["id"], "child", "XLeaf", born="2015-01-01").json()["person"]
+leaf_link = [e["id"] for e in c.get(f"/family/tree/{xo['id']}?depth=3", headers=x_h).json()["edges"] if e["to"] == xleaf["id"]][0]
+check("so is unlinking a person who would be left alone with no owner (409)", c.delete(f"/family/relationships/{leaf_link}", headers=x_h).status_code == 409)
+check("removing that person altogether splits nothing and is allowed (204)", c.delete(f"/family/persons/{xleaf['id']}", headers=x_h).status_code == 204)
+p1 = relative(x_h, xo["id"], "parent", "XP1", born="1960-01-01").json()["person"]
+p2 = relative(x_h, xo["id"], "parent", "XP2", born="1961-01-01").json()["person"]
+sp = c.post("/family/relationships", headers=x_h, json={"from_person_id": p1["id"], "to_person_id": p2["id"], "kind": "spouse_of"}).json()
+check("a link whose removal leaves one connected tree is allowed as before (204)", c.delete(f"/family/relationships/{sp['id']}", headers=x_h).status_code == 204)
+
 print("\n" + ("ALL CHECKS PASSED" if ok else "THERE ARE FAILURES ABOVE"))
 sys.exit(0 if ok else 1)

@@ -305,10 +305,9 @@ check("no relation to them is left behind", not any(sib["id"] in (e["from"], e["
 check("their dispute went with them", not any(d["target_id"] == sib["id"] for d in c.get("/family/disputes", headers=alice_h).json()["items"]))
 check("the rest of the tree is intact", {n["person"]["given_name"] for n in t2["nodes"]} >= {"Alice", "Ama", "Kofi", "Akosua", "Esi"})
 check("a link someone else made is not offered for removal", all(e["removable"] is False for e in tree(kin_h, me["id"], 3).json()["edges"]) if tree(kin_h, me["id"], 3).status_code == 200 else True)
-check("a relation can be removed on its own", c.delete(f"/family/relationships/{[e['id'] for e in t2['edges'] if e['kind'] == 'sibling_of'][0]}", headers=alice_h).status_code == 204)
+check("a relation that would leave a part of the tree with no owner is refused (409)", c.delete(f"/family/relationships/{[e['id'] for e in t2['edges'] if e['kind'] == 'sibling_of'][0]}", headers=alice_h).status_code == 409)
 check("someone else cannot remove it (403)", c.delete(f"/family/relationships/{t2['edges'][0]['id']}", headers=kin_h).status_code == 403)
-check("the member removes their own node (204)", c.delete(f"/family/persons/{me['id']}", headers=alice_h).status_code == 204)
-check("and can add themselves again", person(alice_h, "Alice again", user_id=alice["id"]).status_code == 201)
+check("removing their own node, which would split the tree into parts with no owner, is refused (409)", c.delete(f"/family/persons/{me['id']}", headers=alice_h).status_code == 409)
 
 print("\nA big family loads in pieces")
 big_h, big = register()

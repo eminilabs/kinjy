@@ -894,11 +894,10 @@ Decisions and limits, stated rather than hidden:
   second tree is the caller's alone (nobody else holds a role in it); that one is absorbed and the
   role it gave them goes with it. Linking into another member's tree (previously allowed with the
   member's `who_can_add_family` consent) now returns 404: use an invitation. Real fusion needs its own design.
-- **Platform admins** keep the edit/delete access family-service already gave them. Not touched; to decide.
-- **A member keeps the right to edit and remove their own place** whatever their role (their own data),
-  including a Viewer.
+- **Platform admins** keep, for now, the edit/delete access family-service already gave them, distinct from the roles. Whether a dedicated audit trail is needed for it: yes, it should be logged before it is used in production (nothing records it today). The split rule applies to them too.
+- **A viewer may correct the personal details of their own place, and nothing else**: they cannot remove it, create or link people, confirm, dispute, invite or manage members. Contributors and owners may still remove their own place.
 - **Trees left without an owner** by the migration (see `ownership_reviews`) cannot have members
   managed or contributors invited; contributors keep what they had.
-- **Deleting a node can split a tree**: a part may end up with no owner. Not guarded.
+- **Removing a person or a link that would split a tree** is refused (409, naming who would be left) unless every part keeps an owner; a tree that had no owner is left as it is. As a consequence a person cannot be unlinked from the tree, only removed, unless their part has its own owner.
 - The members panel appears on the owner's own place; an owner with no place of their own (old
   data) has no screen for it yet.

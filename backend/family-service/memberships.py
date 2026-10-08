@@ -180,3 +180,67 @@ def remove_member(membership_id: str, principal: CurrentUser, db: OrmSession = D
     for r in rows:
         db.delete(r)
     db.commit()
+
+
+# --- a split must not leave a tree without an owner ------------------------------------------
+
+def ownerless_fragments(db: OrmSession, people: set[str], removed: set[str], removed_edge: str | None = None) -> list[set[str]]:
+    """The parts of a tree that would have no owner once ``removed`` people (or one link) are gone.
+
+    Empty when nothing is split, and when the tree had no owner to begin with (it is already
+    listed for review and nothing here makes it worse). Otherwise every part the removal
+    leaves must still contain an owner's place, or the removal is refused by the caller.
+    """
+    kept = people - removed
+    owner_anchors_before = set(
+        db.scalars(
+            select(models.Membership.person_id).where(models.Membership.role == "owner", models.Membership.person_id.in_(people))
+        ).all()
+    )
+    if not owner_anchors_before or not kept:
+        return []
+    adjacency: dict[str, set[str]] = {p: set() for p in kept}
+    for e in db.scalars(
+        select(models.Relationship).where(
+            models.Relationship.status != "disputed",
+            models.Relationship.from_person_id.in_(kept),
+            models.Relationship.to_person_id.in_(kept),
+        )
+    ).all():
+        if e.id != removed_edge:
+            adjacency[e.from_person_id].add(e.to_person_id)
+            adjacency[e.to_person_id].add(e.from_person_id)
+    parts: list[set[str]] = []
+    seen: set[str] = set()
+    for start in sorted(kept):
+        if start in seen:
+            continue
+        part, stack = {start}, [start]
+        while stack:
+            for nxt in adjacency[stack.pop()]:
+                if nxt not in part:
+                    part.add(nxt)
+                    stack.append(nxt)
+        seen |= part
+        parts.append(part)
+    if len(parts) <= 1:
+        return []
+    owner_anchors_after = owner_anchors_before - removed
+    return [part for part in parts if not (part & owner_anchors_after)]
+
+
+def refuse_if_orphaning(db: OrmSession, people: set[str], removed: set[str], what: str, removed_edge: str | None = None) -> None:
+    orphans = ownerless_fragments(db, people, removed, removed_edge)
+    if not orphans:
+        return
+    names = [
+        p.given_name for p in db.scalars(select(models.Person).where(models.Person.id.in_(set().union(*orphans)))).all()
+    ]
+    shown = ", ".join(sorted(names)[:3]) + (" and others" if len(names) > 3 else "")
+    raise HTTPException(
+        status_code=409,
+        detail=(
+            f"Removing {what} would split this tree and leave {shown} in a part with no owner. "
+            "Make someone in that part an owner first, or remove those people first."
+        ),
+    )

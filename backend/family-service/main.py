@@ -404,6 +404,9 @@ async def delete_person(person_id: str, principal: CurrentUser, db: OrmSession =
     if not access.can_delete(principal, person, family):
         raise HTTPException(status_code=403, detail="You may remove what you added, or your own place; an owner may remove any node that is not a member's")
 
+    # A removal that splits the tree must not leave a part without an owner.
+    memberships.refuse_if_orphaning(db, family.people, {person_id}, f"{person.given_name}")
+
     # A member's own place anchors their role: removing it must not leave the tree without an owner.
     held = db.scalars(select(models.Membership).where(models.Membership.person_id.in_(family.people))).all()
     owners_left = {m.user_id for m in held if m.role == "owner" and m.person_id != person_id}
@@ -739,6 +742,8 @@ def delete_relationship(relationship_id: str, principal: CurrentUser, db: OrmSes
     if edge is None:
         raise HTTPException(status_code=404, detail="Relationship not found")
     _may_change_link(db, principal, edge, "remove")
+    people = access.load_family(db, principal.user_id, edge.from_person_id).people
+    memberships.refuse_if_orphaning(db, people, set(), "this link", removed_edge=edge.id)
     db.execute(
         delete(models.Confirmation).where(
             models.Confirmation.target_type == "relationship", models.Confirmation.target_id == relationship_id

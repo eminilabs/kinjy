@@ -193,8 +193,11 @@ def can_edit(principal, person: models.Person, family: Family | None = None) -> 
 
 
 def can_delete(principal, person: models.Person, family: Family | None = None) -> bool:
-    if principal.is_admin or person.user_id == principal.user_id:
+    if principal.is_admin:
         return True
+    if person.user_id == principal.user_id:
+        # A viewer only reads: they may correct their own details but not remove their place.
+        return family is None or family.role != "viewer"
     # A node tied to someone's account is theirs to remove, not its author's.
     if person.user_id is not None or family is None:
         return False
