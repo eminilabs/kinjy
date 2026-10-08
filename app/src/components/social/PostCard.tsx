@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  Columns2,
   Eye,
   EyeOff,
   Flag,
@@ -13,8 +12,6 @@ import {
   Repeat2,
   SlidersHorizontal,
   Trash2,
-  Link2,
-  Check,
   Share2,
   UsersRound,
 } from 'lucide-react'
@@ -39,6 +36,7 @@ import {
 } from '@/components/ui/dialog'
 import { Link } from 'react-router'
 import { useCommunityRef } from './useCommunityRef'
+import { CommentsDialog, RepostDialog, ShareDialog, TranslationPanel, type TranslationView } from './PostModals'
 
 /** Who can read a restricted post, said on the card so nobody has to guess. */
 const AUDIENCE: Record<string, { label: string; hint: string }> = {
@@ -236,7 +234,8 @@ export default function PostCard({
   const community = useCommunityRef(hideCommunity ? null : target.community_id)
   const [reactions, setReactions] = useState(target.reactions ?? { counts: {}, total: 0, mine: null })
   const [comments, setComments] = useState(target.comments_count)
-  const [showComments, setShowComments] = useState(commentsAlwaysOpen)
+  const [commentsOpen, setCommentsOpen] = useState(false)
+  const [repostOpen, setRepostOpen] = useState(false)
   const [preview, setPreview] = useState<number | null>(null)
   // Reporting. Held open as a small inline panel rather than a modal: a report
   // is a judgement about the thing you are looking at, and a dialog that
@@ -249,8 +248,6 @@ export default function PostCard({
   // making that claim.
   const { user: me } = useAuth()
   const [shareOpen, setShareOpen] = useState(false)
-  const [withRef, setWithRef] = useState(true)
-  const [shareNote, setShareNote] = useState<string | null>(null)
   const [reporting, setReporting] = useState(false)
   const [reported, setReported] = useState(false)
   const [reportFailed, setReportFailed] = useState(false)
@@ -270,7 +267,8 @@ export default function PostCard({
   const uiLang = i18n.language.slice(0, 2)
   const [translation, setTranslation] = useState<{ text: string; provider?: string; mock?: boolean } | null>(null)
   const [translating, setTranslating] = useState(false)
-  const [sideBySide, setSideBySide] = useState(false)
+  const [translateOpen, setTranslateOpen] = useState(false)
+  const [translationView, setTranslationView] = useState<TranslationView>('translated')
   const canTranslate = post.lang !== uiLang
 
   // Live counts. Only counts — never `mine`, which is per-viewer: applying
@@ -292,43 +290,31 @@ export default function PostCard({
   // 404 to the person who receives it, which is a worse experience than not
   // offering the button.
   const shareable = target.visibility === 'public'
-  const myRef = withRef ? me?.referral_code ?? null : null
-  const shareUrl = postUrl(target.id, myRef)
-
-  const doShare = async () => {
+  const shareTitle = (): string => {
     // The author can be null when the profile lookup did not resolve. That is
     // a reason for a plainer share title, not for the share to fail.
-    const who = source.author?.display_name
-    const result = await shareLink(shareUrl, who ? `${who} on Kinjy` : 'A post on Kinjy')
-    setShareNote(
-      result === 'shared'
-        ? null
-        : result === 'copied'
-          ? 'Link copied.'
-          : result === 'cancelled'
-            ? null
-            : 'Could not copy — select the link and copy it by hand.',
-    )
+    const who = target.author?.display_name
+    return who ? `${who} on Kinjy` : 'A post on Kinjy'
   }
 
-  const toggleRepost = async () => {
-    setBusy(true)
-    setNote(null)
+  const doRepost = async (thoughts: string) => {
     try {
-      if (reposted) {
-        await kaluta.posts.undoRepost(target.id)
-        setReposted(false)
-        setReposts((n) => Math.max(0, n - 1))
-      } else {
-        await kaluta.posts.repost(target.id)
-        setReposted(true)
-        setReposts((n) => n + 1)
-      }
+      await kaluta.posts.repost(target.id, thoughts)
     } catch (err) {
-      setNote(err instanceof ApiError ? err.message : 'Could not repost')
-    } finally {
-      setBusy(false)
+      throw new Error(err instanceof ApiError ? err.message : 'Could not repost')
     }
+    setReposted(true)
+    setReposts((n) => n + 1)
+  }
+
+  const undoRepost = async () => {
+    try {
+      await kaluta.posts.undoRepost(target.id)
+    } catch (err) {
+      throw new Error(err instanceof ApiError ? err.message : 'Could not undo the repost')
+    }
+    setReposted(false)
+    setReposts((n) => Math.max(0, n - 1))
   }
 
   /** "Load it anyway" — one post, without turning data saver off. */
@@ -357,10 +343,12 @@ export default function PostCard({
   }
 
   const translate = async () => {
-    if (translation) {
-      setSideBySide((v) => !v)
+    if (translateOpen) {
+      setTranslateOpen(false)
       return
     }
+    setTranslateOpen(true)
+    if (translation) return
     setTranslating(true)
     try {
       // Pass the author's declared language: the server's detector only
@@ -368,6 +356,7 @@ export default function PostCard({
       const result = await kaluta.ai.translate(plainBody, uiLang, post.lang)
       setTranslation({ text: result.translated, provider: result.provider, mock: result.mock })
     } catch (err) {
+      setTranslateOpen(false)
       setNote(err instanceof ApiError ? err.message : 'Translation unavailable')
     } finally {
       setTranslating(false)
@@ -405,8 +394,8 @@ export default function PostCard({
   const source = target
 
   // Articles are stored as markup; everything else is plain text.
-  const isRichArticle = source.format === 'article' && looksLikeHtml(source.body) && !translation
-  const body = translation && !sideBySide ? translation.text : source.body
+  const isRichArticle = source.format === 'article' && looksLikeHtml(source.body)
+  const body = source.body
   /** Text without the tags — for translation, and for the side-by-side column. */
   const plainBody = looksLikeHtml(source.body) ? htmlToText(source.body) : source.body
   // The first link in the body is the one worth unfurling; a post full of
@@ -522,19 +511,8 @@ export default function PostCard({
         </DialogContent>
       </Dialog>
 
-      {/* Body — single column, or the original beside its translation */}
-      {sideBySide && translation ? (
-        <div className="mt-3 grid gap-4 sm:grid-cols-2">
-          <div>
-            <p className="caption mb-1 uppercase">{post.lang} · original</p>
-            <p className="whitespace-pre-wrap text-[0.95rem] leading-relaxed text-text-hi">{plainBody}</p>
-          </div>
-          <div className="sm:border-s sm:border-white/8 sm:ps-4">
-            <p className="caption mb-1 uppercase">{uiLang} · translated</p>
-            <p className="whitespace-pre-wrap text-[0.95rem] leading-relaxed text-text-hi">{translation.text}</p>
-          </div>
-        </div>
-      ) : isRichArticle ? (
+      {/* Body. A translation never replaces it: it opens underneath. */}
+      {isRichArticle ? (
         /* Sanitised again at render time: the database can hold anything, and
            trusting what was cleaned on the way in would only move the risk. */
         <div
@@ -563,6 +541,19 @@ export default function PostCard({
         >
           {withHashtags(body)}
         </p>
+      )}
+
+      {translateOpen && canTranslate && (
+        <TranslationPanel
+          from={post.lang}
+          to={uiLang}
+          original={plainBody}
+          translation={translation}
+          loading={translating}
+          view={translationView}
+          onView={setTranslationView}
+          onHide={() => setTranslateOpen(false)}
+        />
       )}
 
       {/* Only when the post has no media of its own: a post with a photo and a
@@ -634,13 +625,6 @@ export default function PostCard({
         </ul>
       )}
 
-      {translation && (
-        <p className="caption mt-1.5 text-sky">
-          Translated by {translation.provider ?? 'the language gateway'}
-          {translation.mock && ' · mock provider — no model key configured'}
-        </p>
-      )}
-
       {source.topics.length > 0 && (
         <ul className="mt-3 flex flex-wrap gap-1.5">
           {source.topics.map((topic) => (
@@ -656,7 +640,8 @@ export default function PostCard({
 
         <button
           type="button"
-          onClick={() => (onOpen ? onOpen() : setShowComments(true))}
+          onClick={() => (onOpen ? onOpen() : setCommentsOpen(true))}
+          aria-label={`Comments: ${comments}`}
           className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-text-mid hover:text-text-hi"
         >
           <MessageCircle size={13} aria-hidden="true" />
@@ -665,10 +650,12 @@ export default function PostCard({
 
         <button
           type="button"
-          onClick={toggleRepost}
+          onClick={() => setRepostOpen(true)}
+          aria-haspopup="dialog"
+          aria-label={reposted ? `You reposted this: ${reposts}` : `Repost: ${reposts}`}
           // A repost carries the original inside it, so only public posts can
           // travel further; the server refuses the rest, and the button says so.
-          disabled={busy || (target.visibility !== 'public' && !reposted)}
+          disabled={target.visibility !== 'public' && !reposted}
           aria-pressed={reposted}
           title={
             reposted
@@ -688,12 +675,9 @@ export default function PostCard({
 
         <button
           type="button"
-          onClick={() => {
-            setShareNote(null)
-            setShareOpen((open) => !open)
-          }}
+          onClick={() => setShareOpen(true)}
           disabled={!shareable}
-          aria-expanded={shareOpen}
+          aria-haspopup="dialog"
           title={
             shareable
               ? 'Share this outside Kinjy'
@@ -719,11 +703,11 @@ export default function PostCard({
           <button
             type="button"
             onClick={translate}
-            disabled={translating}
+            aria-expanded={translateOpen}
             className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-text-mid hover:text-sky disabled:opacity-40"
           >
-            {translation ? <Columns2 size={13} aria-hidden="true" /> : <Languages size={13} aria-hidden="true" />}
-            {translating ? 'Translating…' : translation ? (sideBySide ? 'Single column' : 'Side by side') : 'Translate'}
+            <Languages size={13} aria-hidden="true" />
+            {translating ? 'Translating…' : translateOpen ? 'Hide translation' : 'Translate'}
           </button>
         )}
 
@@ -763,53 +747,26 @@ export default function PostCard({
         )}
       </footer>
 
-      {shareOpen && shareable && (
-        <div className="mt-2 rounded-xl border border-text-low/25 p-3">
-          <p className="text-xs font-semibold text-text-hi">Share this outside Kinjy</p>
-
-          {/* The link is shown rather than only copied. A member about to put
-              their name on something in a group chat should be able to read
-              what they are about to send, including the code on the end. */}
-          <p className="mt-2 break-all rounded-lg bg-ink-2/50 px-2.5 py-2 text-[0.7rem] text-text-mid">
-            {shareUrl}
-          </p>
-
-          {me?.referral_code && (
-            <label className="mt-2.5 flex items-start gap-2 text-xs text-text-mid">
-              <input
-                type="checkbox"
-                checked={withRef}
-                onChange={(e) => setWithRef(e.target.checked)}
-                className="mt-0.5 accent-gold"
-              />
-              <span>
-                Include my invitation code
-                <span className="ms-1 font-mono text-text-low">{me.referral_code}</span>
-                <span className="mt-0.5 block text-text-low">
-                  Anyone who joins from this link is credited to you.
-                </span>
-              </span>
-            </label>
-          )}
-
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={doShare}
-              className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-gold-soft to-gold px-3.5 py-1.5 text-xs font-bold text-ink"
-            >
-              <Link2 size={12} aria-hidden="true" />
-              Copy link
-            </button>
-            {shareNote && (
-              <span role="status" className="inline-flex items-center gap-1 text-xs text-text-mid">
-                <Check size={12} aria-hidden="true" />
-                {shareNote}
-              </span>
-            )}
-          </div>
-        </div>
+      {shareable && (
+        <ShareDialog
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+          post={target}
+          baseUrl={postUrl(target.id, null)}
+          buildUrl={(withRef) => postUrl(target.id, withRef ? me?.referral_code ?? null : null)}
+          referralCode={me?.referral_code ?? null}
+          nativeShare={(url) => shareLink(url, shareTitle())}
+        />
       )}
+
+      <RepostDialog
+        open={repostOpen}
+        onOpenChange={setRepostOpen}
+        post={target}
+        reposted={reposted}
+        onRepost={doRepost}
+        onUndo={undoRepost}
+      />
 
       {reporting && !reported && (
         <div className="mt-2 rounded-xl border border-text-low/25 p-3">
@@ -875,13 +832,21 @@ export default function PostCard({
       )}
 
 
-      {/* Inline, the way LinkedIn does it: the thread belongs to the post, and
-          a modal cuts you off from the very content the replies are about.
-          Long threads stay bounded by their own scroll area instead. */}
-      {showComments && (
+      {/* In the post dialog the comments are the point, so they sit open under
+          the post. Everywhere else they open in a dialog of their own. */}
+      {commentsAlwaysOpen ? (
         <Comments
           postId={target.id}
           currentUserId={currentUserId}
+          onCountChange={(delta) => setComments((n) => n + delta)}
+        />
+      ) : (
+        <CommentsDialog
+          open={commentsOpen}
+          onOpenChange={setCommentsOpen}
+          post={target}
+          currentUserId={currentUserId}
+          count={comments}
           onCountChange={(delta) => setComments((n) => n + delta)}
         />
       )}
