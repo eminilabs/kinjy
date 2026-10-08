@@ -854,6 +854,8 @@ export default function PostCard({
           post={target}
           currentUserId={currentUserId}
           count={comments}
+          media={media}
+          autoplay={post.autoplay !== false}
           onCountChange={(delta) => setComments((n) => n + delta)}
         />
       )}

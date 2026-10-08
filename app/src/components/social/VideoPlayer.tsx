@@ -20,6 +20,18 @@ const clock = (seconds: number) =>
  * member's own choice always outranks the viewport: once they have paused
  * something by hand, scrolling back to it does not start it again.
  */
+/**
+ * Whether a dialog is open that this video is not part of.
+ *
+ * The feed keeps playing behind a window that covers it, so opening a post's
+ * comments used to start the same clip a second time on top of the first. A
+ * video under a dialog waits; one inside it plays.
+ */
+function coveredByDialog(video: HTMLElement): boolean {
+  const dialog = document.querySelector('[data-slot="dialog-content"], [data-slot="sheet-content"]')
+  return Boolean(dialog) && !dialog!.contains(video)
+}
+
 export default function VideoPlayer({
   src,
   poster,
@@ -28,6 +40,7 @@ export default function VideoPlayer({
   onExpand,
   startMuted = true,
   fill = false,
+  compact = false,
 }: {
   src: string
   poster?: string | null
@@ -39,6 +52,8 @@ export default function VideoPlayer({
   startMuted?: boolean
   /** In the lightbox the video fills the space instead of being capped. */
   fill?: boolean
+  /** Inside a dialog that also has to fit a comment thread: a shorter frame. */
+  compact?: boolean
 }) {
   const ref = useRef<HTMLVideoElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -71,7 +86,7 @@ export default function VideoPlayer({
         // Half on screen counts as "being watched". A stricter threshold makes
         // a tall video on a short phone never qualify.
         if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
-          if (autoplay && !pausedByHand.current) play()
+          if (autoplay && !pausedByHand.current && !coveredByDialog(video)) play()
         } else {
           video.pause()
         }
@@ -133,7 +148,7 @@ export default function VideoPlayer({
         onClick={toggle}
         className={cn(
           'w-full cursor-pointer bg-black',
-          fill ? 'max-h-[88svh] object-contain' : 'max-h-[460px] object-contain',
+          fill ? 'max-h-[88svh] object-contain' : compact ? 'max-h-[38svh] object-contain' : 'max-h-[460px] object-contain',
         )}
       />
 

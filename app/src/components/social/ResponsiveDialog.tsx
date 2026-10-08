@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react'
+import { useEffect, useMemo, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 import {
   Dialog,
@@ -45,6 +45,19 @@ export function ResponsiveDialog({
 }) {
   const mobile = useIsMobile()
   const value = useMemo(() => ({ mobile, close: () => onOpenChange(false) }), [mobile, onOpenChange])
+
+  // Whatever is playing underneath stops while the window is open. The window
+  // mounts a moment after `open` flips, so look once it is there.
+  useEffect(() => {
+    if (!open) return
+    const timer = window.setTimeout(() => {
+      const inside = document.querySelector('[data-slot="dialog-content"], [data-slot="sheet-content"]')
+      document.querySelectorAll('video').forEach((video) => {
+        if (!inside?.contains(video)) video.pause()
+      })
+    }, 60)
+    return () => window.clearTimeout(timer)
+  }, [open])
 
   if (mobile) {
     return (

@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { Check, Copy, Languages, Loader2, Mail, MessageCircle, Repeat2, Send, Share2, X } from 'lucide-react'
 import { Segmented, Switch } from '@/components/dashboard/primitives'
-import type { Post } from '@/lib/api'
+import type { Post, PostMedia } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import Comments from './Comments'
 import MemberAvatar from './MemberAvatar'
+import VideoPlayer from './VideoPlayer'
 import { DialogHeading, DialogSubheading, ResponsiveDialog, SheetClose } from './ResponsiveDialog'
 import { useDialogContext } from './dialogContext'
 
@@ -327,6 +328,8 @@ export function CommentsDialog({
   post,
   currentUserId,
   count,
+  media,
+  autoplay,
   onCountChange,
 }: {
   open: boolean
@@ -334,11 +337,14 @@ export function CommentsDialog({
   post: Post
   currentUserId: string
   count: number
+  /** What the card is showing: the post's own, or what "load it anyway" fetched. */
+  media: PostMedia[]
+  autoplay: boolean
   onCountChange: (delta: number) => void
 }) {
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange} layout="pinned" width="xl">
-      <CommentsBody post={post} currentUserId={currentUserId} count={count} onCountChange={onCountChange} />
+      <CommentsBody post={post} currentUserId={currentUserId} count={count} media={media} autoplay={autoplay} onCountChange={onCountChange} />
     </ResponsiveDialog>
   )
 }
@@ -347,14 +353,17 @@ function CommentsBody({
   post,
   currentUserId,
   count,
+  media,
+  autoplay,
   onCountChange,
 }: {
   post: Post
   currentUserId: string
   count: number
+  media: PostMedia[]
+  autoplay: boolean
   onCountChange: (delta: number) => void
 }) {
-  const { mobile } = useDialogContext()
   return (
     <>
       <Header
@@ -363,12 +372,26 @@ function CommentsBody({
         title={count === 1 ? '1 comment' : `${count} comments`}
         description="Join the conversation."
       />
-      {/* On a phone the post is the screen behind the sheet, as on Facebook:
-          the sheet is for the thread. */}
-      {!mobile && (
-        <div className={cn(PAD, 'shrink-0 pb-4')}>
-          <PostPreview post={post} framed={false} />
-        </div>
+      {/* The post stays with its thread. A video in particular has to be
+          watchable here: on a phone this sheet covers the card it came from. */}
+      <div className={cn(PAD, 'shrink-0 pb-4')}>
+        <PostPreview post={post} framed={false} />
+      </div>
+      {media.some((item) => item.url) && (
+        <ul className="shrink-0 space-y-0.5 border-t border-[var(--cloud-border)] bg-black">
+          {media
+            .filter((item) => item.url)
+            .slice(0, 1)
+            .map((item) => (
+              <li key={item.url}>
+                {item.kind === 'video' ? (
+                  <VideoPlayer src={item.url!} autoplay={autoplay} compact className="w-full" />
+                ) : (
+                  <img src={item.url!} alt={item.alt_text ?? ''} className="max-h-[38svh] w-full object-contain" />
+                )}
+              </li>
+            ))}
+        </ul>
       )}
       <Comments postId={post.id} currentUserId={currentUserId} onCountChange={onCountChange} variant="sheet" />
     </>
