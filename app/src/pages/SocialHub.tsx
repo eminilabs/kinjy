@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Navigate, Link, useSearchParams } from 'react-router'
-import { ArrowUp, Loader2, PenLine, Sparkles, TrendingUp } from 'lucide-react'
+import { ArrowRight, ArrowUp, Clock3, HelpCircle, Loader2, PenLine, Sparkles, TrendingUp } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
-import AppShell, { RailCard } from '@/components/app/AppShell'
+import AppShell from '@/components/app/AppShell'
 import { useViewTracking } from '@/hooks/useViewTracking'
 import Composer from '@/components/social/Composer'
 import FeedModeMenu from '@/components/social/FeedModeMenu'
@@ -433,35 +433,76 @@ export default function SocialHub() {
 
   const rail = (
     <>
-      {/* Docked "why am I seeing this", as /app presents it: the explanation of
-          the *feed* lives here, and each card keeps its own Why? button for the
-          explanation of that post. */}
-      <div className="rounded-[20px] cloud-glass p-5">
+      {/* How the feed is ordered, in one card. The explanation of the *feed* lives
+          here, and each post keeps its own Why? button for the explanation of
+          that post. The algorithm choice only appears for a mode that ranks: in
+          a chronological one it changes nothing, and a control that does nothing
+          reads as broken. */}
+      <section aria-label="How this feed works" className="rounded-[20px] cloud-glass p-5">
         <p className="mono-data text-[0.72rem] font-bold uppercase tracking-[0.15em] text-gold-soft">Why am I seeing this?</p>
-        <p className="mt-3 text-[0.85rem] leading-relaxed text-text-mid">
-          Your feed is currently ranked by{' '}
-          <span className="font-bold text-text-hi">
-            {feed?.algorithm_name ?? feed?.algorithm ?? 'chronological order'}
+
+        <div className="mt-4 flex items-start gap-3">
+          <span
+            aria-hidden="true"
+            className={cn(
+              'grid h-10 w-10 shrink-0 place-items-center rounded-xl',
+              feed?.ranked ? 'bg-gold/20 text-gold-soft' : 'bg-sky/20 text-sky',
+            )}
+          >
+            {feed?.ranked ? <Sparkles size={18} /> : <Clock3 size={18} />}
           </span>
-          .
-        </p>
-        <ul className="mt-2.5 flex flex-wrap gap-1.5">
-          {(feed?.ranked
-            ? [`Ranked · ${feed?.total_candidates ?? 0} posts scored`, 'Your algorithm applies']
-            : ['Pure chronological', 'No ranking applied']
-          ).map((reason) => (
-            <li
-              key={reason}
-              className="rounded-md bg-sky/10 px-2.5 py-1.5 text-xs font-semibold text-sky"
+          <div className="min-w-0">
+            <p className="text-[1rem] font-bold leading-snug tracking-[-0.02em] text-text-hi">
+              {!feed
+                ? 'Your feed'
+                : feed.ranked && feed.algorithm !== 'chronological'
+                  ? `Ranked by ${feed.algorithm_name ?? feed.algorithm}`
+                  : 'Newest first'}
+            </p>
+            <p className="mt-1 text-sm leading-relaxed text-text-low">
+              {!feed
+                ? 'Working out how it is ordered…'
+                : feed.ranked && feed.algorithm === 'chronological'
+                  ? 'Your algorithm is set to Chronological, so this feed lists the newest posts first. Pick another below to rank it.'
+                  : feed.ranked
+                    ? feed.total_candidates
+                      ? `${feed.total_candidates} posts were scored for you.`
+                      : 'Posts are ordered by the algorithm you chose.'
+                    : 'Posts appear in the order they were published. No algorithm is involved.'}
+            </p>
+          </div>
+        </div>
+
+        {feed?.ranked && (
+          <div className="mt-4 border-t border-[var(--cloud-border)] pt-4">
+            <label htmlFor="algorithm-picker" className="mb-2 block text-sm font-semibold text-text-mid">
+              Your algorithm
+            </label>
+            <select
+              id="algorithm-picker"
+              value={algorithmId}
+              onChange={(e) => setAlgorithmId(e.target.value)}
+              className="w-full rounded-full border border-transparent bg-text-hi/[0.07] px-4 py-2.5 text-sm text-text-hi focus:border-gold/50 focus:bg-transparent focus:outline-none"
             >
-              {reason}
-            </li>
-          ))}
-        </ul>
-        <p className="mt-3 text-xs leading-relaxed text-text-low">
-          Every post carries its own Why? button.
+              {catalog.algorithms.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                  {a.builtin ? '' : ' · community'}
+                </option>
+              ))}
+            </select>
+            <Link to="/feeds" className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-gold-soft hover:underline">
+              Browse the Algorithm Marketplace
+              <ArrowRight size={14} aria-hidden="true" />
+            </Link>
+          </div>
+        )}
+
+        <p className="mt-4 flex items-center gap-2 border-t border-[var(--cloud-border)] pt-4 text-sm text-text-low">
+          <HelpCircle size={15} className="shrink-0" aria-hidden="true" />
+          Every post has its own Why? button.
         </p>
-      </div>
+      </section>
 
       {trending.length > 0 && (
         <div className="rounded-[20px] cloud-glass p-5">
@@ -487,46 +528,6 @@ export default function SocialHub() {
       )}
 
       <Suggestions />
-      <RailCard title="Your algorithm">
-        <p className="caption mb-3">Applies to every ranked mode.</p>
-        <select
-          id="algorithm-picker"
-          value={algorithmId}
-          onChange={(e) => setAlgorithmId(e.target.value)}
-          className="w-full rounded-card-sm border border-white/10 bg-ink-2/70 px-3 py-2 text-sm text-text-hi focus:border-gold/40 focus:outline-none"
-          aria-label="Ranking algorithm"
-        >
-          {catalog.algorithms.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-              {a.builtin ? '' : ' · community'}
-            </option>
-          ))}
-        </select>
-        {feed?.ranked === false && (
-          <p className="caption mt-2 text-text-low">The current mode ignores it by design.</p>
-        )}
-        <Link to="/feeds" className="caption mt-3 block text-gold-soft hover:underline">
-          Browse the Algorithm Marketplace →
-        </Link>
-      </RailCard>
-
-      <RailCard title="This feed">
-        <dl className="space-y-2 text-xs">
-          {[
-            ['Mode', feed?.mode ?? '—'],
-            ['Algorithm', feed?.algorithm_name ?? feed?.algorithm ?? '—'],
-            ['Ranked', feed?.ranked ? 'yes' : 'no'],
-            ['Candidates scored', feed?.total_candidates ?? '—'],
-            ['Shown', feed?.items.length ?? 0],
-          ].map(([k, v]) => (
-            <div key={k} className="flex justify-between gap-3">
-              <dt className="text-text-low">{k}</dt>
-              <dd className="mono-data text-text-mid">{String(v)}</dd>
-            </div>
-          ))}
-        </dl>
-      </RailCard>
     </>
   )
 
