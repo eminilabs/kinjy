@@ -16,7 +16,7 @@ export const FEATURES = {
   /** Voice and video calls in the messenger. */
   calls: false,
   /** Buying and selling, and the /commerce page that presents it. */
-  marketplace: false,
+  marketplace: true,
   /** The family tree, its settings, and the /family page that presents it. */
   familyTree: false,
   /** The Kinjy Assistant: the floating orb and the /assistant page. */
