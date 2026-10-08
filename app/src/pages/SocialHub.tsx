@@ -10,6 +10,7 @@ import Suggestions from '@/components/social/Suggestions'
 import PostCard from '@/components/social/PostCard'
 import PostDialog from '@/components/social/PostDialog'
 import MemberAvatar from '@/components/social/MemberAvatar'
+import AgeDeclaration from '@/components/account/AgeDeclaration'
 import { ApiError, kaluta, type Algorithm, type FeedMode, type FeedPage, type Post } from '@/lib/api'
 import { FEATURES } from '@/lib/features'
 import { slotAboveOrb } from '@/lib/floating'
@@ -616,11 +617,19 @@ export default function SocialHub() {
                 Said out loud: a thinner feed with no reason given looks like
                 the app losing posts. */}
             {!loading && !error && feed?.degraded && (
-              <div className="rounded-card-sm border border-sky/25 bg-sky/10 px-4 py-3 text-sm text-sky">
-                <span role="status">
-                  Some posts may be missing for a moment. The feed fills in on its own.
-                </span>
-              </div>
+              /* The usual cause is an account with no date of birth: it is treated as
+                 a minor's, so posts go missing. That one has a fix the member can do
+                 right here; anything else keeps the plain notice. */
+              <AgeDeclaration
+                onDone={() => void load()}
+                otherwise={
+                  <div className="rounded-card-sm border border-sky/25 bg-sky/10 px-4 py-3 text-sm text-sky">
+                    <span role="status">
+                      Some posts may be missing for a moment. The feed fills in on its own.
+                    </span>
+                  </div>
+                }
+              />
             )}
 
             {fellBackFrom && !loading && (

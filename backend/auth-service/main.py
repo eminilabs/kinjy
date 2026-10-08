@@ -892,13 +892,67 @@ def my_age_status(principal: CurrentUser, db: OrmSession = Depends(get_db)):
         select(models.UserAgeProfile).where(models.UserAgeProfile.user_id == principal.user_id)
     )
     if profile is None:
-        return {"tier": "UNKNOWN", "under_review": False, "can_correct": True}
+        # No record at all: such an account is treated as a minor everywhere until
+        # it has one, and it is the only kind that may declare a date from scratch.
+        return {"tier": "UNKNOWN", "under_review": False, "can_correct": False, "can_declare": True}
     payload = agegate.profile_payload(profile)
     return {
         "tier": payload["tier"],
         "under_review": payload["under_review"],
         "can_correct": profile.dob_change_count < 2,
+        "can_declare": False,
     }
+
+
+@app.post("/auth/age-declaration", tags=["age"])
+def declare_date_of_birth(
+    payload: schemas.DobCorrectionIn, principal: CurrentUser, db: OrmSession = Depends(get_db)
+):
+    """A date of birth for an account that has none.
+
+    Every account created through registration has an age record from its first
+    second. An account that predates that (or was brought in without one) has
+    nothing, and nothing resolves to UNKNOWN, which every service treats as a
+    minor: its feed is thinned, its search is filtered, and there was no door in
+    the product to fix it, because the correction route needs a record to
+    correct.
+
+    This is that door, and it is deliberately narrow. It answers only for an
+    account with no record, so it cannot be used to rewrite an existing one (that
+    is /auth/age-correction, with its review for anything that loosens). It
+    applies the same rules as registration: the same engine, the same tiers, and a
+    date below the minimum age opens an age review instead of granting anything.
+    """
+    existing = db.scalar(
+        select(models.UserAgeProfile).where(models.UserAgeProfile.user_id == principal.user_id)
+    )
+    if existing is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="This account already has a date of birth. Use the correction instead.",
+        )
+    user = db.get(models.User, principal.user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    age_engine = agegate.engine_for(db)
+    verdict, tier, policy = age_engine.registration_eligibility(
+        payload.date_of_birth, agegate._today(), user.country
+    )
+    profile = agegate.create_age_profile(db, principal.user_id, payload.date_of_birth, tier, policy)
+    if not verdict.allowed:
+        # A date that puts the account below the minimum age is the member's own
+        # statement of it: the record exists, and the account sits in review.
+        profile.under_review = True
+        profile.review_opened_at = datetime.now(timezone.utc)
+        db.add(models.AgeReviewCase(
+            id=new_id("arc"), user_id=principal.user_id, source="dob_declaration",
+            detail="Declared date places the account below the minimum age.",
+        ))
+        db.commit()
+        return {"status": "under_review", "tier": "AGE_REVIEW_REQUIRED"}
+    db.commit()
+    return {"status": "created", "tier": tier.value}
 
 
 @app.post("/auth/age-correction", tags=["age"])

@@ -12,6 +12,7 @@ import ProfileEditor from '@/components/dashboard/ProfileEditor'
 import { Badge, Panel } from '@/components/dashboard/primitives'
 import AppShell from '@/components/app/AppShell'
 import MemberAvatar from '@/components/social/MemberAvatar'
+import AgeDeclaration from '@/components/account/AgeDeclaration'
 import { useMyProfile } from '@/hooks/useMyProfile'
 import { cn } from '@/lib/utils'
 
@@ -203,6 +204,9 @@ export default function Dashboard() {
         {tab === 'security' && <Security />}
         {tab === 'account' && (
           <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
+            <div className="lg:col-span-2">
+              <AgeDeclaration />
+            </div>
             <Panel
               title="Account details"
               subtitle={

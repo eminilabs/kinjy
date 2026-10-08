@@ -2088,6 +2088,13 @@ export const kaluta = {
     setPreferences: (patch: Record<string, unknown>) => api.patch('/preferences', patch),
 
     wellbeing: () => api.get<WellbeingStatus>('/wellbeing'),
+
+    /** Where the account stands on age: its tier, and whether it may declare a date of birth. */
+    ageStatus: () =>
+      api.get<{ tier: string; under_review: boolean; can_correct: boolean; can_declare?: boolean }>('/auth/age-status'),
+    /** A date of birth for an account that has none. Refused for one that already has it. */
+    declareDateOfBirth: (date_of_birth: string) =>
+      api.post<{ status: 'created' | 'under_review'; tier: string }>('/auth/age-declaration', { date_of_birth }),
     /**
      * Report time spent. The server clamps the claim against the wall clock, so
      * a missed beat cannot be made up for and a fast one cannot inflate the
