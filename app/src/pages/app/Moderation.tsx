@@ -77,13 +77,19 @@ export default function Moderation() {
   const items = decisions.data?.items ?? []
 
   return (
-    <AppShell
-      title="Moderation"
-      subtitle="Anything that has been restricted on this account, and how to ask for another look."
-    >
+    <AppShell>
+      <header className="mb-6">
+        <p className="mono-data text-[0.72rem] font-bold uppercase tracking-[0.15em] text-gold-soft">Moderation</p>
+        <h1 className="mt-2 text-[clamp(38px,5vw,56px)] font-bold leading-[1.02] tracking-[-0.045em] text-text-hi">
+          What was restricted
+        </h1>
+        <p className="mt-3 max-w-2xl text-[0.95rem] leading-relaxed text-text-low">
+          Anything that has been restricted on this account, and how to ask for another look.
+        </p>
+      </header>
       <div className="space-y-6">
         {error ? (
-          <p role="alert" className="rounded-lg border border-danger/50 bg-danger/10 p-3 text-sm">
+          <p role="alert" className="rounded-2xl bg-danger/10 px-4 py-3 text-sm text-danger">
             {error}
           </p>
         ) : null}
@@ -95,7 +101,7 @@ export default function Moderation() {
             mistake as a dashboard inventing a queue depth: the member reads it
             as an answer when it is an absence of one. */}
         {!decisions.loading && decisions.error ? (
-          <div className="rounded-xl border border-warning/50 bg-warning/10 p-4">
+          <div className="cloud-card p-5">
             <p className="text-sm text-text-hi">
               We could not check this right now — this is not the same as nothing being
               restricted.
@@ -103,7 +109,7 @@ export default function Moderation() {
             <button
               type="button"
               onClick={() => decisions.reload()}
-              className="mt-2 rounded-lg bg-text-hi/10 px-3 py-1.5 text-sm text-text-hi transition-colors hover:bg-text-hi/20"
+              className="mt-3 rounded-full border border-[var(--cloud-border)] px-5 py-2 text-sm font-semibold text-text-hi transition-colors hover:border-gold/50"
             >
               Try again
             </button>
@@ -111,10 +117,12 @@ export default function Moderation() {
         ) : null}
 
         {!decisions.loading && !decisions.error && items.length === 0 ? (
-          <div className="rounded-xl border border-text-low/25 p-6 text-center">
-            <ShieldQuestion className="mx-auto size-6 text-text-low" aria-hidden />
-            <p className="mt-2 text-sm text-text-hi">Nothing has been restricted on this account.</p>
-            <p className="mt-1 text-xs text-text-mid">
+          <div className="cloud-card px-6 py-14 text-center">
+            <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-emerald-500/15 text-emerald-300">
+              <ShieldQuestion className="size-7" aria-hidden />
+            </span>
+            <p className="mt-5 text-lg font-bold tracking-[-0.02em] text-text-hi">Nothing has been restricted on this account.</p>
+            <p className="mx-auto mt-1.5 max-w-sm text-sm leading-relaxed text-text-low">
               If something you posted is not reaching people, it is not because of moderation.
             </p>
           </div>
@@ -132,15 +140,12 @@ export default function Moderation() {
             return (
               <li
                 key={d.id}
-                className={cn(
-                  'space-y-3 rounded-xl border p-4',
-                  meta.severe ? 'border-danger/40' : 'border-text-low/25',
-                )}
+                className={cn('cloud-card space-y-4 p-5 md:p-6', meta.severe && '!border-danger/50')}
               >
                 <div>
-                  <h2 className="text-base font-semibold text-text-hi">{meta.title}</h2>
-                  <p className="mt-1 text-sm text-text-mid">{meta.body}</p>
-                  <p className="mt-2 text-xs text-text-low">
+                  <h2 className="text-[1.15rem] font-bold tracking-[-0.02em] text-text-hi">{meta.title}</h2>
+                  <p className="mt-1.5 text-[0.95rem] leading-relaxed text-text-mid">{meta.body}</p>
+                  <p className="mt-3 text-sm text-text-low">
                     {d.content_kind === 'comment' ? 'A comment' : 'A post'} ·{' '}
                     {new Date(d.created_at).toLocaleDateString()} ·{' '}
                     {d.decided_by === 'automatic'
@@ -150,7 +155,7 @@ export default function Moderation() {
                 </div>
 
                 {status && StatusIcon ? (
-                  <div className="rounded-lg border border-text-low/25 bg-text-low/10 p-3">
+                  <div className="rounded-2xl bg-text-hi/[0.05] p-4">
                     <p className={cn('flex items-center gap-2 text-sm font-medium', status.tone)}>
                       <StatusIcon className="size-4 shrink-0" aria-hidden />
                       {status.label}
@@ -168,7 +173,7 @@ export default function Moderation() {
                   <div className="space-y-2">
                     <label
                       htmlFor={`grounds-${d.id}`}
-                      className="block text-xs uppercase tracking-wide text-text-mid"
+                      className="mono-data block text-[0.7rem] font-bold uppercase tracking-[0.15em] text-gold-soft"
                     >
                       Ask for another look
                     </label>
@@ -179,13 +184,13 @@ export default function Moderation() {
                       value={grounds[d.id] ?? ''}
                       onChange={(e) => setGrounds((g) => ({ ...g, [d.id]: e.target.value }))}
                       placeholder="Why do you think this was wrong?"
-                      className="w-full rounded-lg border border-text-low/30 bg-transparent px-3 py-2 text-sm text-text-hi"
+                      className="w-full rounded-2xl border border-transparent bg-text-hi/[0.07] px-4 py-3 text-[0.95rem] text-text-hi placeholder:text-text-low focus:border-gold/50 focus:bg-transparent focus:outline-none"
                     />
                     <button
                       type="button"
                       disabled={busy === d.id}
                       onClick={() => appeal(d)}
-                      className="rounded-lg bg-text-hi/10 px-3 py-1.5 text-sm text-text-hi transition-colors hover:bg-text-hi/20 disabled:opacity-50"
+                      className="rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-2.5 text-sm font-bold text-ink disabled:opacity-50"
                     >
                       Send for review
                     </button>
@@ -195,7 +200,7 @@ export default function Moderation() {
                     </p>
                   </div>
                 ) : (
-                  <p className="flex items-start gap-2 text-xs text-text-mid">
+                  <p className="flex items-start gap-2 text-sm text-text-mid">
                     <XCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
                     {/* No detail about why: this branch is reached by child-safety
                         escalations, and explaining the boundary explains how to sit
@@ -209,7 +214,7 @@ export default function Moderation() {
         </ul>
 
         {items.length > 0 ? (
-          <p className="text-xs text-text-low">
+          <p className="text-sm text-text-low">
             Ratings decide who can see something, not whether it exists. Restricted is not
             deleted.
           </p>

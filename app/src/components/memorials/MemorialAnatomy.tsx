@@ -1,241 +1,384 @@
-import { useState } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
-import { BookOpen, Flower2, Image, MapPin, Mic2, ShieldCheck, Volume2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { BookOpen, Check, Clock, Flower2, Image, MapPin, Mic2, Play, ShieldCheck, Volume2 } from 'lucide-react'
 import { CandleFlowerWidget, ProvenanceTag, VerifiedBadge } from '@/components/ui-kit'
 import { cn } from '@/lib/utils'
 
 const cloudEase = [0.22, 1, 0.36, 1] as [number, number, number, number]
+const STEP_MS = 5200
 
-type Region = 'bio' | 'media' | 'guestbook' | 'tributes' | 'location' | 'faith'
+type Part = { title: string; body: string; icon: typeof BookOpen }
 
-const CALLOUTS: { id: Region; title: string; body: string; icon: typeof BookOpen }[] = [
-  { id: 'bio', title: 'Biography & timeline', body: 'Life story told in dated chapters.', icon: BookOpen },
-  { id: 'media', title: 'Portrait, cover & voice', body: 'A portrait, a cover image and a voice recording. Autoplay is the family’s choice — ON or OFF.', icon: Image },
-  { id: 'guestbook', title: 'Guest book & condolences', body: 'By default, messages and photos wait for the family’s approval before they appear.', icon: ShieldCheck },
-  { id: 'tributes', title: 'Digital flowers & candles', body: 'Anyone can light a candle or leave a flower, free.', icon: Flower2 },
-  { id: 'location', title: 'Grave location', body: 'Latitude/longitude captured at the grave are marked confirmed; typed ones are marked not yet confirmed. Never fabricated.', icon: MapPin },
-  { id: 'faith', title: 'Faith style', body: 'Chosen only from documented wishes or by administrators. Never inferred by AI.', icon: Mic2 },
+const PARTS: Part[] = [
+  { title: 'Biography & timeline', body: 'Life story told in dated chapters.', icon: BookOpen },
+  { title: 'Photos, videos & voice', body: 'A gallery of photos and videos, a portrait and a voice recording. Each picture says where it comes from; autoplay is the family’s choice.', icon: Image },
+  { title: 'Guest book & condolences', body: 'By default, messages and photos wait for the family’s approval before they appear.', icon: ShieldCheck },
+  { title: 'Digital flowers & candles', body: 'Anyone can light a candle or leave a flower, free.', icon: Flower2 },
+  { title: 'Grave location', body: 'Latitude/longitude captured at the grave are marked confirmed; typed ones are marked not yet confirmed. Never fabricated.', icon: MapPin },
+  { title: 'Faith style', body: 'Chosen only from documented wishes or by administrators. Never inferred by AI.', icon: Mic2 },
 ]
 
-function CalloutChip({
-  callout,
-  active,
-  onHover,
-  index,
-  side,
-}: {
-  callout: (typeof CALLOUTS)[number]
-  active: boolean
-  onHover: (id: Region | null) => void
-  index: number
-  side: 'left' | 'right'
-}) {
-  const reduced = useReducedMotion()
-  const Icon = callout.icon
+const label = 'kl-mono text-[10.5px] tracking-[0.16em] text-[var(--kl-gold-deep)]'
+
+/* ── The six views of one memorial ─────────────────────────────────────── */
+
+function Biography() {
+  const events = [
+    { year: '1947', text: 'Born in Tabora' },
+    { year: '1971', text: 'First classroom' },
+    { year: '2024', text: 'Rest' },
+  ]
   return (
-    <motion.button
-      type="button"
-      onMouseEnter={() => onHover(callout.id)}
-      onMouseLeave={() => onHover(null)}
-      onFocus={() => onHover(callout.id)}
-      onBlur={() => onHover(null)}
-      initial={reduced ? false : { opacity: 0, scale: 0.85 }}
-      whileInView={{ opacity: 1, scale: 1 }}
-      viewport={{ once: true, amount: 0.6 }}
-      transition={{ delay: index * 0.15, duration: 0.5, ease: cloudEase }}
-      className={cn(
-        'group relative flex items-start gap-3 rounded-card-md border p-3.5 text-left transition-colors duration-300',
-        active ? 'border-gold/60 bg-gold/10' : 'border-white/10 bg-white/[0.04] hover:border-gold/30',
-      )}
-      aria-label={`${callout.title}: ${callout.body}`}
-    >
-      {/* connector line drawing toward the card */}
-      <span
-        aria-hidden="true"
-        className={cn(
-          'absolute top-1/2 hidden h-px w-8 bg-gradient-to-r from-gold/70 to-transparent lg:block',
-          side === 'left' ? '-right-8 rotate-180' : '-left-8',
-          'origin-left scale-x-0 transition-transform duration-500 ease-line-ease group-hover:scale-x-100',
-        )}
-      />
-      <span className={cn('mt-0.5 shrink-0 transition-colors', active ? 'text-gold-soft' : 'text-gold/70')}>
-        <Icon size={17} />
-      </span>
-      <span>
-        <span className={cn('block text-sm font-bold transition-colors', active ? 'text-gold-soft' : 'text-text-hi')}>
-          {callout.title}
-        </span>
-        <span className="caption mt-0.5 block !text-text-mid">{callout.body}</span>
-      </span>
-    </motion.button>
+    <div>
+      <p className={label}>BIOGRAPHY & TIMELINE</p>
+      <p className="kl-serif mt-3 text-[1.35rem] leading-snug">
+        A teacher of forty years, a mother of five, a grandmother of eleven.
+        Her classroom was a second home to half the neighborhood.
+      </p>
+      <ol className="relative mt-6 space-y-4 ps-6">
+        <span aria-hidden="true" className="absolute bottom-2 start-[5px] top-2 w-px bg-[var(--kl-dash)]" />
+        {events.map((e) => (
+          <li key={e.year} className="relative flex items-baseline gap-3">
+            <span aria-hidden="true" className="absolute -start-6 top-1.5 h-[11px] w-[11px] rounded-full border-2 border-[var(--kl-gold)] bg-[var(--kl-surface)]" />
+            <span className="kl-mono text-sm text-[var(--kl-gold-deep)]">{e.year}</span>
+            <span className="text-[15px] text-[var(--kl-mid)]">{e.text}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
   )
 }
 
-const regionRing = (region: Region, active: Region | null) =>
-  cn(
-    'rounded-card-md transition-all duration-500 ease-cloud-ease',
-    active === region && 'ring-2 ring-gold/70 shadow-[0_0_24px_rgba(217,166,72,0.25)]',
-  )
-
-/**
- * A memorial, complete (memorials.md §2): annotated memorial card mock with
- * 6 callout chips; hovering a chip highlights its region on the card.
- */
-export default function MemorialAnatomy() {
-  const [active, setActive] = useState<Region | null>(null)
-  const [autoplay, setAutoplay] = useState(false)
-  const reduced = useReducedMotion()
-
-  const left = CALLOUTS.slice(0, 3)
-  const right = CALLOUTS.slice(3)
-
+function Media({ autoplay, onToggle }: { autoplay: boolean; onToggle: () => void }) {
   return (
-    <div className="grid items-center gap-4 lg:grid-cols-[1fr_auto_1fr] lg:gap-8">
-      {/* left callouts */}
-      <div className="order-2 space-y-3 lg:order-1">
-        {left.map((c, i) => (
-          <CalloutChip key={c.id} callout={c} active={active === c.id} onHover={setActive} index={i} side="left" />
+    <div>
+      <div className="flex items-center justify-between gap-3">
+        <p className={label}>PHOTOS · VIDEOS · VOICE</p>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={autoplay}
+          onClick={onToggle}
+          className="flex items-center gap-2 rounded-full border border-[var(--kl-paper-2)] px-2.5 py-1 text-[0.7rem] font-semibold text-[var(--kl-mid)] transition-colors hover:border-[var(--kl-gold)]"
+        >
+          <Volume2 size={12} className={autoplay ? 'text-[var(--kl-gold-deep)]' : 'text-[var(--kl-low)]'} />
+          Autoplay {autoplay ? 'ON' : 'OFF'}
+          <span className={cn('relative h-3.5 w-6 rounded-full transition-colors', autoplay ? 'bg-[var(--kl-gold)]' : 'bg-[var(--kl-paper-2)]')}>
+            <span className={cn('absolute top-0.5 h-2.5 w-2.5 rounded-full bg-white shadow-sm transition-all duration-300', autoplay ? 'left-3' : 'left-0.5')} />
+          </span>
+        </button>
+      </div>
+      <div className="mt-4 grid grid-cols-3 grid-rows-2 gap-2" style={{ height: 176 }}>
+        <img src="/family-archive-1.jpg" alt="" className="col-span-2 row-span-2 h-full w-full rounded-2xl object-cover" style={{ objectPosition: '45% 40%' }} />
+        <img src="/family-archive-3.jpg" alt="" className="h-full w-full rounded-2xl object-cover" style={{ objectPosition: '50% 45%' }} />
+        <img src="/family-archive-2.jpg" alt="" className="h-full w-full rounded-2xl object-cover" style={{ objectPosition: '62% 40%' }} />
+      </div>
+      <div className="mt-3 flex items-center gap-3 rounded-2xl bg-[var(--kl-paper)] p-3">
+        <span className="kl-sheen grid h-10 w-10 shrink-0 place-items-center rounded-full" aria-hidden="true">
+          <Play size={15} className="ms-0.5" />
+        </span>
+        <span className="flex h-8 flex-1 items-center gap-[3px]" aria-hidden="true">
+          {[0.35, 0.6, 0.9, 0.5, 0.75, 1, 0.55, 0.8, 0.4, 0.65, 0.95, 0.5, 0.7, 0.3, 0.6, 0.85, 0.45, 0.7].map((h, i) => (
+            <span
+              key={i}
+              className={cn('w-[3px] rounded-full', i < 7 ? 'bg-[var(--kl-gold)]' : 'bg-[var(--kl-dash)]', autoplay && 'animate-wave-bar')}
+              style={{ height: `${h * 100}%`, animationDelay: `${i * 0.08}s` }}
+            />
+          ))}
+        </span>
+        <span className="kl-mono shrink-0 text-xs text-[var(--kl-low)]">1:42</span>
+      </div>
+      <p className="mt-2 flex flex-wrap items-center gap-1 text-[0.8rem] text-[var(--kl-low)]">
+        Her voice, reading a poem · <ProvenanceTag kind="original" className="ml-1 align-middle" />
+      </p>
+    </div>
+  )
+}
+
+function GuestBook() {
+  return (
+    <div>
+      <p className={label}>GUEST BOOK</p>
+      <figure className="mt-4 rounded-2xl border border-[var(--kl-paper-2)] p-5">
+        <blockquote className="kl-serif text-[1.3rem] italic leading-snug">
+          “You taught my mother, and then you taught me. Asante, Mwalimu.”
+        </blockquote>
+        <figcaption className="mt-3 flex flex-wrap items-center gap-2 text-[0.82rem] text-[var(--kl-low)]">
+          — Neema K.
+          <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-[0.7rem] font-semibold text-success">
+            <Check size={11} aria-hidden="true" /> approved by an administrator before appearing
+          </span>
+        </figcaption>
+      </figure>
+      <div className="mt-3 flex items-center gap-3 rounded-2xl border border-dashed border-[var(--kl-dash)] p-4" aria-hidden="true">
+        <span className="h-9 w-9 shrink-0 rounded-full bg-[var(--kl-paper)]" />
+        <span className="flex-1 space-y-2">
+          <span className="block h-2 w-4/5 rounded-full bg-[var(--kl-paper-2)]" />
+          <span className="block h-2 w-1/2 rounded-full bg-[var(--kl-paper-2)]" />
+        </span>
+        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[0.7rem] font-semibold text-warning">
+          <Clock size={11} /> pending
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function Tributes() {
+  return (
+    <div>
+      <p className={label}>TRIBUTES</p>
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        {[
+          { n: '214', what: 'candles' },
+          { n: '96', what: 'flowers' },
+        ].map((t) => (
+          <div key={t.what} className="rounded-2xl bg-[var(--kl-paper)] p-4">
+            <div className="kl-serif text-[2.6rem] font-semibold leading-none">{t.n}</div>
+            <div className="mt-1 text-sm text-[var(--kl-mid)]">{t.what}</div>
+          </div>
         ))}
       </div>
+      {/* A candle reads as light only against the dark: the tile stays night in both themes. */}
+      <div className="force-dark mt-3 flex items-end justify-center gap-6 rounded-2xl bg-[#12162B] py-2">
+        <CandleFlowerWidget kind="candle" tier="free" className="scale-90" />
+        <CandleFlowerWidget kind="flower" tier="premium" className="scale-90" />
+      </div>
+      <p className="mt-2 text-[0.8rem] text-[var(--kl-low)]">free & premium</p>
+    </div>
+  )
+}
 
-      {/* the memorial card */}
-      <motion.article
-        initial={reduced ? false : { opacity: 0, y: 48 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, amount: 0.65 }}
-        transition={{ duration: 0.9, ease: cloudEase }}
-        className="relative order-1 w-full max-w-lg overflow-hidden rounded-card-xl border border-gold/25 bg-[#141830] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.8)] lg:order-2"
-      >
-        {/* dark stone texture at 8% */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 opacity-[0.08]"
-          style={{ backgroundImage: 'url(/cloud-grain.svg)', backgroundSize: '256px 256px' }}
-        />
-
-        {/* header */}
-        <header className="relative flex items-center gap-4 border-b border-white/8 p-6">
-          <img
-            src="/family-archive-1.jpg"
-            alt="Portrait of Mama Agnes Neema Mushi with her family"
-            className="h-16 w-16 rounded-full border border-gold/40 object-cover object-top"
-          />
-          <div>
-            <p className="flex items-center gap-2 font-display text-xl text-text-hi">
-              Mama Agnes Neema Mushi
-              <VerifiedBadge size={18} />
-            </p>
-            <p className="mono-data mt-1 text-[0.72rem] tracking-wider text-gold-soft">1947 — 2024 · DAR ES SALAAM</p>
-          </div>
-          <span className="ml-auto rounded-full border border-success/40 bg-success/10 px-2.5 py-1 mono-data text-[0.62rem] tracking-widest text-success">
-            VERIFIED MEMORIAL
+function Location() {
+  const reduced = useReducedMotion()
+  return (
+    <div>
+      <p className={label}>GRAVE LOCATION</p>
+      {/* A drawn map: contour lines, two paths and the pin. Illustrative —
+          the coordinates beneath it are the record. */}
+      <div className="relative mt-4 h-[176px] overflow-hidden rounded-2xl bg-[var(--kl-paper)]" aria-hidden="true">
+        <svg viewBox="0 0 400 176" preserveAspectRatio="xMidYMid slice" className="absolute inset-0 h-full w-full text-[var(--kl-dash)]">
+          {[18, 40, 62, 84].map((r, i) => (
+            <ellipse key={r} cx="250" cy="96" rx={r * 2.2} ry={r} fill="none" stroke="currentColor" strokeWidth="1" opacity={1 - i * 0.18} />
+          ))}
+          <path d="M-10 140 C 80 120, 140 150, 230 118 S 360 70, 420 82" fill="none" stroke="currentColor" strokeWidth="6" strokeLinecap="round" opacity="0.7" />
+          <path d="M60 -10 C 90 60, 120 90, 150 190" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" opacity="0.6" />
+        </svg>
+        <span className="absolute" style={{ left: '62.5%', top: '54.5%' }}>
+          {!reduced && (
+            <motion.span
+              className="absolute -left-5 -top-5 h-10 w-10 rounded-full bg-[#D9A648]/30"
+              animate={{ scale: [0.6, 1.4], opacity: [0.8, 0] }}
+              transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
+            />
+          )}
+          <span className="kl-sheen absolute -left-[14px] -top-[34px] grid h-7 w-7 place-items-center rounded-full rounded-br-none rotate-45 shadow-md">
+            <span className="h-2.5 w-2.5 -rotate-45 rounded-full bg-[var(--kl-night)]" />
           </span>
-        </header>
-
-        <div className="relative space-y-4 p-6">
-          {/* 1 biography & timeline */}
-          <section className={cn('p-3', regionRing('bio', active))}>
-            <p className="mono-data text-[0.62rem] tracking-[0.2em] text-gold/80">BIOGRAPHY & TIMELINE</p>
-            <p className="mt-2 text-[0.92rem] leading-relaxed text-text-mid">
-              A teacher of forty years, a mother of five, a grandmother of eleven.
-              Her classroom was a second home to half the neighborhood.
-            </p>
-            <div className="mt-2 flex gap-4 mono-data text-[0.66rem] text-text-low">
-              <span>1947 · Born in Tabora</span>
-              <span>1971 · First classroom</span>
-              <span>2024 · Rest</span>
-            </div>
-          </section>
-
-          {/* 2 media + memorial audio with autoplay toggle */}
-          <section className={cn('p-3', regionRing('media', active))}>
-            <div className="flex items-center justify-between">
-              <p className="mono-data text-[0.62rem] tracking-[0.2em] text-gold/80">PHOTOS · VIDEOS · VOICE</p>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={autoplay}
-                onClick={() => setAutoplay((v) => !v)}
-                className="flex items-center gap-2 rounded-full border border-white/15 px-2.5 py-1 text-[0.68rem] font-semibold text-text-mid transition-colors hover:border-gold/40"
-              >
-                <Volume2 size={12} className={autoplay ? 'text-gold-soft' : 'text-text-low'} />
-                Autoplay {autoplay ? 'ON' : 'OFF'}
-                <span className={cn('relative h-3.5 w-6 rounded-full transition-colors', autoplay ? 'bg-gold/70' : 'bg-white/15')}>
-                  <span
-                    className={cn(
-                      'absolute top-0.5 h-2.5 w-2.5 rounded-full bg-white transition-all duration-300 ease-cloud-ease',
-                      autoplay ? 'left-3' : 'left-0.5',
-                    )}
-                  />
-                </span>
-              </button>
-            </div>
-            <div className="mt-2 flex items-center gap-2">
-              {[0, 1, 2].map((i) => (
-                <span key={i} className="h-12 w-16 rounded-card-sm bg-white/[0.06] ring-1 ring-white/10" />
-              ))}
-              <span className="flex h-12 flex-1 items-center justify-center gap-1 rounded-card-sm bg-white/[0.06] ring-1 ring-white/10">
-                {[0.5, 1, 0.7, 0.9, 0.4].map((h, i) => (
-                  <span
-                    key={i}
-                    className={cn('w-0.5 rounded-full bg-gold-soft/70', autoplay && 'animate-wave-bar')}
-                    style={{ height: `${h * 22}px`, animationDelay: `${i * 0.12}s` }}
-                  />
-                ))}
-              </span>
-            </div>
-            <p className="caption mt-1.5 !text-text-low">Her voice, reading a poem · 1:42 · <ProvenanceTag kind="original" className="ml-1 align-middle" /></p>
-          </section>
-
-          {/* 3 guest book */}
-          <section className={cn('p-3', regionRing('guestbook', active))}>
-            <p className="mono-data text-[0.62rem] tracking-[0.2em] text-gold/80">GUEST BOOK</p>
-            <blockquote className="mt-2 border-l-2 border-gold/40 pl-3 font-display text-[0.95rem] italic text-text-hi">
-              “You taught my mother, and then you taught me. Asante, Mwalimu.”
-            </blockquote>
-            <p className="caption mt-1.5 !text-text-low">— Neema K. · approved by an administrator before appearing</p>
-          </section>
-
-          {/* 4 tributes */}
-          <section className={cn('flex items-center justify-between p-3', regionRing('tributes', active))}>
-            <div>
-              <p className="mono-data text-[0.62rem] tracking-[0.2em] text-gold/80">TRIBUTES</p>
-              <p className="caption mt-1 !text-text-mid">214 candles · 96 flowers · free & premium</p>
-            </div>
-            <div className="flex items-end -space-x-2">
-              <CandleFlowerWidget kind="candle" tier="free" className="scale-[0.55]" />
-              <CandleFlowerWidget kind="flower" tier="premium" className="scale-[0.55]" />
-            </div>
-          </section>
-
-          {/* 5 grave location */}
-          <section className={cn('p-3', regionRing('location', active))}>
-            <p className="mono-data text-[0.62rem] tracking-[0.2em] text-gold/80">GRAVE LOCATION</p>
-            <p className="mono-data mt-1.5 flex flex-wrap items-center gap-2 text-[0.72rem] text-text-mid">
-              <MapPin size={12} className="text-gold-soft" />
-              −6.7924° S, 39.2083° E · Kinondoni Cemetery
-              <span className="rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[0.6rem] tracking-widest text-success">
-                CAPTURED ON-SITE · VERIFIED
-              </span>
-            </p>
-          </section>
-
-          {/* 6 faith style */}
-          <section className={cn('p-3', regionRing('faith', active))}>
-            <p className="mono-data text-[0.62rem] tracking-[0.2em] text-gold/80">FAITH STYLE</p>
-            <p className="caption mt-1.5 !text-text-mid">
-              Chosen from her <strong className="text-text-hi">documented wishes</strong>, confirmed by
-              the memorial’s administrators. AI plays no part in this choice.
-            </p>
-          </section>
+        </span>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <div className="min-w-0">
+          <p className="kl-mono text-sm text-[var(--kl-ink)]">−6.7924° S, 39.2083° E</p>
+          <p className="text-[0.82rem] text-[var(--kl-low)]">Kinondoni Cemetery</p>
         </div>
-      </motion.article>
+        <span className="mono-data ms-auto rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[0.6rem] tracking-widest text-success">
+          CAPTURED ON-SITE · VERIFIED
+        </span>
+      </div>
+    </div>
+  )
+}
 
-      {/* right callouts */}
-      <div className="order-3 space-y-3">
-        {right.map((c, i) => (
-          <CalloutChip key={c.id} callout={c} active={active === c.id} onHover={setActive} index={i + 3} side="right" />
+function Faith() {
+  return (
+    <div>
+      <p className={label}>FAITH STYLE</p>
+      <p className="kl-serif mt-3 text-[1.35rem] leading-snug">
+        Chosen from her <span className="text-[var(--kl-gold-deep)]">documented wishes</span>, confirmed by
+        the memorial’s administrators. AI plays no part in this choice.
+      </p>
+      <ul className="mt-6 space-y-2">
+        {[
+          { k: 'Source', v: 'Her documented wishes' },
+          { k: 'Confirmed by', v: 'The memorial’s administrators' },
+          { k: 'AI', v: 'Plays no part in this choice' },
+        ].map((r) => (
+          <li key={r.k} className="flex items-center justify-between gap-4 rounded-xl bg-[var(--kl-paper)] px-4 py-3 text-sm">
+            <span className="kl-mono text-[11px] tracking-[0.12em] text-[var(--kl-low)]">{r.k.toUpperCase()}</span>
+            <span className="text-end text-[var(--kl-ink)]">{r.v}</span>
+          </li>
         ))}
+      </ul>
+    </div>
+  )
+}
+
+/* ── The section ───────────────────────────────────────────────────────── */
+
+/**
+ * A memorial, complete (memorials.md §2) — on the landing's selector pattern:
+ * the six parts of a memorial as a numbered list, and one memorial beside it
+ * showing the chosen part in full. It turns on its own until the visitor
+ * picks a part, and never for visitors who asked for less motion.
+ */
+export default function MemorialAnatomy() {
+  const { t } = useTranslation()
+  const reduced = useReducedMotion()
+  const [active, setActive] = useState(0)
+  const [manual, setManual] = useState(false)
+  const [autoplay, setAutoplay] = useState(false)
+  const turning = !manual && !reduced
+
+  useEffect(() => {
+    if (!turning) return
+    const timer = window.setInterval(() => setActive((i) => (i + 1) % PARTS.length), STEP_MS)
+    return () => window.clearInterval(timer)
+  }, [turning])
+
+  const pick = (i: number) => {
+    setManual(true)
+    setActive(i)
+  }
+
+  const views: ReactNode[] = [
+    <Biography key="bio" />,
+    <Media key="media" autoplay={autoplay} onToggle={() => setAutoplay((v) => !v)} />,
+    <GuestBook key="guestbook" />,
+    <Tributes key="tributes" />,
+    <Location key="location" />,
+    <Faith key="faith" />,
+  ]
+
+  return (
+    <div className="kl-split items-start gap-[clamp(40px,6vw,96px)]">
+      <div>
+        <p className="kl-mono text-xs tracking-[.14em] text-[var(--kl-gold-deep)]">{t('memorials.anatomy').toUpperCase()}</p>
+        <h2 className="kl-h2 mt-4">{t('memorials.aMemorialComplete')}</h2>
+        <p className="kl-lead mt-5">
+          Every memorial is a whole life, carefully kept. Select each element to see where it lives.
+        </p>
+
+        <ol className="mt-10 border-b border-[var(--kl-paper-2)]">
+          {PARTS.map((p, i) => {
+            const on = i === active
+            const Icon = p.icon
+            return (
+              <li key={p.title} className="relative border-t border-[var(--kl-paper-2)]">
+                <button
+                  type="button"
+                  onClick={() => pick(i)}
+                  aria-expanded={on}
+                  className="flex w-full items-start gap-5 py-5 text-start"
+                >
+                  <span className={cn('kl-mono pt-1.5 text-[13px] transition-colors', on ? 'text-[var(--kl-gold-deep)]' : 'text-[var(--kl-low)]')}>
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className={cn(
+                        'kl-serif flex items-center gap-3 text-[clamp(22px,2.2vw,28px)] font-semibold leading-tight transition-colors',
+                        on ? 'text-[var(--kl-ink)]' : 'text-[var(--kl-low)]',
+                      )}
+                    >
+                      <Icon size={20} className={on ? 'text-[var(--kl-gold-deep)]' : 'opacity-60'} aria-hidden="true" />
+                      {p.title}
+                    </span>
+                    <AnimatePresence initial={false}>
+                      {on && (
+                        <motion.span
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: reduced ? 0 : 0.35, ease: cloudEase }}
+                          className="block overflow-hidden"
+                        >
+                          <span className="block pt-2 text-base leading-[1.55] text-[var(--kl-mid)]">{p.body}</span>
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                  </span>
+                </button>
+                {on && (
+                  <motion.span
+                    key={`bar-${i}-${turning}`}
+                    aria-hidden="true"
+                    className="absolute -top-px left-0 h-0.5 bg-[var(--kl-gold)]"
+                    initial={{ width: turning ? '0%' : '100%' }}
+                    animate={{ width: '100%' }}
+                    transition={{ duration: turning ? STEP_MS / 1000 : 0, ease: 'linear' }}
+                  />
+                )}
+              </li>
+            )
+          })}
+        </ol>
+      </div>
+
+      {/* One memorial, open on the chosen part */}
+      <div
+        className="relative overflow-hidden rounded-[20px] p-[clamp(20px,4vw,44px)]"
+        style={{ background: 'linear-gradient(160deg, var(--kl-stage-a), var(--kl-stage-b))' }}
+      >
+        <div aria-hidden="true" className="absolute -right-16 -top-16 h-[260px] w-[260px] rounded-full bg-[var(--kl-sky)] opacity-40 blur-[80px]" />
+        <div aria-hidden="true" className="kl-sheen absolute -bottom-20 -left-16 h-[220px] w-[220px] rounded-full opacity-30 blur-[80px]" />
+
+        <motion.article
+          initial={reduced ? false : { opacity: 0, y: 32 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.4 }}
+          transition={{ duration: 0.8, ease: cloudEase }}
+          className="kl-card-shadow relative mx-auto max-w-[460px] overflow-hidden rounded-[20px] bg-[var(--kl-surface)]"
+          aria-label="Example memorial: Mama Agnes Neema Mushi"
+        >
+          <header className="flex items-center gap-4 border-b border-[var(--kl-paper-2)] p-5">
+            <span className="kl-orb-ring shrink-0 rounded-full p-[3px]">
+              <img
+                src="/family-archive-1.jpg"
+                alt="Portrait of Mama Agnes Neema Mushi with her family"
+                className="h-14 w-14 rounded-full border-[3px] border-[var(--kl-cutout)] object-cover"
+                style={{ objectPosition: '30% 25%' }}
+              />
+            </span>
+            <div className="min-w-0">
+              <p className="kl-serif flex items-center gap-2 text-xl font-semibold leading-tight">
+                Mama Agnes Neema Mushi
+                <VerifiedBadge size={16} />
+              </p>
+              <p className="kl-mono mt-1 text-[11px] tracking-[0.14em] text-[var(--kl-gold-deep)]">1947 — 2024 · DAR ES SALAAM</p>
+            </div>
+          </header>
+
+          <div className="relative min-h-[360px] p-5">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={active}
+                initial={reduced ? { opacity: 0 } : { opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduced ? { opacity: 0 } : { opacity: 0, y: -10 }}
+                transition={{ duration: 0.35, ease: cloudEase }}
+              >
+                {views[active]}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          <footer className="flex items-center justify-between border-t border-[var(--kl-paper-2)] px-5 py-3">
+            <span className="mono-data inline-flex items-center gap-1.5 rounded-full border border-success/40 bg-success/10 px-2.5 py-1 text-[0.6rem] tracking-widest text-success">
+              <ShieldCheck size={11} aria-hidden="true" /> VERIFIED MEMORIAL
+            </span>
+            <span className="flex gap-1.5" aria-hidden="true">
+              {PARTS.map((p, i) => (
+                <span
+                  key={p.title}
+                  className={cn('h-1.5 rounded-full transition-all', i === active ? 'w-5 bg-[var(--kl-gold)]' : 'w-1.5 bg-[var(--kl-paper-2)]')}
+                />
+              ))}
+            </span>
+          </footer>
+        </motion.article>
       </div>
     </div>
   )

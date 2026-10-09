@@ -4,6 +4,8 @@ import { LedgerRow } from '@/components/ui-kit'
 import { cn } from '@/lib/utils'
 import { EASE, useReducedMotion } from '@/components/creators/motion-utils'
 import { FEATURES } from '@/lib/features'
+import { Eyebrow } from '@/components/landing/PageKit'
+import { KL_CARD, KL_CARD_GOLD, KL_LABEL } from '@/components/landing/kl-classes'
 
 const CRYPTO_FEATURES = [
   { icon: Bitcoin, text: '350+ coins in, deposit addresses via POST /v1/payment' },
@@ -32,29 +34,29 @@ export default function DualRail() {
   const reduced = useReducedMotion()
 
   return (
-    <section className="noise-overlay px-6 py-24 md:py-32" style={{ background: 'var(--ink)' }}>
-      <div className="mx-auto max-w-container">
-        <p className="eyebrow text-gold">Architecture — Dual-rail settlement</p>
-        <h2 className="h2 mt-4 max-w-3xl">
-          Crypto rail live today. <span className="text-gold-grad font-display italic">Bank escrow next.</span>
+    <section className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]">
+      <div>
+        <Eyebrow>Architecture — Dual-rail settlement</Eyebrow>
+        <h2 className="kl-h2 mt-5 max-w-[900px]">
+          Crypto rail live today. <span className="text-[var(--kl-gold-deep)]">Bank escrow next.</span>
         </h2>
-        <p className="body-lg mt-4 max-w-2xl text-text-mid">
+        <p className="kl-lead mt-6 !max-w-[680px]">
           Two settlement rails, one source of truth. Members choose crypto or — once our bank
           escrow partner is onboarded — fiat. Both reconcile against the same immutable Kinjy
           ledger, entry for entry.
         </p>
 
-        <div className="relative mt-12 grid items-stretch gap-6 lg:grid-cols-[1fr_auto_1fr]">
+        <div className="relative mt-12 grid items-stretch gap-6 grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
           {/* Rail 1: NowPayments */}
           <motion.div
-            className="cloud-card gold flex flex-col p-6 sm:p-8"
+            className={cn(KL_CARD_GOLD, 'flex flex-col p-6 sm:p-8')}
             initial={reduced ? false : { opacity: 0, y: 28 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-12%' }}
             transition={{ duration: 0.6, ease: EASE }}
           >
             <div className="flex items-center justify-between gap-3">
-              <h3 className="h3">NowPayments — crypto rail</h3>
+              <h3 className="text-[22px] font-bold tracking-[-0.02em]">NowPayments — crypto rail</h3>
               <span className="mono-data inline-flex items-center gap-1.5 rounded-full border border-success/40 bg-success/10 px-3 py-1 text-xs text-success">
                 <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" /> live
               </span>
@@ -81,7 +83,7 @@ export default function DualRail() {
             transition={{ delay: 0.3, duration: 0.6 }}
           >
             <span className="h-px w-10 lg:h-10 lg:w-px" style={{ background: 'var(--grad-arc)' }} aria-hidden="true" />
-            <span className="flex h-14 w-14 items-center justify-center rounded-full border border-gold/40 bg-ink-2 shadow-gold-ring">
+            <span className="flex h-14 w-14 items-center justify-center rounded-full border border-gold/40 bg-[var(--kl-paper)] !border-[var(--kl-gold)]">
               <BookLock size={20} className="text-gold-soft" aria-hidden="true" />
             </span>
             <p className="mono-data hidden max-w-[120px] text-center text-[0.65rem] leading-relaxed text-text-low lg:block">
@@ -92,14 +94,14 @@ export default function DualRail() {
 
           {/* Rail 2: Mangopay */}
           <motion.div
-            className="cloud-card flex flex-col p-6 sm:p-8"
+            className={cn(KL_CARD, 'flex flex-col p-6 sm:p-8')}
             initial={reduced ? false : { opacity: 0, y: 28 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-12%' }}
             transition={{ delay: 0.12, duration: 0.6, ease: EASE }}
           >
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 className="h3">Mangopay — bank escrow rail</h3>
+              <h3 className="text-[22px] font-bold tracking-[-0.02em]">Mangopay — bank escrow rail</h3>
               <span className="mono-data inline-flex items-center gap-1.5 rounded-full border border-warning/40 bg-warning/10 px-3 py-1 text-xs text-warning">
                 <Clock size={12} aria-hidden="true" /> recommended
               </span>
@@ -128,13 +130,13 @@ export default function DualRail() {
 
         {/* comparison mini-table */}
         <motion.div
-          className="cloud-card mt-8 overflow-x-auto p-6 sm:p-8"
+          className={cn(KL_CARD, 'mt-8 overflow-x-auto p-6 sm:p-8')}
           initial={reduced ? false : { opacity: 0, y: 28 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-12%' }}
           transition={{ delay: 0.15, duration: 0.6, ease: EASE }}
         >
-          <p className="eyebrow text-text-low">Bank/fintech escrow candidates — evaluation</p>
+          <p className={KL_LABEL}>Bank/fintech escrow candidates — evaluation</p>
           <table className="mt-5 w-full min-w-[640px] text-left text-sm">
             <thead>
               <tr className="border-b border-white/10">
@@ -176,7 +178,7 @@ export default function DualRail() {
           transition={{ delay: 0.25, duration: 0.6 }}
         >
           <p className="mono-data mb-3 text-xs text-text-low">both rails append to the same ledger — never edit</p>
-          <div className="grid gap-2 md:grid-cols-2">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-2 md:grid-cols-2">
             <LedgerRow id="8841207" label="Crypto rail — receipt settled USDT·BSC" amount="+$9.99" reconciled timestamp="now" />
             <LedgerRow id="po-55231" label="Crypto rail — Mass Payout to member wallet" amount="-$1.04" reconciled timestamp="now" />
           </div>

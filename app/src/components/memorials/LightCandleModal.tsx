@@ -104,11 +104,11 @@ export default function LightCandleModal({
             animate={{ opacity: 1, y: 0 }}
             exit={reduced ? { opacity: 0 } : { opacity: 0, y: 24 }}
             transition={{ duration: 0.5, ease: cloudEase }}
-            className="w-full max-w-md rounded-card-xl border border-gold/25 bg-[#0E1226] p-8 shadow-[0_40px_90px_-20px_rgba(0,0,0,0.9)]"
+            className="w-full max-w-md rounded-[20px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] p-8 shadow-[0_40px_90px_-30px_rgba(0,0,0,0.6)]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between">
-              <h3 className="font-display text-2xl text-text-hi">Light a candle</h3>
+              <h3 className="kl-serif text-[28px] font-semibold">Light a candle</h3>
               <button
                 type="button"
                 onClick={handleClose}
@@ -167,7 +167,7 @@ export default function LightCandleModal({
                     placeholder="Type their name…"
                     maxLength={60}
                     aria-label="Find the memorial by name"
-                    className="mt-2 w-full rounded-card-sm border border-white/15 bg-white/[0.05] px-4 py-3 text-text-hi placeholder:text-text-low focus:border-gold/50 focus:outline-none"
+                    className="mt-2 w-full rounded-[10px] border border-[var(--kl-paper-2)] bg-[var(--kl-paper)] px-4 py-3 text-text-hi placeholder:text-text-low focus:border-[var(--kl-gold)] focus:outline-none"
                   />
                 </label>
 
@@ -183,7 +183,7 @@ export default function LightCandleModal({
                     </li>
                   )}
                   {(results ?? []).map((m) => (
-                    <li key={m.id} className="flex items-center gap-3 rounded-card-sm px-2 py-2 hover:bg-white/[0.05]">
+                    <li key={m.id} className="flex items-center gap-3 rounded-[10px] px-2 py-2 hover:bg-[var(--kl-paper)]">
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm text-text-hi">{m.full_name}</span>
                         <span className="block text-xs text-text-mid">{lifeSpan(m.birth_date, m.death_date)}</span>

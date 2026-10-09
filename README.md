@@ -268,6 +268,14 @@ place, lights a candle, leaves a flower or signs the guest book.
   counted, and an administrator can take any tribute down from **Manage**.
 - **Files are the family's own.** A portrait, cover or voice recording must be
   the uploader's file, and is served through short-lived signed links.
+- **A gallery of photos and videos** (up to 60, 500 MB in all). Photos are JPEG,
+  PNG or WebP up to 25 MB; videos MP4 or WebM up to 50 MB. media-service checks
+  the first bytes against the declared type, so a picture cannot pass as a video.
+  Each item has a caption, an origin label (original, edited, AI assisted, AI
+  generated, verified source), and a "sensitive" mark that blurs it until the
+  visitor chooses to look. Visitors open it in a viewer (arrow keys, Escape, a
+  video player that seeks); the family orders it, and can promote an approved
+  visitor photo into it. Removing an item deletes the family's own file.
 - **Up to three administrators**, in succession order. Naming one is contact,
   so it follows the messaging rules: the member must accept it from you (by
   default, be connected first), blocks apply, and an adult cannot name an
@@ -309,6 +317,16 @@ opens its own page against a live service.
 | Explore | `/explore` | community + commerce + family |
 | Marketplace | `/market` | commerce |
 | Earnings | `/dashboard` | ledger + payment + auth |
+
+**Family tree.** `/tree` shows the family around one person (a drawing on a wide
+screen, a list by generation on a phone) and lets a member add, link, edit and
+remove people and confirm what they know. The rules live in family-service, not
+the screen: you read a tree you belong to (or one its owner opened, through
+`who_can_see_family`), you write only where you belong, and a member's node needs
+that member's `who_can_add_family`. The server refuses relations that contradict
+each other and tells the screen what each person may do. `FEATURES.familyTreeApp`
+opens the app side; the public `/family` page stays behind `FEATURES.familyTree`.
+What is not built is listed in `NOT-DONE.md` ("Family tree").
 
 Live is the one entry with no backend. Rather than a convincing mock, its page
 states plainly that nothing runs behind it — a screen that looks finished is how

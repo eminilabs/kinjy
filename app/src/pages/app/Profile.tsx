@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link,useNavigate, useParams } from 'react-router'
 import { Check, Clock, MapPin, MessageSquare, Pencil, UserPlus, Users } from 'lucide-react'
-import AppShell, { RailCard } from '@/components/app/AppShell'
+import AppShell from '@/components/app/AppShell'
 import MediaLightbox from '@/components/social/MediaLightbox'
 import MemberAvatar from '@/components/social/MemberAvatar'
 import PostCard from '@/components/social/PostCard'
@@ -113,8 +113,7 @@ export default function Profile() {
     setBusy(true)
     setNote(null)
     try {
-      // Straight to this thread: /messages alone opens the most recent one,
-      // which is someone else whenever this conversation is older.
+      // Straight to this thread, by id, rather than leaving the list to choose.
       const conversation = await kaluta.messages.start([profile.user_id])
       navigate(`/messages?c=${conversation.id}`)
     } catch (err) {
@@ -134,7 +133,7 @@ export default function Profile() {
   if (error || !profile) {
     return (
       <AppShell title="Profile">
-        <p className="rounded-card-sm border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+        <p role="alert" className="rounded-xl bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
           {error ?? 'This member does not exist.'}
         </p>
       </AppShell>
@@ -147,56 +146,73 @@ export default function Profile() {
   const spoken = splitLanguages(profile.languages)
     .map((code) => languageName(code, lang))
     .join(', ')
-  const action = 'inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold'
+  const action = 'inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-colors'
+  const label = 'mono-data mb-3 text-[0.7rem] font-bold uppercase tracking-[0.15em] text-gold-soft'
 
   return (
     <AppShell
       aside={
         <>
-          <RailCard title="About">
+          <section className={cn('rounded-[20px] p-5', tok.card)}>
+            <p className={label}>About</p>
             {profile.bio ? (
-              <p className={cn('whitespace-pre-wrap text-xs leading-relaxed', tok.mid)}>{profile.bio}</p>
+              <p className={cn('whitespace-pre-wrap text-[0.9rem] leading-relaxed', tok.mid)}>{profile.bio}</p>
             ) : (
-              <p className={cn('text-xs', tok.low)}>No bio yet.</p>
+              <p className={cn('text-sm', tok.low)}>No bio yet.</p>
             )}
-            <dl className={cn('mt-3 space-y-1.5 border-t pt-3 text-xs', tok.divider, 'border-t-current/10')}>
+            <dl className="mt-4 space-y-3 border-t border-[var(--cloud-border)] pt-4 text-sm">
               {place && (
                 <div className="flex justify-between gap-3">
                   <dt className={tok.low}>Location</dt>
-                  <dd className={tok.mid}>{place}</dd>
+                  <dd className={cn('text-end font-medium', tok.text)}>{place}</dd>
                 </div>
               )}
               <div className="flex justify-between gap-3">
                 <dt className={tok.low}>Languages</dt>
-                <dd className={cn('text-end', tok.mid)}>{spoken}</dd>
+                <dd className={cn('text-end font-medium', tok.text)}>{spoken}</dd>
               </div>
               <div className="flex justify-between gap-3">
                 <dt className={tok.low}>Handle</dt>
-                <dd className="mono-data text-gold-soft">@{profile.handle}</dd>
+                <dd className="mono-data font-semibold text-gold-soft">@{profile.handle}</dd>
               </div>
             </dl>
-          </RailCard>
+          </section>
 
           {permissions && !isSelf && (
-            <RailCard title="Your relationship">
-              <ul className={cn('space-y-1.5 text-xs', tok.mid)}>
-                <li>{permissions.connected ? 'Connected' : permissions.pending ? 'Invitation pending' : 'Not connected'}</li>
-                <li className={tok.low}>
-                  {permissions.can_message ? 'Can message' : 'Cannot message yet'}
-                </li>
-                {FEATURES.familyTree && (
-                  <li className={tok.low}>
-                    {permissions.can_add_family ? 'Can add to family tree' : 'Cannot add to family tree'}
+            <section className={cn('rounded-[20px] p-5', tok.card)}>
+              <p className={label}>Your relationship</p>
+              <ul className="space-y-3 text-sm">
+                {[
+                  {
+                    on: permissions.connected,
+                    text: permissions.connected ? 'Connected' : permissions.pending ? 'Invitation pending' : 'Not connected',
+                  },
+                  { on: permissions.can_message, text: permissions.can_message ? 'Can message' : 'Cannot message yet' },
+                  ...(FEATURES.familyTreeApp
+                    ? [{ on: permissions.can_add_family, text: permissions.can_add_family ? 'Can add to family tree' : 'Cannot add to family tree' }]
+                    : []),
+                ].map((row) => (
+                  <li key={row.text} className={cn('flex items-center gap-2.5', row.on ? tok.text : tok.low)}>
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'grid h-5 w-5 shrink-0 place-items-center rounded-full',
+                        row.on ? 'bg-emerald-500/15 text-emerald-300' : 'bg-text-hi/[0.07] text-text-low',
+                      )}
+                    >
+                      {row.on ? <Check size={12} /> : <span className="h-1 w-1 rounded-full bg-current" />}
+                    </span>
+                    {row.text}
                   </li>
-                )}
+                ))}
               </ul>
-            </RailCard>
+            </section>
           )}
         </>
       }
     >
       {/* Header card */}
-      <div className={cn('overflow-hidden rounded-card-lg', tok.card)}>
+      <div className={cn('overflow-hidden rounded-[20px]', tok.card)}>
         {profile.cover_url ? (
           <button
             type="button"
@@ -204,13 +220,13 @@ export default function Profile() {
             className="block w-full cursor-zoom-in"
             aria-label="View cover photo"
           >
-            <img src={profile.cover_url} alt="" className="h-32 w-full object-cover sm:h-40" />
+            <img src={profile.cover_url} alt="" className="h-40 w-full object-cover sm:h-52" />
           </button>
         ) : (
-          <div className="h-24 bg-gradient-to-r from-indigo/60 via-sky/40 to-gold/40" aria-hidden="true" />
+          <div className="h-32 bg-gradient-to-r from-[#F0C878] via-[#F2B8A2] to-[#C9CDF5] sm:h-44" aria-hidden="true" />
         )}
-        <div className="px-5 pb-5">
-          <div className="-mt-10 mb-3 flex items-end justify-between gap-3">
+        <div className="px-5 pb-6 sm:px-7">
+          <div className="-mt-14 mb-4 flex items-end justify-between gap-3">
             {/* Only a real photograph is worth opening. Without one the
                 avatar is generated initials, and zooming those is a joke at
                 the member's expense. */}
@@ -224,7 +240,7 @@ export default function Profile() {
                 <MemberAvatar
                   displayName={profile.display_name}
                   avatarUrl={profile.avatar_url}
-                  size={80}
+                  size={112}
                   ring
                 />
               </button>
@@ -232,14 +248,14 @@ export default function Profile() {
               <MemberAvatar
                 displayName={profile.display_name}
                 avatarUrl={profile.avatar_url}
-                size={80}
+                size={112}
                 ring
               />
             )}
             {isSelf && (
               <Link
                 to="/dashboard?tab=profile"
-                className={cn(action, 'border border-white/12', tok.mid, 'hover:border-gold/40 hover:text-gold-soft')}
+                className={cn(action, 'border border-[var(--cloud-border)]', tok.mid, 'hover:border-gold/50 hover:text-gold-soft')}
               >
                 <Pencil size={14} aria-hidden="true" />
                 Edit profile
@@ -247,31 +263,33 @@ export default function Profile() {
             )}
           </div>
 
-          <h1 className={cn('flex items-center gap-2 text-xl font-semibold', tok.text)}>
+          <h1 className={cn('flex items-center gap-2 text-[clamp(28px,3.4vw,38px)] font-bold leading-[1.05] tracking-[-0.035em]', tok.text)}>
             {profile.display_name}
-            {profile.verified && <VerifiedBadge size={16} />}
+            {profile.verified && <VerifiedBadge size={22} />}
           </h1>
-          <p className={cn('mt-0.5 text-sm', tok.low)}>
-            @{profile.handle}
+          <p className={cn('mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.95rem]', tok.low)}>
+            <span className="mono-data">@{profile.handle}</span>
             {place && (
-              <span className="ms-2 inline-flex items-center gap-1">
-                <MapPin size={11} aria-hidden="true" />
+              <span className="inline-flex items-center gap-1">
+                <MapPin size={13} aria-hidden="true" />
                 {place}
               </span>
             )}
           </p>
 
-          <p className={cn('mt-3 flex items-center gap-4 text-sm', tok.mid)}>
-            <span>
-              <strong className="text-gold-soft">{profile.followers_count}</strong> followers
-            </span>
-            <span>
-              <strong className="text-gold-soft">{profile.following_count}</strong> following
-            </span>
-          </p>
+          <dl className="mt-5 flex items-center gap-8">
+            <div>
+              <dd className={cn('text-2xl font-bold leading-none tabular-nums tracking-[-0.02em]', tok.text)}>{profile.followers_count}</dd>
+              <dt className={cn('mt-1.5 text-sm', tok.low)}>followers</dt>
+            </div>
+            <div>
+              <dd className={cn('text-2xl font-bold leading-none tabular-nums tracking-[-0.02em]', tok.text)}>{profile.following_count}</dd>
+              <dt className={cn('mt-1.5 text-sm', tok.low)}>following</dt>
+            </div>
+          </dl>
 
           {!isSelf && (
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-6 flex flex-wrap gap-2.5">
               <button
                 type="button"
                 onClick={follow}
@@ -279,22 +297,22 @@ export default function Profile() {
                 className={cn(
                   action,
                   following
-                    ? cn('border border-current/20', tok.low)
-                    : 'bg-gradient-to-br from-gold-soft to-gold text-ink',
+                    ? cn('border border-[var(--cloud-border)]', tok.low)
+                    : 'bg-gradient-to-br from-gold-soft to-gold text-ink shadow-[0_8px_20px_-10px_rgba(166,120,57,0.6)]',
                 )}
               >
-                <UserPlus size={14} aria-hidden="true" />
+                <UserPlus size={15} aria-hidden="true" />
                 {following ? 'Following' : 'Follow'}
               </button>
 
               {permissions?.connected ? (
-                <span className={cn(action, 'border border-emerald-400/30 text-emerald-200')}>
-                  <Users size={14} aria-hidden="true" />
+                <span className={cn(action, 'bg-emerald-500/10 text-emerald-300')}>
+                  <Users size={15} aria-hidden="true" />
                   Connected
                 </span>
               ) : permissions?.pending ? (
-                <span className={cn(action, 'border border-current/20', tok.low)}>
-                  <Clock size={14} aria-hidden="true" />
+                <span className={cn(action, 'border border-[var(--cloud-border)]', tok.low)}>
+                  <Clock size={15} aria-hidden="true" />
                   {permissions.invited_by_me ? 'Invitation sent' : 'They invited you'}
                 </span>
               ) : (
@@ -307,9 +325,9 @@ export default function Profile() {
                       ? 'They decide whether to accept'
                       : 'This member is not accepting invitations'
                   }
-                  className={cn(action, 'border border-sky/40 text-sky hover:bg-sky/10 disabled:opacity-40')}
+                  className={cn(action, 'border border-sky/50 text-sky hover:bg-sky/10 disabled:opacity-40')}
                 >
-                  <Check size={14} aria-hidden="true" />
+                  <Check size={15} aria-hidden="true" />
                   Connect
                 </button>
               )}
@@ -319,17 +337,17 @@ export default function Profile() {
                 onClick={message}
                 disabled={busy || !permissions?.can_message}
                 title={permissions?.can_message ? 'Open a conversation' : BLOCKED[permissions?.reason ?? ''] ?? ''}
-                className={cn(action, 'border border-white/12', tok.mid, 'hover:text-text-hi disabled:opacity-40')}
+                className={cn(action, 'border border-[var(--cloud-border)]', tok.mid, 'hover:border-gold/50 hover:text-text-hi disabled:opacity-40')}
               >
-                <MessageSquare size={14} aria-hidden="true" />
+                <MessageSquare size={15} aria-hidden="true" />
                 Message
               </button>
             </div>
           )}
 
-          {note && <p className="mt-3 text-sm text-gold-soft">{note}</p>}
+          {note && <p className="mt-4 text-sm font-medium text-gold-soft">{note}</p>}
           {!isSelf && permissions && !permissions.can_message && (
-            <p className={cn('mt-2 text-xs', tok.low)}>
+            <p className={cn('mt-3 text-sm', tok.low)}>
               {BLOCKED[permissions.reason] ?? 'Messaging is closed for this member.'}
             </p>
           )}
@@ -337,13 +355,19 @@ export default function Profile() {
       </div>
 
       {/* Their posts */}
-      <h2 className={cn('mb-3 mt-6 text-sm font-semibold', tok.text)}>
-        Posts {posts.length > 0 && <span className={tok.low}>({posts.length})</span>}
+      <h2 className={cn('mb-4 mt-8 flex items-center gap-2.5 text-xl font-bold tracking-[-0.03em]', tok.text)}>
+        Posts
+        {posts.length > 0 && (
+          <span className="mono-data rounded-full bg-text-hi/[0.07] px-2.5 py-0.5 text-xs font-semibold text-text-mid">
+            {posts.length}
+          </span>
+        )}
       </h2>
       {posts.length === 0 ? (
-        <p className={cn('rounded-card-lg p-6 text-center text-sm', tok.card, tok.low)}>
-          Nothing public here yet.
-        </p>
+        <div className={cn('rounded-[20px] px-6 py-12 text-center', tok.card)}>
+          <p className={cn('text-base font-semibold', tok.text)}>Nothing public here yet</p>
+          <p className={cn('mt-1 text-sm', tok.low)}>Posts shared with everyone will appear here.</p>
+        </div>
       ) : (
         <div className="space-y-4">
           {posts.map((post) => (

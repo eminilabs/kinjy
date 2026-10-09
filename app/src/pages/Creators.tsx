@@ -1,7 +1,5 @@
-import { useNavigate } from 'react-router'
-import { motion } from 'framer-motion'
+import { Link } from 'react-router'
 import { ArrowRight } from 'lucide-react'
-import { ArcButton } from '@/components/ui-kit'
 import CreatorsHero from '@/components/creators/CreatorsHero'
 import PublishingEngine from '@/components/creators/PublishingEngine'
 import CopilotPanel from '@/components/creators/CopilotPanel'
@@ -10,54 +8,42 @@ import LeadersPool from '@/components/creators/LeadersPool'
 import FormulaCards from '@/components/creators/FormulaCards'
 import BadgeRow from '@/components/creators/BadgeRow'
 import PrePublishGuardian from '@/components/creators/PrePublishGuardian'
-import { KineticWords } from '@/components/creators/Kinetic'
-import { EASE, useReducedMotion } from '@/components/creators/motion-utils'
+import PublicShell from '@/components/landing/PublicShell'
+import { ClosingStage } from '@/components/landing/PageKit'
+import { KL_BTN_GHOST, KL_BTN_GOLD } from '@/components/landing/kl-classes'
 
-/** Section 8 — CTA. */
+/** Section 8 — CTA, on the landing's closing paper stage. */
 function CreatorsCta() {
-  const navigate = useNavigate()
-  const reduced = useReducedMotion()
   return (
-    <section className="noise-overlay twilight-field px-6 py-24 md:py-32">
-      <motion.div
-        className="mx-auto max-w-2xl text-center"
-        initial={reduced ? false : { opacity: 0, y: 40 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: '-20%' }}
-        transition={{ duration: 0.7, ease: EASE }}
-      >
-        <KineticWords
-          as="h2"
-          className="h2"
-          ariaLabel="Your audience is already here."
-          delay={0}
-          words={[
-            { text: 'Your' },
-            { text: 'audience' },
-            { text: 'is' },
-            { text: 'already', gold: true },
-            { text: 'here.', gold: true },
-          ]}
-        />
-        <div className="mt-9 flex flex-wrap justify-center gap-3">
-          <ArcButton size="lg" onClick={() => navigate('/app')}>Start creating</ArcButton>
-          <ArcButton size="lg" variant="ghost" onClick={() => navigate('/pricing')}>
-            Compare plans <ArrowRight size={16} aria-hidden="true" />
-          </ArcButton>
-        </div>
-        <p className="caption mx-auto mt-6 max-w-md">
-          KYC verification ($10/yr via KinjyKYC) is required before affiliate participation — only
-          verification results are stored. AI Creator Studio features are part of Premium.
-        </p>
-      </motion.div>
-    </section>
+    <ClosingStage
+      eyebrow="Start creating"
+      glow="var(--kl-coral)"
+      title={
+        <>
+          Your audience is <span className="italic text-[var(--kl-gold-deep)]">already here.</span>
+        </>
+      }
+    >
+      <div className="mt-12 flex flex-col items-center justify-center gap-4 sm:flex-row">
+        <Link to="/app" className={KL_BTN_GOLD}>
+          Start creating <ArrowRight size={17} aria-hidden="true" />
+        </Link>
+        <Link to="/pricing" className={KL_BTN_GHOST}>
+          Compare plans <ArrowRight size={17} aria-hidden="true" />
+        </Link>
+      </div>
+      <p className="mx-auto mt-6 max-w-md text-sm text-[var(--kl-mid)]">
+        KYC verification ($10/yr via KinjyKYC) is required before affiliate participation — only
+        verification results are stored. AI Creator Studio features are part of Premium.
+      </p>
+    </ClosingStage>
   )
 }
 
 /** /creators — Creator Studio & Earnings (creators.md). */
 export default function Creators() {
   return (
-    <>
+    <PublicShell>
       <CreatorsHero />
       <PublishingEngine />
       <CopilotPanel />
@@ -67,6 +53,6 @@ export default function Creators() {
       <BadgeRow />
       <PrePublishGuardian />
       <CreatorsCta />
-    </>
+    </PublicShell>
   )
 }

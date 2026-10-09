@@ -1,12 +1,6 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router'
-import { Award, Crown, MapPin, Medal, Users,
-  LifeBuoy,
-  LayoutGrid,
-  Tag,
-  Wallet,
-  Code2,
-} from 'lucide-react'
+import { Award, Code2, Crown, LayoutGrid, LifeBuoy, MapPin, Medal, Tag, Users, Wallet } from 'lucide-react'
 import { VerifiedBadge } from '@/components/ui-kit'
 import { MODULE_ICONS } from '@/components/appdemo/Chrome'
 import { ROUTE_FOR } from './navigation'

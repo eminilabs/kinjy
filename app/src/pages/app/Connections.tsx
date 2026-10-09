@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { Check, MessageCircle, UserMinus, X } from 'lucide-react'
+import { Check, MessageCircle, UserMinus, Users, X } from 'lucide-react'
 import AppShell from '@/components/app/AppShell'
 import MemberAvatar from '@/components/social/MemberAvatar'
 import { useApi } from '@/hooks/useApi'
@@ -90,7 +90,7 @@ export default function Connections() {
             tone="good"
             onClick={() => run(entry, () => kaluta.connections.respond(entry.user_id, true), 'Could not accept')}
           >
-            <Check size={14} />
+            <Check size={17} />
           </IconButton>
           <IconButton
             label={`Decline ${name}`}
@@ -98,7 +98,7 @@ export default function Connections() {
             tone="bad"
             onClick={() => run(entry, () => kaluta.connections.respond(entry.user_id, false), 'Could not decline')}
           >
-            <X size={14} />
+            <X size={17} />
           </IconButton>
         </>
       )
@@ -109,7 +109,7 @@ export default function Connections() {
           type="button"
           disabled={disabled}
           onClick={() => run(entry, () => kaluta.connections.remove(entry.user_id), 'Could not cancel the invitation')}
-          className="rounded-full border border-white/12 px-3 py-1.5 text-xs font-semibold text-text-mid hover:border-red-400/40 hover:text-red-200 disabled:opacity-40"
+          className="rounded-full border border-[var(--cloud-border)] px-4 py-2 text-sm font-semibold text-text-mid hover:border-red-400/50 hover:text-red-200 disabled:opacity-40"
         >
           Cancel
         </button>
@@ -118,10 +118,10 @@ export default function Connections() {
     return (
       <>
         <IconButton label={`Message ${name}`} disabled={disabled} tone="neutral" onClick={() => message(entry)}>
-          <MessageCircle size={14} />
+          <MessageCircle size={17} />
         </IconButton>
         <IconButton label={`Remove ${name}`} disabled={disabled} tone="bad" onClick={() => setConfirmRemove(entry)}>
-          <UserMinus size={14} />
+          <UserMinus size={17} />
         </IconButton>
       </>
     )
@@ -137,12 +137,23 @@ export default function Connections() {
   const groups = connections.data
 
   return (
-    <AppShell
-      title="Connections"
-      subtitle="People you are connected to. A connection is mutual, and it is what opens messaging between you."
-    >
+    <AppShell>
+      <header className="mb-6">
+        <p className="mono-data text-[0.72rem] font-bold uppercase tracking-[0.15em] text-gold-soft">Connections</p>
+        <h1 className="mt-2 text-[clamp(38px,5vw,56px)] font-bold leading-[1.02] tracking-[-0.045em] text-text-hi">
+          Your people
+        </h1>
+        <p className="mt-3 max-w-2xl text-[0.95rem] leading-relaxed text-text-low">
+          People you are connected to. A connection is mutual, and it is what opens messaging between you.
+        </p>
+      </header>
+
       {groups && (
-        <div role="group" aria-label="Show" className="flex flex-wrap gap-2">
+        <div
+          role="group"
+          aria-label="Show"
+          className="inline-flex max-w-full gap-1 overflow-x-auto rounded-full border border-[var(--cloud-border)] bg-text-hi/[0.04] p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
           {TABS.map((t) => {
             const count = groups[t.id].length
             return (
@@ -152,13 +163,21 @@ export default function Connections() {
                 aria-pressed={tab === t.id}
                 onClick={() => setParams({ tab: t.id }, { replace: true })}
                 className={cn(
-                  'rounded-full border px-3.5 py-1.5 text-xs font-semibold',
+                  'inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-semibold transition-colors sm:gap-2 sm:px-5',
                   tab === t.id
-                    ? 'border-gold/50 bg-gold/10 text-gold-soft'
-                    : 'border-white/12 text-text-mid hover:text-text-hi',
+                    ? 'bg-gradient-to-br from-gold-soft to-gold text-ink shadow-[0_8px_20px_-10px_rgba(166,120,57,0.6)]'
+                    : 'text-text-mid hover:text-text-hi',
                 )}
               >
-                {t.label} <span className="mono-data">{count}</span>
+                {t.label}
+                <span
+                  className={cn(
+                    'mono-data rounded-full px-2 py-0.5 text-xs',
+                    tab === t.id ? 'bg-ink/15' : 'bg-text-hi/[0.08]',
+                  )}
+                >
+                  {count}
+                </span>
               </button>
             )
           })}
@@ -166,47 +185,56 @@ export default function Connections() {
       )}
 
       {error && (
-        <p role="alert" className="mt-4 text-sm text-red-200">
+        <p role="alert" className="mt-4 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-200">
           {error}
         </p>
       )}
 
-      <div className="mt-5">
+      <div className="mt-6">
         {connections.loading && <p className="text-sm text-text-low">Loading your connections…</p>}
         {connections.error && <p className="text-sm text-amber-200">{connections.error}</p>}
-        {connections.data && rows.length === 0 && <p className="text-sm text-text-low">{current.empty}</p>}
-        <ul className="grid gap-3 sm:grid-cols-2">
+        {connections.data && rows.length === 0 && (
+          <div className="cloud-card px-6 py-14 text-center">
+            <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-gold/15 text-gold-soft">
+              <Users size={26} aria-hidden="true" />
+            </span>
+            <p className="mx-auto mt-5 max-w-sm text-base font-semibold text-text-hi">{current.empty}</p>
+          </div>
+        )}
+        <ul className="grid gap-4 sm:grid-cols-2">
           {rows.map((entry) => (
-            <li key={entry.id} className="cloud-card flex items-center gap-3 p-4">
+            <li key={entry.id} className="cloud-card flex items-center gap-4 p-5">
               <MemberAvatar
                 handle={entry.profile?.handle}
                 displayName={entry.profile?.display_name}
                 avatarUrl={entry.profile?.avatar_url}
-                size={40}
+                size={56}
               />
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 {entry.profile ? (
                   <Link
                     to={`/u/${entry.profile.handle}`}
-                    className="block truncate text-sm font-semibold text-text-hi hover:text-gold-soft"
+                    className="block truncate text-[1.05rem] font-bold tracking-[-0.015em] text-text-hi hover:text-gold-soft"
                   >
                     {entry.profile.display_name}
                   </Link>
                 ) : (
-                  <p className="truncate text-sm font-semibold text-text-hi">Unknown member</p>
+                  <p className="truncate text-[1.05rem] font-bold text-text-hi">Unknown member</p>
                 )}
-                {entry.profile && <p className="caption truncate">@{entry.profile.handle}</p>}
+                {entry.profile && <p className="mono-data truncate text-xs text-text-low">@{entry.profile.handle}</p>}
                 {tab === 'incoming' && entry.message && (
-                  <p className="mt-1 line-clamp-2 text-xs text-text-mid">“{entry.message}”</p>
+                  <p className="mt-2 line-clamp-2 rounded-xl bg-text-hi/[0.05] px-3 py-2 text-sm leading-relaxed text-text-mid">
+                    “{entry.message}”
+                  </p>
                 )}
               </div>
-              <div className="ms-auto flex shrink-0 gap-1">{actionsFor(entry)}</div>
+              <div className="flex shrink-0 gap-2">{actionsFor(entry)}</div>
             </li>
           ))}
         </ul>
       </div>
 
-      <p className="mt-8 text-xs text-text-low">
+      <p className="mt-8 text-sm text-text-low">
         Choose who can send you an invitation in{' '}
         <Link to="/dashboard?tab=privacy" className="text-gold-soft hover:underline">
           your privacy settings
@@ -232,9 +260,9 @@ export default function Connections() {
 }
 
 const TONES = {
-  good: 'border-emerald-400/40 text-emerald-300 hover:bg-emerald-400/10',
-  bad: 'border-white/12 text-text-mid hover:border-red-400/40 hover:text-red-200',
-  neutral: 'border-white/12 text-text-mid hover:border-gold/40 hover:text-gold-soft',
+  good: 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25',
+  bad: 'bg-text-hi/[0.07] text-text-mid hover:bg-red-500/15 hover:text-red-200',
+  neutral: 'bg-text-hi/[0.07] text-text-mid hover:bg-gold/20 hover:text-gold-soft',
 } as const
 
 function IconButton({
@@ -257,7 +285,7 @@ function IconButton({
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className={cn('rounded-full border p-2 disabled:opacity-40', TONES[tone])}
+      className={cn('grid h-10 w-10 place-items-center rounded-full transition-colors disabled:opacity-40', TONES[tone])}
     >
       {children}
     </button>

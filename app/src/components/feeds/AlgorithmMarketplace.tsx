@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { ArrowUp, Search, ShieldCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { ModeChip } from '@/components/ui-kit'
 import { AlgoGlyph, CLOUD_EASE } from '@/components/platform/shared'
 import { ALGORITHMS } from './data'
 import type { AlgoCategory, Algorithm } from './data'
 import { useToasts } from './Toast'
+import { Eyebrow } from '@/components/landing/PageKit'
+import { MODULE_TONES } from '@/components/platform/tones'
 import { useApi } from '@/hooks/useApi'
 import { kaluta, type Algorithm as ApiAlgorithm } from '@/lib/api'
 
@@ -49,17 +50,20 @@ const FILTERS: Array<'All' | AlgoCategory> = ['All', 'People', 'Places', 'Intere
 
 function AlgorithmCard({
   algo,
+  index,
   active,
   highlighted,
   onUse,
 }: {
   algo: Algorithm
+  index: number
   active: boolean
   highlighted: boolean
   onUse: () => void
 }) {
   const [ripple, setRipple] = useState(0)
   const reduced = useReducedMotion()
+  const [ink, tile] = MODULE_TONES[index % MODULE_TONES.length]
 
   return (
     <motion.article
@@ -69,9 +73,12 @@ function AlgorithmCard({
       exit={{ opacity: 0, scale: 0.94 }}
       transition={{ duration: 0.35, ease: CLOUD_EASE }}
       className={cn(
-        'cloud-card relative flex flex-col overflow-hidden p-5 transition-shadow duration-300',
-        active && 'shadow-[0_0_0_2px_rgba(217,166,72,0.85),0_16px_40px_-16px_rgba(0,0,0,0.5)]',
-        highlighted && !active && 'shadow-[0_0_0_2px_rgba(240,200,120,0.55)]',
+        'relative flex h-full flex-col overflow-hidden rounded-[20px] border bg-[var(--kl-surface)] p-6 transition-[box-shadow,border-color,transform] duration-300 hover:-translate-y-0.5',
+        active
+          ? 'border-[var(--kl-gold)] shadow-[0_0_0_1px_var(--kl-gold),0_24px_48px_-30px_var(--kl-shadow)]'
+          : highlighted
+            ? 'border-[var(--kl-gold-soft)] shadow-[0_24px_48px_-30px_var(--kl-shadow)]'
+            : 'border-[var(--kl-paper-2)] shadow-[0_18px_36px_-30px_var(--kl-shadow)]',
       )}
       aria-label={`Algorithm: ${algo.name}`}
     >
@@ -81,11 +88,11 @@ function AlgorithmCard({
           <motion.span
             key={ripple}
             aria-hidden="true"
-            className="pointer-events-none absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gold/25"
-            initial={{ scale: 0, opacity: 0.9 }}
-            animate={{ scale: 2.2, opacity: 0 }}
+            className="pointer-events-none absolute bottom-6 right-6 h-40 w-40 translate-x-1/2 translate-y-1/2 rounded-full bg-[var(--kl-gold)] opacity-30"
+            initial={{ scale: 0, opacity: 0.5 }}
+            animate={{ scale: 2.4, opacity: 0 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.3, ease: 'easeOut' }}
+            transition={{ duration: 0.45, ease: 'easeOut' }}
           />
         )}
       </AnimatePresence>
@@ -94,38 +101,38 @@ function AlgorithmCard({
       {highlighted && !active && (
         <motion.span
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 rounded-card-lg border-2 border-gold/60"
-          animate={reduced ? undefined : { opacity: [0.9, 0.25, 0.9] }}
+          className="pointer-events-none absolute inset-0 rounded-[20px] border-2 border-[var(--kl-gold)]"
+          animate={reduced ? undefined : { opacity: [0.9, 0.2, 0.9] }}
           transition={{ duration: 1.4, repeat: 2, ease: 'easeInOut' }}
         />
       )}
 
       <div className="flex items-start justify-between gap-2">
-        <span className={cn('cloud-glass flex h-11 w-11 items-center justify-center rounded-full', active && 'border-gold/50')}>
-          <AlgoGlyph id={algo.glyph} size={22} />
+        <span className="grid h-12 w-12 place-items-center rounded-[12px]" style={{ background: tile, color: ink }}>
+          <AlgoGlyph id={algo.glyph} size={22} className="!text-current" />
         </span>
-        {algo.community && (
-          <span className="inline-flex items-center gap-1 rounded-full border border-success/35 bg-success/10 px-2 py-0.5 text-[0.62rem] font-bold text-success">
+        {algo.community ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-[#DDF0E5] px-2.5 py-1 text-[10.5px] font-bold text-[#2E7D57]">
             <ShieldCheck size={11} /> Reviewed · v1.3
           </span>
+        ) : (
+          <span className="kl-mono text-[10px] uppercase tracking-[.12em] text-[var(--kl-low)]">{algo.category}</span>
         )}
       </div>
 
-      <h3 className="mt-3.5 font-semibold text-text-hi">{algo.name}</h3>
-      <p className="caption mt-1.5 flex-1 leading-relaxed">{algo.promise}</p>
+      <h3 className="kl-serif mt-5 text-[24px] font-semibold leading-tight">{algo.name}</h3>
+      <p className="mt-2 flex-1 text-[14px] leading-relaxed text-[var(--kl-mid)]">{algo.promise}</p>
       {algo.note && (
-        <p className="mt-2 rounded-card-sm border border-gold/25 bg-gold/5 px-2.5 py-1.5 text-[0.68rem] font-semibold text-gold-soft">
-          {algo.note}
-        </p>
+        <p className="mt-3 rounded-[10px] bg-[var(--kl-paper)] px-3 py-2 text-xs font-semibold text-[var(--kl-gold-deep)]">{algo.note}</p>
       )}
       {highlighted && !active && (
-        <p className="mt-2 text-[0.68rem] font-bold text-gold-soft">Suggested — based on your choice</p>
+        <p className="mt-3 text-xs font-bold text-[var(--kl-gold-deep)]">Suggested — based on your choice</p>
       )}
 
-      <div className="mt-4 flex items-center justify-between gap-2 border-t border-white/10 pt-3.5">
-        <div>
-          <p className="text-[0.66rem] font-semibold text-text-low">{algo.publisher}</p>
-          <p className="mono-data mt-0.5 text-[0.68rem] text-text-mid">{algo.installs.toLocaleString()} installs</p>
+      <div className="mt-5 flex items-center justify-between gap-2 border-t border-[var(--kl-paper-2)] pt-4">
+        <div className="min-w-0">
+          <p className="truncate text-xs font-semibold">{algo.publisher}</p>
+          <p className="kl-mono mt-0.5 text-[11px] text-[var(--kl-low)]">{algo.installs.toLocaleString()} installs</p>
         </div>
         <button
           type="button"
@@ -134,10 +141,10 @@ function AlgorithmCard({
             onUse()
           }}
           className={cn(
-            'rounded-full px-3.5 py-1.5 text-xs font-bold transition-colors',
+            'shrink-0 rounded-full px-4 py-2 text-xs font-bold transition-colors',
             active
-              ? 'bg-gradient-to-br from-gold-soft to-gold text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]'
-              : 'cloud-glass text-text-hi hover:border-gold/40 hover:text-gold-soft',
+              ? 'kl-sheen'
+              : 'bg-[var(--kl-paper)] hover:bg-[var(--kl-paper-2)]',
           )}
           aria-pressed={active}
         >
@@ -205,84 +212,109 @@ export default function AlgorithmMarketplace({
   }
 
   return (
-    <section id="algorithm-marketplace" className="scroll-mt-24 px-6 py-24 md:py-32" aria-label="The Algorithm Marketplace">
-      <div className="mx-auto max-w-container">
-        {/* Header row */}
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-xl">
-            <p className="eyebrow text-gold">Refinement 02 · Mandatory Blueprint Change</p>
-            <h2 className="h2 mt-4">The Algorithm Marketplace</h2>
-            <p className="body-lg mt-4 text-text-mid">
-              {catalogue.length} ranking algorithms — {catalogue.filter((a) => !a.community).length} by
-              Kinjy, {catalogue.filter((a) => a.community).length} community-built — installed by
-              your choice, removable in one tap.
-            </p>
-            <p className="caption mt-2">
-              {live ? (
-                <span className="text-gold-soft">Live catalogue · /api/algorithms</span>
-              ) : liveError ? (
-                <span className="text-text-low">
-                  Published catalogue — social-service is unreachable
-                </span>
-              ) : (
-                <span className="text-text-low">Loading the live catalogue…</span>
-              )}
-            </p>
-          </div>
-          <div className="flex flex-col gap-3">
-            <label className="cloud-glass flex items-center gap-2.5 rounded-full px-4 py-2.5">
-              <Search size={15} className="shrink-0 text-text-low" />
-              <input
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search algorithms…"
-                aria-label="Search algorithms"
-                className="w-48 bg-transparent text-sm text-text-hi placeholder:text-text-low focus:outline-none"
-              />
-            </label>
-            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by category">
-              {FILTERS.map((f) => (
-                <ModeChip key={f} label={f} active={filter === f} onClick={() => setFilter(f)} className="px-3 py-1.5 text-xs" />
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Grid */}
-        <motion.div layout className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          <AnimatePresence mode="popLayout">
-            {visible.map((algo, i) => (
-              <motion.div
-                key={algo.id}
-                layout
-                initial={reduced ? false : { opacity: 0, y: 24 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, amount: 0.2 }}
-                transition={{ duration: 0.45, ease: CLOUD_EASE, delay: (i % 6) * 0.06 }}
-              >
-                <AlgorithmCard
-                  algo={algo}
-                  active={activeId === algo.id}
-                  highlighted={highlightId === algo.id}
-                  onUse={() => handleUse(algo)}
-                />
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </motion.div>
-
-        {visible.length === 0 && (
-          <p className="caption mx-auto mt-10 w-fit rounded-full border border-white/12 bg-white/5 px-4 py-2">
-            No algorithms match “{query}” — try “family”, “video” or “local”.
+    <section
+      id="algorithm-marketplace"
+      className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]"
+      aria-label="The Algorithm Marketplace"
+    >
+      {/* Header row */}
+      <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
+        <div className="max-w-[640px]">
+          <Eyebrow>Algorithm marketplace</Eyebrow>
+          <h2 className="kl-h2 mt-5">Pick how your feed thinks.</h2>
+          <p className="kl-lead mt-5 !max-w-[560px]">
+            {catalogue.length} ranking algorithms — {catalogue.filter((a) => !a.community).length} by
+            Kinjy, {catalogue.filter((a) => a.community).length} community-built — installed by
+            your choice, removable in one tap.
           </p>
-        )}
-
-        <p className="caption mx-auto mt-8 flex w-fit items-center gap-2">
-          <ArrowUp size={13} className="text-gold" />
-          Installing an algorithm re-orders the live demo feed above.
-        </p>
+          <p className="kl-mono mt-3 flex items-center gap-2 text-[11px] uppercase tracking-[.1em]">
+            <span
+              aria-hidden="true"
+              className={cn('h-1.5 w-1.5 rounded-full', live ? 'kl-pulse bg-[#2E7D57]' : liveError ? 'bg-[var(--kl-coral)]' : 'bg-[var(--kl-low)]')}
+            />
+            {live ? (
+              <span className="text-[var(--kl-gold-deep)]">Live catalogue · /api/algorithms</span>
+            ) : liveError ? (
+              <span className="text-[var(--kl-low)]">Published catalogue — social-service is unreachable</span>
+            ) : (
+              <span className="text-[var(--kl-low)]">Loading the live catalogue…</span>
+            )}
+          </p>
+        </div>
+        <label className="flex w-full items-center gap-2.5 rounded-full border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] px-5 py-3 transition-colors focus-within:border-[var(--kl-gold)] lg:w-[320px]">
+          <Search size={16} className="shrink-0 text-[var(--kl-low)]" />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search algorithms…"
+            aria-label="Search algorithms"
+            className="min-w-0 flex-1 bg-transparent text-[15px] placeholder:text-[var(--kl-low)] focus:outline-none"
+          />
+        </label>
       </div>
+
+      {/* Category tabs */}
+      <div
+        className="mt-10 flex gap-1 overflow-x-auto border-b border-[var(--kl-paper-2)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        role="group"
+        aria-label="Filter by category"
+      >
+        {FILTERS.map((f) => {
+          const on = filter === f
+          const count = f === 'All' ? catalogue.length : catalogue.filter((a) => a.category === f).length
+          return (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setFilter(f)}
+              aria-pressed={on}
+              className={cn(
+                'relative shrink-0 px-4 pb-3.5 pt-1 text-[15px] font-semibold transition-colors',
+                on ? 'text-[var(--kl-ink)]' : 'text-[var(--kl-low)] hover:text-[var(--kl-ink)]',
+              )}
+            >
+              {f} <span className="kl-mono text-[11px] text-[var(--kl-low)]">{count}</span>
+              {on && <motion.span layoutId="algo-tab" className="kl-sheen absolute inset-x-3 -bottom-px h-[3px] rounded-full" />}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Grid */}
+      <motion.div layout className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <AnimatePresence mode="popLayout">
+          {visible.map((algo, i) => (
+            <motion.div
+              key={algo.id}
+              layout
+              initial={reduced ? false : { opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.2 }}
+              transition={{ duration: 0.45, ease: CLOUD_EASE, delay: (i % 6) * 0.06 }}
+            >
+              <AlgorithmCard
+                algo={algo}
+                index={catalogue.indexOf(algo)}
+                active={activeId === algo.id}
+                highlighted={highlightId === algo.id}
+                onUse={() => handleUse(algo)}
+              />
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </motion.div>
+
+      {visible.length === 0 && (
+        <p className="mx-auto mt-10 w-fit rounded-full bg-[var(--kl-paper)] px-5 py-2.5 text-sm text-[var(--kl-mid)]">
+          No algorithms match “{query}” — try “family”, “video” or “local”.
+        </p>
+      )}
+
+      <p className="mx-auto mt-10 flex w-fit items-center gap-2 text-sm text-[var(--kl-mid)]">
+        <ArrowUp size={14} className="text-[var(--kl-gold-deep)]" />
+        Installing an algorithm re-orders the live demo feed above.
+      </p>
     </section>
   )
 }

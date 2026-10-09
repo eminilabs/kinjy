@@ -3,6 +3,32 @@
 @tailwind utilities;
 
 @layer base {
+  /* Brand primitives — the "Kinjy Landing" palette, defined once.
+   *
+   * Constants, not theme tokens: they mean the same in every theme. The theme
+   * blocks below and the landing page (components/landing/landing.css) both
+   * build from them, so the public site and the app cannot drift apart. */
+  :root {
+    --k-night: #0B0E1D;
+    --k-night-2: #12162B;
+    --k-night-3: #1A1F3B;
+    --k-indigo: #4A52E0;
+    --k-indigo-deep: #242142;
+    --k-gold: #D9A648;
+    --k-gold-soft: #F0C878;
+    --k-gold-deep: #8A6414;
+    --k-sky: #8FB8E8;
+    --k-coral: #E07856;
+    --k-white: #FFFFFF;
+    --k-paper: #F6F1E7;
+    --k-paper-2: #EDE4D3;
+    --k-paper-ink: #241F16;
+    --k-paper-mid: #5C5344;
+    --k-paper-low: #6E6555;
+    --k-night-text: #F4F2EE;
+    --k-night-mid: #A7ACBF;
+  }
+
   /* The dark palette is the default, and it is also the palette that any
      always-dark surface must carry with it.
      
@@ -146,22 +172,19 @@
    * shadcn bridge below. */
   :root[data-theme='light'],
   .force-light {
-    --ink: #F6F1E7;
-    --ink-2: #FFFFFF;
-    --ink-3: #EDE4D3;
+    /* The landing design's light: a white page, paper for soft panels and
+       hairlines, white cards set off by a border rather than by tint. */
+    --ink: var(--k-white);
+    --ink-2: var(--k-white);
+    --ink-3: var(--k-paper);
     /* Ink, not paper: these three carry every piece of text on a card. */
     --text-hi: #241F16;
     --text-mid: #5C5344;
     --text-low: #6E6555;
     /* An opaque card on paper. The translucent white of the dark theme has
-       nothing to sit against here and simply disappears.
-
-       Fully opaque, not 0.92: eight percent is enough to let whatever sits
-       behind the page show faintly through every card, which on a light theme
-       reads as a dirty screen rather than as depth. The shadow and the border
-       carry the lift; the fill does not need to. */
-    --cloud: #FFFFFF;
-    --cloud-border: rgba(36, 31, 22, 0.12);
+       nothing to sit against here and simply disappears. */
+    --cloud: var(--k-white);
+    --cloud-border: var(--k-paper-2);
     /* The gold that reads on dark is far too pale on paper. */
     --gold: #A9761C;
     --gold-soft: #8A6414;
@@ -172,9 +195,9 @@
     --danger: #B23B3B;
     --info: #2E5FB8;
 
-    --ink-rgb: 246 241 231;
+    --ink-rgb: 255 255 255;
     --ink-2-rgb: 255 255 255;
-    --ink-3-rgb: 237 228 211;
+    --ink-3-rgb: 246 241 231;
     --gold-rgb: 169 118 28;
     /* Darkened until the hashtag chips and secondary counters clear WCAG AA
        (4.5:1) on the card, measured rather than eyeballed. The dark theme's
@@ -190,10 +213,10 @@
     --danger-rgb: 178 59 59;
     --info-rgb: 46 95 184;
 
-    --grad-twilight: linear-gradient(160deg, #F6F1E7 0%, #EDE4D3 100%);
+    --grad-twilight: linear-gradient(160deg, #FFFFFF 0%, #F6F1E7 100%);
     --grad-gold-sheen: linear-gradient(135deg, #C08F2C, #A9761C);
 
-    --background: 40 46% 94%;
+    --background: 0 0% 100%;
     --foreground: 40 22% 12%;
     --card: 0 0% 100%;
     --card-foreground: 40 22% 12%;
@@ -201,22 +224,44 @@
     --popover-foreground: 40 22% 12%;
     --primary: 38 72% 39%;
     --primary-foreground: 40 46% 97%;
-    --secondary: 40 38% 88%;
+    --secondary: 40 46% 94%;
     --secondary-foreground: 40 22% 12%;
-    --muted: 40 38% 88%;
+    --muted: 40 46% 94%;
     --muted-foreground: 38 14% 38%;
-    --accent: 40 38% 88%;
+    --accent: 40 46% 94%;
     --accent-foreground: 40 22% 12%;
-    --border: 40 18% 82%;
-    --input: 40 18% 82%;
+    --border: 39 41% 88%;
+    --input: 39 41% 88%;
     --ring: 38 72% 39%;
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 40 22% 12%;
     --sidebar-accent: 40 38% 88%;
     --sidebar-accent-foreground: 40 22% 12%;
     --sidebar-border: 40 18% 82%;
-    --shadow-cloud: 0 10px 26px -14px rgba(36, 31, 22, 0.28);
-    --shadow-cloud-hover: 0 18px 40px -16px rgba(36, 31, 22, 0.34);
+    /* The design's long, soft drop: a card lifts off white paper without a
+       dark rim around it. */
+    --shadow-cloud: 0 24px 48px -30px rgba(36, 31, 22, 0.32), 0 1px 3px rgba(36, 31, 22, 0.05);
+    --shadow-cloud-hover: 0 32px 60px -30px rgba(36, 31, 22, 0.4), 0 1px 3px rgba(36, 31, 22, 0.06);
+  }
+
+  /* Hairlines written for the dark theme.
+   *
+   * Hundreds of dividers and input outlines are `border-white/5…/20`: a
+   * faint light line on night. On white paper the same class draws white on
+   * white, so in light mode every one of those borders simply vanished —
+   * inputs had no outline and list rows no separation. They become the paper
+   * hairline here, in light mode only; the dark themes keep them as written. */
+  /* Sections that stay night in every theme (.twilight-field, .force-dark)
+     keep their light hairlines: there the white line is the right one. */
+  :is(:root[data-theme='light'], .force-light) :is(
+    .border-white\/5, .border-white\/8, .border-white\/10, .border-white\/12,
+    .border-white\/14, .border-white\/15, .border-white\/20,
+    .border-t-white\/10, .border-b-white\/10
+  ):not(:is(.twilight-field, .force-dark) *, .twilight-field, .force-dark) {
+    border-color: var(--k-paper-2);
+  }
+  :is(:root[data-theme='light'], .force-light) :is(.divide-white\/5, .divide-white\/8, .divide-white\/10):not(:is(.twilight-field, .force-dark) *) > * + * {
+    border-color: var(--k-paper-2);
   }
 
   /* The signature cloud card, inside the app, opaque.
@@ -257,9 +302,70 @@
     border-color: rgba(169, 118, 28, 0.35);
   }
 
+  /* The landing's card: a rounder corner and a longer, softer drop than the
+     glass card's, so every panel in the signed-in app reads like the public
+     pages. Dark and Cloud keep their glass. */
+  :is(:root[data-theme='light'], .force-light) .cloud-card {
+    border-radius: 20px;
+    box-shadow: 0 24px 48px -34px rgba(36, 31, 22, 0.32), 0 1px 3px rgba(36, 31, 22, 0.04);
+  }
+
+  /* Light mode in the signed-in app: warm paper cards on a cream page. */
+  :root[data-theme='light'] .app-shell .cloud-card {
+    background: #fffdfa;
+    border-color: #e7e1d7;
+    box-shadow: 0 15px 35px rgba(76, 62, 43, 0.07);
+  }
+
+  /* Every card in the signed-in app takes the landing's 20px corner. */
+  .app-shell :is(.cloud-card, .cloud-glass.rounded-card-lg) {
+    border-radius: 20px;
+  }
+
+  /* The gold button, as on the landing: the same warm gold and dark ink in
+     every theme. Left to the theme tokens it turned brown on paper, and its
+     `text-ink` turned white. */
+  .bg-gradient-to-br.from-gold-soft.to-gold,
+  .bg-gradient-to-r.from-gold-soft.to-gold {
+    background-image: linear-gradient(135deg, #f0c878, #d9a648);
+    color: #0b0e1d;
+  }
+
+  /* Status colours written for the night themes (pale amber, mint, rose on a
+     dark card). On paper they were near-invisible, so each maps to the
+     darker shade that reads there. Excludes night sections inside a light page. */
+  :is(:root[data-theme='light'], .force-light) :is(.text-amber-100, .text-amber-200, .text-amber-300):not(:is(.force-dark, .twilight-field) *) {
+    color: #8a6414;
+  }
+  :is(:root[data-theme='light'], .force-light) :is(.text-emerald-200, .text-emerald-300, .text-emerald-400):not(:is(.force-dark, .twilight-field) *) {
+    color: #1f7a52;
+  }
+  :is(:root[data-theme='light'], .force-light) :is(.text-red-100, .text-red-200, .text-red-300, .text-red-400, .text-rose-400):not(:is(.force-dark, .twilight-field) *) {
+    color: #b23b3b;
+  }
+  :is(:root[data-theme='light'], .force-light) :is(.bg-amber-500\/10, .bg-amber-400\/15, .bg-amber-300\/10):not(:is(.force-dark, .twilight-field) *) {
+    background-color: rgba(169, 118, 28, 0.12);
+  }
+  :is(:root[data-theme='light'], .force-light) :is(.bg-emerald-400\/10, .bg-emerald-400\/15):not(:is(.force-dark, .twilight-field) *) {
+    background-color: rgba(31, 122, 82, 0.12);
+  }
+  :is(:root[data-theme='light'], .force-light) :is(.bg-red-500\/10, .bg-red-500\/5, .bg-red-400\/10, .bg-red-400\/15):not(:is(.force-dark, .twilight-field) *) {
+    background-color: rgba(178, 59, 59, 0.1);
+  }
+  :is(:root[data-theme='light'], .force-light) :is(.border-amber-400\/25, .border-amber-400\/30, .border-amber-300\/30):not(:is(.force-dark, .twilight-field) *) {
+    border-color: rgba(169, 118, 28, 0.35);
+  }
+  :is(:root[data-theme='light'], .force-light) :is(.border-emerald-400\/30, .border-emerald-400\/40):not(:is(.force-dark, .twilight-field) *) {
+    border-color: rgba(31, 122, 82, 0.35);
+  }
+  :is(:root[data-theme='light'], .force-light) :is(.border-red-400\/25, .border-red-400\/30, .border-red-400\/35, .border-red-400\/40, .border-red-500\/40):not(:is(.force-dark, .twilight-field) *) {
+    border-color: rgba(178, 59, 59, 0.35);
+  }
+
   body {
     @apply bg-ink text-text-hi font-sans antialiased;
-    font-feature-settings: "ss01", "cv11";
+    /* Hanken Grotesk's defaults are the design; the old ss01/cv11 switched
+       Manrope's alternate glyphs and mean something else in this face. */
   }
 
   ::selection {
@@ -284,7 +390,7 @@
      collision. */
   .display-xl {
     font-family: "Fraunces", serif;
-    font-weight: 500;
+    font-weight: 600;
     font-size: clamp(3.25rem, 7.5vw, 6.5rem);
     line-height: 1.16;
     letter-spacing: -0.03em;
@@ -292,7 +398,7 @@
   }
   .display-lg {
     font-family: "Fraunces", serif;
-    font-weight: 500;
+    font-weight: 600;
     font-size: clamp(2.5rem, 5vw, 4.25rem);
     line-height: 1.15;
     letter-spacing: -0.025em;
@@ -300,14 +406,14 @@
   }
   .h1 {
     font-family: "Fraunces", serif;
-    font-weight: 500;
+    font-weight: 600;
     font-size: clamp(2rem, 4vw, 3.25rem);
     line-height: 1.18;
     letter-spacing: -0.02em;
   }
   .h2 {
     font-family: "Fraunces", serif;
-    font-weight: 500;
+    font-weight: 600;
     font-size: clamp(1.6rem, 3vw, 2.4rem);
     line-height: 1.2;
     letter-spacing: -0.015em;

@@ -70,7 +70,7 @@ class Message(Base):
     encrypted: Mapped[bool] = mapped_column(Boolean, default=True)
     ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary)
     body: Mapped[str | None] = mapped_column(Text)
-    kind: Mapped[str] = mapped_column(String(20), default="text")  # text|media|call_event
+    kind: Mapped[str] = mapped_column(String(20), default="text")  # text|media|sticker|call_event
     media_url: Mapped[str | None] = mapped_column(String(500))
     # Attachment facts as media-service recorded them at upload — never as the
     # sending client described them.

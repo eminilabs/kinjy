@@ -82,7 +82,7 @@ export function KineticWords({ text, className, as: Tag = 'span' }: { text: stri
   return (
     <Tag className={className}>
       {words.map((w, i) => (
-        <span key={`${w}-${i}`} className="inline-block overflow-hidden pb-[0.08em] -mb-[0.08em] align-bottom pe-[0.24em] last:pe-0">
+        <span key={`${w}-${i}`} className="inline-block overflow-hidden pb-[0.08em] -mb-[0.08em] align-bottom">
           <span className="inline-block">
             {w}
             {i < words.length - 1 ? ' ' : ''}

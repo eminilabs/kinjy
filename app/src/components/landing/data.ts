@@ -252,41 +252,41 @@ export const NAV_MORE = openLinks([
 
 const ALL_FOOTER_COLUMNS: { title: string; links: PageLink[] }[] = [
   {
-    title: 'Platform',
+    title: 'footer.platform',
     links: [
-      { to: '/platform', label: 'All modules' },
-      { to: '/feeds', label: 'Feeds & algorithms' },
-      { to: '/family', label: 'Family tree' },
-      { to: '/memorials', label: 'Digital graveyard' },
-      { to: '/app', label: 'The app' },
+      { to: '/platform', label: 'footer.allModules' },
+      { to: '/feeds', label: 'footer.feeds' },
+      { to: '/family', label: 'footer.familyTree' },
+      { to: '/memorials', label: 'footer.memorials' },
+      { to: '/app', label: 'footer.app' },
     ],
   },
   {
-    title: 'Trust',
+    title: 'footer.trust',
     links: [
-      { to: '/safety', label: 'Safety & moderation' },
-      { to: '/safety', label: 'Privacy' },
-      { to: '/safety', label: 'Transparency' },
-      { to: '/safety', label: 'Account deletion' },
+      { to: '/safety', label: 'footer.safety' },
+      { to: '/safety', label: 'footer.privacy' },
+      { to: '/safety', label: 'footer.transparency' },
+      { to: '/safety', label: 'footer.deletion' },
     ],
   },
   {
-    title: 'Economy',
+    title: 'footer.economy',
     links: [
-      { to: '/creators', label: 'Creator Studio' },
-      { to: '/commerce', label: 'Marketplace' },
-      { to: '/commerce', label: 'Advertising' },
-      { to: '/payments', label: 'Payments & crypto' },
-      { to: '/creators', label: 'Kinjy Leaders' },
+      { to: '/creators', label: 'footer.creators' },
+      { to: '/commerce', label: 'footer.marketplace' },
+      { to: '/commerce', label: 'footer.advertising' },
+      { to: '/payments', label: 'footer.payments' },
+      { to: '/creators', label: 'footer.leaders' },
     ],
   },
   {
-    title: 'Developers',
+    title: 'footer.developers',
     links: [
-      { to: '/developers', label: 'Developers' },
-      { to: '/developers', label: 'AI Gateway' },
-      { to: '/feeds', label: 'Algorithm marketplace' },
-      { to: '/assistant', label: 'Kinjy Assistant' },
+      { to: '/developers', label: 'footer.devDocs' },
+      { to: '/developers', label: 'footer.aiGateway' },
+      { to: '/feeds', label: 'footer.algoMarket' },
+      { to: '/assistant', label: 'footer.assistant' },
     ],
   },
 ]

@@ -52,8 +52,8 @@ const ALL_CONTROLS: Control[] = [
     key: 'who_can_add_family',
     icon: TreeDeciduous,
     title: 'Add you to a family tree',
-    hint: 'A relationship claim still needs your confirmation on top of this.',
-    feature: 'familyTree',
+    hint: 'Decides who may put your own node into their family tree. You can remove yourself from a tree at any time.',
+    feature: 'familyTreeApp',
   },
   {
     key: 'who_can_add_community',
@@ -68,7 +68,7 @@ const ALL_CONTROLS: Control[] = [
     hint: 'Applied by family-service on every read — names, dates and relationships, including the dead. "Your family" means people who share the graph with you.',
     choices: FAMILY_CHOICES,
     fallback: 'family',
-    feature: 'familyTree',
+    feature: 'familyTreeApp',
   },
 ]
 
@@ -108,7 +108,7 @@ export default function Privacy() {
   const accepted = connections.data?.accepted.length ?? 0
 
   return (
-    <div className="grid gap-5 lg:grid-cols-2">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
       <Panel
         title="Who can reach you"
         subtitle="Following is always open. Everything below is your call."
@@ -137,7 +137,7 @@ export default function Privacy() {
                           'rounded-full border px-3 py-1 text-xs font-semibold',
                           value === choice.id
                             ? 'border-gold/50 bg-gold/10 text-gold-soft'
-                            : 'border-white/12 text-text-mid hover:text-text-hi',
+                            : 'border-[var(--cloud-border)] text-text-mid hover:text-text-hi',
                         )}
                       >
                         {choice.label}
@@ -149,7 +149,7 @@ export default function Privacy() {
             })}
 
             {FEATURES.assistant && (
-              <li className="border-t border-white/8 pt-4">
+              <li className="border-t border-[var(--cloud-border)] pt-4">
                 <label className="flex items-start gap-2.5">
                   <input
                     type="checkbox"
@@ -171,7 +171,7 @@ export default function Privacy() {
               </li>
             )}
 
-            <li className="border-t border-white/8 pt-4">
+            <li className="border-t border-[var(--cloud-border)] pt-4">
               <label className="flex items-start gap-2.5">
                 <input
                   type="checkbox"
@@ -192,8 +192,8 @@ export default function Privacy() {
               </label>
             </li>
 
-            {FEATURES.familyTree && (
-              <li className="border-t border-white/8 pt-4">
+            {FEATURES.familyTreeApp && (
+              <li className="border-t border-[var(--cloud-border)] pt-4">
                 <label className="flex items-start gap-2.5">
                   <input
                     type="checkbox"
@@ -221,7 +221,7 @@ export default function Privacy() {
 
       <Panel
         title="Connections"
-        subtitle={`Accepting an invitation is what opens messaging, ${FEATURES.familyTree ? 'family links ' : ''}and community invites.`}
+        subtitle={`Accepting an invitation is what opens messaging, ${FEATURES.familyTreeApp ? 'family links ' : ''}and community invites.`}
         action={incoming > 0 ? <Badge tone="warn">{incoming} waiting</Badge> : undefined}
       >
         <PanelState loading={connections.loading} error={connections.error}>

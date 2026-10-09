@@ -14,8 +14,9 @@ import {
   Settings,
   UserRound,
 } from 'lucide-react'
-import { ArcButton } from '@/components/ui-kit'
 import { cn } from '@/lib/utils'
+import { Eyebrow, KlButton } from '@/components/landing/PageKit'
+import { KL_CARD } from '@/components/landing/kl-classes'
 
 type Choice = 'deactivate' | 'delete'
 type Identity = 'passkey' | 'otp'
@@ -48,14 +49,14 @@ export default function DeletionStepper() {
   }
 
   return (
-    <section aria-labelledby="deletion-heading" className="py-24">
-      <div className="mx-auto max-w-container px-6">
+    <section aria-labelledby="deletion-heading" className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]">
+      <div>
         <div className="text-center">
-          <p className="eyebrow text-gold">Refinement #4 · Account control</p>
-          <h2 id="deletion-heading" className="h2 mt-3">
+          <Eyebrow>Account control</Eyebrow>
+          <h2 id="deletion-heading" className="kl-h2 mx-auto mt-5 max-w-[900px]">
             Your account, yours to end.
           </h2>
-          <p className="body-lg mx-auto mt-4 max-w-xl text-text-mid">
+          <p className="kl-lead mx-auto mt-6 !max-w-[680px]">
             Self-service, honest, and reachable in four steps. Try the actual flow:
           </p>
         </div>
@@ -66,10 +67,10 @@ export default function DeletionStepper() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.3 }}
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          className="cloud-card mx-auto mt-12 max-w-2xl overflow-hidden"
+          className={cn(KL_CARD, 'mx-auto mt-12 max-w-2xl overflow-hidden')}
         >
           {/* breadcrumb bar */}
-          <div className="flex flex-wrap items-center gap-2 border-b border-white/8 bg-ink-3/60 px-5 py-3">
+          <div className="flex flex-wrap items-center gap-2 border-b border-white/8 bg-[var(--kl-paper)] px-5 py-3">
             <Settings size={14} className="text-text-low" aria-hidden="true" />
             <span className="text-sm text-text-mid">Settings</span>
             <ChevronRight size={13} className="text-text-low" aria-hidden="true" />
@@ -302,7 +303,7 @@ export default function DeletionStepper() {
               <ArrowLeft size={14} aria-hidden="true" /> {step === 3 ? 'Start over' : 'Back'}
             </button>
             {step < 3 && (
-              <ArcButton
+              <KlButton
                 variant="gold"
                 size="sm"
                 type="button"
@@ -312,7 +313,7 @@ export default function DeletionStepper() {
               >
                 {step === 2 ? (choice === 'delete' ? 'Confirm deletion' : 'Confirm') : 'Continue'}
                 <ChevronRight size={14} aria-hidden="true" />
-              </ArcButton>
+              </KlButton>
             )}
           </div>
         </motion.div>

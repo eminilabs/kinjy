@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { ApiError, kaluta, type Memorial, type MemorialEvent, type Tribute } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { DEATH_STATUS, FAITH_STYLES, lifeSpan, momentDate } from './format'
+import MemorialGallery from './MemorialGallery'
 import { TICKET_REFRESH_MS, useEvery } from './useEvery'
 
 const card = 'rounded-card-md border border-text-low/25 bg-text-low/5 p-5'
@@ -31,7 +32,7 @@ function Initials({ name, size }: { name: string; size: number }) {
   return (
     <span
       aria-hidden="true"
-      className="flex shrink-0 items-center justify-center rounded-full bg-text-low/20 font-display text-text-hi"
+      className="flex shrink-0 items-center justify-center rounded-full bg-text-low/20 font-bold text-text-hi"
       style={{ width: size, height: size, fontSize: size * 0.34 }}
     >
       {letters}
@@ -434,7 +435,7 @@ export default function MemorialView({ memorial, onChanged }: { memorial: Memori
             )}
           </div>
           <div className="min-w-0 flex-1 pt-3">
-            <h2 className="font-display text-2xl text-text-hi sm:text-3xl">{memorial.full_name}</h2>
+            <h2 className="text-2xl font-bold tracking-[-0.035em] text-text-hi sm:text-3xl">{memorial.full_name}</h2>
             <p className="mt-1 text-sm text-text-mid">{lifeSpan(memorial.birth_date, memorial.death_date)}</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {status.tone !== 'none' && (
@@ -476,6 +477,8 @@ export default function MemorialView({ memorial, onChanged }: { memorial: Memori
           <p className="whitespace-pre-line text-sm leading-relaxed text-text-mid">{memorial.biography}</p>
         </section>
       )}
+
+      <MemorialGallery memorial={memorial} />
 
       {moments.length > 0 && (
         <section className={card} aria-label="Timeline">

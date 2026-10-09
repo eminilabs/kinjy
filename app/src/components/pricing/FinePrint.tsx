@@ -1,7 +1,7 @@
 import { Link } from 'react-router'
 import { motion } from 'framer-motion'
 import { ArrowRight, Download, ShieldCheck, Trash2, XCircle } from 'lucide-react'
-import { CloudCard } from '@/components/ui-kit'
+import { Eyebrow } from '@/components/landing/PageKit'
 import { EASE, useReducedMotion } from '@/components/creators/motion-utils'
 import { FEATURES } from '@/lib/features'
 
@@ -33,44 +33,47 @@ const CARDS = [
   },
 ]
 
-/** Section 4 — Honest fine print (trust band). */
+/** Section 4 — the honest fine print, as the landing's numbered trust rows. */
 export default function FinePrint() {
   const reduced = useReducedMotion()
   return (
-    <section className="noise-overlay twilight-field px-6 py-24 md:py-32">
-      <div className="mx-auto max-w-container">
-        <p className="eyebrow text-center text-sky">Honest fine print</p>
-        <h2 className="h2 mt-4 text-center">The trust band.</h2>
-        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {CARDS.map((c, i) => (
-            <motion.div
-              key={c.title}
-              initial={reduced ? false : { opacity: 0, y: 40 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-15%' }}
-              transition={{ delay: i * 0.1, duration: 0.55, ease: EASE }}
-            >
-              <CloudCard hoverable className="h-full p-6">
-                <motion.span
-                  className="cloud-glass flex h-11 w-11 items-center justify-center rounded-card-sm"
-                  initial={reduced ? false : { scale: 0 }}
-                  whileInView={{ scale: 1 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: 0.2 + i * 0.1, duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
-                >
-                  <c.icon size={19} className="text-gold" aria-hidden="true" />
-                </motion.span>
-                <h3 className="mt-4 font-semibold text-text-hi">{c.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-text-mid">{c.body}</p>
-                {c.link && (
-                  <Link to={c.link.to} className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-gold-soft transition-all hover:gap-2.5">
-                    {c.link.label} <ArrowRight size={14} aria-hidden="true" />
-                  </Link>
-                )}
-              </CloudCard>
-            </motion.div>
-          ))}
+    <section className="kl-pad-x pb-10 pt-[clamp(40px,6vw,80px)]">
+      <div className="mb-12 flex flex-wrap items-end justify-between gap-8">
+        <div>
+          <Eyebrow>Honest fine print</Eyebrow>
+          <h2 className="kl-h2 mt-5">No small print, just print.</h2>
         </div>
+        <p className="max-w-[400px] text-lg leading-[1.5] text-[var(--kl-mid)]">
+          What you agree to, said plainly — before you pay anything.
+        </p>
+      </div>
+      <div className="border-t-2 border-[var(--kl-ink)]">
+        {CARDS.map((c, i) => (
+          <motion.div
+            key={c.title}
+            initial={reduced ? false : { opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-10%' }}
+            transition={{ delay: i * 0.06, duration: 0.5, ease: EASE }}
+            className="flex flex-wrap items-baseline gap-x-12 gap-y-4 border-b border-[var(--kl-paper-2)] py-9"
+          >
+            <div className="flex flex-[1_1_360px] items-baseline gap-7">
+              <span className="kl-mono w-7 flex-none text-[13px] tracking-[.08em] text-[var(--kl-gold-deep)]">{String(i + 1).padStart(2, '0')}</span>
+              <h3 className="kl-serif m-0 flex items-center gap-3 font-semibold leading-[1.1] tracking-[-.02em]" style={{ fontSize: 'clamp(26px, 2.6vw, 34px)' }}>
+                <c.icon size={22} className="shrink-0 text-[var(--kl-gold-deep)]" aria-hidden="true" />
+                {c.title}
+              </h3>
+            </div>
+            <div className="max-w-[520px] flex-[1_1_360px]">
+              <p className="m-0 text-[17px] leading-[1.6] text-[var(--kl-mid)]">{c.body}</p>
+              {c.link && (
+                <Link to={c.link.to} className="mt-3 inline-flex items-center gap-1.5 font-semibold text-[var(--kl-gold-deep)] transition-all hover:gap-2.5">
+                  {c.link.label} <ArrowRight size={15} aria-hidden="true" />
+                </Link>
+              )}
+            </div>
+          </motion.div>
+        ))}
       </div>
     </section>
   )

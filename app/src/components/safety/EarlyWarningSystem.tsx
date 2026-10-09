@@ -9,6 +9,9 @@ import {
   TrendingDown,
 } from 'lucide-react'
 import { EASE, useReducedMotion } from './motion-utils'
+import { Eyebrow } from '@/components/landing/PageKit'
+import { KL_CARD } from '@/components/landing/kl-classes'
+import { cn } from '@/lib/utils'
 
 /** 14-day sentiment-drift sparkline points (0–100 scale, higher = healthier). */
 const SENTIMENT = [72, 74, 73, 70, 71, 68, 66, 64, 61, 58, 55, 52, 49, 46]
@@ -43,14 +46,14 @@ export default function EarlyWarningSystem() {
   const path = sparkPath(SENTIMENT, 260, 72)
 
   return (
-    <section aria-labelledby="early-warning-heading" className="noise-overlay twilight-field px-6 py-24">
-      <div className="mx-auto max-w-container">
+    <section aria-labelledby="early-warning-heading" className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]">
+      <div>
         <div className="max-w-2xl">
-          <p className="eyebrow text-sky">Community Early-Warning System</p>
-          <h2 id="early-warning-heading" className="h2 mt-3">
-            Moderators see the storm <span className="font-display italic text-gold-grad">before it breaks.</span>
+          <Eyebrow>Community Early-Warning System</Eyebrow>
+          <h2 id="early-warning-heading" className="kl-h2 mt-5 max-w-[900px]">
+            Moderators see the storm <span className="font-display italic text-[var(--kl-gold-deep)]">before it breaks.</span>
           </h2>
-          <p className="body-lg mt-4 text-text-mid">
+          <p className="kl-lead mt-6 !max-w-[680px]">
             Kinjy watches the drift, not just the incident. Sentiment trends and escalation
             predictions give community guides time to help — before a thread needs a takedown.
           </p>
@@ -62,7 +65,7 @@ export default function EarlyWarningSystem() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-15%' }}
           transition={{ duration: 0.7, ease: EASE }}
-          className="cloud-card mt-14 overflow-hidden"
+          className={cn(KL_CARD, 'mt-14 overflow-hidden')}
         >
           {/* Dashboard chrome */}
           <div className="flex flex-wrap items-center gap-3 border-b border-white/10 px-5 py-4">
@@ -80,7 +83,7 @@ export default function EarlyWarningSystem() {
 
           <div className="grid gap-5 p-5 lg:grid-cols-3">
             {/* Sentiment-drift sparkline */}
-            <div className="rounded-card-md border border-white/10 bg-ink-3/60 p-4">
+            <div className="rounded-card-md border border-white/10 bg-[var(--kl-paper)] p-4">
               <p className="mono-data flex items-center gap-1.5 text-[0.65rem] uppercase tracking-wider text-text-low">
                 <TrendingDown size={12} className="text-warning" aria-hidden="true" /> Sentiment drift · 14 days
               </p>
@@ -145,7 +148,7 @@ export default function EarlyWarningSystem() {
                   transition={{ duration: 0.9, ease: [0.65, 0, 0.35, 1], delay: 0.25 }}
                 />
               </div>
-              <div className="mt-4 rounded-card-sm border border-white/10 bg-ink-3/70 p-3">
+              <div className="mt-4 rounded-card-sm border border-white/10 bg-[var(--kl-paper)] p-3">
                 <p className="mono-data flex items-center gap-1.5 text-[0.65rem] uppercase tracking-wider text-sky">
                   <HandHelping size={11} aria-hidden="true" /> Recommended action
                 </p>
@@ -163,7 +166,7 @@ export default function EarlyWarningSystem() {
             </div>
 
             {/* Weekly community-health summary */}
-            <div className="rounded-card-md border border-white/10 bg-ink-3/60 p-4">
+            <div className="rounded-card-md border border-white/10 bg-[var(--kl-paper)] p-4">
               <p className="mono-data flex items-center gap-1.5 text-[0.65rem] uppercase tracking-wider text-text-low">
                 <CalendarDays size={12} className="text-gold" aria-hidden="true" /> Weekly health summary
               </p>

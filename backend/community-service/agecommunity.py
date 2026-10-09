@@ -143,6 +143,47 @@ def restrict_query(stmt, model, profile: AgeProfile):
     return stmt.where(model.id.not_in(classified_out), model.id.in_(has_row))
 
 
+# A minor's page is read from the database in batches of this many rows, and at
+# most this many rows are looked at, so a forum full of unreadable threads costs
+# a bounded amount per request.
+SCAN_BATCH = 50
+SCAN_CEILING = 600
+
+
+def readable_page(db: OrmSession, stmt, profile: AgeProfile, *, limit: int, offset: int) -> list:
+    """The rows of an ordered `stmt` this viewer may read, paged over what they may read.
+
+    `restrict_query` is a coarse filter that keeps the scan short; it is looser
+    than the engine that decides whether a thread opens (it ignores the category
+    ceilings of the youngest teens and an unknown age facing 13+ content), so
+    the engine has the last word here, row by row. `offset` and `limit` count
+    readable rows only: counting hidden ones would let a reader tell, from a
+    short or empty page, that something they cannot see is there.
+    """
+    if not profile.is_minor:
+        return list(db.scalars(stmt.limit(limit).offset(offset)))
+    kept: list = []
+    skipped = scanned = 0
+    while len(kept) < limit and scanned < SCAN_CEILING:
+        rows = list(db.scalars(stmt.limit(SCAN_BATCH).offset(scanned)))
+        if not rows:
+            break
+        table = classifications_for(db, [row.id for row in rows])
+        for row in rows:
+            if not engine.can_view_content(profile, table.get(row.id)).allowed:
+                continue
+            if skipped < offset:
+                skipped += 1
+                continue
+            kept.append(row)
+            if len(kept) == limit:
+                break
+        scanned += len(rows)
+        if len(rows) < SCAN_BATCH:
+            break
+    return kept
+
+
 def visible(db: OrmSession, profile: AgeProfile, content_id: str) -> bool:
     """One item, reached directly. Same engine, same answer as the listing."""
     row = db.scalar(

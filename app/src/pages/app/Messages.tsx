@@ -5,12 +5,14 @@ import {
   ArrowLeft,
   Check,
   CheckCheck,
+  Clock,
   Download,
   File as FileIcon,
   FileText,
   Lock,
   MessageSquare,
   Mic,
+  Pencil,
   Plus,
   Search,
   Send,
@@ -19,24 +21,41 @@ import {
   Trash2,
   UserRound,
   Users,
+  Volume2,
+  VolumeX,
   Wifi,
   WifiOff,
   X,
-  CornerUpLeft,
-  Volume2,
-  VolumeX,
-  Pencil,
-  SmilePlus,
-  Sticker,
 } from 'lucide-react'
 import AppShell from '@/components/app/AppShell'
 import { useAppTheme } from '@/components/appdemo/theme'
 import AttachmentMenu from '@/components/social/AttachmentMenu'
 import MediaLightbox from '@/components/social/MediaLightbox'
+import VoiceNotePlayer from '@/components/social/VoiceNotePlayer'
+import {
+  OptionsButton,
+  OwnMessageMenu,
+  ReactButton,
+  ReactionChips,
+  ReactionPicker,
+} from '@/components/social/MessageReactions'
+import EmojiStickerButton from '@/components/social/EmojiStickerPanel'
+import StickerFace from '@/components/social/StickerFace'
+import ConfirmDialog from '@/components/ui-kit/ConfirmDialog'
+import PushToggle from '@/components/app/PushToggle'
+import { playMessageChime, primeSound, setSoundEnabled, soundEnabled } from '@/lib/chime'
+import {
+  ReplyBanner,
+  ReplyButton,
+  ReplyQuote,
+  SwipeToReply,
+  type QuoteTarget,
+} from '@/components/social/MessageReply'
 import MemberAvatar from '@/components/social/MemberAvatar'
 import { useApi } from '@/hooks/useApi'
 import { useRealtime } from '@/hooks/useRealtime'
 import { useAuth } from '@/hooks/useAuth'
+import { useMyProfile } from '@/hooks/useMyProfile'
 import {
   ApiError,
   kaluta,
@@ -44,13 +63,10 @@ import {
   type Message,
   type PersonBrief,
   type Presence,
+  type Sticker,
 } from '@/lib/api'
 import { FEATURES } from '@/lib/features'
 import { realtime } from '@/lib/realtime'
-import { playMessageChime, primeSound, setSoundEnabled, soundEnabled } from '@/lib/chime'
-import { MESSAGE_REACTIONS, type StickerPack } from '@/lib/api'
-import ConfirmDialog from '@/components/ui-kit/ConfirmDialog'
-import PushToggle from '@/components/app/PushToggle'
 import { cn } from '@/lib/utils'
 
 function useMediaQuery(query: string): boolean {
@@ -193,15 +209,73 @@ function recorderType(): string | undefined {
   )
 }
 
+/**
+ * The time of a message, and for my own the delivery ticks: one line, so a short
+ * message or a voice note does not grow a row of its own for it.
+ * `onGold`: drawn on my gold bubble, so in its fixed dark ink (the `ink` token turns
+ * white in the light theme) rather than the thread's grey.
+ */
+function MessageMeta({
+  message,
+  locale,
+  mine,
+  onGold,
+  isRead,
+}: {
+  message: ChatMessage
+  locale: string
+  mine: boolean
+  onGold: boolean
+  isRead: boolean
+}) {
+  const sending = message.status === 'sending'
+  const failed = message.status === 'failed'
+  return (
+    <span
+      className={cn(
+        'inline-flex select-none items-center gap-1 whitespace-nowrap text-[0.68rem] leading-none',
+        onGold ? 'text-[#0b0e1d]/70' : 'text-text-low',
+      )}
+      title={fullStamp(message.created_at, locale)}
+    >
+      <span>
+        {sending
+          ? message.media_kind
+            ? `Uploading ${Math.round((message.progress ?? 0) * 100)}%`
+            : 'Sending…'
+          : timeOf(message.created_at, locale)}
+        {/* Said, not hidden: an edit nobody can see is a way to change what
+            somebody appears to have agreed to after they agreed to it. */}
+        {message.edited_at && !message.deleted && ' · edited'}
+      </span>
+      {mine && !failed && (
+        <span className="inline-flex items-center">
+          {sending ? (
+            <Clock size={11} className="opacity-70" aria-label="Sending" />
+          ) : isRead ? (
+            <CheckCheck size={13} className={onGold ? 'text-[#0b0e1d]' : 'text-gold-soft'} aria-label="Seen" />
+          ) : (
+            <CheckCheck size={13} className="opacity-45" aria-label="Delivered" />
+          )}
+        </span>
+      )}
+    </span>
+  )
+}
+
 /** One attachment, drawn for what it is. */
 function Attachment({
   message,
   onOpenImage,
-  dark,
+  sender,
+  mine,
+  metaSlot,
 }: {
   message: ChatMessage
   onOpenImage: (url: string) => void
-  dark: boolean
+  sender?: { handle?: string; display_name?: string; avatar_url?: string | null } | null
+  mine: boolean
+  metaSlot?: React.ReactNode
 }) {
   const url = message.media_url ?? message.preview_url ?? null
   const kind = message.media_kind ?? 'file'
@@ -222,15 +296,14 @@ function Attachment({
     return <video src={url} controls preload="metadata" className="max-h-80 max-w-full rounded-card-sm" />
   }
   if (url && kind === 'audio') {
-    // The browser draws its own player; `color-scheme` is how it learns the
-    // page is dark, instead of dropping a white pill into a dark thread.
     return (
-      <audio
+      <VoiceNotePlayer
         src={url}
-        controls
-        preload="metadata"
-        className="w-64 max-w-full"
-        style={{ colorScheme: dark ? 'dark' : 'light' }}
+        senderAvatarUrl={sender?.avatar_url}
+        senderDisplayName={sender?.display_name}
+        senderHandle={sender?.handle}
+        mine={mine}
+        metaSlot={metaSlot}
       />
     )
   }
@@ -314,6 +387,15 @@ function titleOf(conversation: Conversation, others: string[]): string {
 }
 
 /** An avatar with the member's online dot. Never a link here: a tap means "write". */
+/**
+ * Messenger's grouping: inside a run from one person the corners that face
+ * their side tighten, so consecutive bubbles read as one block.
+ */
+function bubbleShape(mine: boolean, first: boolean, last: boolean): string {
+  if (mine) return cn('rounded-[18px]', !first && 'rounded-se-[5px]', !last && 'rounded-ee-[5px]')
+  return cn('rounded-[18px]', !first && 'rounded-ss-[5px]', !last && 'rounded-es-[5px]')
+}
+
 function PresenceAvatar({
   profile,
   online,
@@ -343,7 +425,8 @@ function PresenceAvatar({
 
 export default function Messages() {
   const { user } = useAuth()
-  const { lang: locale, resolved } = useAppTheme()
+  const me = useMyProfile()
+  const { lang: locale } = useAppTheme()
   const [params, setParams] = useSearchParams()
   const requestedId = params.get('c')
   const paramsRef = useRef(params)
@@ -371,8 +454,39 @@ export default function Messages() {
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [loadingThread, setLoadingThread] = useState(false)
   const [draft, setDraft] = useState('')
+  // The message the next send answers, and the one just jumped to from a quote.
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
+  const [highlightId, setHighlightId] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  // The reaction picker and the menu of your own message, each anchored to a bubble.
+  const [picker, setPicker] = useState<{ id: string; rect: DOMRect; withReply: boolean } | null>(null)
+  const [ownMenu, setOwnMenu] = useState<{ id: string; rect: DOMRect } | null>(null)
+  // The sticker packs, as the server curates them.
+  const stickerPacks = useApi(() => kaluta.messages.stickers(), [])
+  /** A sticker from the catalogue by its id, for a bubble drawn before the server has answered. */
+  const stickerById = (id: string | null | undefined): Sticker | null => {
+    if (!id) return null
+    for (const pack of stickerPacks.data?.packs ?? []) {
+      const found = pack.stickers.find((s) => s.id === id)
+      if (found) return found
+    }
+    return null
+  }
+  // The message being edited and the text so far - apart from the composer's
+  // draft, so abandoning an edit does not swallow what was already typed below.
+  const [editing, setEditing] = useState<ChatMessage | null>(null)
+  const [editDraft, setEditDraft] = useState('')
+  // The message awaiting a yes, so the dialog can name what is about to happen.
+  const [confirmDelete, setConfirmDelete] = useState<ChatMessage | null>(null)
+  const [sound, setSound] = useState(soundEnabled())
+  // Message ids already announced. A reconnect replays everything missed, and
+  // without this the catch-up is a burst of chimes.
+  const seenForSound = useRef<Set<string>>(new Set())
   const [peer, setPeer] = useState('')
   const [composing, setComposing] = useState(false)
+  // Narrowing the list you already have: nothing is fetched.
+  const [chatQuery, setChatQuery] = useState('')
+  const [unreadOnly, setUnreadOnly] = useState(false)
   const [results, setResults] = useState<Array<PersonBrief & { user_id: string }>>([])
   const [searched, setSearched] = useState(false)
   // Kept apart from `error`, which renders in the thread pane on the right —
@@ -391,9 +505,6 @@ export default function Messages() {
   // --- scrolling ------------------------------------------------------------
   const listRef = useRef<HTMLDivElement>(null)
   const nearBottom = useRef(true)
-  // Message ids already announced. A reconnect replays everything missed,
-  // and without this the catch-up is a burst of chimes.
-  const seenForSound = useRef<Set<string>>(new Set())
   const scrollMode = useRef<'bottom' | 'keep' | { restoreFrom: number }>('bottom')
 
   const onScroll = () => {
@@ -441,17 +552,14 @@ export default function Messages() {
    * both are visible and the URL only records which thread is open.
    */
   const openThread = useCallback(
-    async (conversationId: string, how: 'user' | 'url' | 'auto' = 'user') => {
-      // Opening a thread by hand is a gesture, and a gesture is the only
-      // moment a browser lets audio start. Unlocking here means the first
-      // message to arrive can be heard; doing it later means the first one is
-      // always silent. Not on 'url' or 'auto', which are not gestures.
+    async (conversationId: string, how: 'user' | 'url' = 'user') => {
+      // Opening a thread by hand is a gesture, and a gesture is the only moment a
+      // browser lets audio start. Unlocking here means the first message to
+      // arrive can be heard; doing it later means the first one is always silent.
       if (how === 'user') primeSound()
       setActiveId(conversationId)
-      // A thread just opened is being read, so nothing in it should chime.
-      // Without this, opening a busy conversation plays the catch-up.
-      setReplyTo(null)
       activeIdRef.current = conversationId
+      setReplyTo(null)
       if (how !== 'url') {
         const push = how === 'user' && !wideRef.current && !paramsRef.current.get('c')
         pushedThread.current = push
@@ -483,24 +591,20 @@ export default function Messages() {
     [markRead, setParams],
   )
 
-  // Which thread to show: the one the URL names (a notification, the Message
-  // button on a profile, a tap on a phone), else — on a wide screen only —
-  // the most recent. A phone shows the list first, and a thread that is not on
-  // screen must not be opened, since opening one marks it read.
+  // Which thread to show: only the one the URL names (a notification, the
+  // Message button on a profile, a tap on the list). Nothing opens by itself:
+  // opening a thread marks it read, so the member chooses what to read — and
+  // on any screen size, the list comes first.
   useEffect(() => {
     if (requestedId) {
       if (requestedId !== activeIdRef.current) void openThread(requestedId, 'url')
       return
     }
-    if (!wide) {
-      // Back on the list (the back button or gesture): nothing is being read.
-      activeIdRef.current = null
-      setActiveId(null)
-      return
-    }
-    const first = conversations.data?.items[0]
-    if (first && !activeIdRef.current) void openThread(first.id, 'auto')
-  }, [requestedId, conversations.data, openThread, wide])
+    // No conversation named (first visit, or back on the list): nothing is open
+    // and nothing is being read.
+    activeIdRef.current = null
+    setActiveId(null)
+  }, [requestedId, openThread])
 
   const backToList = () => {
     if (pushedThread.current) {
@@ -559,6 +663,7 @@ export default function Messages() {
       body: string | null,
       file?: File,
       replyToId?: string | null,
+      stickerId?: string | null,
     ) => {
       try {
         let mediaId: string | undefined
@@ -573,12 +678,7 @@ export default function Messages() {
           )
           mediaId = asset.id
         }
-        const created = await kaluta.messages.send(conversationId, {
-          body,
-          mediaId,
-          clientId,
-          replyToId,
-        })
+        const created = await kaluta.messages.send(conversationId, { body, mediaId, clientId, replyToId, stickerId })
         filesRef.current.delete(clientId)
         if (activeIdRef.current !== conversationId) return
         // Usually the socket frame has already brought the full message; this
@@ -593,7 +693,9 @@ export default function Messages() {
               encrypted: false,
               ciphertext_b64: null,
               body,
-              kind: file ? 'media' : 'text',
+              kind: stickerId ? 'sticker' : file ? 'media' : 'text',
+              sticker_id: stickerId ?? null,
+              reply_to_id: replyToId ?? null,
               created_at: created.created_at,
             },
           ]),
@@ -623,6 +725,7 @@ export default function Messages() {
       const clientId = crypto.randomUUID()
       const body = index === 0 && caption ? caption : null
       filesRef.current.set(clientId, { file, body })
+      const replyToId = index === 0 ? replyTo?.id : null
       const kind = kindOf(file)
       const preview = ['image', 'video', 'audio'].includes(kind) ? URL.createObjectURL(file) : null
       if (preview) previewsRef.current.add(preview)
@@ -637,6 +740,7 @@ export default function Messages() {
         ciphertext_b64: null,
         body,
         kind: 'media',
+        reply_to_id: replyToId ?? null,
         media_kind: kind,
         media_name: file.name,
         media_type: file.type,
@@ -650,26 +754,11 @@ export default function Messages() {
     void (async () => {
       for (const message of pending) {
         const entry = filesRef.current.get(message.client_id!)
-        if (entry) await deliver(conversationId, message.client_id!, entry.body, entry.file)
+        if (entry) await deliver(conversationId, message.client_id!, entry.body, entry.file, message.reply_to_id)
       }
     })()
   }
 
-  // The message being answered, if any. Held as the message rather than its
-  // id so the composer can show the quoted line without searching the thread.
-  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
-  // The message being edited, and the text so far. Separate from the composer
-  // draft: abandoning an edit must not swallow what was already typed below.
-  const [editing, setEditing] = useState<ChatMessage | null>(null)
-  const [editDraft, setEditDraft] = useState('')
-  // Which message's reaction row is open, and the sticker tray.
-  const [reactingTo, setReactingTo] = useState<string | null>(null)
-  const [stickersOpen, setStickersOpen] = useState(false)
-  // The message awaiting a yes. Held rather than confirmed inline so the
-  // dialog can name what is about to happen.
-  const [confirmDelete, setConfirmDelete] = useState<ChatMessage | null>(null)
-  const [packs, setPacks] = useState<StickerPack[] | null>(null)
-  const [sound, setSound] = useState(soundEnabled())
   const [staged, setStaged] = useState<File[]>([])
   const stage = (files: FileList | File[] | null) => {
     // Copied now, not inside the updater: a FileList is live, and the input
@@ -688,13 +777,15 @@ export default function Messages() {
       sendFiles(staged, text)
       setStaged([])
       setDraft('')
+      setReplyTo(null)
       return
     }
     if (!text) return
+    const replyToId = replyTo?.id ?? null
+    setReplyTo(null)
     setDraft('')
     setError(null)
     const clientId = crypto.randomUUID()
-    const answering = replyTo
     scrollMode.current = 'bottom'
     setMessages((current) => [
       ...current,
@@ -707,140 +798,59 @@ export default function Messages() {
         ciphertext_b64: null,
         body: text,
         kind: 'text',
-        // The quote is on the bubble before the server answers, so the reply
-        // does not appear detached from what it answers for a moment.
-        reply_to_id: answering?.id ?? null,
-        reply_to: answering
-          ? {
-              id: answering.id,
-              sender_id: answering.sender_id,
-              encrypted: answering.encrypted,
-              preview: answering.body ?? 'Message',
-              media_kind: answering.media_kind ?? null,
-            }
-          : null,
+        reply_to_id: replyToId,
         created_at: new Date().toISOString(),
       },
     ])
-    setReplyTo(null)
-    void deliver(conversationId, clientId, text, undefined, answering?.id ?? null)
+    void deliver(conversationId, clientId, text, undefined, replyToId)
   }
-
-  /** Save an edit. The thread updates from the server's answer, not the draft. */
-  const saveEdit = async () => {
-    const conversationId = activeIdRef.current
-    const target = editing
-    const text = editDraft.trim()
-    if (!conversationId || !target) return
-    if (!text || text === (target.body ?? '')) {
-      setEditing(null)
-      return
-    }
-    setEditing(null)
-    try {
-      const saved = await kaluta.messages.edit(conversationId, target.id, text)
-      setMessages((current) =>
-        current.map((m) =>
-          m.id === target.id ? { ...m, body: saved.body, edited_at: saved.edited_at } : m,
-        ),
-      )
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not save that edit.')
-    }
-  }
-
-  /**
-   * Delete a message.
-   *
-   * Confirmed first: there is no undo, by design - the words are removed from
-   * the database rather than hidden, so "are you sure" is the only chance
-   * anybody gets.
-   */
-  const removeMessage = async (message: ChatMessage) => {
-    const conversationId = activeIdRef.current
-    if (!conversationId) return
-    setConfirmDelete(null)
-    try {
-      await kaluta.messages.remove(conversationId, message.id)
-      setMessages((current) =>
-        current.map((m) =>
-          m.id === message.id
-            ? { ...m, deleted: true, body: null, media_kind: null, media_url: null, reactions: {} }
-            : m,
-        ),
-      )
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not delete that message.')
-    }
-  }
-
-  /** React, swap, or take it back - the server decides which from what is there. */
-  const react = async (message: ChatMessage, emoji: string) => {
-    const conversationId = activeIdRef.current
-    if (!conversationId) return
-    setReactingTo(null)
-    try {
-      const result = await kaluta.messages.react(conversationId, message.id, emoji)
-      setMessages((current) =>
-        current.map((m) =>
-          m.id === message.id ? { ...m, reactions: result.counts, my_reaction: result.mine } : m,
-        ),
-      )
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not react to that message.')
-    }
-  }
-
-  /** Send a sticker. It is the whole message, so there is nothing else to clear. */
-  const sendSticker = (stickerId: string) => {
-    const conversationId = activeIdRef.current
-    if (!conversationId || !user) return
-    setStickersOpen(false)
-    const clientId = crypto.randomUUID()
-    const answering = replyTo
-    scrollMode.current = 'bottom'
-    setReplyTo(null)
-    void (async () => {
-      try {
-        await kaluta.messages.send(conversationId, {
-          stickerId,
-          clientId,
-          replyToId: answering?.id ?? null,
-        })
-        // No optimistic bubble: the sticker's picture comes from the server's
-        // catalogue, and the socket frame carries it a moment later. Drawing a
-        // guess first would flicker.
-      } catch (err) {
-        setError(err instanceof ApiError ? err.message : 'Could not send that sticker.')
-      }
-    })()
-  }
-
-  useEffect(() => {
-    // Fetched on first use rather than on mount: most visits to Messages never
-    // open the tray, and the catalogue is not worth a request they did not ask
-    // for.
-    if (!stickersOpen || packs) return
-    let alive = true
-    kaluta.messages
-      .stickers()
-      .then((r) => alive && setPacks(r.packs))
-      .catch(() => alive && setPacks([]))
-    return () => {
-      alive = false
-    }
-  }, [stickersOpen, packs])
 
   const retry = (message: ChatMessage) => {
     const conversationId = activeIdRef.current
     if (!conversationId || !message.client_id) return
     const entry = filesRef.current.get(message.client_id)
-    if (!entry && !message.body) return
+    if (!entry && !message.body && !message.sticker_id) return
     setError(null)
     setMessages((current) =>
       current.map((m) => (m.client_id === message.client_id ? { ...m, status: 'sending', progress: 0 } : m)),
     )
-    void deliver(conversationId, message.client_id, entry ? entry.body : message.body, entry?.file)
+    void deliver(
+      conversationId,
+      message.client_id,
+      entry ? entry.body : message.body,
+      entry?.file,
+      message.reply_to_id,
+      message.sticker_id,
+    )
+  }
+
+  /** A sticker from the panel, sent as a message of its own (answering the message being replied to, if any). */
+  const sendSticker = (stickerId: string) => {
+    const conversationId = activeIdRef.current
+    if (!conversationId || !user) return
+    const replyToId = replyTo?.id ?? null
+    setReplyTo(null)
+    setError(null)
+    const clientId = crypto.randomUUID()
+    scrollMode.current = 'bottom'
+    setMessages((current) => [
+      ...current,
+      {
+        id: `local_${clientId}`,
+        client_id: clientId,
+        status: 'sending',
+        sender_id: user.id,
+        encrypted: false,
+        ciphertext_b64: null,
+        body: null,
+        kind: 'sticker',
+        sticker_id: stickerId,
+        sticker: stickerById(stickerId),
+        reply_to_id: replyToId,
+        created_at: new Date().toISOString(),
+      },
+    ])
+    void deliver(conversationId, clientId, null, undefined, replyToId, stickerId)
   }
 
   // --- voice messages ------------------------------------------------------------
@@ -894,6 +904,30 @@ export default function Messages() {
   }
 
   const recordingFor = recordingSince === null ? 0 : Math.floor((Date.now() - recordingSince) / 1000)
+
+  // Emoji go into the text at the caret. The caret is read from the field itself (it keeps
+  // its selection while the panel has focus) and put back after the render, just behind the
+  // new characters, so the member carries on typing where they were.
+  const draftRef = useRef(draft)
+  useLayoutEffect(() => {
+    draftRef.current = draft
+  })
+  const caretRef = useRef<number | null>(null)
+  const insertEmoji = (text: string) => {
+    const field = inputRef.current
+    const current = draftRef.current
+    const chained = caretRef.current !== null // another insertion in the same tick
+    const start = chained ? caretRef.current! : (field?.selectionStart ?? current.length)
+    const end = chained ? start : (field?.selectionEnd ?? start)
+    caretRef.current = start + text.length
+    draftRef.current = current.slice(0, start) + text + current.slice(end)
+    onDraftChange(draftRef.current)
+  }
+  useLayoutEffect(() => {
+    if (caretRef.current === null) return
+    inputRef.current?.setSelectionRange(caretRef.current, caretRef.current)
+    caretRef.current = null
+  }, [draft])
 
   const onDraftChange = (value: string) => {
     setDraft(value)
@@ -1018,6 +1052,66 @@ export default function Messages() {
     })
   }, [sortedFriends, friendQuery, onlineOnly, presence])
 
+  // --- reactions, edit, delete ---------------------------------------------------
+  /** React, swap, or take it back - the server decides which from what is there. */
+  const react = async (message: ChatMessage, emoji: string) => {
+    const conversationId = activeIdRef.current
+    if (!conversationId || message.status || message.id.startsWith('local_')) return
+    try {
+      const result = await kaluta.messages.react(conversationId, message.id, emoji)
+      setMessages((current) =>
+        current.map((m) =>
+          m.id === message.id ? { ...m, reactions: result.counts, my_reaction: result.mine } : m,
+        ),
+      )
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not react — check your connection.')
+    }
+  }
+
+  /** Save an edit. The thread updates from the server's answer, not from the draft. */
+  const saveEdit = async () => {
+    const conversationId = activeIdRef.current
+    const target = editing
+    const text = editDraft.trim()
+    if (!conversationId || !target) return
+    if (!text || text === (target.body ?? '')) {
+      setEditing(null)
+      return
+    }
+    setEditing(null)
+    try {
+      const saved = await kaluta.messages.edit(conversationId, target.id, text)
+      setMessages((current) =>
+        current.map((m) => (m.id === target.id ? { ...m, body: saved.body, edited_at: saved.edited_at } : m)),
+      )
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not save that edit.')
+    }
+  }
+
+  /**
+   * Delete a message. Confirmed first: there is no undo, by design - the words
+   * are removed from the database rather than hidden.
+   */
+  const removeMessage = async (message: ChatMessage) => {
+    const conversationId = activeIdRef.current
+    if (!conversationId) return
+    setConfirmDelete(null)
+    try {
+      await kaluta.messages.remove(conversationId, message.id)
+      setMessages((current) =>
+        current.map((m) =>
+          m.id === message.id
+            ? { ...m, deleted: true, body: null, media_kind: null, media_url: null, sticker: null, reactions: {}, my_reaction: null }
+            : m,
+        ),
+      )
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not delete that message.')
+    }
+  }
+
   // --- live events ---------------------------------------------------------------
   const { connected } = useRealtime((event) => {
     switch (event.type) {
@@ -1033,6 +1127,9 @@ export default function Messages() {
                 ciphertext_b64: null,
                 body: event.body ?? null,
                 kind: event.kind ?? 'text',
+                sticker_id: event.kind === 'sticker' ? (event.sticker_id ?? null) : null,
+                sticker: event.kind === 'sticker' ? (event.sticker ?? null) : null,
+                reply_to_id: event.reply_to_id ?? null,
                 media_url: event.media_url ?? null,
                 media_kind: event.media_kind ?? null,
                 media_name: event.media_name ?? null,
@@ -1044,10 +1141,10 @@ export default function Messages() {
           )
           if (event.sender_id !== user?.id) markRead(event.conversation_id)
         }
-        // A sound for a message somebody else sent. Not for your own, which
-        // you just watched leave, and not for a frame echoing a message
-        // already on screen - a reconnect replays what was missed, and a
-        // thread that chimes six times on catch-up is a thread people mute.
+        // A sound for a message somebody else sent. Not for your own, which you
+        // just watched leave, and not for a frame echoing a message already on
+        // screen - a reconnect replays what was missed, and a thread that chimes
+        // six times on catch-up is a thread people mute.
         if (
           event.sender_id &&
           event.sender_id !== user?.id &&
@@ -1068,6 +1165,14 @@ export default function Messages() {
           })
         }
         conversations.reload()
+        break
+      }
+      case 'message_reaction': {
+        if (!event.message_id) break
+        const { message_id: reacted } = event
+        setMessages((current) =>
+          current.map((m) => (m.id === reacted ? { ...m, reactions: (event.counts as Record<string, number>) ?? {} } : m)),
+        )
         break
       }
       case 'message_edited': {
@@ -1091,23 +1196,11 @@ export default function Messages() {
         setMessages((current) =>
           current.map((m) =>
             m.id === removed
-              ? { ...m, deleted: true, body: null, media_kind: null, media_url: null, reactions: {}, my_reaction: null }
+              ? { ...m, deleted: true, body: null, media_kind: null, media_url: null, sticker: null, reactions: {}, my_reaction: null }
               : m,
           ),
         )
         conversations.reload()
-        break
-      }
-      case 'message_reaction': {
-        if (!event.message_id) break
-        const { message_id: reacted } = event
-        setMessages((current) =>
-          current.map((m) =>
-            m.id === reacted
-              ? { ...m, reactions: (event.counts as Record<string, number>) ?? {} }
-              : m,
-          ),
-        )
         break
       }
       case 'read': {
@@ -1188,6 +1281,32 @@ export default function Messages() {
 
   // The receipt goes under my latest stored message only — one "Seen" per
   // thread, where the eye lands, not a tick-mark on every bubble.
+  const nameOf = (message: ChatMessage) =>
+    message.sender_id === user?.id ? 'You' : (active?.profiles?.[message.sender_id]?.display_name ?? 'Member')
+
+  const startReply = (message: ChatMessage) => {
+    // A bubble still on its way has no id the server knows yet.
+    if (message.status || message.id.startsWith('local_')) return
+    setReplyTo(message)
+    inputRef.current?.focus()
+  }
+
+  /** The original is built from what the thread already holds; the server never sends its text. */
+  const quoteOf = (message: ChatMessage): QuoteTarget | null => {
+    if (!message.reply_to_id) return null
+    if (message.reply_to_deleted) return { state: 'deleted' }
+    const original = messages.find((m) => m.id === message.reply_to_id)
+    return original ? { state: 'found', name: nameOf(original), message: original } : { state: 'older' }
+  }
+
+  const jumpTo = (id: string) => {
+    const el = document.getElementById(`msg-${id}`)
+    if (!el) return
+    el.scrollIntoView({ block: 'center' })
+    setHighlightId(id)
+    window.setTimeout(() => setHighlightId((current) => (current === id ? null : current)), 1500)
+  }
+
   const lastMine = [...messages].reverse().find((m) => m.sender_id === user?.id && !m.status)
   const seenBy =
     active && lastMine
@@ -1206,71 +1325,109 @@ export default function Messages() {
   })()
 
   return (
-    <AppShell
-      // Messages is a working surface, not something to read down the middle of
-      // the page: the 560px reading cap left the thread about 240px once the
-      // conversation list took its 300, which is a column of broken words
-      // rather than a conversation.
-      wide
-      // On a phone, the open thread is the whole screen: its own header (with
-      // the back button) says where you are, and every pixel above the
-      // composer is a message you can read.
-      title={showThread && !wide ? undefined : 'Messages'}
-      subtitle="Private conversations between members."
-      action={showThread && !wide ? undefined : (
-        <div className="flex items-center gap-2">
-          {/* Renders nothing when the browser or this installation cannot
-              push, so it never offers a switch that does nothing. */}
-          <PushToggle />
+    <AppShell rail={false}>
+      {/* One workspace, as Messenger draws it: the chats on the left, the open
+          conversation on the right, in a single card. On a phone the open
+          thread is the whole screen. */}
+      <div className="grid h-[calc(100dvh-236px)] min-h-[420px] min-w-0 grid-cols-[minmax(0,1fr)] gap-4 lg:h-[calc(100dvh-196px)] lg:min-h-[520px] lg:grid-cols-[360px_minmax(0,1fr)] lg:gap-5">
+        <div className={cn('cloud-card flex min-h-0 min-w-0 flex-col overflow-hidden', showThread && 'hidden lg:flex')}>
+          <div className="space-y-3 px-4 pb-2 pt-4">
+            <div className="flex items-center gap-2">
+              <h1 className="text-[26px] font-bold leading-none tracking-[-0.03em] text-text-hi">Chats</h1>
+              {connected ? (
+                <span title="Connected" className="inline-flex text-success">
+                  <Wifi size={13} aria-hidden="true" />
+                  <span className="sr-only">Connected</span>
+                </span>
+              ) : (
+                <span
+                  role="status"
+                  className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-200"
+                >
+                  <WifiOff size={12} aria-hidden="true" />
+                  Reconnecting…
+                </span>
+              )}
+              <div className="ms-auto flex items-center gap-2">
+                {/* Renders nothing when the browser or this installation cannot
+                    push, so it never offers a switch that does nothing. */}
+                <PushToggle />
+                {/* A sound nobody can switch off is a reason to close the tab. */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !sound
+                    setSound(next)
+                    setSoundEnabled(next)
+                    // Turning it on is a gesture, the only moment a browser lets
+                    // audio start: unlock here, and play it once - which doubles
+                    // as showing what it sounds like.
+                    if (next) {
+                      primeSound()
+                      playMessageChime()
+                    }
+                  }}
+                  aria-pressed={sound}
+                  aria-label={sound ? 'Sound on for new messages' : 'Sound off for new messages'}
+                  title={sound ? 'Sound on for new messages' : 'Sound off for new messages'}
+                  className={cn(
+                    'grid h-9 w-9 place-items-center rounded-full transition-colors hover:bg-text-hi/[0.1]',
+                    sound ? 'bg-text-hi/[0.07] text-text-hi' : 'text-text-low',
+                  )}
+                >
+                  {sound ? <Volume2 size={16} aria-hidden="true" /> : <VolumeX size={16} aria-hidden="true" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setComposing((v) => !v)}
+                  aria-expanded={composing}
+                  aria-label="New conversation"
+                  title="New conversation"
+                  className={cn(
+                    'grid h-9 w-9 place-items-center rounded-full text-text-hi transition-colors hover:bg-text-hi/[0.1]',
+                    composing ? 'bg-gold/20 text-gold-soft' : 'bg-text-hi/[0.07]',
+                  )}
+                >
+                  <Plus size={17} aria-hidden="true" />
+                </button>
+              </div>
+            </div>
 
-          {/* A sound nobody can switch off is a reason to close the tab. It
-              sits beside the connection state because both are facts about
-              this surface rather than settings about the account. */}
-          <button
-            type="button"
-            onClick={() => {
-              const next = !sound
-              setSound(next)
-              setSoundEnabled(next)
-              // Turning it on is a gesture, which is the only moment a browser
-              // will let audio start - so unlock here, and play it once, which
-              // doubles as showing what it sounds like.
-              if (next) {
-                primeSound()
-                playMessageChime()
-              }
-            }}
-            aria-pressed={sound}
-            title={sound ? 'Sound on for new messages' : 'Sound off for new messages'}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-full border border-white/12 px-3 py-1.5 text-xs font-semibold',
-              sound ? 'text-text-mid hover:text-text-hi' : 'text-text-low',
-            )}
-          >
-            {sound ? <Volume2 size={12} aria-hidden="true" /> : <VolumeX size={12} aria-hidden="true" />}
-            {sound ? 'Sound on' : 'Sound off'}
-          </button>
+            <label className="relative flex items-center">
+              <Search size={15} className="pointer-events-none absolute start-3.5 text-text-low" aria-hidden="true" />
+              <input
+                type="search"
+                value={chatQuery}
+                onChange={(e) => setChatQuery(e.target.value)}
+                placeholder="Search chats"
+                aria-label="Search your conversations"
+                className="w-full rounded-full border border-transparent bg-text-hi/[0.07] py-2.5 pe-4 ps-10 text-[15px] text-text-hi placeholder:text-text-low focus:border-gold/50 focus:bg-transparent focus:outline-none"
+              />
+            </label>
 
-          <span
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold',
-              connected
-                ? 'border-emerald-400/30 text-emerald-200'
-                : 'border-amber-400/30 text-amber-200',
-            )}
-          >
-            {connected ? <Wifi size={12} aria-hidden="true" /> : <WifiOff size={12} aria-hidden="true" />}
-            {connected ? 'Connected' : 'Reconnecting…'}
-          </span>
-        </div>
-      )}
-    >
-      <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
-        <div className={cn('min-w-0 space-y-4', showThread && 'hidden lg:block')}>
+            <div className="flex gap-2" role="group" aria-label="Filter conversations">
+              {([['All', false], ['Unread', true]] as const).map(([label, value]) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setUnreadOnly(value)}
+                  aria-pressed={unreadOnly === value}
+                  className={cn(
+                    'rounded-full px-3.5 py-1.5 text-[0.82rem] font-semibold transition-colors',
+                    unreadOnly === value ? 'bg-gold/20 text-gold-soft' : 'text-text-mid hover:bg-text-hi/[0.07]',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-2 pb-3">
           {/* Friends: every accepted connection, one tap from a conversation.
               A strip rather than a second list, so the conversations below
               stay in view at the same time. */}
-          <section aria-labelledby="friends-heading">
+          <section aria-labelledby="friends-heading" className="px-2">
             <div className="mb-2 flex items-center gap-2">
               <h2 id="friends-heading" className="flex items-center gap-2 text-sm font-semibold text-text-hi">
                 Friends
@@ -1406,14 +1563,14 @@ export default function Messages() {
                       type="button"
                       onClick={() => void startWith(friend.user_id)}
                       title={`Message ${friend.profile?.display_name ?? 'this member'}`}
-                      className="flex w-[64px] flex-col items-center gap-1 rounded-card-sm px-1 py-1.5 hover:bg-white/5"
+                      className="flex w-[72px] flex-col items-center gap-1.5 rounded-xl px-1 py-2 hover:bg-text-hi/[0.05]"
                     >
                       <PresenceAvatar
                         profile={friend.profile}
                         online={presence[friend.user_id]?.online}
-                        size={40}
+                        size={52}
                       />
-                      <span className="w-full truncate text-center text-[0.7rem] text-text-mid">
+                      <span className="w-full truncate text-center text-xs text-text-mid">
                         {friend.profile?.display_name.split(' ')[0] ?? 'Member'}
                       </span>
                     </button>
@@ -1457,23 +1614,10 @@ export default function Messages() {
             )}
           </section>
 
-          <div className="space-y-3">
+          <div className="space-y-3 px-2">
             {/* Starting a conversation with someone who is not yet a friend is
                 an action, so it is a button — not a form permanently occupying
                 the top of the list. */}
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-text-hi">Conversations</h2>
-              <button
-                type="button"
-                onClick={() => setComposing((v) => !v)}
-                aria-expanded={composing}
-                className="inline-flex items-center gap-1.5 rounded-full border border-white/12 px-3 py-1.5 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
-              >
-                <Plus size={12} aria-hidden="true" />
-                New
-              </button>
-            </div>
-
             {composing && (
               <div>
                 <input
@@ -1532,87 +1676,111 @@ export default function Messages() {
               </p>
             )}
 
-            <ul className="space-y-2">
-              {(conversations.data?.items ?? []).map((conversation) => {
+            {(() => {
+              const needle = chatQuery.trim().toLowerCase()
+              const shown = (conversations.data?.items ?? []).filter((conversation) => {
+                if (unreadOnly && !((conversation.unread ?? 0) > 0)) return false
+                if (!needle) return true
                 const others = conversation.participants.filter((p) => p !== user?.id)
-                const typingHere = Object.entries(typing[conversation.id] ?? {}).some(
-                  ([uid, until]) => uid !== user?.id && until > Date.now(),
-                )
                 return (
-                  <li key={conversation.id}>
-                    <button
-                      type="button"
-                      onClick={() => void openThread(conversation.id)}
-                      className={cn(
-                        'flex w-full items-center gap-2.5 rounded-card-sm border p-2.5 text-start',
-                        activeId === conversation.id
-                          ? 'border-gold/40 bg-gold/5'
-                          : 'border-white/8 bg-ink-2/40 hover:border-white/15',
-                      )}
-                    >
-                      <PresenceAvatar
-                        profile={conversation.profiles?.[others[0]]}
-                        online={conversation.kind === 'direct' && presence[others[0]]?.online}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-baseline gap-2">
-                          <span className="truncate text-sm font-medium text-text-hi">
-                            {titleOf(conversation, others)}
-                          </span>
-                          <span
-                            className={cn(
-                              'ms-auto shrink-0 text-[0.7rem]',
-                              (conversation.unread ?? 0) > 0 ? 'font-semibold text-gold-soft' : 'text-text-low',
-                            )}
-                            title={fullStamp(conversation.last_message_at, locale)}
-                          >
-                            {listStamp(conversation.last_message_at, locale)}
-                          </span>
-                        </span>
-                        <span className="flex items-center gap-2">
-                          <span className="caption flex min-w-0 items-center gap-1">
-                            {typingHere ? (
-                              <span className="text-gold-soft">typing…</span>
-                            ) : conversation.last_message ? (
-                              <span className="truncate">
-                                {conversation.last_message.sender_id === user?.id && 'You: '}
-                                {conversation.last_message.preview}
-                              </span>
-                            ) : (
-                              <>
-                                {conversation.encrypted || conversation.sealed_at_rest ? (
-                                  <Lock size={10} aria-hidden="true" />
-                                ) : (
-                                  <ShieldOff size={10} aria-hidden="true" />
+                  titleOf(conversation, others).toLowerCase().includes(needle) ||
+                  (conversation.last_message?.preview ?? '').toLowerCase().includes(needle)
+                )
+              })
+              if (conversations.data && conversations.data.items.length > 0 && shown.length === 0) {
+                return (
+                  <p className="px-2 py-3 text-sm text-text-low">
+                    {unreadOnly && !needle ? 'Nothing unread.' : 'No conversation matches.'}
+                  </p>
+                )
+              }
+              return (
+                <ul className="space-y-0.5">
+                  {shown.map((conversation) => {
+                    const others = conversation.participants.filter((p) => p !== user?.id)
+                    const typingHere = Object.entries(typing[conversation.id] ?? {}).some(
+                      ([uid, until]) => uid !== user?.id && until > Date.now(),
+                    )
+                    const unread = (conversation.unread ?? 0) > 0
+                    return (
+                      <li key={conversation.id}>
+                        <button
+                          type="button"
+                          onClick={() => void openThread(conversation.id)}
+                          aria-current={activeId === conversation.id ? 'true' : undefined}
+                          className={cn(
+                            'flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-start transition-colors',
+                            activeId === conversation.id ? 'bg-gold/15' : 'hover:bg-text-hi/[0.05]',
+                          )}
+                        >
+                          <PresenceAvatar
+                            profile={conversation.profiles?.[others[0]]}
+                            online={conversation.kind === 'direct' && presence[others[0]]?.online}
+                            size={52}
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[15px] font-semibold leading-tight text-text-hi">
+                              {titleOf(conversation, others)}
+                            </span>
+                            <span className="mt-0.5 flex items-center gap-1.5 text-[0.82rem] leading-tight">
+                              <span
+                                className={cn(
+                                  'flex min-w-0 items-center gap-1',
+                                  unread ? 'font-semibold text-text-hi' : 'text-text-low',
                                 )}
-                                No messages yet
-                              </>
-                            )}
+                              >
+                                {typingHere ? (
+                                  <span className="text-gold-soft">typing…</span>
+                                ) : conversation.last_message ? (
+                                  <span className="truncate">
+                                    {conversation.last_message.sender_id === user?.id && 'You: '}
+                                    {conversation.last_message.preview}
+                                  </span>
+                                ) : (
+                                  <>
+                                    {conversation.encrypted || conversation.sealed_at_rest ? (
+                                      <Lock size={11} aria-hidden="true" />
+                                    ) : (
+                                      <ShieldOff size={11} aria-hidden="true" />
+                                    )}
+                                    No messages yet
+                                  </>
+                                )}
+                              </span>
+                              <span
+                                aria-hidden="true"
+                                className="shrink-0 text-text-low"
+                                title={fullStamp(conversation.last_message_at, locale)}
+                              >
+                                · {listStamp(conversation.last_message_at, locale)}
+                              </span>
+                            </span>
                           </span>
-                          {(conversation.unread ?? 0) > 0 && (
-                            <span className="ms-auto shrink-0 rounded-full bg-gold px-1.5 py-0.5 text-[0.65rem] font-bold text-ink">
+                          {unread && (
+                            <span
+                              className="ms-auto grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-gradient-to-br from-gold-soft to-gold px-1.5 text-[0.7rem] font-bold text-ink"
+                              aria-label={`${conversation.unread} unread`}
+                            >
                               {conversation.unread}
                             </span>
                           )}
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )
+            })()}
+          </div>
           </div>
         </div>
 
         {/* Thread */}
         <div
           className={cn(
-            // Phone: the space between the sticky top chrome (~113px + 16px)
-            // and the bottom bar (the shell's 96px of padding).
-            'cloud-card relative flex h-[calc(100dvh-230px)] min-h-[360px] min-w-0 flex-col p-3 sm:p-5',
-            'lg:h-[calc(100dvh-220px)] lg:min-h-[440px]',
+            'cloud-card relative flex min-h-0 min-w-0 flex-col overflow-hidden',
             !showThread && 'hidden',
-            dragging && 'ring-2 ring-gold/50',
+            dragging && 'ring-2 ring-inset ring-gold/50',
           )}
           onDragOver={(e) => {
             if (!active || !e.dataTransfer.types.includes('Files')) return
@@ -1635,15 +1803,20 @@ export default function Messages() {
             </div>
           )}
           {!active ? (
-            <div className="m-auto text-center">
-              <MessageSquare size={22} className="mx-auto text-text-low" aria-hidden="true" />
-              <p className="mt-2 text-sm text-text-low">
-                {loadingThread ? 'Loading…' : 'Pick a conversation or a friend.'}
+            <div className="m-auto max-w-xs px-6 text-center">
+              <span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-gold/15 text-gold-soft">
+                <MessageSquare size={28} aria-hidden="true" />
+              </span>
+              <p className="mt-5 text-lg font-bold tracking-[-0.02em] text-text-hi">
+                {loadingThread ? 'Loading…' : 'Your messages'}
               </p>
+              {!loadingThread && (
+                <p className="mt-1.5 text-sm leading-relaxed text-text-low">Pick a conversation or a friend.</p>
+              )}
             </div>
           ) : (
             <>
-              <header className="mb-3 flex items-center gap-3 border-b border-white/8 pb-3">
+              <header className="flex items-center gap-3 border-b border-[var(--cloud-border)] px-3 py-3 sm:px-5">
                 <button
                   type="button"
                   onClick={backToList}
@@ -1655,12 +1828,12 @@ export default function Messages() {
                 <PresenceAvatar
                   profile={active.profiles?.[activeOthers[0]]}
                   online={active.kind === 'direct' && presence[activeOthers[0]]?.online}
-                  size={40}
+                  size={44}
                 />
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-text-hi">{titleOf(active, activeOthers)}</p>
+                  <p className="truncate text-base font-bold leading-tight text-text-hi">{titleOf(active, activeOthers)}</p>
                   <p
-                    className={cn('caption truncate', typingNames.length > 0 && 'text-gold-soft')}
+                    className={cn('truncate text-xs text-text-low', typingNames.length > 0 && 'text-gold-soft')}
                     aria-live="polite"
                   >
                     {headerSubtitle}
@@ -1692,7 +1865,7 @@ export default function Messages() {
                 </span>
               </header>
 
-              <div ref={listRef} onScroll={onScroll} className="flex flex-1 flex-col overflow-y-auto pe-1">
+              <div ref={listRef} onScroll={onScroll} className="flex flex-1 flex-col overflow-y-auto px-3 py-3 sm:px-5">
                 {hasOlder && (
                   <div className="mb-2 text-center">
                     <button
@@ -1724,75 +1897,155 @@ export default function Messages() {
                     new Date(message.created_at).getTime() - new Date(previous.created_at).getTime() < BURST_MS
                   const hasText = !message.encrypted && Boolean(message.body?.trim())
                   const mediaOnly = Boolean(message.media_kind) && !hasText
+                  // A sticker stands on its own, without a bubble, unless it answers a message
+                  // (then the quote needs one to sit in).
+                  const isSticker = !message.deleted && message.kind === 'sticker' && Boolean(message.sticker_id)
+                  const sticker = isSticker ? (message.sticker ?? stickerById(message.sticker_id)) : null
+                  const bareSticker = Boolean(sticker) && !message.reply_to_id
+                  // Is the next bubble part of the same run? Decides the corners and
+                  // where the sender's avatar and the time are drawn.
+                  const following = messages[index + 1]
+                  const burstNext =
+                    Boolean(following) &&
+                    startOfDay(new Date(following.created_at)) === startOfDay(new Date(message.created_at)) &&
+                    following.sender_id === message.sender_id &&
+                    new Date(following.created_at).getTime() - new Date(message.created_at).getTime() < BURST_MS
+                  const isAudio = message.media_kind === 'audio'
+                  // A run shows one time, on its last bubble; hover has the full stamp.
+                  // An edited message always shows its time, which is where "edited" is said:
+                  // a change nobody can see is a way to alter what somebody agreed to.
+                  const showMeta = !burstNext || Boolean(message.status) || Boolean(message.edited_at)
+                  // Where the time goes: inside a voice note, at the end of the text's last
+                  // line, or (a photo, a sticker) on a row of its own. Never a row after text.
+                  const metaInPlayer = isAudio && !hasText && !message.encrypted
+                  const metaInText = hasText || (message.encrypted && !isSticker)
+                  const metaOnItsOwnRow = !metaInPlayer && !metaInText
+                  const seenByThem =
+                    mine && activeOthers.some((uid) => {
+                      const at = readAt(active, uid)
+                      return at !== null && new Date(at).getTime() >= new Date(message.created_at).getTime()
+                    })
+                  const meta = (
+                    <MessageMeta
+                      message={message}
+                      locale={locale}
+                      mine={mine}
+                      onGold={mine && !bareSticker}
+                      isRead={seenByThem}
+                    />
+                  )
+                  const attachmentSender = mine
+                    ? user && { handle: user.handle, display_name: user.display_name, avatar_url: me?.avatar_url ?? sender?.avatar_url ?? null }
+                    : sender
                   return (
-                    <div key={message.client_id ?? message.id} id={`msg-${message.id}`}>
+                    <div key={message.client_id ?? message.id}>
                       {newDay && (
                         <div className="my-4 flex items-center gap-3" role="separator">
-                          <span className="h-px flex-1 bg-white/8" />
-                          <span className="caption rounded-full border border-white/8 bg-ink-2/60 px-3 py-0.5">
+                          <span className="h-px flex-1 bg-[var(--cloud-border)]" />
+                          <span className="rounded-full bg-text-hi/[0.06] px-3 py-1 text-xs font-semibold text-text-low">
                             {dayLabel(message.created_at, locale)}
                           </span>
-                          <span className="h-px flex-1 bg-white/8" />
+                          <span className="h-px flex-1 bg-[var(--cloud-border)]" />
                         </div>
                       )}
                       <div
+                        id={`msg-${message.id}`}
                         className={cn(
-                          'group/msg flex flex-col',
+                          'flex flex-col rounded-card-md',
                           mine ? 'items-end' : 'items-start',
                           burst ? 'mt-0.5' : 'mt-3',
+                          highlightId === message.id && 'bg-gold/20',
                         )}
                       >
                         {!mine && active.kind === 'group' && !burst && (
-                          <span className="caption mb-0.5 ms-1">{sender?.display_name ?? 'Member'}</span>
+                          <span className="mb-0.5 ms-9 text-xs text-text-low">{sender?.display_name ?? 'Member'}</span>
                         )}
+                        <div className={cn('flex w-full items-end gap-2', mine ? 'justify-end' : 'justify-start')}>
+                        {!mine && (
+                          <span className="w-7 shrink-0" aria-hidden={burstNext ? 'true' : undefined}>
+                            {!burstNext && <PresenceAvatar profile={sender} size={28} />}
+                          </span>
+                        )}
+                        <div className="group/bubble relative flex min-w-0 max-w-[min(75%,34rem)] items-stretch">
+                        {/* Beside the bubble, out of the flow: they must not widen it or push the reactions off its edge. */}
+                        <div className={cn('absolute inset-y-0 flex items-center', mine ? 'end-full' : 'start-full')}>
+                          {!message.deleted && (
+                            <ReplyButton
+                              onClick={() => startReply(message)}
+                              label={`Reply to ${nameOf(message)}`}
+                            />
+                          )}
+                          {!message.deleted && !message.status && !message.id.startsWith('local_') && (
+                            <ReactButton
+                              label={`React to ${nameOf(message)}`}
+                              onOpen={(rect) => setPicker({ id: message.id, rect, withReply: false })}
+                            />
+                          )}
+                          {mine && !message.deleted && !message.status && !message.id.startsWith('local_') && (
+                            <OptionsButton
+                              label="Edit or delete this message"
+                              onOpen={(rect) => setOwnMenu({ id: message.id, rect })}
+                            />
+                          )}
+                        </div>
+                        <SwipeToReply
+                          onReply={() => startReply(message)}
+                          onLongPress={() => {
+                            const rect = document.getElementById(`msg-${message.id}`)?.getBoundingClientRect()
+                            if (rect) setPicker({ id: message.id, rect, withReply: true })
+                          }}
+                          disabled={Boolean(message.status) || Boolean(message.deleted)}
+                        >
                         <div
                           className={cn(
-                            'max-w-[75%] rounded-card-md',
-                            mediaOnly ? 'p-1.5' : 'px-3.5 py-2',
-                            mine ? 'bg-gold/15 text-text-hi' : 'border border-white/8 bg-white/[0.08] text-text-hi',
+                            'min-w-0',
+                            bareSticker ? 'p-0' : metaInPlayer ? 'px-2.5 py-1.5' : mediaOnly ? 'p-1.5' : 'px-3.5 py-[7px]',
+                            !bareSticker && bubbleShape(mine, !burst, !burstNext),
+                            bareSticker
+                              ? 'text-text-hi'
+                              : mine
+                                ? 'bg-gradient-to-br from-gold-soft to-gold text-ink'
+                                : 'bg-text-hi/[0.07] text-text-hi',
                             message.status === 'sending' && 'opacity-80',
                             message.status === 'failed' && 'border border-red-400/40',
                           )}
                         >
-                          {(message.reply_to || message.reply_to_id) && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                // Jump to what is being answered. The original
-                                // may be further back than the loaded page, in
-                                // which case there is nothing to scroll to and
-                                // the quote is simply not a link anywhere.
-                                const target = message.reply_to_id
-                                  ? document.getElementById(`msg-${message.reply_to_id}`)
-                                  : null
-                                target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                              }}
-                              className={cn(
-                                'mb-1.5 flex w-full flex-col items-start gap-0.5 rounded-card-sm border-s-2 px-2 py-1 text-start',
-                                mine ? 'border-gold/60 bg-black/15' : 'border-sky/60 bg-black/20',
-                              )}
-                            >
-                              <span className="caption">
-                                {message.reply_to
-                                  ? active.profiles?.[message.reply_to.sender_id]?.display_name ??
-                                    (message.reply_to.sender_id === user?.id ? 'You' : 'Member')
-                                  : ''}
-                              </span>
-                              <span className="line-clamp-2 text-xs text-text-mid">
-                                {/* The original may have expired or been deleted
-                                    between being answered and being read. The
-                                    reply stays either way - hiding an answer
-                                    because the question went is worse than an
-                                    answer with nothing above it. */}
-                                {message.reply_to?.preview ?? 'Message unavailable'}
-                              </span>
-                            </button>
+                          {!message.deleted && quoteOf(message) && (
+                            <ReplyQuote
+                              target={quoteOf(message)!}
+                              mine={mine}
+                              onJump={() => message.reply_to_id && jumpTo(message.reply_to_id)}
+                            />
                           )}
-
+                          {message.deleted && (
+                            <p className={cn('text-[15px] italic leading-snug', mine ? 'text-[#0b0e1d]/70' : 'text-text-low')}>
+                              This message was deleted
+                            </p>
+                          )}
+                          {sticker && (
+                            <span role="img" aria-label={sticker.label} title={sticker.label} className="block">
+                              <StickerFace
+                                sticker={sticker}
+                                className="block text-[3.75rem]"
+                                imageClassName="h-28 w-28 max-w-full object-contain"
+                              />
+                            </span>
+                          )}
+                          {isSticker && !sticker && (
+                            <p className={cn('text-[15px] italic leading-snug', mine ? 'text-[#0b0e1d]/70' : 'text-text-low')}>
+                              Sticker no longer available
+                            </p>
+                          )}
                           {message.media_kind && (
                             <div className={cn('relative', hasText && '-mx-2 -mt-0.5 mb-1.5')}>
-                              <Attachment message={message} onOpenImage={setLightbox} dark={resolved !== 'light'} />
-                              {message.status === 'sending' && (
+                              <Attachment
+                                message={message}
+                                onOpenImage={setLightbox}
+                                sender={attachmentSender}
+                                mine={mine}
+                                metaSlot={showMeta ? meta : undefined}
+                              />
+                              {message.status === 'sending' && !metaInPlayer && (
                                 <div className="absolute inset-x-2 bottom-2 h-1 overflow-hidden rounded-full bg-black/40">
                                   <div
                                     className="h-full bg-gold"
@@ -1802,36 +2055,8 @@ export default function Messages() {
                               )}
                             </div>
                           )}
-                          {message.deleted && (
-                            <p className="text-sm italic leading-relaxed text-text-low">
-                              This message was deleted
-                            </p>
-                          )}
-
-                          {/* A sticker is the message: no bubble chrome around
-                              it, because a frame on a sticker makes it look
-                              like a failed image. */}
-                          {!message.deleted && message.sticker && (
-                            <span
-                              role="img"
-                              aria-label={message.sticker.label}
-                              title={message.sticker.label}
-                              className="block select-none text-[3.25rem] leading-none"
-                            >
-                              {message.sticker.image_url ? (
-                                <img
-                                  src={message.sticker.image_url}
-                                  alt={message.sticker.label}
-                                  className="h-28 w-28 object-contain"
-                                />
-                              ) : (
-                                message.sticker.glyph
-                              )}
-                            </span>
-                          )}
-
-                          {!message.deleted && (hasText || message.encrypted) && (
-                            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                          {metaInText && (
+                            <p className="relative whitespace-pre-wrap break-words text-[15px] leading-snug">
                               {message.encrypted ? (
                                 <span className="italic text-text-low">
                                   Encrypted — only your device can read this.
@@ -1839,119 +2064,35 @@ export default function Messages() {
                               ) : (
                                 message.body
                               )}
+                              {showMeta && (
+                                <>
+                                  {/* An unseen copy of the time keeps room for it at the end of the last
+                                      line, or pushes it to a new line when that line is full; the real one
+                                      sits on top of it, bottom right. */}
+                                  <span aria-hidden="true" className="invisible ms-2.5 inline-flex align-bottom">
+                                    {meta}
+                                  </span>
+                                  <span className="absolute bottom-0 end-0 flex items-end">{meta}</span>
+                                </>
+                              )}
                             </p>
                           )}
-                          <p
-                            className={cn('text-right text-[0.68rem] text-text-low', mediaOnly ? 'px-1.5 pt-1' : 'mt-0.5')}
-                            title={fullStamp(message.created_at, locale)}
-                          >
-                            {message.status === 'sending'
-                              ? message.media_kind
-                                ? `Uploading ${Math.round((message.progress ?? 0) * 100)}%`
-                                : 'Sending…'
-                              : timeOf(message.created_at, locale)}
-                            {/* Said, not hidden: an edit nobody can see is a
-                                way to change what somebody appears to have
-                                agreed to after they agreed to it. */}
-                            {message.edited_at && !message.deleted && ' · edited'}
-                          </p>
+                          {metaOnItsOwnRow && showMeta && (
+                            <div className={cn('flex justify-end', mediaOnly || bareSticker ? 'px-1.5 pt-1' : 'mt-1')}>
+                              {meta}
+                            </div>
+                          )}
                         </div>
-
-                        {/* What the room thought of it. Counts, not names:
-                            naming everyone who reacted turns a quiet
-                            acknowledgement into a scoreboard. */}
-                        {!message.deleted && Object.keys(message.reactions ?? {}).length > 0 && (
-                          <div className="mt-0.5 flex flex-wrap gap-1">
-                            {Object.entries(message.reactions ?? {}).map(([emoji, count]) => (
-                              <button
-                                key={emoji}
-                                type="button"
-                                onClick={() => react(message, emoji)}
-                                className={cn(
-                                  'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[0.7rem]',
-                                  message.my_reaction === emoji
-                                    ? 'border-gold/50 bg-gold/15 text-text-hi'
-                                    : 'border-white/10 bg-white/[0.06] text-text-mid hover:border-white/20',
-                                )}
-                              >
-                                <span aria-hidden="true">{emoji}</span>
-                                {count}
-                              </button>
-                            ))}
-                          </div>
+                        </SwipeToReply>
+                        </div>
+                        </div>
+                        {!message.deleted && (
+                          <ReactionChips
+                            counts={message.reactions ?? {}}
+                            mine={message.my_reaction}
+                            onToggle={(emoji) => void react(message, emoji)}
+                          />
                         )}
-
-                        {/* The emoji row, opened from the action below. */}
-                        {reactingTo === message.id && !message.deleted && (
-                          <div className="mt-1 flex flex-wrap gap-1 rounded-full border border-white/10 bg-ink-2 px-1.5 py-1 shadow-cloud">
-                            {MESSAGE_REACTIONS.map((emoji) => (
-                              <button
-                                key={emoji}
-                                type="button"
-                                onClick={() => react(message, emoji)}
-                                aria-label={`React ${emoji}`}
-                                className="rounded-full px-1 text-base hover:scale-110"
-                              >
-                                {emoji}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Reply. Shown on hover on a pointer device and always
-                            on a touch one, where there is no hover to reveal it.
-                            Not offered for a message still being sent: it has no
-                            server id yet, so the reply would point at nothing. */}
-                        {!message.status && !message.deleted && (
-                          <div className="mt-0.5 flex items-center gap-2 opacity-100 md:opacity-0 md:group-hover/msg:opacity-100">
-                            <button
-                              type="button"
-                              onClick={() => setReplyTo(message)}
-                              className="inline-flex items-center gap-1 px-1 text-[0.68rem] text-text-low hover:text-gold-soft"
-                            >
-                              <CornerUpLeft size={11} aria-hidden="true" />
-                              Reply
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setReactingTo((current) => (current === message.id ? null : message.id))}
-                              aria-expanded={reactingTo === message.id}
-                              className="inline-flex items-center gap-1 px-1 text-[0.68rem] text-text-low hover:text-gold-soft"
-                            >
-                              <SmilePlus size={11} aria-hidden="true" />
-                              React
-                            </button>
-                            {/* Only your own, and only text: a sticker has
-                                nothing to edit, and an end-to-end encrypted
-                                message is ciphertext the server cannot
-                                replace. The server refuses both anyway; the
-                                point here is not to offer what will fail. */}
-                            {mine && !message.sticker && !message.encrypted && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditing(message)
-                                  setEditDraft(message.body ?? '')
-                                }}
-                                className="inline-flex items-center gap-1 px-1 text-[0.68rem] text-text-low hover:text-gold-soft"
-                              >
-                                <Pencil size={11} aria-hidden="true" />
-                                Edit
-                              </button>
-                            )}
-                            {mine && (
-                              <button
-                                type="button"
-                                onClick={() => setConfirmDelete(message)}
-                                className="inline-flex items-center gap-1 px-1 text-[0.68rem] text-text-low hover:text-red-200"
-                              >
-                                <Trash2 size={11} aria-hidden="true" />
-                                Delete
-                              </button>
-                            )}
-                          </div>
-                        )}
-
                         {message.status === 'failed' && (
                           <button
                             type="button"
@@ -1983,7 +2124,7 @@ export default function Messages() {
                 })}
                 {typingNames.length > 0 && (
                   <div className="mt-3 flex" aria-hidden="true">
-                    <span className="inline-flex gap-1 rounded-card-md bg-white/6 px-3.5 py-3">
+                    <span className="inline-flex gap-1 rounded-[18px] bg-text-hi/[0.07] px-3.5 py-3">
                       {[0, 1, 2].map((i) => (
                         <span
                           key={i}
@@ -1998,7 +2139,7 @@ export default function Messages() {
 
               {/* Files waiting to go: reviewed, captioned, removable. */}
               {staged.length > 0 && (
-                <ul className="mt-3 flex flex-wrap gap-2" aria-label="Attachments to send">
+                <ul className="flex flex-wrap gap-2 px-3 pt-2 sm:px-5" aria-label="Attachments to send">
                   {staged.map((file, index) => (
                     <li
                       key={`${file.name}-${index}`}
@@ -2026,11 +2167,11 @@ export default function Messages() {
                   rests in the bottom-end corner (lib/floating.ts, slot 0) —
                   exactly where a full-height thread puts its composer. No
                   orb, no gap: Send keeps the full width. */}
-              {/* Editing happens where the message is read, not in a dialog
-                  over it: the point of an edit is the words around it. */}
+              {/* Editing happens where the message is read, not in a dialog over it:
+                  the point of an edit is the words around it. */}
               {editing && (
-                <div className="mt-3 rounded-card-sm border border-gold/35 bg-gold/[0.07] px-3 py-2">
-                  <p className="caption mb-1.5 inline-flex items-center gap-1">
+                <div className="mx-3 mb-1 rounded-card-sm border border-gold/35 bg-gold/[0.07] px-3 py-2 sm:mx-5">
+                  <p className="mb-1.5 inline-flex items-center gap-1 text-xs font-semibold text-text-mid">
                     <Pencil size={11} aria-hidden="true" />
                     Editing a message
                   </p>
@@ -2046,109 +2187,31 @@ export default function Messages() {
                     }}
                     autoFocus
                     aria-label="Edit message"
-                    className="w-full rounded-card-sm border border-white/10 bg-ink-2/70 px-3 py-2 text-sm text-text-hi focus:border-gold/50 focus:outline-none"
+                    className="w-full rounded-xl border border-transparent bg-text-hi/[0.07] px-4 py-2.5 text-[0.95rem] text-text-hi focus:border-gold/50 focus:outline-none"
                   />
                   <div className="mt-2 flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => void saveEdit()}
-                      className="rounded-full bg-gradient-to-br from-gold-soft to-gold px-3 py-1 text-xs font-bold text-ink"
+                      className="rounded-full bg-gradient-to-br from-gold-soft to-gold px-3 py-1 text-xs font-bold text-[#0b0e1d]"
                     >
                       Save
                     </button>
                     <button
                       type="button"
                       onClick={() => setEditing(null)}
-                      className="rounded-full border border-white/12 px-3 py-1 text-xs font-semibold text-text-mid hover:text-text-hi"
+                      className="rounded-full border border-[var(--cloud-border)] px-3 py-1 text-xs font-semibold text-text-mid hover:text-text-hi"
                     >
                       Cancel
                     </button>
-                    <span className="caption">Everyone will see it was edited.</span>
+                    <span className="text-xs text-text-low">Everyone will see it was edited.</span>
                   </div>
                 </div>
               )}
-
-              {/* The sticker tray. Opens above the box so a thumb on a phone
-                  is already where the stickers are. */}
-              {stickersOpen && (
-                <div className="mt-3 max-h-56 overflow-y-auto rounded-card-sm border border-white/10 bg-ink-2/70 p-3">
-                  {packs === null && <p className="caption">Loading stickers…</p>}
-                  {packs?.length === 0 && <p className="caption">No stickers available.</p>}
-                  {packs?.map((pack) => (
-                    <div key={pack.id} className="mb-3 last:mb-0">
-                      <p className="caption mb-1.5">{pack.name}</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {pack.stickers.map((sticker) => (
-                          <button
-                            key={sticker.id}
-                            type="button"
-                            onClick={() => sendSticker(sticker.id)}
-                            title={sticker.label}
-                            aria-label={sticker.label}
-                            className="rounded-card-sm px-2 py-1 text-3xl leading-none hover:bg-white/[0.08]"
-                          >
-                            {sticker.image_url ? (
-                              <img src={sticker.image_url} alt={sticker.label} className="h-10 w-10 object-contain" />
-                            ) : (
-                              sticker.glyph
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* What is being answered, above the box. Shown rather than
-                  implied: a reply sent to the wrong message is a small
-                  humiliation, and the only moment to prevent it is before
-                  pressing send. */}
               {replyTo && (
-                <div className="mt-3 flex items-start gap-2 rounded-card-sm border-s-2 border-gold/60 bg-white/[0.06] px-3 py-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="caption">
-                      Replying to{' '}
-                      {replyTo.sender_id === user?.id
-                        ? 'yourself'
-                        : active.profiles?.[replyTo.sender_id]?.display_name ?? 'this message'}
-                    </p>
-                    <p className="line-clamp-2 text-xs text-text-mid">
-                      {replyTo.encrypted
-                        ? 'Encrypted message'
-                        : replyTo.body?.trim() || (replyTo.media_kind ? 'Attachment' : 'Message')}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setReplyTo(null)}
-                    aria-label="Cancel reply"
-                    className="shrink-0 rounded-full p-1 text-text-low hover:text-text-hi"
-                  >
-                    <X size={13} aria-hidden="true" />
-                  </button>
-                </div>
+                <ReplyBanner name={nameOf(replyTo)} message={replyTo} onCancel={() => setReplyTo(null)} />
               )}
-
-              <form onSubmit={send} className={cn('mt-3 flex items-center gap-2 border-t border-white/8 pt-3', FEATURES.assistant && 'pe-14 lg:pe-12')}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    // Opening the tray is a gesture, so it is also a fine
-                    // moment to unlock audio for the reply that follows.
-                    primeSound()
-                    setStickersOpen((open) => !open)
-                  }}
-                  aria-expanded={stickersOpen}
-                  aria-label="Stickers"
-                  title="Stickers"
-                  className={cn(
-                    'shrink-0 rounded-full p-2',
-                    stickersOpen ? 'text-gold' : 'text-text-low hover:text-text-hi',
-                  )}
-                >
-                  <Sticker size={17} aria-hidden="true" />
-                </button>
+              <form onSubmit={send} className={cn('flex items-center gap-1.5 px-3 py-3 sm:px-5', FEATURES.assistant && 'pe-14 lg:pe-12')}>
                 {recordingSince !== null ? (
                   <>
                     <button
@@ -2167,7 +2230,7 @@ export default function Messages() {
                       type="button"
                       onClick={() => stopRecording(false)}
                       aria-label="Stop and send the voice message"
-                      className="shrink-0 rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-2.5 text-ink"
+                      className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-gold-soft to-gold text-ink"
                     >
                       <Square size={15} aria-hidden="true" />
                     </button>
@@ -2175,9 +2238,17 @@ export default function Messages() {
                 ) : (
                   <>
                     <AttachmentMenu onFiles={stage} />
+                    <EmojiStickerButton packs={stickerPacks.data?.packs ?? null} onEmoji={insertEmoji} onSticker={sendSticker} />
                     <input
+                      ref={inputRef}
                       value={draft}
                       onChange={(e) => onDraftChange(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape' && replyTo) {
+                          e.preventDefault()
+                          setReplyTo(null)
+                        }
+                      }}
                       onPaste={(e) => {
                         // A pasted screenshot is an attachment, not text.
                         if (e.clipboardData.files.length) {
@@ -2187,13 +2258,13 @@ export default function Messages() {
                       }}
                       placeholder={staged.length ? 'Add a caption…' : 'Write a message…'}
                       aria-label="Message"
-                      className="w-full min-w-0 rounded-full border border-white/10 bg-ink-2/60 px-4 py-2.5 text-sm text-text-hi placeholder:text-text-low focus:border-gold/40 focus:outline-none"
+                      className="w-full min-w-0 rounded-full border border-transparent bg-text-hi/[0.07] px-4 py-2.5 text-[15px] text-text-hi placeholder:text-text-low focus:border-gold/50 focus:bg-transparent focus:outline-none"
                     />
                     {draft.trim() || staged.length ? (
                       <button
                         type="submit"
                         aria-label="Send"
-                        className="shrink-0 rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-2.5 text-ink"
+                        className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-gold-soft to-gold text-ink"
                       >
                         <Send size={15} aria-hidden="true" />
                       </button>
@@ -2202,7 +2273,7 @@ export default function Messages() {
                         type="button"
                         onClick={() => void startRecording()}
                         aria-label="Record a voice message"
-                        className="shrink-0 rounded-full border border-white/12 px-4 py-2.5 text-text-mid hover:border-gold/40 hover:text-gold-soft"
+                        className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-text-mid hover:bg-text-hi/[0.07] hover:text-gold-soft"
                       >
                         <Mic size={15} aria-hidden="true" />
                       </button>
@@ -2213,12 +2284,42 @@ export default function Messages() {
             </>
           )}
           {error && (
-            <p role="alert" className="mt-2 text-sm text-red-200">
+            <p role="alert" className="px-3 pb-2 text-sm text-red-200 sm:px-5">
               {error}
             </p>
           )}
         </div>
       </div>
+      {picker && (() => {
+        const target = messages.find((m) => m.id === picker.id)
+        if (!target || target.deleted) return null
+        return (
+          <ReactionPicker
+            anchor={picker.rect}
+            current={target.my_reaction}
+            onPick={(emoji) => void react(target, emoji)}
+            onReply={picker.withReply ? () => startReply(target) : undefined}
+            onClose={() => setPicker(null)}
+          />
+        )
+      })()}
+      {ownMenu && (() => {
+        const target = messages.find((m) => m.id === ownMenu.id)
+        if (!target || target.deleted) return null
+        return (
+          <OwnMessageMenu
+            anchor={ownMenu.rect}
+            // Text the server can read: not a sticker, not an end-to-end encrypted message.
+            canEdit={!target.encrypted && target.kind !== 'sticker' && Boolean(target.body?.trim())}
+            onEdit={() => {
+              setEditing(target)
+              setEditDraft(target.body ?? '')
+            }}
+            onDelete={() => setConfirmDelete(target)}
+            onClose={() => setOwnMenu(null)}
+          />
+        )
+      })()}
       {lightbox && (
         <MediaLightbox
           media={[{ url: lightbox, kind: 'image', alt_text: null }]}

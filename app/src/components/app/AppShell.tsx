@@ -33,7 +33,7 @@ export default function AppShell({
   subtitle,
   action,
   aside,
-  wide = false,
+  rail = true,
   children,
 }: {
   /**
@@ -46,21 +46,12 @@ export default function AppShell({
   action?: ReactNode
   /** Right-hand context rail. Omitted on pages that don't need one. */
   aside?: ReactNode
-  /**
-   * Drop the reading-width cap and use the whole middle column.
-   *
-   * The 560px cap exists because a feed is a line of text and a picture, and a
-   * long line is tiring to read. A page that is a working surface rather than
-   * something to read - a chat with a conversation list beside it, a table, a
-   * board - is only cramped by it: at 560 the message panel had about 240px
-   * left once the list took its 300, which is not a conversation, it is a
-   * column of broken words.
-   */
-  wide?: boolean
+  /** The left rail (profile, pinned modules, circles). A page that is a workspace of its own turns it off. */
+  rail?: boolean
   children: ReactNode
 }) {
   const { user, loading } = useAuth()
-  const { tok, frameStyle, rtl } = useAppTheme()
+  const { tok, frameStyle, rtl, resolved } = useAppTheme()
   const location = useLocation()
   const unread = useUnreadMessages()
 
@@ -84,7 +75,15 @@ export default function AppShell({
   // the steps up. The marketing sections have always used it; the app frame —
   // the largest gradient in the product — never did.
   return (
-    <div className="relative min-h-[100dvh] noise-overlay" style={frameStyle} dir={rtl ? 'rtl' : 'ltr'}>
+    <div
+      className="app-shell relative min-h-[100dvh] noise-overlay"
+      style={
+        resolved === 'light'
+          ? { background: 'radial-gradient(circle at 70% -20%, #fff 0, #f8f5ef 48%, #f3efe7 100%)' }
+          : frameStyle
+      }
+      dir={rtl ? 'rtl' : 'ltr'}
+    >
       {/* Chrome: the app owns the top of the page here — the marketing navbar
           is suppressed on these routes, so this sticks to 0 rather than 72. */}
       <div className="sticky top-0 z-30">
@@ -95,36 +94,25 @@ export default function AppShell({
 
       <div
         className={cn(
-          // The rails sit in the corners and the feed is centred between them.
-          //
-          // So the shell is full width with no max-w cap, the middle column
-          // takes everything the rails leave, and the *reading* width is held
-          // on <main> instead - 560px, centred in that column. Capping the
-          // column itself and centring the three together, which is what this
-          // did a moment ago, pulls the rails inward and leaves a margin
-          // outside them; the feed measures the same either way, but the rails
-          // end up floating rather than anchored.
-          //
-          // The cap matters wherever it lives: at the old 814px the line ran
-          // past comfortable reading length and a square photo rendered 814px
-          // tall and swallowed the post under it.
-          'grid w-full gap-4 px-3 pb-24 pt-4 md:px-4 lg:pb-8',
-          aside
-            ? 'lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_320px]'
-            : 'lg:grid-cols-[240px_minmax(0,1fr)]',
+          'mx-auto grid w-full max-w-[1320px] gap-[26px] px-4 pb-24 pt-6 md:px-6 lg:pb-16 lg:pt-9',
+          !rail
+            ? 'lg:grid-cols-[minmax(0,1fr)]'
+            : aside
+              ? 'lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_300px]'
+              : 'lg:grid-cols-[220px_minmax(0,1fr)]',
         )}
       >
         {/* Left rail — identity and shortcuts */}
-        <div className="hidden lg:block">
-          <div className="sticky top-[140px]">
-            <ProfileCard />
+        {rail && (
+          <div className="hidden lg:block">
+            <div className="sticky top-[156px] max-h-[calc(100svh-176px)] overflow-y-auto overscroll-contain">
+              <ProfileCard />
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Centre column. The reading width lives here rather than on the grid
-            column, so the rails stay anchored to the edges while the feed sits
-            in the middle of the space between them. */}
-        <main className={cn('w-full min-w-0', !wide && 'mx-auto max-w-[560px]')}>
+        {/* Centre column */}
+        <main className="min-w-0">
           {(title || action) && (
             <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
               {title ? (
@@ -149,15 +137,9 @@ export default function AppShell({
             {/* Scrolls on its own. Sticky alone meant a rail taller than the
                 window had its bottom permanently out of reach - which is what
                 happens to anybody who zooms, and to anybody on a short laptop
-                screen.
-
-                No visible scrollbar: the base layer hides them everywhere, and
-                this used to opt back in with scrollbar-width:thin, which put a
-                track down the side of the rail. The scrolling itself is
-                untouched - wheel, trackpad, touch and keyboard all still move
-                it, which is the whole point of hiding the chrome rather than
-                setting overflow:hidden. */}
-            <div className="sticky top-[140px] max-h-[calc(100svh-160px)] space-y-3 overflow-y-auto overscroll-contain">
+                screen. No visible scrollbar (the base layer hides them), but
+                wheel, trackpad, touch and keyboard all still scroll it. */}
+            <div className="sticky top-[156px] max-h-[calc(100svh-176px)] space-y-3 overflow-y-auto overscroll-contain">
               {aside}
             </div>
           </aside>
@@ -187,7 +169,9 @@ export default function AppShell({
                   <span
                     className={cn(
                       'relative flex h-9 w-9 items-center justify-center rounded-full',
-                      'primary' in item && item.primary && 'bg-gradient-to-br from-gold-soft to-gold',
+                      'primary' in item &&
+                        item.primary &&
+                        '-mt-6 h-12 w-12 border-[5px] border-[#f7f4ee] bg-gradient-to-br from-gold-soft to-gold shadow-[0_6px_16px_-4px_rgba(170,124,60,0.45)]',
                     )}
                   >
                     <item.icon size={18} aria-hidden="true" />
@@ -213,8 +197,8 @@ export default function AppShell({
 export function RailCard({ title, children }: { title: string; children: ReactNode }) {
   const { tok } = useAppTheme()
   return (
-    <section className={cn('rounded-card-lg p-4', tok.card)}>
-      <h2 className={cn('mb-3 text-sm font-semibold', tok.text)}>{title}</h2>
+    <section className={cn('rounded-[20px] p-5', tok.card)}>
+      <h2 className={cn('mb-3.5 text-[0.95rem] font-bold tracking-[-0.01em]', tok.text)}>{title}</h2>
       {children}
     </section>
   )

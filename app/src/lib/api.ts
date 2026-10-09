@@ -155,6 +155,8 @@ export const api = {
     request<T>(path, { ...options, method: 'POST', body }),
   patch: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>(path, { ...options, method: 'PATCH', body }),
+  put: <T>(path: string, body?: unknown, options?: RequestOptions) =>
+    request<T>(path, { ...options, method: 'PUT', body }),
   delete: <T>(path: string, options?: RequestOptions) =>
     request<T>(path, { ...options, method: 'DELETE' }),
 }
@@ -696,26 +698,60 @@ export interface Forum {
   threads_count: number
 }
 
+export type ThreadSort = 'recent' | 'trending' | 'solved' | 'unanswered'
+
 export interface Thread {
   id: string
   title: string
   author_id: string
+  author?: PersonBrief | null
+  /** At least one reply has been accepted as the answer. */
+  solved?: boolean
   replies_count: number
   views_count: number
   pinned: boolean
   ai_summary: string | null
   last_activity_at: string
+  created_at?: string
+}
+
+export interface KnowledgeEntry {
+  id: string
+  /** `community`: an answer the asker accepted and members upvoted. `curated`: written down by a reviewer. */
+  origin: 'community' | 'curated'
+  question: string
+  answer: string
+  lang: string
+  confidence: number | null
+  votes: number
+  /** The threads this came from. */
+  sources: string[]
+  reviewed: boolean
 }
 
 export interface ThreadDetail {
   id: string
+  forum_id: string
   title: string
   body: string
   author_id: string
+  author?: PersonBrief | null
   lang: string
   ai_summary: string | null
   locked: boolean
-  replies: Array<{ id: string; author_id: string; body: string; upvotes: number; created_at: string }>
+  created_at?: string
+  replies: Array<{
+    id: string
+    author_id: string
+    author?: PersonBrief | null
+    parent_id?: string | null
+    body: string
+    upvotes: number
+    /** Whether the signed-in viewer has upvoted this reply. */
+    voted_by_me?: boolean
+    accepted_answer?: boolean
+    created_at: string
+  }>
 }
 
 export interface PersonBrief {
@@ -768,20 +804,12 @@ export interface Message {
   media_name?: string | null
   media_type?: string | null
   media_size?: number | null
-  /** The message this one answers, if any. */
+  /** The message this one answers; the quote itself is built client-side. */
   reply_to_id?: string | null
-  /**
-   * One line of the message being answered, as the server renders it. Null when
-   * the original has expired or been deleted - the reply survives it, and the
-   * thread says "Message unavailable" rather than hiding the answer.
-   */
-  reply_to?: {
-    id: string
-    sender_id: string
-    encrypted: boolean
-    preview: string
-    media_kind?: string | null
-  } | null
+  /** True when the original has expired or been deleted. Its content is never sent. */
+  reply_to_deleted?: boolean
+  /** For kind "sticker": the catalogue id, and nothing else. */
+  sticker_id?: string | null
   /** Resolved by the server from its catalogue; a message only stores the id. */
   sticker?: Sticker | null
   /** Set when the text has been changed. Shown, never silent. */
@@ -827,9 +855,60 @@ export interface Person {
   confirmations?: number
 }
 
+/** One person in full, with what the caller may do about them (decided by the server). */
+export interface PersonDetail extends Person {
+  other_names: string | null
+  birth_place: string | null
+  death_place: string | null
+  biography: string | null
+  is_me: boolean
+  /** Derived from the graph, relative to the caller's own node; null when they are not in this family. */
+  relation_to_me: string | null
+  counts: { parents: number; children: number; spouses: number; siblings: number }
+  my_decision: 'confirm' | 'dispute' | null
+  permissions: { can_edit: boolean; can_delete: boolean; can_link: boolean; can_confirm: boolean }
+}
+
+/** What may be sent for a person. `null` clears a field; leaving it out leaves it alone. */
+export interface PersonFields {
+  given_name: string
+  family_name?: string | null
+  other_names?: string | null
+  gender?: string | null
+  birth_date?: string | null
+  birth_place?: string | null
+  death_date?: string | null
+  death_place?: string | null
+  deceased?: boolean
+  biography?: string | null
+}
+
+export type RelativeKind = 'parent' | 'adoptive_parent' | 'child' | 'spouse' | 'sibling'
+
+/** What a parent is to a child. A property of the link; never worked out from anyone's gender. */
+export type ParentRole = 'father' | 'mother'
+
+/** What the extra questions of "add a relative" send. Each applies to one kind of relative. */
+export interface RelativeExtras {
+  /** parent / adoptive_parent: what the new person is to this one. */
+  role?: ParentRole
+  /** child: what this person is to the child, who the other parent is, and what they are. */
+  anchor_role?: ParentRole
+  other_parent_id?: string
+  other_parent_role?: ParentRole
+  /** sibling: the parents of this person who are also the new person's. */
+  shared_parent_ids?: string[]
+}
+
 export interface FamilyTree {
   root: string
   depth: number
+  /** The caller's own node, if they have added themselves. */
+  me: string | null
+  /** Everyone in this family; the view may hold fewer. */
+  family_size: number
+  /** True when someone shown has parents or children that are not. */
+  truncated: boolean
   nodes: Array<{
     person: Person
     /** 0 = the root, positive = ancestors, negative = descendants. */
@@ -837,8 +916,12 @@ export interface FamilyTree {
     relation: string
     closeness: number
     sibling_kind: string | null
+    /** More of the family lies beyond this person. */
+    more: boolean
+    mine: boolean
+    editable: boolean
   }>
-  edges: Array<{ id: string; from: string; to: string; kind: string; status: string }>
+  edges: Array<{ id: string; from: string; to: string; kind: string; role: ParentRole | null; status: string; removable: boolean }>
 }
 
 export interface HowRelated {
@@ -906,6 +989,30 @@ export interface Tribute {
   status?: string
 }
 
+/** One photo or video in a memorial's gallery. The url is a ticket: short-lived, never to be stored. */
+export interface GalleryItem {
+  id: string
+  kind: 'image' | 'video'
+  url: string
+  caption: string | null
+  /** original | edited | ai_assisted | ai_generated | verified_source */
+  provenance: string
+  /** The family's call: blurred until the visitor chooses to look. */
+  sensitive: boolean
+  position: number
+  size_bytes: number
+  /** A visitor's tribute photo the family promoted; it still belongs to the tribute. */
+  from_tribute: boolean
+}
+
+export interface Gallery {
+  limit: number
+  max_bytes: number
+  /** Administrators only. */
+  bytes_used?: number
+  items: GalleryItem[]
+}
+
 export interface MemorialEvent {
   id: string
   year: number
@@ -943,11 +1050,130 @@ export interface Product {
   country: string | null
   city: string | null
   images: string[]
+  vendor?: VendorBrief
+  rating_average?: number | null
+  rating_count?: number
+}
+
+export interface VendorBrief {
+  user_id: string
+  handle: string | null
+  display_name: string | null
+  avatar_url: string | null
+}
+
+export interface ProductPricing {
+  vendor_price: string
+  margin: string
+  customer_price: string
+  markup_pct: string
+}
+
+export interface VendorStats {
+  listings_active: number
+  sales_settled: number
+}
+
+/** Owners also get the full price split; everyone else only customer_price. */
+export interface ProductDetail {
+  id: string
+  title: string
+  description: string
+  kind: string
+  stock: number | null
+  country: string | null
+  city: string | null
+  images: string[]
+  currency: string
+  /** active | paused | removed */
+  status: string
+  created_at: string
+  vendor_id: string
+  vendor: VendorBrief
+  vendor_since: string | null
+  vendor_stats: VendorStats
+  is_owner: boolean
+  customer_price: string
+  vendor_price?: string
+  margin?: string
+  markup_pct?: string
+}
+
+export interface MyProduct extends ProductPricing {
+  id: string
+  title: string
+  description: string
+  kind: string
+  stock: number | null
+  status: string
+  currency: string
+  country: string | null
+  city: string | null
+  images: string[]
+  created_at: string
+}
+
+export interface ProductPatch {
+  title?: string
+  description?: string
+  vendor_price?: string
+  stock?: number | null
+  country?: string | null
+  city?: string | null
+  images?: string[]
+  status?: 'active' | 'paused'
+}
+
+export interface Sale extends Order {
+  product_title: string | null
+  buyer: VendorBrief
+  /** In escrow and not yet handed over. */
+  to_ship: boolean
+}
+
+export interface SellerFinances {
+  currency: string
+  escrow_pending: string
+  released: string
+  refunded: string
+  counts: { escrow_pending: number; to_ship: number; settled: number; refunded: number; disputed: number }
+}
+
+export interface StorefrontResponse {
+  vendor: VendorBrief
+  since: string | null
+  stats: VendorStats
+  total: number
+  items: Product[]
+}
+
+export interface OrderProduct {
+  id: string
+  title: string
+  description: string | null
+  kind: string
+  images: string[]
+  country: string | null
+  city: string | null
+  /** False when the seller removed or paused the listing; the buyer still sees what they bought. */
+  available: boolean
+}
+
+export interface OrderCounterpart {
+  user_id: string
+  handle: string | null
+  display_name: string | null
+  avatar_url: string | null
 }
 
 export interface Order {
   id: string
   role: string | null
+  product?: OrderProduct | null
+  /** The other party: the seller for a buyer, the buyer for a seller. */
+  counterpart?: OrderCounterpart | null
+  /** The viewer already reviewed this order. */
+  reviewed?: boolean
   product_id: string
   quantity: number
   customer_price: string
@@ -964,7 +1190,53 @@ export interface Order {
   dispute_window_ends: string | null
   escrow_released_at: string | null
   dispute_id?: string | null
+  /** Only present for the buyer and the vendor of the order. */
+  shipping?: OrderShipping | null
+  carrier?: string | null
+  tracking_number?: string | null
+  tracking_url?: string | null
   created_at: string
+}
+
+export interface OrderPayment {
+  payment_id: string
+  rail: string
+  /** True when no live payment rail is configured: nothing real is charged. */
+  mock: boolean
+  amount: string
+  pay_address?: string | null
+  pay_currency?: string | null
+  checkout_url?: string | null
+  status: string
+}
+
+export interface OrderShipping {
+  full_name: string
+  line1: string
+  line2?: string | null
+  city: string
+  region?: string | null
+  postal_code?: string | null
+  /** ISO 3166-1 alpha-2 */
+  country: string
+  phone?: string | null
+}
+
+export interface ProductReview {
+  id: string
+  rating: number
+  comment: string | null
+  created_at: string
+  author_id: string
+  reviewer?: { id?: string; handle?: string; display_name?: string; avatar_url?: string | null } | null
+}
+
+export interface ReviewsSummary {
+  average: number
+  count: number
+  /** Review counts keyed '1'..'5'. */
+  distribution: Record<string, number>
+  items: ProductReview[]
 }
 
 export interface EscrowTerms {
@@ -985,6 +1257,12 @@ export interface DisputeMessage {
   body: string
   evidence: string[]
   created_at: string
+  author?: DisputeParty['profile']
+}
+
+export interface DisputeParty {
+  id: string
+  profile: { id?: string; handle?: string; display_name?: string; avatar_url?: string | null } | null
 }
 
 export interface Dispute {
@@ -1006,6 +1284,24 @@ export interface Dispute {
   resolved_at: string | null
   created_at: string
   messages?: DisputeMessage[]
+  /** Detail-only fields, from GET /commerce/disputes/{id}. */
+  viewer_role?: 'buyer' | 'seller' | 'admin'
+  can_reply?: boolean
+  can_withdraw?: boolean
+  can_concede?: boolean
+  seconds_left_to_respond?: number | null
+  seconds_left_to_arbitrate?: number | null
+  buyer?: DisputeParty
+  seller?: DisputeParty
+  order?: {
+    id: string
+    product_id: string
+    title: string | null
+    quantity: number
+    customer_price: string
+    currency: string
+    status: string
+  }
 }
 
 export interface LeaderStanding {
@@ -1469,8 +1765,12 @@ export const kaluta = {
         provenance?: string
         altText?: string
         signal?: AbortSignal
-        /** 'chat' accepts any file type; a post only formats every browser renders. */
-        purpose?: 'post' | 'chat'
+        /**
+         * 'chat' accepts any file type; a post only formats every browser renders.
+         * 'memorial' is a gallery photo or video: JPEG/PNG/WebP up to 25 MB, MP4/WebM up
+         * to 50 MB, and the bytes must be what the type says.
+         */
+        purpose?: 'post' | 'chat' | 'memorial'
       } = {},
     ): Promise<UploadedMedia> {
       const form = new FormData()
@@ -1666,11 +1966,23 @@ export const kaluta = {
     },
     create: (input: { name: string; description?: string; hierarchy?: string; scope?: string; scope_value?: string }) =>
       api.post<{ id: string; slug: string }>('/forums', { hierarchy: 'topic', ...input }),
-    threads: (forumId: string) => api.get<{ items: Thread[] }>(`/forums/${forumId}/threads`, { auth: false }),
+    threads: (forumId: string, sort: ThreadSort = 'recent') =>
+      api.get<{ items: Thread[] }>(`/forums/${forumId}/threads?sort=${sort}`, { auth: false }),
     createThread: (forumId: string, input: { title: string; body: string; lang?: string }) =>
       api.post<{ id: string }>(`/forums/${forumId}/threads`, input),
     thread: (threadId: string) => api.get<ThreadDetail>(`/threads/${threadId}`, { auth: false }),
     reply: (threadId: string, body: string) => api.post<{ id: string }>(`/threads/${threadId}/replies`, { body }),
+    /** What a forum has settled, with the discussions it came from. */
+    knowledge: (forumId: string, q = '') =>
+      api.get<{ items: KnowledgeEntry[] }>(
+        `/forums/${forumId}/knowledge${q ? `?q=${encodeURIComponent(q)}` : ''}`,
+        { auth: false },
+      ),
+    /** Upvote a reply, or take the vote back. One vote each, never on your own reply. */
+    upvote: (replyId: string) => api.post<{ upvotes: number; voted: boolean }>(`/replies/${replyId}/upvote`),
+    /** Mark a reply as the answer. Only the author of the thread can. */
+    acceptAnswer: (replyId: string) =>
+      api.post<{ accepted: boolean; reply_id: string }>(`/replies/${replyId}/accept`),
   },
 
   /**
@@ -1724,26 +2036,22 @@ export const kaluta = {
         body?: string | null
         mediaId?: string
         clientId?: string
-        /** The message being answered. The server ignores an id from another thread. */
         replyToId?: string | null
-        /** A sticker from the catalogue. The whole message; no text needed. */
+        /** Sends a standalone sticker: a catalogue id, no text, no file. */
         stickerId?: string | null
       },
     ) =>
-      api.post<{
-        id: string
-        created_at: string
-        client_id: string | null
-        duplicate?: boolean
-        reply_to_id?: string | null
-      }>(`/conversations/${conversationId}/messages`, {
-        body: message.body || null,
-        kind: message.mediaId ? 'media' : 'text',
-        media_id: message.mediaId,
-        client_id: message.clientId,
-        reply_to_id: message.replyToId ?? null,
-        sticker_id: message.stickerId ?? null,
-      }),
+      api.post<{ id: string; created_at: string; client_id: string | null; duplicate?: boolean }>(
+        `/conversations/${conversationId}/messages`,
+        {
+          body: message.body || null,
+          kind: message.stickerId ? 'sticker' : message.mediaId ? 'media' : 'text',
+          media_id: message.mediaId,
+          client_id: message.clientId,
+          reply_to_id: message.replyToId || undefined,
+          sticker_id: message.stickerId || undefined,
+        },
+      ),
 
     /** The sticker packs, as the server curates them. */
     stickers: () => api.get<{ packs: StickerPack[] }>('/stickers'),
@@ -1783,16 +2091,34 @@ export const kaluta = {
   family: {
     /** Searches your own family only — the server scopes it to your graph. */
     search: (q: string) => api.get<{ items: Person[] }>(`/family/search?q=${encodeURIComponent(q)}`),
-    addPerson: (input: Partial<Person> & { given_name: string }) =>
-      api.post<Person>('/family/persons', input),
+    /** Where the member stands: their own node, or null before they have added themselves. */
+    me: () => api.get<{ person: PersonDetail | null }>('/family/me'),
+    addPerson: (input: PersonFields & { user_id?: string }) => api.post<Person>('/family/persons', input),
+    person: (personId: string) => api.get<PersonDetail>(`/family/persons/${personId}`),
+    /** Only the fields sent change; `null` clears one. */
+    updatePerson: (personId: string, changes: Partial<PersonFields>) =>
+      api.patch<PersonDetail>(`/family/persons/${personId}`, changes),
+    /** Takes the person's relationships with them. */
+    deletePerson: (personId: string) => api.delete<void>(`/family/persons/${personId}`),
+    /** The person and the relationship are written together, or not at all. */
+    addRelative: (personId: string, relation: RelativeKind, person: PersonFields, extras: RelativeExtras = {}) =>
+      api.post<{
+        person: Person
+        relationship: { id: string; kind: string; from: string; to: string; role: ParentRole | null }
+        relationships: Array<{ id: string; kind: string; from: string; to: string; role: ParentRole | null }>
+      }>(`/family/persons/${personId}/relatives`, { relation, person, ...extras }),
     tree: (personId: string, depth = 3) =>
       // Authenticated on purpose: the tree is family-only, and the server
       // refuses a caller with no part in it.
       api.get<FamilyTree>(`/family/tree/${personId}?depth=${depth}`),
-    /** Browse — what the tree screen opens with. Search needs a real query. */
+    /** The people in the families you belong to. */
     persons: (limit = 30) => api.get<{ items: Person[] }>(`/family/persons?limit=${limit}`),
-    link: (input: { from_person_id: string; to_person_id: string; kind: string }) =>
+    link: (input: { from_person_id: string; to_person_id: string; kind: string; role?: ParentRole }) =>
       api.post<{ id: string; status: string }>('/family/relationships', input),
+    unlink: (relationshipId: string) => api.delete<void>(`/family/relationships/${relationshipId}`),
+    /** Say, or take back (null), whether a parent is the father or the mother. */
+    setRole: (relationshipId: string, role: ParentRole | null) =>
+      api.patch<{ id: string; role: ParentRole | null }>(`/family/relationships/${relationshipId}`, { role }),
     howRelated: (from: string, to: string) =>
       api.get<HowRelated>(`/family/how-related?from_person=${from}&to_person=${to}`),
     confirm: (personId: string, decision: 'confirm' | 'dispute', note?: string) =>
@@ -1867,6 +2193,22 @@ export const kaluta = {
         `/memorials/${id}/tributes/${tributeId}/moderate?decision=${decision}`,
       ),
 
+    gallery: (id: string) => api.get<Gallery>(`/memorials/${id}/media`),
+    addMedia: (id: string, input: { media_id: string; caption?: string; sensitive?: boolean }) =>
+      api.post<GalleryItem>(`/memorials/${id}/media`, input),
+    updateMedia: (
+      id: string,
+      itemId: string,
+      patch: Partial<{ caption: string | null; sensitive: boolean; provenance: string }>,
+    ) => api.patch<GalleryItem>(`/memorials/${id}/media/${itemId}`, patch),
+    /** Every item, once, in the order wanted. */
+    reorderMedia: (id: string, ids: string[]) =>
+      api.post<{ items: GalleryItem[] }>(`/memorials/${id}/media/reorder`, { ids }),
+    removeMedia: (id: string, itemId: string) => api.delete<void>(`/memorials/${id}/media/${itemId}`),
+    /** Put a visitor's approved photo in the gallery; the file stays the tribute's. */
+    promoteTribute: (id: string, tributeId: string) =>
+      api.post<GalleryItem>(`/memorials/${id}/media/from-tribute/${tributeId}`),
+
     events: (id: string) => api.get<{ items: MemorialEvent[] }>(`/memorials/${id}/events`),
     addEvent: (id: string, input: { year: number; month?: number; day?: number; title: string; body?: string }) =>
       api.post<MemorialEvent>(`/memorials/${id}/events`, input),
@@ -1902,33 +2244,107 @@ export const kaluta = {
   },
 
   market: {
-    products: (params: { q?: string; country?: string; limit?: number } = {}) => {
+    products: (
+      params: {
+        q?: string
+        country?: string
+        city?: string
+        kind?: string
+        min_price?: string
+        max_price?: string
+        sort?: 'recent' | 'price_asc' | 'price_desc'
+        limit?: number
+        offset?: number
+        /** Only the signed-in member's own active listings. Needs the token, unlike the public list. */
+        mine?: boolean
+      } = {},
+    ) => {
       const query = new URLSearchParams()
       if (params.q) query.set('q', params.q)
+      if (params.mine) query.set('mine', 'true')
+      if (params.offset) query.set('offset', String(params.offset))
       if (params.country) query.set('country', params.country)
+      if (params.city) query.set('city', params.city)
+      if (params.kind) query.set('kind', params.kind)
+      if (params.min_price) query.set('min_price', params.min_price)
+      if (params.max_price) query.set('max_price', params.max_price)
+      if (params.sort) query.set('sort', params.sort)
       query.set('limit', String(params.limit ?? 30))
-      return api.get<{ total: number; items: Product[] }>(`/commerce/products?${query}`, { auth: false })
+      return api.get<{ total: number; items: Product[] }>(`/commerce/products?${query}`, {
+        auth: params.mine === true,
+      })
     },
-    createProduct: (input: { title: string; description?: string; vendor_price: string; country?: string }) =>
+    createProduct: (input: {
+      title: string
+      description?: string
+      kind?: 'product' | 'service' | 'digital'
+      vendor_price: string
+      stock?: number | null
+      country?: string
+      city?: string
+      images?: string[]
+    }) =>
       api.post<{ id: string; pricing: Record<string, string> }>('/commerce/products', input),
-    order: (productId: string, quantity = 1) =>
+    order: (productId: string, quantity = 1, shipping?: OrderShipping) =>
       api.post<{ id: string; status: string; customer_price: string }>('/commerce/orders', {
         product_id: productId,
         quantity,
+        ...(shipping ? { shipping } : {}),
       }),
-    myOrders: () => api.get<{ items: Order[] }>('/commerce/orders/me'),
+    myOrders: (params: { status?: string; role?: 'buyer' | 'seller' } = {}) => {
+      const query = new URLSearchParams()
+      if (params.status) query.set('status', params.status)
+      if (params.role) query.set('role', params.role)
+      const qs = query.toString()
+      return api.get<{ items: Order[] }>(`/commerce/orders/me${qs ? `?${qs}` : ''}`)
+    },
     order_: (id: string) => api.get<Order>(`/commerce/orders/${id}`),
+
+    /** Public; signed in, the owner also gets the price breakdown. */
+    product: (id: string) => api.get<ProductDetail>(`/commerce/products/${id}`),
+    myProducts: () => api.get<{ items: MyProduct[] }>('/commerce/products/mine'),
+    updateProduct: (id: string, patch: ProductPatch) =>
+      api.patch<{ id: string; status: string; pricing: ProductPricing }>(`/commerce/products/${id}`, patch),
+    removeProduct: (id: string) => api.delete<{ id: string; status: string }>(`/commerce/products/${id}`),
+    sales: (status?: string) =>
+      api.get<{ total: number; items: Sale[] }>(
+        `/commerce/sales${status ? `?status=${encodeURIComponent(status)}` : ''}`,
+      ),
+    sellerFinances: () => api.get<SellerFinances>('/commerce/seller/finances'),
+    vendor: (id: string, params: { limit?: number; offset?: number } = {}) => {
+      const query = new URLSearchParams()
+      if (params.limit != null) query.set('limit', String(params.limit))
+      if (params.offset != null) query.set('offset', String(params.offset))
+      return api.get<StorefrontResponse>(`/commerce/vendors/${id}?${query}`, { auth: false })
+    },
 
     /** Who holds the money and for how long. Readable signed out on purpose. */
     escrowTerms: () => api.get<EscrowTerms>('/commerce/escrow/terms', { auth: false }),
 
     /** The seller says it has shipped. This does not release the money. */
-    markDelivered: (orderId: string, note = '') =>
-      api.post<Order>(`/commerce/orders/${orderId}/delivered`, { note }),
+    markDelivered: (
+      orderId: string,
+      input: string | { note?: string; carrier?: string; tracking_number?: string; tracking_url?: string } = '',
+    ) =>
+      api.post<Order>(
+        `/commerce/orders/${orderId}/delivered`,
+        typeof input === 'string' ? { note: input } : input,
+      ),
 
     /** The buyer releases the escrow. Only they can. */
     confirmDelivery: (orderId: string) =>
       api.post<{ id: string; status: string }>(`/commerce/orders/${orderId}/confirm-delivery`, {}),
+
+    /**
+     * Start paying for an order. The amount must be the order's price: the server
+     * checks it, so a different one is refused. Without a live payment rail the
+     * reply is a mock checkout that `settleMockPayment` completes; with one,
+     * `checkout_url` and `pay_address` say where to pay.
+     */
+    payOrder: (orderId: string, amount: string) =>
+      api.post<OrderPayment>('/payments/checkout', { purpose: 'order', amount, reference: orderId }),
+    settleMockPayment: (paymentId: string) =>
+      api.post<{ payment_id: string; status: string; mock: boolean }>(`/payments/${paymentId}/mock-settle`, {}),
 
     openDispute: (
       orderId: string,
@@ -1941,6 +2357,26 @@ export const kaluta = {
       api.post<{ ok: boolean; status: string }>(`/commerce/disputes/${id}/messages`, input),
     withdrawDispute: (id: string) => api.post<Dispute>(`/commerce/disputes/${id}/withdraw`, {}),
     concedeDispute: (id: string) => api.post<Dispute>(`/commerce/disputes/${id}/concede`, {}),
+
+    /** Buyer only, once the order is settled; one review per order. */
+    reviewOrder: (orderId: string, input: { rating: number; comment?: string }) =>
+      api.post<{ id: string; order_id: string; product_id: string; rating: number; comment: string | null }>(
+        `/commerce/orders/${orderId}/review`,
+        input,
+      ),
+    productReviews: (productId: string, params: { limit?: number; offset?: number } = {}) => {
+      const query = new URLSearchParams()
+      if (params.limit != null) query.set('limit', String(params.limit))
+      if (params.offset != null) query.set('offset', String(params.offset))
+      const qs = query.toString()
+      return api.get<ReviewsSummary>(`/commerce/products/${productId}/reviews${qs ? `?${qs}` : ''}`, {
+        auth: false,
+      })
+    },
+    vendorRating: (vendorId: string) =>
+      api.get<{ vendor_id: string; average: number; count: number }>(`/commerce/vendors/${vendorId}/rating`, {
+        auth: false,
+      }),
   },
 
   /** Kinjy Leaders — 5% of monthly revenue, split by commission earned. */

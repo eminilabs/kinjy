@@ -3,6 +3,8 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { AlertTriangle, BadgeCheck, Check, ClipboardCheck, ScanLine, Wallet, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { EASE, useReducedMotion } from '@/components/creators/motion-utils'
+import { Eyebrow } from '@/components/landing/PageKit'
+import { KL_CARD, KL_LABEL } from '@/components/landing/kl-classes'
 
 const VALID_ADDRESS = '0x8Ba1f109551bD432803012645Ac136ddd64DBA72'
 
@@ -50,24 +52,24 @@ export default function EligibilityGate() {
   const eligible = kyc && walletOk
 
   return (
-    <section className="noise-overlay twilight-field px-6 py-24 md:py-32">
-      <div className="mx-auto max-w-container">
-        <p className="eyebrow text-gold">Backoffice — Eligibility gate</p>
-        <h2 className="h2 mt-4 max-w-2xl">
-          Verified and wallet-ready, <span className="text-gold-grad font-display italic">or the escrow waits.</span>
+    <section className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]">
+      <div>
+        <Eyebrow>Backoffice — Eligibility gate</Eyebrow>
+        <h2 className="kl-h2 mt-5 max-w-[900px]">
+          Verified and wallet-ready, <span className="text-[var(--kl-gold-deep)]">or the escrow waits.</span>
         </h2>
-        <p className="body-lg mt-4 max-w-2xl text-text-mid">
+        <p className="kl-lead mt-6 !max-w-[680px]">
           To qualify for commission cashouts, a member must have a verified account and a crypto
           wallet address saved in their backoffice. Everyone still accrues — but ineligible members
           hold in escrow with a clear "action required" until both boxes tick green.
         </p>
 
-        <div className="mt-12 grid items-start gap-8 lg:grid-cols-2">
+        <div className="mt-12 grid items-start gap-8 grid-cols-[minmax(0,1fr)] lg:grid-cols-2">
           {/* checklist cards */}
           <div className="space-y-6">
             {/* Card 1: KinjyKYC */}
             <motion.div
-              className={cn('cloud-card p-6 transition-colors duration-300', kyc && 'shadow-gold-ring')}
+              className={cn(KL_CARD, 'p-6 transition-colors duration-300', kyc && '!border-[var(--kl-gold)]')}
               initial={reduced ? false : { opacity: 0, y: 24 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: '-15%' }}
@@ -106,7 +108,7 @@ export default function EligibilityGate() {
 
             {/* Card 2: wallet address with checksum validation */}
             <motion.div
-              className={cn('cloud-card p-6 transition-colors duration-300', walletOk && 'shadow-gold-ring')}
+              className={cn(KL_CARD, 'p-6 transition-colors duration-300', walletOk && '!border-[var(--kl-gold)]')}
               initial={reduced ? false : { opacity: 0, y: 24 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: '-15%' }}
@@ -128,7 +130,7 @@ export default function EligibilityGate() {
                   </p>
                   <div
                     className={cn(
-                      'mono-data mt-4 flex items-center gap-2 rounded-card-sm border bg-ink/70 px-3 py-2.5 text-xs transition-colors duration-300',
+                      'mono-data mt-4 flex items-center gap-2 rounded-card-sm border bg-[var(--kl-paper)] px-3 py-2.5 text-xs transition-colors duration-300',
                       walletOk ? 'border-success/40' : address.trim() ? 'border-danger/50' : 'border-white/15',
                     )}
                   >
@@ -176,13 +178,13 @@ export default function EligibilityGate() {
 
           {/* payout queue reacting */}
           <motion.div
-            className="cloud-card p-6 sm:p-8"
+            className={cn(KL_CARD, 'p-6 sm:p-8')}
             initial={reduced ? false : { opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-15%' }}
             transition={{ delay: 0.2, duration: 0.55, ease: EASE }}
           >
-            <p className="eyebrow text-text-low">Next Mass Payouts batch — live queue</p>
+            <p className={KL_LABEL}>Next Mass Payouts batch — live queue</p>
             <ul className="mt-5 space-y-3">
               {QUEUE.map((m) => {
                 const blocked = m.demo && !eligible

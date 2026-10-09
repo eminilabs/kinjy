@@ -39,6 +39,17 @@ const APP_ROUTES = [
   '/u',
 ]
 
+/** Public pages already on the new design: they bring their own navigation and
+ *  footer (components/landing/PublicShell), so the old marketing ones step aside. */
+const OWN_CHROME_PAGES = ['/', '/memorials', '/platform', '/feeds', '/creators', '/pricing', '/payments', '/safety', '/developers', '/app', '/join', '/admin', '/commerce', '/family', '/assistant']
+
+/** Public pages with a dynamic part (/p/:postId, /memorial/:code) and the sign-in helpers. */
+const OWN_CHROME_PREFIXES = ['/p/', '/memorial/', '/reset-password']
+
+function hasOwnChrome(pathname: string): boolean {
+  return OWN_CHROME_PAGES.includes(pathname) || OWN_CHROME_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+}
+
 export function isAppRoute(pathname: string): boolean {
   return APP_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`))
 }
@@ -61,7 +72,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   // The landing page brings its own navigation, footer and paper palette (the
   // "Kinjy Landing" design); the dark marketing chrome around it would frame
   // a light page in a second, different header.
-  const ownChrome = inApp || location.pathname === '/'
+  const ownChrome = inApp || hasOwnChrome(location.pathname)
 
   // Scroll behavior on route change: honor hash deep links (e.g.
   // /family#reunion-planner) after the lazy page mounts; otherwise scroll to top.
@@ -106,7 +117,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       {!ownChrome && <Footer />}
       {showAssistant && <LiveAssistant />}
       {/* Film grain belongs to the dark surfaces; on white paper it reads as dirt. */}
-      {location.pathname !== '/' && <div className="global-grain" aria-hidden="true" />}
+      {!hasOwnChrome(location.pathname) && <div className="global-grain" aria-hidden="true" />}
     </div>
   )
 }

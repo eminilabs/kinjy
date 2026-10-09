@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { AlertCircle, Fingerprint, Loader2, ShieldCheck } from 'lucide-react'
-import ArcButton from '@/components/ui-kit/ArcButton'
+import { AlertCircle, Loader2 } from 'lucide-react'
+import '@/components/landing/landing.css'
+import { KlButton } from '@/components/landing/PageKit'
+import { HeroCollage } from '@/components/landing/LandingHero'
+import { Brand, ThemeToggle } from '@/components/landing/shared'
+import { useLandingTheme } from '@/components/landing/useLandingTheme'
 import { useAuth } from '@/hooks/useAuth'
 import { ApiError } from '@/lib/api'
 import { clearPendingRef, pendingRef } from '@/lib/share'
@@ -59,10 +63,13 @@ function passwordProblem(value: string): string | null {
 }
 
 export default function SignIn() {
-  const { t } = useTranslation()
+  // This page is English only, whatever language the browser asks for.
+  const { i18n } = useTranslation()
+  const t = i18n.getFixedT('en')
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const { user, signIn, signUp } = useAuth()
+  const { theme } = useLandingTheme()
 
   const [mode, setMode] = useState<Mode>(params.get('mode') === 'signup' ? 'signup' : 'signin')
   const [email, setEmail] = useState(params.get('email') ?? '')
@@ -160,194 +167,217 @@ export default function SignIn() {
     }
   }
 
-  const field = 'w-full rounded-card-sm bg-ink-2/70 border border-white/10 px-4 py-3 text-text-hi placeholder:text-text-low focus:border-gold/50 focus:outline-none'
+  const field =
+    'w-full rounded-[12px] border border-[var(--kl-paper-2)] bg-[var(--kl-bg)] px-4 py-3 text-[16px] text-[var(--kl-ink)] placeholder:text-[var(--kl-low)] focus:border-[var(--kl-gold)] focus:outline-none focus:ring-2 focus:ring-[var(--kl-gold)]/25'
+  const label = 'mb-1.5 block text-[13px] font-semibold text-[var(--kl-mid)]'
+  const hint = 'mt-1.5 block text-[13px] leading-snug text-[var(--kl-low)]'
+  const fieldError = 'mt-1.5 block text-[13px] text-[#B23B3B]'
 
   return (
-    <section className="twilight-field noise-overlay flex min-h-[calc(100svh-72px)] items-center px-6 py-16">
-      <div className="mx-auto grid w-full max-w-container items-center gap-14 lg:grid-cols-[1fr_460px]">
-        {/* Left: promise */}
-        <div className="hidden lg:block">
-          <p className="eyebrow text-gold">{t('signin.yourSocietyAwaits')}</p>
-          <h1 className="h1 mt-4 max-w-lg">
-            One account.{' '}
-            <span className="font-display italic text-gold-grad">{spelled(OPEN_MODULES)} modules.</span>
-          </h1>
-          <ul className="mt-8 space-y-4 text-text-mid">
-            <li className="flex items-start gap-3">
-              <Fingerprint size={18} className="mt-0.5 shrink-0 text-gold" aria-hidden="true" />
-              <span>
-                <strong className="text-text-hi">{t('signin.passkeysNotABiometric')}</strong> {t('signin.yourFingerprintOrFace')}
-              </span>
-            </li>
-            <li className="flex items-start gap-3">
-              <ShieldCheck size={18} className="mt-0.5 shrink-0 text-gold" aria-hidden="true" />
-              <span>
-                <strong className="text-text-hi">{t('signin.leaveWheneverYouWant')}</strong> {t('signin.deactivateOrDeleteFrom')}
-              </span>
-            </li>
-          </ul>
-        </div>
-
+    <div
+      className={`kl kl-plain ${theme === 'dark' ? 'force-dark' : 'force-light'} min-h-screen bg-[var(--kl-bg)] text-[var(--kl-ink)] lg:h-screen lg:overflow-hidden`}
+      data-kl-theme={theme}
+    >
+      <div className="grid min-h-screen grid-cols-[minmax(0,1fr)] lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
         {/* Right: the form */}
-        <div className="cloud-card p-7 md:p-8">
-          <div className="flex gap-1 rounded-full bg-ink-2/60 p-1">
-            {(['signin', 'signup'] as Mode[]).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => {
-                  setMode(m)
-                  setError(null)
-                }}
-                className={cn(
-                  'flex-1 rounded-full px-4 py-2 text-sm font-semibold',
-                  mode === m ? 'bg-gold text-ink' : 'text-text-mid hover:text-text-hi',
-                )}
-              >
-                {m === 'signin' ? 'Sign in' : 'Create account'}
-              </button>
-            ))}
+        <main className="flex min-w-0 flex-col lg:order-2 lg:h-full lg:overflow-y-auto px-[clamp(20px,5vw,72px)] py-6">
+          <div className="flex items-center justify-between">
+            <Link to="/" aria-label="Kinjy home" className="lg:invisible">
+              <Brand size={40} text={22} />
+            </Link>
+            <ThemeToggle />
           </div>
 
-          <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
-            {mode === 'signup' && (
-              <>
-                <label className="block">
-                  <span className="caption mb-1.5 block">{t('signin.yourName')}</span>
-                  <input
-                    className={field}
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder={t('signin.yourFullName')}
-                    autoComplete="name"
-                  />
-                </label>
-                <label className="block">
-                  <span className="caption mb-1.5 block">{t('signin.dateOfBirth')}</span>
-                  <input
-                    type="date"
-                    className={field}
-                    value={birthDate}
-                    onChange={(e) => setBirthDate(e.target.value)}
-                    autoComplete="bday"
-                    max={new Date().toISOString().slice(0, 10)}
-                    aria-describedby="dob-why"
-                  />
-                  {/* Says what it is for, and nothing about what would qualify.
-                      Telling someone the minimum age is telling them which date
-                      to type instead. */}
-                  <span id="dob-why" className="caption mt-1.5 block">
-                    {t('signin.weUseThisTo')}
-                  </span>
-                </label>
-                <label className="block">
-                  <span className="caption mb-1.5 block">{t('signin.handle')}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-text-low">@</span>
+          <div className="mx-auto flex w-full max-w-[460px] flex-1 flex-col justify-center py-10">
+            <h1 className="text-[clamp(30px,3.4vw,42px)] font-bold leading-[1.05] tracking-[-0.035em]">
+              {mode === 'signin' ? 'Welcome back' : 'Create your account'}
+            </h1>
+            <p className="mt-2 text-[15px] leading-relaxed text-[var(--kl-mid)]">
+              {mode === 'signin'
+                ? 'Sign in to pick up where you left off.'
+                : `One account opens ${spelled(OPEN_MODULES).toLowerCase()} modules.`}
+            </p>
+
+            <div className="mt-7 flex gap-1 rounded-full bg-[var(--kl-paper)] p-1">
+              {(['signin', 'signup'] as Mode[]).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => {
+                    setMode(m)
+                    setError(null)
+                  }}
+                  className={cn(
+                    'flex-1 rounded-full px-4 py-2.5 text-sm font-semibold transition-colors',
+                    mode === m ? 'kl-sheen' : 'text-[var(--kl-mid)] hover:text-[var(--kl-ink)]',
+                  )}
+                >
+                  {m === 'signin' ? 'Sign in' : 'Create account'}
+                </button>
+              ))}
+            </div>
+
+            <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
+              {mode === 'signup' && (
+                <>
+                  <label className="block">
+                    <span className={label}>{t('signin.yourName')}</span>
                     <input
                       className={field}
-                      value={handle}
-                      onChange={(e) => {
-                        setHandleEdited(true)
-                        setHandle(e.target.value.toLowerCase())
-                      }}
-                      placeholder="your.handle"
-                      autoComplete="username"
-                      aria-invalid={Boolean(handleError)}
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      placeholder={t('signin.yourFullName')}
+                      autoComplete="name"
                     />
-                  </div>
-                  {handleError && <span className="mt-1.5 block text-xs text-red-300">{handleError}</span>}
-                </label>
-              </>
-            )}
-
-            <label className="block">
-              <span className="caption mb-1.5 block">{t('signin.email')}</span>
-              <input
-                className={field}
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                autoComplete="email"
-                required
-              />
-            </label>
-
-            <label className="block">
-              <span className="caption mb-1.5 block">{t('signin.password')}</span>
-              <input
-                className={field}
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={mode === 'signup' ? 'At least 10 characters' : '••••••••••'}
-                autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-                aria-invalid={Boolean(passwordError)}
-                required
-              />
-              {passwordError && <span className="mt-1.5 block text-xs text-red-300">{passwordError}</span>}
-              {mode === 'signin' && (
-                <Link
-                  to="/reset-password"
-                  className="mt-2 inline-block text-xs text-text-mid hover:text-gold"
-                >
-                  {t('signin.forgotPassword')}
-                </Link>
+                  </label>
+                  <label className="block">
+                    <span className={label}>{t('signin.dateOfBirth')}</span>
+                    <input
+                      type="date"
+                      className={field}
+                      value={birthDate}
+                      onChange={(e) => setBirthDate(e.target.value)}
+                      autoComplete="bday"
+                      max={new Date().toISOString().slice(0, 10)}
+                      aria-describedby="dob-why"
+                    />
+                    {/* Says what it is for, and nothing about what would qualify.
+                        Telling someone the minimum age is telling them which date
+                        to type instead. */}
+                    <span id="dob-why" className={hint}>
+                      {t('signin.weUseThisTo')}
+                    </span>
+                  </label>
+                  <label className="block">
+                    <span className={label}>{t('signin.handle')}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[var(--kl-low)]">@</span>
+                      <input
+                        className={field}
+                        value={handle}
+                        onChange={(e) => {
+                          setHandleEdited(true)
+                          setHandle(e.target.value.toLowerCase())
+                        }}
+                        placeholder="your.handle"
+                        autoComplete="username"
+                        aria-invalid={Boolean(handleError)}
+                      />
+                    </div>
+                    {handleError && <span className={fieldError}>{handleError}</span>}
+                  </label>
+                </>
               )}
-            </label>
 
-            {mode === 'signup' && (
               <label className="block">
-                <span className="caption mb-1.5 block">{t('signin.referralCodeOptional')}</span>
+                <span className={label}>{t('signin.email')}</span>
                 <input
                   className={field}
-                  value={referral}
-                  onChange={(e) => setReferral(e.target.value.toUpperCase())}
-                  placeholder="ABCD1234"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  required
                 />
-                <span className="mt-1.5 block text-xs text-text-low">
-                  {t('signin.creditsWhoeverInvitedYou')}
-                </span>
               </label>
-            )}
 
-            {error && (
-              <div
-                role="alert"
-                className="flex items-start gap-2.5 rounded-card-sm border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200"
-              >
-                <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
-                <span>{error}</span>
-              </div>
-            )}
+              <label className="block">
+                <span className={label}>{t('signin.password')}</span>
+                <input
+                  className={field}
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={mode === 'signup' ? 'At least 10 characters' : '••••••••••'}
+                  autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                  aria-invalid={Boolean(passwordError)}
+                  required
+                />
+                {passwordError && <span className={fieldError}>{passwordError}</span>}
+                {mode === 'signin' && (
+                  <Link
+                    to="/reset-password"
+                    className="mt-2 inline-block text-[13px] text-[var(--kl-mid)] hover:text-[var(--kl-gold-deep)]"
+                  >
+                    {t('signin.forgotPassword')}
+                  </Link>
+                )}
+              </label>
 
-            <ArcButton size="lg" className="w-full justify-center" disabled={!canSubmit}>
-              {submitting && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
-              {mode === 'signin' ? 'Sign in' : 'Create your account'}
-            </ArcButton>
-          </form>
+              {mode === 'signup' && (
+                <label className="block">
+                  <span className={label}>{t('signin.referralCodeOptional')}</span>
+                  <input
+                    className={field}
+                    value={referral}
+                    onChange={(e) => setReferral(e.target.value.toUpperCase())}
+                    placeholder="ABCD1234"
+                  />
+                  <span className={hint}>
+                    {t('signin.creditsWhoeverInvitedYou')}
+                  </span>
+                </label>
+              )}
 
-          <p className="caption mt-5 text-center">
-            {mode === 'signin' ? (
-              <>
-                No account yet?{' '}
-                <button type="button" onClick={() => setMode('signup')} className="text-gold-soft hover:underline">
-                  {t('signin.createOne')}
-                </button>
-              </>
-            ) : (
-              <>
-                By creating an account you accept the{' '}
-                <Link to="/safety" className="text-gold-soft hover:underline">
-                  {t('signin.communityStandards')}
-                </Link>
-                .
-              </>
-            )}
-          </p>
-        </div>
+              {error && (
+                <div
+                  role="alert"
+                  className="flex items-start gap-2.5 rounded-[12px] border border-[#B23B3B]/40 bg-[#B23B3B]/10 px-4 py-3 text-sm text-[#B23B3B]"
+                >
+                  <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <KlButton size="lg" className="w-full" disabled={!canSubmit} type="submit">
+                {submitting && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
+                {mode === 'signin' ? 'Sign in' : 'Create your account'}
+              </KlButton>
+            </form>
+
+            <p className="mt-5 text-center text-[13px] text-[var(--kl-low)]">
+              {mode === 'signin' ? (
+                <>
+                  No account yet?{' '}
+                  <button type="button" onClick={() => setMode('signup')} className="font-semibold text-[var(--kl-gold-deep)] hover:underline">
+                    {t('signin.createOne')}
+                  </button>
+                </>
+              ) : (
+                <>
+                  By creating an account you accept the{' '}
+                  <Link to="/safety" className="font-semibold text-[var(--kl-gold-deep)] hover:underline">
+                    {t('signin.communityStandards')}
+                  </Link>
+                  .
+                </>
+              )}
+            </p>
+          </div>
+        </main>
+
+        {/* Left: the landing, as a showcase */}
+        <aside
+          aria-label="About Kinjy"
+          className="relative hidden min-w-0 overflow-hidden lg:order-1 lg:block lg:h-full"
+          style={{ background: 'linear-gradient(160deg, var(--kl-stage-a), var(--kl-stage-b))' }}
+        >
+          <div aria-hidden="true" className="absolute -right-24 -top-24 h-[420px] w-[420px] rounded-full opacity-35 blur-[110px]" style={{ background: 'var(--kl-sky)' }} />
+          <div aria-hidden="true" className="absolute -bottom-32 -left-24 h-[420px] w-[420px] rounded-full opacity-40 blur-[110px]" style={{ background: '#D9A648' }} />
+          <div className="relative flex h-full items-center justify-center px-[clamp(32px,5vw,84px)] py-10">
+            <Link to="/" aria-label="Kinjy home" className="absolute left-[clamp(32px,5vw,84px)] top-6">
+              <Brand size={40} text={22} />
+            </Link>
+            <div className="flex w-full flex-col items-center">
+              <HeroCollage english className="relative w-[min(100%,min(480px,calc((100vh-240px)/1.08)))] shrink-0" />
+              <p className="mt-6 max-w-[420px] text-center text-[17px] leading-[1.55] text-[var(--kl-mid)]" style={{ textWrap: 'pretty' }}>
+                {t('hero.sub')}
+              </p>
+            </div>
+          </div>
+        </aside>
       </div>
-    </section>
+    </div>
   )
 }

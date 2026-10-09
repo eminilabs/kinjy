@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react'
 import { animate, motion } from 'framer-motion'
 import { Check, Crown } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { KineticWords } from '@/components/creators/Kinetic'
+import { Link } from 'react-router'
+import { KineticWords } from '@/components/platform/shared'
+import { Eyebrow } from '@/components/landing/PageKit'
+import { useJoinTarget } from '@/components/landing/useJoinTarget'
 import { EASE, useReducedMotion } from '@/components/creators/motion-utils'
 import { FEATURES, OPEN_MODULES } from '@/lib/features'
 
@@ -109,62 +112,46 @@ function PriceFigure({ value, yearly }: { value: number; yearly: boolean }) {
   }, [value, reduced])
 
   return (
-    <span className="font-mono text-4xl font-semibold text-text-hi">
-      ${value === 0 ? '0' : display.toFixed(value % 1 === 0 ? 0 : 2)}
-      <span className="ml-1 text-sm font-normal text-text-low">{value === 0 ? '' : yearly ? '/yr' : '/mo'}</span>
+    <span className="flex items-baseline gap-1.5">
+      <span className="kl-serif text-[56px] font-semibold leading-none tracking-[-.02em]">
+        ${value === 0 ? '0' : display.toFixed(value % 1 === 0 ? 0 : 2)}
+      </span>
+      <span className="text-[15px] text-[var(--kl-low)]">{value === 0 ? 'forever' : yearly ? '/ year' : '/ month'}</span>
     </span>
   )
 }
 
-/** Sections 1+2 — Pricing hero with billing toggle and the three tiers. */
+/** Sections 1+2 — the landing's split hero with the billing switch, then the three tiers. */
 export default function PricingTiers() {
   const reduced = useReducedMotion()
   const [yearly, setYearly] = useState(false)
+  const join = useJoinTarget()
+  const rise = (delay: number) =>
+    reduced ? {} : { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.6, delay, ease: EASE } }
 
   return (
-    <section className="noise-overlay twilight-field px-6 pb-24 pt-20 md:pb-32 md:pt-28">
-      <div className="mx-auto max-w-container">
-        {/* Hero */}
-        <div className="mx-auto max-w-2xl text-center">
-          <motion.p
-            className="eyebrow text-gold"
-            initial={reduced ? false : { opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: EASE }}
-          >
-            Pricing
-          </motion.p>
+    <section className="kl-pad-x pb-[clamp(72px,9vw,120px)] pt-14">
+      {/* Hero */}
+      <div className="flex flex-col gap-10 lg:flex-row lg:items-end lg:justify-between">
+        <div className="max-w-[820px]">
+          <motion.div {...rise(0.1)}>
+            <Eyebrow>Pricing</Eyebrow>
+          </motion.div>
           <KineticWords
-            className="display-lg mt-5"
-            ariaLabel="Free is genuinely useful. Paid is genuinely worth it."
-            words={[
-              { text: 'Free' },
-              { text: 'is' },
-              { text: 'genuinely' },
-              { text: 'useful.' },
-              { text: 'Paid' },
-              { text: 'is' },
-              { text: 'genuinely' },
-              { text: 'worth', gold: true },
-              { text: 'it.', gold: true },
-            ]}
+            as="h1"
+            text="Free is genuinely useful. Paid is genuinely worth it."
+            className="kl-serif mt-6 block text-balance text-[clamp(42px,6vw,88px)] font-semibold leading-[0.98] tracking-[-0.02em]"
           />
-          <motion.p
-            className="body-lg mt-6 text-text-mid"
-            initial={reduced ? false : { opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.75, duration: 0.7, ease: EASE }}
-          >
+          <motion.p className="mt-8 max-w-[520px] text-[19px] leading-[1.55] text-[var(--kl-mid)]" {...rise(0.45)}>
             One society, three ways in. Cancel anytime, export everything, delete everything — your
             account is yours.
           </motion.p>
+        </div>
 
-          {/* Billing toggle */}
-          <motion.div
-            className="mt-8 inline-flex items-center rounded-full cloud-glass p-1"
-            initial={reduced ? false : { opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.9, duration: 0.5, ease: EASE }}
+        {/* Billing switch */}
+        <motion.div {...rise(0.6)} className="shrink-0">
+          <div
+            className="inline-flex items-center rounded-full border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] p-1.5"
             role="group"
             aria-label="Billing period"
           >
@@ -177,100 +164,102 @@ export default function PricingTiers() {
                   aria-pressed={active}
                   onClick={() => setYearly(label === 'Yearly')}
                   className={cn(
-                    'relative rounded-full px-5 py-2 text-sm font-semibold transition-colors duration-200',
-                    active ? 'text-ink' : 'text-text-mid hover:text-text-hi',
+                    'relative rounded-full px-6 py-2.5 text-[15px] font-semibold transition-colors duration-200',
+                    active ? 'text-[#0B0E1D]' : 'text-[var(--kl-mid)] hover:text-[var(--kl-ink)]',
                   )}
                 >
                   {active && (
                     <motion.span
                       layoutId="billing-knob"
-                      className="absolute inset-0 rounded-full bg-gradient-to-br from-gold-soft to-gold shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]"
+                      className="kl-sheen absolute inset-0 rounded-full"
                       transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                     />
                   )}
                   <span className="relative">
                     {label}
-                    {label === 'Yearly' && <span className={cn('ml-1.5 text-[0.7rem]', active ? 'text-ink/80' : 'text-gold-soft')}>save ~18%</span>}
+                    {label === 'Yearly' && (
+                      <span className={cn('kl-mono ml-2 text-[11px]', active ? 'text-[#0B0E1D]/70' : 'text-[var(--kl-gold-deep)]')}>−18%</span>
+                    )}
                   </span>
                 </button>
               )
             })}
-          </motion.div>
-        </div>
+          </div>
+        </motion.div>
+      </div>
 
-        {/* Tier cards */}
-        <div className="mt-16 grid items-start gap-6 lg:grid-cols-3">
-          {TIERS.map((tier, ti) => (
-            <motion.div
-              key={tier.name}
-              initial={reduced ? false : { opacity: 0, y: 56 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-15%' }}
-              transition={{ delay: ti * 0.12, duration: 0.6, ease: EASE }}
-              whileHover={reduced ? undefined : { y: -6 }}
-              className={cn(
-                'cloud-card relative p-7 transition-shadow duration-300',
-                tier.featured && 'lg:-mt-4 bg-gradient-to-b from-gold/[0.10] to-transparent',
-              )}
-              style={tier.featured ? { boxShadow: '0 0 0 1.5px rgba(217,166,72,0.55), 0 28px 64px -16px rgba(0,0,0,0.6)' } : undefined}
-            >
+      {/* Tier cards */}
+      <div className="mt-16 grid items-stretch gap-4 lg:grid-cols-3">
+        {TIERS.map((tier, ti) => (
+          <motion.div
+            key={tier.name}
+            initial={reduced ? false : { opacity: 0, y: 40 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-10%' }}
+            transition={{ delay: ti * 0.1, duration: 0.6, ease: EASE }}
+            className={cn(
+              'relative flex flex-col overflow-hidden rounded-[20px] border p-8',
+              tier.featured
+                ? 'border-[var(--kl-gold)] shadow-[0_0_0_1px_var(--kl-gold),0_40px_80px_-40px_rgba(169,118,28,.55)]'
+                : ti === 1
+                  ? 'border-[var(--kl-paper-2)] bg-[var(--kl-paper)]'
+                  : 'border-[var(--kl-paper-2)] bg-[var(--kl-surface)]',
+            )}
+            style={tier.featured ? { background: 'linear-gradient(170deg, var(--kl-stage-a), var(--kl-stage-b))' } : undefined}
+          >
+            {tier.featured && (
+              <>
+                <div aria-hidden="true" className="kl-sheen absolute -right-20 -top-24 h-[260px] w-[260px] rounded-full opacity-40 blur-[80px]" />
+                <div aria-hidden="true" className="absolute -bottom-24 -left-16 h-[220px] w-[220px] rounded-full bg-[var(--kl-sky)] opacity-25 blur-[80px]" />
+              </>
+            )}
+            <div className="relative flex items-center justify-between gap-3">
+              <h3 className="kl-serif text-[28px] font-semibold">{tier.name}</h3>
               {tier.featured && (
-                <span className="absolute -top-3.5 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-1.5 text-xs font-bold text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]">
+                <span className="kl-sheen inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold">
                   <Crown size={12} aria-hidden="true" /> Most loved
                 </span>
               )}
-              <h3 className={cn('font-display text-2xl', tier.featured ? 'text-gold-grad' : 'text-text-hi')}>{tier.name}</h3>
-              <p className="caption mt-1">{tier.tagline}</p>
-              <div className="mt-5">
-                <PriceFigure value={yearly ? tier.yearly : tier.monthly} yearly={yearly} />
-                {tier.yearly > 0 && (
-                  <p className="mono-data mt-1 text-[0.68rem] text-text-low">
-                    {yearly ? `≈ $${(tier.yearly / 12).toFixed(2)}/mo` : `$${tier.yearly}/yr — save ~18%`}
-                  </p>
-                )}
-              </div>
-              <ul className="mt-6 space-y-3">
-                {tier.features.map((f, fi) => (
-                  <motion.li
-                    key={f.label}
-                    initial={reduced ? false : { opacity: 0, x: -12 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    viewport={{ once: true, margin: '-10%' }}
-                    transition={{ delay: 0.3 + ti * 0.12 + fi * 0.03, duration: 0.35, ease: EASE }}
-                    className="group relative flex items-start gap-2.5"
-                  >
-                    <Check size={15} className={cn('mt-1 shrink-0', tier.featured ? 'text-gold' : 'text-success')} aria-hidden="true" />
-                    <span className={cn('text-sm leading-snug', f.strong ? 'font-semibold text-text-hi' : 'text-text-mid')}>
-                      {f.label}
-                    </span>
-                    {/* one-line explainer tooltip */}
-                    <span className="pointer-events-none absolute -top-2 left-6 z-10 w-56 -translate-y-full rounded-card-sm border border-white/10 bg-ink-2/95 px-3 py-2 text-[0.7rem] leading-snug text-text-mid opacity-0 shadow-cloud backdrop-blur-md transition-opacity duration-200 group-hover:opacity-100">
-                      {f.tip}
-                    </span>
-                  </motion.li>
-                ))}
-              </ul>
-              <button
-                type="button"
-                className={cn(
-                  'mt-8 w-full rounded-full py-3 text-sm font-bold transition',
-                  tier.featured
-                    ? 'bg-gradient-to-br from-gold-soft to-gold text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] hover:brightness-110'
-                    : 'cloud-glass text-text-hi hover:border-gold/40 hover:text-gold-soft',
-                )}
-              >
-                {tier.cta}
-              </button>
-            </motion.div>
-          ))}
-        </div>
-
-        {/* What the plans have in common, said once and plainly. */}
-        <p className="mx-auto mt-10 max-w-2xl text-center text-sm leading-relaxed text-text-low">
-          Advertising is part of every plan and is on by default. Premium members can switch ad display off
-          or back on whenever they like.
-        </p>
+            </div>
+            <p className="relative mt-1 text-[15px] text-[var(--kl-mid)]">{tier.tagline}</p>
+            <div className="relative mt-7">
+              <PriceFigure value={yearly ? tier.yearly : tier.monthly} yearly={yearly} />
+              <p className="kl-mono mt-2 h-4 text-[11px] text-[var(--kl-low)]">
+                {tier.yearly > 0 && (yearly ? `≈ $${(tier.yearly / 12).toFixed(2)} / month` : `$${tier.yearly} / year — save ~18%`)}
+              </p>
+            </div>
+            <ul className="relative mt-7 flex flex-1 flex-col gap-3 border-t border-[var(--kl-paper-2)] pt-7">
+              {tier.features.map((f) => (
+                <li key={f.label} className="group relative flex items-start gap-2.5" tabIndex={0}>
+                  <Check size={16} className="mt-0.5 shrink-0 text-[var(--kl-gold-deep)]" aria-hidden="true" />
+                  <span className={cn('text-[15px] leading-snug', f.strong ? 'font-semibold' : 'text-[var(--kl-mid)]')}>{f.label}</span>
+                  {/* one-line explainer tooltip */}
+                  <span className="kl-card-shadow pointer-events-none absolute -top-2 left-6 z-10 w-60 -translate-y-full rounded-[12px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] px-3 py-2 text-xs leading-snug text-[var(--kl-mid)] opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus:opacity-100">
+                    {f.tip}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <Link
+              to={join.to}
+              className={cn(
+                'relative mt-9 rounded-[12px] p-3.5 text-center text-[15px] font-bold transition',
+                tier.featured
+                  ? 'kl-sheen shadow-[0_14px_30px_-12px_rgba(169,118,28,.55)] hover:-translate-y-0.5'
+                  : 'border border-[var(--kl-ink)] bg-[var(--kl-surface)] hover:bg-[var(--kl-ink)] hover:!text-[var(--kl-bg)]',
+              )}
+            >
+              {tier.cta}
+            </Link>
+          </motion.div>
+        ))}
       </div>
+
+      {/* What the plans have in common, said once and plainly. */}
+      <p className="mx-auto mt-10 max-w-2xl text-center text-sm leading-relaxed text-[var(--kl-low)]">
+        Advertising is part of every plan and is on by default. Premium members can switch ad display off
+        or back on whenever they like.
+      </p>
     </section>
   )
 }

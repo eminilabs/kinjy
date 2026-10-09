@@ -1,109 +1,96 @@
-import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { ArrowDown, MousePointerClick } from 'lucide-react'
-import { ArcButton } from '@/components/ui-kit'
+import { KineticWords } from '@/components/platform/shared'
+import { Eyebrow, Stage } from '@/components/landing/PageKit'
 
-const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
+const EASE = [0.22, 1, 0.36, 1] as const
 
-/** Section 1 — "Step inside": glass door panels part to reveal the app. */
+const CHIPS = ['Home', 'Feeds', 'Forums', 'Circles', 'Create', 'Memorials']
+
+/** Section 1 — the landing's split: the promise, and a sketch of the app window it opens on. */
 export default function EnterHero() {
-  const [open, setOpen] = useState(false)
+  const reduced = useReducedMotion()
+  const rise = (delay: number) =>
+    reduced ? {} : { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.6, delay, ease: EASE } }
 
   const enter = () => {
-    setOpen(true)
-    setTimeout(() => {
-      document.getElementById('app-frame')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }, 700)
+    document.getElementById('app-frame')?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' })
   }
 
-  // also part the doors once the visitor scrolls past 60% of the hero
-  useEffect(() => {
-    const onScroll = () => {
-      if (window.scrollY > window.innerHeight * 0.42) setOpen(true)
-    }
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
-
   return (
-    <section className="twilight-field noise-overlay relative -mt-[72px] flex min-h-[calc(70dvh+72px)] items-center justify-center overflow-hidden px-6 pt-[72px]">
-      {/* faint app preview behind the doors */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 bottom-0 top-[72px] bg-cover bg-top opacity-25"
-        style={{ backgroundImage: 'url(/app-feed-mock.jpg)' }}
-      />
-
-      <div className="relative z-10 mx-auto max-w-3xl text-center">
-        <motion.p
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: EASE }}
-          className="eyebrow text-gold"
-        >
-          Live demo
-        </motion.p>
-        <h1 className="display-lg mt-5">
-          {'This is Kinjy, running.'.split(' ').map((w, i) => (
-            <motion.span
-              key={i}
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.12 + i * 0.08, duration: 0.65, ease: EASE }}
-              className="inline-block pe-[0.26em] last:pe-0"
-            >
-              {w === 'running.' ? <span className="text-gold-grad">{w}</span> : w}
-            </motion.span>
-          ))}
-        </h1>
-        <motion.p
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.55, duration: 0.55, ease: EASE }}
-          className="body-lg mx-auto mt-5 max-w-xl text-text-mid"
-        >
+    <header className="kl-split kl-pad-x gap-[clamp(40px,6vw,96px)] pb-24 pt-14">
+      <div className="min-w-0">
+        <motion.div {...rise(0.1)}>
+          <Eyebrow>Live demo</Eyebrow>
+        </motion.div>
+        <KineticWords
+          as="h1"
+          text="This is Kinjy, running."
+          className="kl-serif mt-6 block text-balance text-[clamp(44px,6.6vw,96px)] font-semibold leading-[0.96] tracking-[-0.02em]"
+        />
+        <motion.p className="mt-8 max-w-[480px] text-[19px] leading-[1.55] text-[var(--kl-mid)]" {...rise(0.45)}>
           A real slice of the product — click everything. Data is simulated; the experience is not.
         </motion.p>
-        <motion.div
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.7, duration: 0.55, ease: EASE }}
-          className="mt-9"
-        >
-          <ArcButton variant="gold" size="lg" onClick={enter}>
+        <motion.div className="mt-10 flex flex-wrap items-center gap-4" {...rise(0.6)}>
+          <button
+            type="button"
+            onClick={enter}
+            className="kl-sheen inline-flex items-center gap-[18px] rounded-[20px] py-[7px] pe-[7px] ps-[30px] text-[17px] font-semibold shadow-[0_14px_30px_-12px_rgba(169,118,28,.55)] transition-transform hover:-translate-y-0.5"
+          >
             <MousePointerClick size={17} aria-hidden="true" /> Enter the app
-          </ArcButton>
+            <span className="grid h-12 w-12 place-items-center rounded-full bg-white text-[var(--kl-night)]" aria-hidden="true">
+              <ArrowDown size={18} />
+            </span>
+          </button>
+          <span className="flex items-center gap-1.5 text-sm text-[var(--kl-low)]">
+            <ArrowDown size={13} aria-hidden="true" /> or keep scrolling
+          </span>
         </motion.div>
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.1 }}
-          className="caption mt-6 flex items-center justify-center gap-1.5"
-        >
-          <ArrowDown size={13} aria-hidden="true" /> or keep scrolling
-        </motion.p>
       </div>
 
-      {/* the two glass door panels */}
-      {(['left', 'right'] as const).map((side) => (
-        <motion.div
-          key={side}
-          aria-hidden="true"
-          initial={false}
-          animate={{ x: open ? (side === 'left' ? '-102%' : '102%') : '0%' }}
-          transition={{ duration: 0.9, ease: EASE }}
-          className="cloud-glass absolute inset-y-0 z-20 w-1/2"
-          style={{
-            [side]: 0,
-            background: 'linear-gradient(160deg, rgba(46,42,110,0.55), rgba(11,14,29,0.75))',
-            borderRadius: 0,
-          }}
-        >
-          <span
-            className={`absolute top-1/2 h-24 w-px -translate-y-1/2 bg-gradient-to-b from-transparent via-gold/70 to-transparent ${side === 'left' ? 'right-0' : 'left-0'}`}
-          />
-        </motion.div>
-      ))}
-    </section>
+      {/* A sketch of the window below: top bar, chips, three columns */}
+      <Stage className="min-w-0 p-[clamp(16px,3vw,40px)]" glows={['var(--kl-sky)', '#D9A648']}>
+        <div aria-hidden="true" className="overflow-hidden rounded-2xl bg-[var(--kl-surface)] shadow-[0_30px_60px_-34px_var(--kl-shadow)]">
+          <div className="flex items-center gap-2 border-b border-[var(--kl-paper-2)] px-4 py-3">
+            <span className="kl-orb-ring h-6 w-6 rounded-full" />
+            <span className="h-2.5 w-24 rounded-full bg-[var(--kl-paper-2)]" />
+            <span className="ms-auto h-2.5 w-16 rounded-full bg-[var(--kl-paper-2)]" />
+          </div>
+          <div className="flex gap-1.5 overflow-hidden border-b border-[var(--kl-paper-2)] px-4 py-2.5">
+            {CHIPS.map((c, i) => (
+              <span
+                key={c}
+                className={`rounded-full px-3 py-1 text-[11px] font-semibold ${i === 0 ? 'kl-sheen' : 'bg-[var(--kl-paper)] text-[var(--kl-mid)]'}`}
+              >
+                {c}
+              </span>
+            ))}
+          </div>
+          <div className="grid grid-cols-[1fr_2.2fr_1fr] gap-3 p-3">
+            <div className="space-y-2">
+              {[70, 55, 80, 50].map((w, i) => (
+                <span key={i} className="block h-2 rounded-full bg-[var(--kl-paper-2)]" style={{ width: `${w}%` }} />
+              ))}
+            </div>
+            <div className="space-y-2.5">
+              {[0, 1].map((i) => (
+                <div key={i} className="rounded-xl bg-[var(--kl-paper)] p-3">
+                  <div className="flex items-center gap-2">
+                    <span className="h-6 w-6 rounded-full bg-[var(--kl-paper-2)]" />
+                    <span className="h-2 w-20 rounded-full bg-[var(--kl-paper-2)]" />
+                  </div>
+                  <div className={`mt-2.5 h-16 rounded-lg bg-gradient-to-br ${i ? 'from-[#C9CDF5] to-[#E3ECF7]' : 'from-[#F0C878] to-[#F2B8A2]'}`} />
+                </div>
+              ))}
+            </div>
+            <div className="space-y-2">
+              {[60, 85, 45].map((w, i) => (
+                <span key={i} className="block h-8 rounded-lg bg-[var(--kl-paper)]" style={{ width: `${w + 15}%` }} />
+              ))}
+            </div>
+          </div>
+        </div>
+      </Stage>
+    </header>
   )
 }

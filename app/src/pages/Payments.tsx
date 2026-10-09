@@ -1,7 +1,5 @@
-import { useNavigate } from 'react-router'
-import { motion } from 'framer-motion'
+import { Link } from 'react-router'
 import { ArrowRight } from 'lucide-react'
-import { ArcButton } from '@/components/ui-kit'
 import PaymentsHero from '@/components/payments/PaymentsHero'
 import CryptoCheckout from '@/components/payments/CryptoCheckout'
 import AutoconversionPipeline from '@/components/payments/AutoconversionPipeline'
@@ -9,66 +7,46 @@ import CashoutEngine from '@/components/payments/CashoutEngine'
 import EligibilityGate from '@/components/payments/EligibilityGate'
 import DualRail from '@/components/payments/DualRail'
 import SecurityStrip from '@/components/payments/SecurityStrip'
-import { KineticWords } from '@/components/creators/Kinetic'
-import { EASE, useReducedMotion } from '@/components/creators/motion-utils'
+import { useReducedMotion } from '@/components/creators/motion-utils'
+import PublicShell from '@/components/landing/PublicShell'
+import { ClosingStage } from '@/components/landing/PageKit'
+import { KL_BTN_GHOST, KL_BTN_GOLD } from '@/components/landing/kl-classes'
 
-/** Section 8 — CTA. */
+/** Section 8 — CTA, on the landing's closing paper stage. */
 function PaymentsCta() {
-  const navigate = useNavigate()
   const reduced = useReducedMotion()
   return (
-    <section className="noise-overlay px-6 py-24 md:py-32" style={{ background: 'var(--ink)' }}>
-      <motion.div
-        className="mx-auto max-w-2xl text-center"
-        initial={reduced ? false : { opacity: 0, y: 40 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: '-20%' }}
-        transition={{ duration: 0.7, ease: EASE }}
-      >
-        <KineticWords
-          as="h2"
-          className="h2"
-          ariaLabel="Verify your account. Add your wallet. Get paid."
-          delay={0}
-          words={[
-            { text: 'Verify' },
-            { text: 'your' },
-            { text: 'account.' },
-            { text: 'Add' },
-            { text: 'your' },
-            { text: 'wallet.', gold: true },
-            { text: 'Get' },
-            { text: 'paid.', gold: true },
-          ]}
-        />
-        <div className="mt-9 flex flex-wrap justify-center gap-3">
-          <ArcButton size="lg" onClick={() => navigate('/app')}>Open your backoffice</ArcButton>
-          <ArcButton
-            size="lg"
-            variant="ghost"
-            onClick={() =>
-              document.getElementById('crypto-checkout')?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth' })
-            }
-          >
-            Replay the checkout
-          </ArcButton>
-        </div>
+    <ClosingStage
+      eyebrow="Get paid"
+      title={
+        <>
+          Verify your account. Add your wallet. <span className="text-[var(--kl-gold-deep)]">Get paid.</span>
+        </>
+      }
+    >
+      <div className="mt-12 flex flex-col items-center justify-center gap-4 sm:flex-row">
+        <Link to="/app" className={KL_BTN_GOLD}>
+          Open your backoffice <ArrowRight size={17} aria-hidden="true" />
+        </Link>
         <button
           type="button"
-          onClick={() => navigate('/creators')}
-          className="mt-7 inline-flex items-center gap-2 font-semibold text-gold-soft transition-all hover:gap-3"
+          className={KL_BTN_GHOST}
+          onClick={() => document.getElementById('crypto-checkout')?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth' })}
         >
-          How commissions are earned <ArrowRight size={16} aria-hidden="true" />
+          Replay the checkout
         </button>
-      </motion.div>
-    </section>
+      </div>
+      <Link to="/creators" className="mt-8 inline-flex items-center gap-2 font-semibold text-[var(--kl-gold-deep)] transition-all hover:gap-3">
+        How commissions are earned <ArrowRight size={16} aria-hidden="true" />
+      </Link>
+    </ClosingStage>
   )
 }
 
 /** /payments — NowPayments crypto rail, 10-level cashout engine, escrow rails. */
 export default function Payments() {
   return (
-    <>
+    <PublicShell>
       <PaymentsHero />
       <CryptoCheckout />
       <AutoconversionPipeline />
@@ -77,6 +55,6 @@ export default function Payments() {
       <DualRail />
       <SecurityStrip />
       <PaymentsCta />
-    </>
+    </PublicShell>
   )
 }

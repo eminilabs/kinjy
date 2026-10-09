@@ -3,6 +3,8 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { ArrowRight, Bot, Building2, Play, RefreshCw, ShieldCheck } from 'lucide-react'
 import { VerifiedBadge } from '@/components/ui-kit'
 import { cn } from '@/lib/utils'
+import { Eyebrow } from '@/components/landing/PageKit'
+import { KL_CARD } from '@/components/landing/kl-classes'
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 
@@ -85,12 +87,12 @@ function AgentCard({ agent, index }: { agent: RegistryAgent; index: number }) {
       viewport={{ once: true, margin: '-10%' }}
       transition={{ delay: index * 0.09, duration: 0.55, ease: EASE }}
       className={cn(
-        'cloud-card cloud-card-hover relative p-5',
-        agent.placement === 'paid' && 'shadow-gold-ring',
+        KL_CARD, 'transition-transform hover:-translate-y-0.5 relative p-5',
+        agent.placement === 'paid' && '!border-[var(--kl-gold)]',
       )}
     >
       {agent.placement === 'paid' && (
-        <span className="absolute -top-2.5 right-4 rounded-full border border-gold/40 bg-ink px-2.5 py-0.5 font-mono text-[0.58rem] font-semibold uppercase tracking-widest text-gold-soft">
+        <span className="absolute -top-2.5 right-4 rounded-full border border-gold/40 bg-[var(--kl-surface)] px-2.5 py-0.5 font-mono text-[0.58rem] font-semibold uppercase tracking-widest text-gold-soft">
           paid placement
         </span>
       )}
@@ -145,8 +147,8 @@ export default function A2ARegistry() {
   const reset = useCallback(() => setPhase(-1), [])
 
   return (
-    <section className="noise-overlay relative bg-ink-2/40 px-6 py-24 md:py-32">
-      <div className="mx-auto max-w-container">
+    <section className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)] relative">
+      <div>
         <motion.div
           initial={{ opacity: 0, y: 28 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -154,18 +156,18 @@ export default function A2ARegistry() {
           transition={{ duration: 0.65, ease: EASE }}
           className="mx-auto max-w-3xl text-center"
         >
-          <p className="eyebrow text-gold">Agent-to-Agent Registry</p>
-          <h2 className="h2 mt-4">
-            Your agent talks to <span className="text-arc-grad">verified business agents.</span>
+          <Eyebrow>Agent-to-Agent Registry</Eyebrow>
+          <h2 className="kl-h2 mt-5 max-w-[900px]">
+            Your agent talks to <span className="text-[var(--kl-gold-deep)]">verified business agents.</span>
           </h2>
-          <p className="body-lg mt-5 text-text-mid">
+          <p className="kl-lead mt-6 !max-w-[640px]">
             Every business on Kinjy can publish a machine-readable agent — sealed, scoped and
             rate-limited. Your personal assistant negotiates with it directly, in the open, with a
             signed trail.
           </p>
         </motion.div>
 
-        <div className="mt-16 grid gap-10 lg:grid-cols-[5fr_6fr]">
+        <div className="mt-16 grid grid-cols-[minmax(0,1fr)] gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
           {/* Directory */}
           <div>
             <div className="space-y-5">
@@ -192,9 +194,9 @@ export default function A2ARegistry() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-15%' }}
             transition={{ duration: 0.7, ease: EASE }}
-            className="cloud-card flex flex-col overflow-hidden"
+            className={cn(KL_CARD, 'flex flex-col overflow-hidden')}
           >
-            <div className="flex items-center justify-between border-b border-white/10 bg-ink-3/70 px-5 py-3">
+            <div className="flex items-center justify-between border-b border-white/10 bg-[var(--kl-code)] px-5 py-3">
               <span className="mono-data flex items-center gap-2 text-xs text-text-low">
                 <Bot size={13} className="text-gold" aria-hidden="true" />
                 a2a.exchange / scripted session
@@ -218,7 +220,7 @@ export default function A2ARegistry() {
               )}
             </div>
 
-            <div className="flex-1 space-y-4 overflow-x-auto bg-ink-3/40 p-5">
+            <div className="flex-1 space-y-4 overflow-x-auto bg-[var(--kl-code)] p-5">
               {phase < 0 && (
                 <div className="flex h-full min-h-[260px] flex-col items-center justify-center gap-3 text-center">
                   <span
@@ -264,7 +266,7 @@ export default function A2ARegistry() {
                     initial={{ opacity: 0, y: 24, scale: 0.97 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     transition={{ duration: 0.55, ease: EASE }}
-                    className="rounded-card-md border border-gold/45 bg-ink/80 p-5 shadow-gold-ring"
+                    className="rounded-card-md border border-gold/45 bg-[var(--kl-code)] p-5 !border-[var(--kl-gold)]"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <p className="flex items-center gap-2 text-sm font-semibold text-text-hi">
@@ -274,11 +276,11 @@ export default function A2ARegistry() {
                         signed · verifiable
                       </span>
                     </div>
-                    <div className="mt-4 grid gap-x-6 gap-y-2 sm:grid-cols-2">
+                    <div className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-x-6 gap-y-2 sm:grid-cols-2">
                       {OFFER_ROWS.map(([k, v]) => (
                         <div key={k} className="flex items-baseline justify-between gap-3 border-b border-white/8 pb-1.5">
                           <span className="font-mono text-[0.65rem] uppercase tracking-wider text-text-low">{k}</span>
-                          <span className={cn('mono-data text-[0.75rem]', k === 'total' ? 'text-gold-grad text-base font-semibold' : 'text-text-hi')}>
+                          <span className={cn('mono-data text-[0.75rem]', k === 'total' ? 'text-[var(--kl-gold-deep)] text-base font-semibold' : 'text-text-hi')}>
                             {v}
                           </span>
                         </div>

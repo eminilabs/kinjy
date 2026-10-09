@@ -27,7 +27,7 @@ export function LandingAssistant() {
         <div className="flex max-w-[480px] flex-wrap gap-2">
           {ASSISTANT_SKILLS.map((k) => (
             <span key={k} className="kl-night-glass rounded-[10px] px-3.5 py-[9px] text-sm">
-              {k}
+              {tr(k)}
             </span>
           ))}
         </div>
@@ -36,7 +36,7 @@ export function LandingAssistant() {
         <div className="kl-night-glass max-w-[85%] self-start px-[18px] py-4" style={{ borderRadius: '16px 16px 16px 4px' }}>
           <div className="text-base leading-[1.45]">Mti wa familia unafanyaje kazi?</div>
           <div className="mt-2.5 border-t border-white/15 pt-2.5 text-sm text-[var(--kl-gold-soft)]">
-            Question asked in Swahili · answer in Swahili
+            {tr('landing.assistant.caption')}
           </div>
         </div>
         <div className="kl-sheen max-w-[85%] self-end px-[18px] py-3.5 text-base leading-[1.45] text-[var(--kl-night)]" style={{ borderRadius: '16px 16px 4px 16px' }}>
@@ -90,7 +90,7 @@ export function LandingPricing() {
                 className="rounded-[10px] p-3.5 text-center text-[15px] font-bold"
                 style={{ background: t.btnBg, color: t.btnColor }}
               >
-                {join.to.startsWith('/join') ? p.cta : 'See plans'}
+                {join.to.startsWith('/join') ? tr(p.cta) : tr('landing.pricing.seePlans')}
               </Link>
             </div>
           )
@@ -184,7 +184,7 @@ export function LandingFinalCta() {
           </p>
           <div className="flex flex-col items-center gap-6">
             <Link to={join.to} className="kl-sheen rounded-[10px] px-7 py-3.5 text-[17px] font-bold text-[var(--kl-night)]">
-              {join.to.startsWith('/join') ? 'Create my account' : join.label} →
+              {join.to.startsWith('/join') ? tr('nav.join') : join.label} →
             </Link>
             <div className="max-w-[520px]">
               <StoreBadges framed />
@@ -192,34 +192,42 @@ export function LandingFinalCta() {
           </div>
         </div>
       </div>
-      <footer className="px-2 pb-7 pt-14 text-sm text-[var(--kl-mid)]">
-        <div className="grid gap-10" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))' }}>
-          <div className="flex flex-col gap-3">
-            <Brand size={39} text={20} />
-            <p className="max-w-[220px] leading-[1.5]">{tr('landing.cta.sub')}</p>
-          </div>
-          {FOOTER_COLUMNS.map((col) => (
-            <nav key={col.title} aria-label={col.title}>
-              <h3 className="mb-3 text-[13px] font-semibold uppercase tracking-[.08em] text-[var(--kl-ink)]">{col.title}</h3>
-              <ul className="flex flex-col gap-2">
-                {col.links.map((l) => (
-                  <li key={tr(l.label)}>
-                    <Link to={l.to} className="hover:text-[var(--kl-gold-deep)]">
-                      {tr(l.label)}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </nav>
-          ))}
-        </div>
-        <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-[var(--kl-paper-2)] pt-6">
-          <span>© {new Date().getFullYear()} Kinjy</span>
-          <Link to="/join?mode=signup" className="font-semibold text-[var(--kl-gold-deep)] hover:underline">
-            {tr('nav.join')} →
-          </Link>
-        </div>
-      </footer>
+      <LandingFooter />
     </section>
+  )
+}
+
+/** The site footer: every public page, in four columns. */
+export function LandingFooter() {
+  const { t: tr } = useTranslation()
+  return (
+  <footer className="px-2 pb-7 pt-14 text-sm text-[var(--kl-mid)]">
+    <div className="grid gap-10" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))' }}>
+      <div className="flex flex-col gap-3">
+        <Brand size={39} text={20} />
+        <p className="max-w-[220px] leading-[1.5]">{tr('landing.cta.sub')}</p>
+      </div>
+      {FOOTER_COLUMNS.map((col) => (
+        <nav key={col.title} aria-label={tr(col.title)}>
+          <h3 className="mb-3 text-[13px] font-semibold uppercase tracking-[.08em] text-[var(--kl-ink)]">{tr(col.title)}</h3>
+          <ul className="flex flex-col gap-2">
+            {col.links.map((l) => (
+              <li key={tr(l.label)}>
+                <Link to={l.to} className="hover:text-[var(--kl-gold-deep)]">
+                  {tr(l.label)}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      ))}
+    </div>
+    <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-[var(--kl-paper-2)] pt-6">
+      <span>© {new Date().getFullYear()} Kinjy</span>
+      <Link to="/join?mode=signup" className="font-semibold text-[var(--kl-gold-deep)] hover:underline">
+        {tr('nav.join')} →
+      </Link>
+    </div>
+  </footer>
   )
 }

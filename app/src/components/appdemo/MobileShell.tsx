@@ -84,7 +84,7 @@ function MiniProfile() {
 
 /** Section 6 — phone frame with the mandated bottom bar and raised gold FAB. */
 export default function MobileShell() {
-  const { tok } = useAppTheme()
+  const { tok, frameStyle } = useAppTheme()
   const [tab, setTab] = useState<Tab>('home')
   const [sheetOpen, setSheetOpen] = useState(false)
 
@@ -112,7 +112,7 @@ export default function MobileShell() {
       viewport={{ once: true, margin: '-15%' }}
       transition={{ duration: 0.8, ease: EASE }}
       className="relative mx-auto h-[760px] w-[390px] max-w-full overflow-hidden rounded-card-xl ring-1 ring-gold/40 shadow-cloud-hover"
-      style={{ background: 'radial-gradient(ellipse at 30% 20%, #2E2A6E 0%, #0B0E1D 65%)', perspective: '1200px' }}
+      style={{ ...frameStyle, perspective: '1200px' }}
     >
       {/* top mini-bar */}
       <div className={cn('flex h-12 items-center gap-2 border-b px-3.5', tok.card, 'rounded-none border-x-0 border-t-0')}>

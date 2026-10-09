@@ -1,6 +1,8 @@
 import { motion } from 'framer-motion'
 import { Clapperboard, Languages, Mail, Palette, Sparkles } from 'lucide-react'
 import { useReducedMotion } from '@/components/creators/motion-utils'
+import { Eyebrow } from '@/components/landing/PageKit'
+import { MODULE_TONES } from '@/components/platform/tones'
 
 const PACKS = [
   { icon: Clapperboard, name: 'HD pack', price: '$8', math: 'Basic $3.99/mo unit ≈ $2 → 4× once, HD forever' },
@@ -10,42 +12,45 @@ const PACKS = [
   { icon: Palette, name: 'Brand kit', price: '$15', math: 'Premium unit ≈ $4 → ~4× one-off' },
 ]
 
-/** Section 3 — One-off purchases at 2–4× implied subscription unit cost. */
+/** Section 3 — one-off purchases, set as a menu: each pack with its unit-cost maths in plain view. */
 export default function OneOffPurchases() {
   const reduced = useReducedMotion()
   return (
-    <section className="noise-overlay bg-ink px-6 py-24 md:py-32">
-      <div className="mx-auto max-w-container">
-        <div className="cloud-card mx-auto max-w-4xl p-8 text-center md:p-12">
-          <h2 className="h3">Prefer to buy just one thing?</h2>
-          <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-text-mid">
+    <section className="kl-pad-x border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]">
+      <div className="kl-split items-start gap-[clamp(40px,6vw,96px)]">
+        <div className="min-w-0">
+          <Eyebrow>À la carte</Eyebrow>
+          <h2 className="kl-h2 mt-5">Prefer to buy once?</h2>
+          <p className="kl-lead mt-6">
             One-off purchases are priced fairly at{' '}
-            <span className="mono-data text-gold-soft">2–4× the implied subscription unit cost</span> —
-            buy a feature forever instead of subscribing.
+            <span className="font-semibold text-[var(--kl-ink)]">2–4× the implied subscription unit cost</span> — buy a
+            feature forever instead of subscribing.
           </p>
-          <div className="mt-8 flex flex-wrap justify-center gap-3">
-            {PACKS.map((p, i) => (
-              <motion.div
-                key={p.name}
-                initial={reduced ? false : { opacity: 0, scale: 0.7 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true, margin: '-15%' }}
-                transition={{ delay: i * 0.06, duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
-                className="group relative"
-              >
-                <div className="flex cursor-default items-center gap-2.5 rounded-full cloud-glass px-4 py-2.5 transition-colors duration-200 hover:border-gold/40">
-                  <p.icon size={15} className="text-gold" aria-hidden="true" />
-                  <span className="text-sm font-semibold text-text-hi">{p.name}</span>
-                  <span className="mono-data rounded-full bg-gold/15 px-2 py-0.5 text-[0.7rem] text-gold-soft">{p.price}</span>
-                </div>
-                {/* unit-cost math tooltip */}
-                <span className="mono-data pointer-events-none absolute -top-2 left-1/2 z-10 w-64 -translate-x-1/2 -translate-y-full rounded-card-sm border border-white/10 bg-ink-2/95 px-3 py-2 text-[0.65rem] leading-snug text-gold-soft opacity-0 shadow-cloud backdrop-blur-md transition-opacity duration-200 group-hover:opacity-100">
-                  {p.math}
-                </span>
-              </motion.div>
-            ))}
-          </div>
         </div>
+        <ul className="min-w-0 border-t-2 border-[var(--kl-ink)]">
+          {PACKS.map((p, i) => (
+            <motion.li
+              key={p.name}
+              initial={reduced ? false : { opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: '-10%' }}
+              transition={{ delay: i * 0.06, duration: 0.4 }}
+              className="flex items-center gap-4 border-b border-[var(--kl-paper-2)] py-5"
+            >
+              <span
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-[10px]"
+                style={{ background: MODULE_TONES[i % 4][1], color: MODULE_TONES[i % 4][0] }}
+              >
+                <p.icon size={19} aria-hidden="true" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[17px] font-semibold">{p.name}</p>
+                <p className="kl-mono mt-0.5 text-[11px] text-[var(--kl-low)]">{p.math}</p>
+              </div>
+              <span className="kl-serif text-[32px] font-semibold leading-none">{p.price}</span>
+            </motion.li>
+          ))}
+        </ul>
       </div>
     </section>
   )

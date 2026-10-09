@@ -67,39 +67,39 @@ export function AIWatchCard({ advisory, demo = false }: { advisory: WatchAdvisor
   const actionable = status === 'new'
 
   return (
-    <article className="rounded-card-md border border-white/15 bg-ink-2/60 p-4">
+    <article className={demo ? 'rounded-[20px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] p-6 text-start shadow-[0_24px_48px_-34px_var(--kl-shadow)]' : 'rounded-card-md border border-white/15 bg-ink-2/60 p-4'}>
       <div className="flex flex-wrap items-center gap-2">
         <StatusChip status={status} />
-        <span className="ms-auto font-mono text-[0.62rem] text-text-low">{advisory.branch}</span>
+        <span className={demo ? 'kl-mono ms-auto text-[0.68rem] text-[var(--kl-low)]' : 'ms-auto font-mono text-[0.62rem] text-text-low'}>{advisory.branch}</span>
       </div>
-      <h4 className="mt-2.5 text-sm font-bold leading-snug">{advisory.title}</h4>
-      <p className="caption mt-1">{advisory.what}</p>
+      <h4 className={demo ? 'mt-3 text-lg font-bold leading-snug' : 'mt-2.5 text-sm font-bold leading-snug'}>{advisory.title}</h4>
+      <p className={demo ? 'mt-1 text-sm text-[var(--kl-mid)]' : 'caption mt-1'}>{advisory.what}</p>
 
-      <div className="mt-3 space-y-2 text-[0.78rem] leading-relaxed">
+      <div className={demo ? 'mt-4 space-y-2 text-[0.88rem] leading-relaxed' : 'mt-3 space-y-2 text-[0.78rem] leading-relaxed'}>
         <p>
-          <span className="font-bold text-gold-soft">Why adopt: </span>
-          <span className="text-text-mid">{advisory.whyAdopt}</span>
+          <span className={demo ? 'font-bold text-[var(--kl-gold-deep)]' : 'font-bold text-gold-soft'}>Why adopt: </span>
+          <span className={demo ? 'text-[var(--kl-mid)]' : 'text-text-mid'}>{advisory.whyAdopt}</span>
         </p>
         <p>
-          <span className="font-bold text-sky">Why code changes are needed: </span>
-          <span className="text-text-mid">{advisory.whyCode}</span>
+          <span className={demo ? 'font-bold text-[#2F6BA8]' : 'font-bold text-sky'}>Why code changes are needed: </span>
+          <span className={demo ? 'text-[var(--kl-mid)]' : 'text-text-mid'}>{advisory.whyCode}</span>
         </p>
       </div>
 
       {/* Proposed codebase / diff preview */}
-      <div className="mt-3 rounded-card-sm border border-white/10 bg-ink/70">
+      <div className={demo ? 'mt-4 rounded-[12px] border border-[var(--kl-paper-2)] bg-[var(--kl-paper)]' : 'mt-3 rounded-card-sm border border-white/10 bg-ink/70'}>
         <button
           type="button"
           onClick={() => setDiffOpen((v) => !v)}
           aria-expanded={diffOpen}
           className="flex w-full items-center justify-between px-3 py-2 text-start"
         >
-          <span className="font-mono text-[0.66rem] text-text-mid">
+          <span className={demo ? 'kl-mono text-[0.72rem] text-[var(--kl-mid)]' : 'font-mono text-[0.66rem] text-text-mid'}>
             {advisory.branch} — {advisory.diff.length} files changed
             <span className="text-success"> +{totalAdd}</span>
             <span className="text-danger"> −{totalDel}</span>
           </span>
-          <span className="text-[0.62rem] font-semibold text-gold-soft">{diffOpen ? 'Hide diff' : 'Review diff'}</span>
+          <span className={demo ? 'text-[0.72rem] font-semibold text-[var(--kl-gold-deep)]' : 'text-[0.62rem] font-semibold text-gold-soft'}>{diffOpen ? 'Hide diff' : 'Review diff'}</span>
         </button>
         <AnimatePresence initial={false}>
           {diffOpen && (
@@ -110,9 +110,9 @@ export function AIWatchCard({ advisory, demo = false }: { advisory: WatchAdvisor
               transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
               className="overflow-hidden"
             >
-              <div className="border-t border-white/10 px-3 py-2">
+              <div className={demo ? 'border-t border-[var(--kl-paper-2)] px-3 py-2' : 'border-t border-white/10 px-3 py-2'}>
                 {advisory.diff.map((d) => (
-                  <p key={d.file} className="font-mono text-[0.64rem] leading-relaxed text-text-mid">
+                  <p key={d.file} className={demo ? 'kl-mono text-[0.7rem] leading-relaxed text-[var(--kl-mid)]' : 'font-mono text-[0.64rem] leading-relaxed text-text-mid'}>
                     {d.file}
                     <span className="text-success"> +{d.add}</span>
                     <span className="text-danger"> −{d.del}</span>
@@ -134,7 +134,7 @@ export function AIWatchCard({ advisory, demo = false }: { advisory: WatchAdvisor
           type="button"
           onClick={() => setDiffOpen(true)}
           disabled={!actionable && status !== 'pr-opened'}
-          className="rounded-full cloud-glass px-3.5 py-1.5 text-[0.7rem] font-semibold text-text-hi transition-colors hover:text-gold-soft disabled:opacity-40"
+          className={demo ? 'rounded-full border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] px-4 py-2 text-[0.78rem] font-semibold transition-colors hover:border-[var(--kl-gold)] disabled:opacity-40' : 'rounded-full cloud-glass px-3.5 py-1.5 text-[0.7rem] font-semibold text-text-hi transition-colors hover:text-gold-soft disabled:opacity-40'}
         >
           Review diff
         </button>
@@ -142,7 +142,7 @@ export function AIWatchCard({ advisory, demo = false }: { advisory: WatchAdvisor
           type="button"
           onClick={() => setStatus('dismissed')}
           disabled={!actionable}
-          className="rounded-full cloud-glass px-3.5 py-1.5 text-[0.7rem] font-semibold text-text-mid transition-colors hover:text-text-hi disabled:opacity-40"
+          className={demo ? 'rounded-full border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] px-4 py-2 text-[0.78rem] font-semibold text-[var(--kl-mid)] transition-colors hover:border-[var(--kl-gold)] disabled:opacity-40' : 'rounded-full cloud-glass px-3.5 py-1.5 text-[0.7rem] font-semibold text-text-mid transition-colors hover:text-text-hi disabled:opacity-40'}
         >
           Dismiss
         </button>
@@ -150,7 +150,7 @@ export function AIWatchCard({ advisory, demo = false }: { advisory: WatchAdvisor
           type="button"
           onClick={() => setConfirmOpen(true)}
           disabled={!actionable}
-          className="ms-auto rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-1.5 text-[0.7rem] font-bold text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] transition hover:brightness-110 disabled:opacity-40"
+          className={demo ? 'kl-sheen ms-auto rounded-full px-5 py-2 text-[0.78rem] font-bold transition hover:brightness-105 disabled:opacity-40' : 'ms-auto rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-1.5 text-[0.7rem] font-bold text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] transition hover:brightness-110 disabled:opacity-40'}
         >
           Instruct to execute
         </button>
@@ -169,7 +169,7 @@ export function AIWatchCard({ advisory, demo = false }: { advisory: WatchAdvisor
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[90] flex items-center justify-center bg-ink/70 p-6 backdrop-blur-sm"
+            className={demo ? 'fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-6 backdrop-blur-sm' : 'fixed inset-0 z-[90] flex items-center justify-center bg-ink/70 p-6 backdrop-blur-sm'}
             role="dialog"
             aria-modal="true"
             aria-label="Confirm execution"
@@ -180,7 +180,7 @@ export function AIWatchCard({ advisory, demo = false }: { advisory: WatchAdvisor
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 24 }}
               transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-              className="w-full max-w-sm rounded-card-lg cloud-glass bg-ink-2/95 p-6 shadow-cloud"
+              className={demo ? 'w-full max-w-sm rounded-[20px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] p-6 text-[var(--kl-ink)] shadow-[0_30px_60px_-30px_var(--kl-shadow)]' : 'w-full max-w-sm rounded-card-lg cloud-glass bg-ink-2/95 p-6 shadow-cloud'}
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-start justify-between gap-3">

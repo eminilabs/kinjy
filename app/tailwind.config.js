@@ -80,16 +80,18 @@ module.exports = {
         },
       },
       borderRadius: {
-        // Tightened one step across the board (was 10/16/24/32). Changing the
-        // scale rather than individual components keeps card, input, dialog and
-        // rail corners in the same family instead of drifting apart.
+        // The "Kinjy Landing" design's family: 10px for chips and controls,
+        // 16px for cards, 20px for large panels (it was 6/9/12/16, and before
+        // that 10/16/24/32). Changing the scale rather than individual
+        // components keeps card, input, dialog and rail corners in the same
+        // family instead of drifting apart.
         // Named "card-*", not "r-*": `rounded-r-lg` collided with Tailwind's
         // built-in right-side utility, so both rules were emitted and cards
         // ended up with 16px left corners and 12px right ones.
-        "card-sm": "6px",
-        "card-md": "9px",
-        "card-lg": "12px",
-        "card-xl": "16px",
+        "card-sm": "8px",
+        "card-md": "10px",
+        "card-lg": "16px",
+        "card-xl": "20px",
         xl: "calc(var(--radius) + 4px)",
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
@@ -104,7 +106,7 @@ module.exports = {
       },
       fontFamily: {
         display: ["Fraunces", "serif"],
-        sans: ["Manrope", "system-ui", "sans-serif"],
+        sans: ["'Hanken Grotesk'", "system-ui", "-apple-system", "'Segoe UI'", "sans-serif"],
         mono: ["'JetBrains Mono'", "monospace"],
       },
       transitionTimingFunction: {

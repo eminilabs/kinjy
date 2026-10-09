@@ -20,7 +20,7 @@ import threading
 
 from common import crypto, permissions, settings
 from common.auth import AdminUser, CurrentUser
-from common.database import SessionLocal, get_db
+from common.database import SessionLocal, create_all, get_db
 from common.ids import new_id
 from common.security import decode_token, ACCESS
 from common.service import create_app
@@ -90,14 +90,44 @@ MIGRATIONS = [
     ),
     # A sealed name is longer than the name it hides.
     f"ALTER TABLE {models.SCHEMA}.messages ALTER COLUMN media_name TYPE TEXT",
+    # Reactions used to point at a sticker (a `sticker_id` column); they are emoji
+    # now. create_all never changes a table that exists, so a database that still
+    # has the old shape would fail on the first reaction. The old table is set
+    # aside - renamed, never dropped, so what it holds can still be read - and
+    # _rebuild_reactions builds the new one right after these statements.
+    f"""DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = '{models.SCHEMA}' AND table_name = 'message_reactions' AND column_name = 'sticker_id'
+      ) THEN
+        ALTER TABLE {models.SCHEMA}.message_reactions RENAME CONSTRAINT message_reactions_pkey TO message_reactions_legacy_pkey;
+        ALTER INDEX IF EXISTS {models.SCHEMA}.ix_messaging_message_reactions_message_id RENAME TO ix_message_reactions_legacy_message_id;
+        ALTER SEQUENCE IF EXISTS {models.SCHEMA}.message_reactions_id_seq RENAME TO message_reactions_legacy_id_seq;
+        ALTER TABLE {models.SCHEMA}.message_reactions RENAME TO message_reactions_legacy;
+      END IF;
+    END $$""",
 ]
+
+
+def _rebuild_reactions() -> None:
+    """Runs after the migrations: builds the reactions table if they set the old one aside.
+
+    Never fatal: a service that refuses to start over this is worse than one that
+    starts and says what needs attention, which is the rule the migrations follow.
+    """
+    try:
+        create_all(models.SCHEMA)
+    except Exception:
+        log.exception("could not rebuild the reactions table after the migrations")
+
 
 app = create_app(
     name="messaging-service",
     schema=models.SCHEMA,
     migrations=MIGRATIONS,
     description="End-to-end encrypted direct messages, group conversations, notifications.",
-    on_startup=[lambda: _start_sealing()],
+    on_startup=[_rebuild_reactions, lambda: _start_sealing()],
 )
 
 # --- the realtime hub ------------------------------------------------------
@@ -124,32 +154,57 @@ _topics: dict[str, set[WebSocket]] = {}
 
 
 SOCIAL_URL = "http://social-service:8000"
+COMMUNITY_URL = "http://community-service:8000"
+
+# Topics anyone signed in may listen to: they carry no member's content. Anything
+# else must be gated below; a topic nobody wrote a rule for is refused, so a new
+# kind of topic starts closed instead of open.
+OPEN_TOPICS = frozenset({"feed", "shorts"})
+
+
+async def _readable_ids(url: str, key: str, user_id: str, ids: list[str]) -> set[str]:
+    """Ask the service that owns these items which ones this member may read.
+
+    One call for the whole batch. If the service cannot answer, nothing is
+    allowed: live updates wait for a reload, nothing leaks.
+    """
+    if not ids:
+        return set()
+    try:
+        async with httpx.AsyncClient(timeout=4) as client:
+            response = await client.post(url, json={"viewer": user_id, key: ids[:200]})
+        response.raise_for_status()
+        return set(response.json().get(key, []))
+    except Exception as exc:
+        log.warning("topic check %s failed for %s: %s", key, user_id, exc)
+        return set()
 
 
 async def _readable_topics(user_id: str, topics: list[str]) -> list[str]:
-    """Drop ``post:<id>`` topics for posts this member may not read.
+    """Keep the topics this member may listen to, drop the rest.
 
-    A post topic carries who commented and when. Subscribing used to be open to
-    anyone holding the id, so a member removed from a circle could keep
-    listening to its posts. social-service answers for the whole batch with the
-    same audience rule as every other read; if it cannot answer, the post
-    topics are dropped — live counters wait for a reload, nothing leaks.
+    ``post:<id>`` and ``thread:<id>`` carry who commented, replied or voted, and
+    when. Subscribing used to be open to anyone holding the id, so a member
+    removed from a circle could keep listening to its posts, and anyone could
+    listen to a secret community's threads. The service that owns the item
+    answers with the same rule as opening it (audience, forum door, age).
     """
-    post_ids = [t.split(":", 1)[1] for t in topics if t.startswith("post:")]
-    if not post_ids:
-        return topics
-    try:
-        async with httpx.AsyncClient(timeout=4) as client:
-            response = await client.post(
-                f"{SOCIAL_URL}/internal/readable-posts",
-                json={"viewer": user_id, "post_ids": post_ids[:200]},
-            )
-        response.raise_for_status()
-        allowed = set(response.json().get("post_ids", []))
-    except Exception as exc:
-        log.warning("post topic check failed for %s: %s", user_id, exc)
-        allowed = set()
-    return [t for t in topics if not t.startswith("post:") or t.split(":", 1)[1] in allowed]
+    def ids_of(prefix: str) -> list[str]:
+        return list(dict.fromkeys(t[len(prefix):] for t in topics if t.startswith(prefix) and len(t) > len(prefix)))
+
+    posts, threads = await asyncio.gather(
+        _readable_ids(f"{SOCIAL_URL}/internal/readable-posts", "post_ids", user_id, ids_of("post:")),
+        _readable_ids(f"{COMMUNITY_URL}/internal/readable-threads", "thread_ids", user_id, ids_of("thread:")),
+    )
+    allowed: list[str] = []
+    for topic in topics:
+        if topic in OPEN_TOPICS or topic == f"user:{user_id}":
+            allowed.append(topic)
+        elif topic.startswith("post:") and topic[5:] in posts:
+            allowed.append(topic)
+        elif topic.startswith("thread:") and topic[7:] in threads:
+            allowed.append(topic)
+    return allowed
 
 
 def _subscribe(socket: WebSocket, topics: list[str]) -> None:
@@ -300,21 +355,18 @@ class ConversationIn(BaseModel):
 class MessageIn(BaseModel):
     ciphertext_b64: str | None = None
     body: str | None = Field(default=None, max_length=10_000)
-    kind: str = Field(default="text", pattern="^(text|media|call_event|sticker)$")
-    # From the server's catalogue. An id it does not know is refused rather
-    # than stored, so a message can never carry a picture nobody curated.
-    sticker_id: str | None = Field(default=None, max_length=40)
+    kind: str = Field(default="text", pattern="^(text|media|sticker|call_event)$")
     # An uploaded asset's id. Its URL, type, name and size are looked up from
     # media-service, which is why no client-supplied URL is accepted: a message
     # must not be able to embed an arbitrary address as a "photo".
     media_id: str | None = Field(default=None, max_length=40)
     lang: str | None = None
-    # The message being answered. Checked against this conversation before it
-    # is stored - an id from another thread would otherwise quote a message the
-    # people here are not allowed to read.
-    reply_to_id: str | None = Field(default=None, max_length=40)
     # See models.Message.client_id: makes a retried send idempotent.
     client_id: str | None = Field(default=None, max_length=64)
+    # The message this one answers; must belong to the same conversation.
+    reply_to_id: str | None = Field(default=None, max_length=40)
+    # For kind "sticker" only: an id from the catalogue (stickers.py).
+    sticker_id: str | None = Field(default=None, max_length=64)
 
 
 def _purge_expired(db: OrmSession, conversation_id: str | None = None) -> int:
@@ -326,12 +378,19 @@ def _purge_expired(db: OrmSession, conversation_id: str | None = None) -> int:
     returned by the API. Deleting on the path that would otherwise serve it
     closes that window.
     """
+    expired = select(models.Message.id).where(
+        models.Message.expires_at.is_not(None),
+        models.Message.expires_at <= datetime.now(timezone.utc),
+    )
     stmt = delete(models.Message).where(
         models.Message.expires_at.is_not(None),
         models.Message.expires_at <= datetime.now(timezone.utc),
     )
     if conversation_id:
+        expired = expired.where(models.Message.conversation_id == conversation_id)
         stmt = stmt.where(models.Message.conversation_id == conversation_id)
+    # A reaction must not outlive the message it is under.
+    db.execute(delete(models.MessageReaction).where(models.MessageReaction.message_id.in_(expired)))
     removed = db.execute(stmt).rowcount or 0
     if removed:
         db.commit()
@@ -872,31 +931,11 @@ MEDIA_LABELS = {"image": "a photo", "video": "a video", "audio": "a voice or aud
                 "document": "a document", "file": "a file"}
 
 
-def _quoted(message: "models.Message | None") -> dict | None:
-    """The one line of the message being answered.
-
-    Returns None when the original has gone - expired, deleted, or simply not
-    in this conversation. The reply itself stays: a thread that refuses to show
-    an answer because the question disappeared is worse than an answer with
-    nothing above it, and the client renders "Message unavailable".
-
-    An end-to-end encrypted original has no line the server can quote, so it
-    says so rather than inventing one; the client has the plaintext and can do
-    better if it still holds the thread.
-    """
-    if message is None:
-        return None
-    return {
-        "id": message.id,
-        "sender_id": message.sender_id,
-        "encrypted": message.encrypted,
-        "preview": "Encrypted message" if message.encrypted else _preview(message)[:140],
-        "media_kind": message.media_kind,
-    }
-
-
 def _preview(message: models.Message) -> str:
     """One line for a notification or the conversation list — never ciphertext."""
+    if message.kind == "sticker":
+        # A public catalogue id: nothing to hide, in encrypted rooms either.
+        return "Sent a sticker"
     if message.encrypted:
         return "Encrypted message"
     text = (_plain(message)[0] or "").strip()
@@ -904,29 +943,6 @@ def _preview(message: models.Message) -> str:
         label = MEDIA_LABELS.get(message.media_kind, "a file")
         return f"Sent {label}" + (f": {text}" if text else "")
     return text
-
-
-def _reply_target(db: OrmSession, conversation_id: str, reply_to_id: str | None) -> str | None:
-    """The message being answered, if it belongs to this conversation.
-
-    An id from another thread is refused rather than ignored: silently dropping
-    it would send a reply that quotes nothing, and accepting it would let
-    somebody quote a message from a conversation they are not in - the quoted
-    line is rendered from the original, so that would be a read.
-
-    A reply to a message that has since expired is allowed through as a plain
-    message. The alternative is refusing to send at all because the thing being
-    answered disappeared between opening the reply box and pressing send.
-    """
-    if not reply_to_id:
-        return None
-    exists = db.scalar(
-        select(models.Message.id).where(
-            models.Message.id == reply_to_id,
-            models.Message.conversation_id == conversation_id,
-        )
-    )
-    return exists or None
 
 
 async def _tell_room(db: OrmSession, conversation_id: str, payload: dict) -> None:
@@ -973,9 +989,11 @@ async def edit_message(
     ciphertext it cannot open, so there is nothing to replace. Saying so is
     better than appearing to accept the edit and discarding it.
     """
-    _member(db, conversation_id, principal.user_id)
-    message = db.get(models.Message, message_id)
-    if message is None or message.conversation_id != conversation_id or message.deleted_at:
+    # The same standing check as sending: somebody who was blocked, or whose
+    # messages were closed to this member, must not be able to rewrite what
+    # this member sees by going back to an old message.
+    message = await _react_guard(db, conversation_id, message_id, principal)
+    if message.deleted_at:
         raise HTTPException(status_code=404, detail="Message not found")
     if message.sender_id != principal.user_id:
         raise HTTPException(status_code=403, detail="You can only edit your own messages")
@@ -985,7 +1003,8 @@ async def edit_message(
     if message.kind == "sticker":
         raise HTTPException(status_code=409, detail="A sticker has no text to edit")
 
-    _seal(message, payload.body, None)
+    # The attachment's name is kept: editing a caption must not erase what the file is called.
+    _seal(message, payload.body, _plain(message)[1])
     message.edited_at = datetime.now(timezone.utc)
     db.commit()
 
@@ -1059,29 +1078,37 @@ async def react_to_message(
     it. One per person per message, so a reaction stays a quiet acknowledgement
     rather than a way to fill somebody's thread.
     """
-    _member(db, conversation_id, principal.user_id)
-    message = db.get(models.Message, message_id)
-    if message is None or message.conversation_id != conversation_id or message.deleted_at:
+    message = await _react_guard(db, conversation_id, message_id, principal)
+    if message.deleted_at:
         raise HTTPException(status_code=404, detail="Message not found")
 
-    existing = db.scalar(
-        select(models.MessageReaction).where(
-            models.MessageReaction.message_id == message_id,
-            models.MessageReaction.user_id == principal.user_id,
+    for attempt in (1, 2):
+        existing = db.scalar(
+            select(models.MessageReaction).where(
+                models.MessageReaction.message_id == message_id,
+                models.MessageReaction.user_id == principal.user_id,
+            )
         )
-    )
-    mine: str | None = payload.emoji
-    if existing and existing.emoji == payload.emoji:
-        db.delete(existing)
-        mine = None
-    elif existing:
-        existing.emoji = payload.emoji
-    else:
-        db.add(models.MessageReaction(
-            message_id=message_id, conversation_id=conversation_id,
-            user_id=principal.user_id, emoji=payload.emoji,
-        ))
-    db.commit()
+        mine: str | None = payload.emoji
+        if existing and existing.emoji == payload.emoji:
+            db.delete(existing)
+            mine = None
+        elif existing:
+            existing.emoji = payload.emoji
+        else:
+            db.add(models.MessageReaction(
+                message_id=message_id, conversation_id=conversation_id,
+                user_id=principal.user_id, emoji=payload.emoji,
+            ))
+        try:
+            db.commit()
+            break
+        except IntegrityError:
+            # Two taps raced past the lookup and the unique constraint kept one.
+            # Look again: the second tap now finds the first and acts on it.
+            db.rollback()
+            if attempt == 2:
+                raise HTTPException(status_code=409, detail="Try that reaction again")
 
     counts = _reaction_counts(db, [message_id]).get(message_id, {})
     await _tell_room(db, conversation_id, {
@@ -1162,7 +1189,23 @@ async def send_message(
                 "duplicate": True,
             }
 
-    if conversation.encrypted:
+    if payload.sticker_id and "kind" not in payload.model_fields_set:
+        # A client that names a sticker and no kind means a sticker. Naming a
+        # different kind with a sticker_id is still refused below.
+        payload.kind = "sticker"
+
+    if payload.kind == "sticker":
+        # A sticker message is a catalogue id and nothing else: no text, no
+        # ciphertext, no attachment, no URL. That is what lets it be sent in an
+        # end-to-end encrypted room too - there is nothing private in it to
+        # protect, and nothing the client chose that the server has not checked.
+        if stickers.get(payload.sticker_id) is None:
+            raise HTTPException(status_code=400, detail="Unknown sticker")
+        if payload.body or payload.ciphertext_b64 or payload.media_id:
+            raise HTTPException(status_code=400, detail="A sticker message carries only a sticker id")
+    elif payload.sticker_id:
+        raise HTTPException(status_code=400, detail="sticker_id is only for sticker messages")
+    elif conversation.encrypted:
         if payload.media_id:
             # The file would sit on the server in the clear, which is exactly
             # what an encrypted room promises will not happen.
@@ -1180,17 +1223,30 @@ async def send_message(
                 status_code=400,
                 detail="Refusing to store plaintext in an encrypted conversation.",
             )
-    elif not (payload.body and payload.body.strip()) and not payload.media_id and not payload.sticker_id:
-        # A sticker is the whole message: it carries no text and needs none,
-        # which is the point of sending one.
-        raise HTTPException(
-            status_code=400, detail="A message needs text, an attachment or a sticker")
+    elif not (payload.body and payload.body.strip()) and not payload.media_id:
+        raise HTTPException(status_code=400, detail="A message needs text or an attachment")
+
+    if payload.reply_to_id:
+        # Looked up inside this conversation, never by id alone: a bare lookup
+        # would confirm that a message exists in a room the sender is not in.
+        # An expired message was purged above, so it is refused like any other
+        # id that is not here.
+        quoted = db.scalar(
+            select(models.Message.id).where(
+                models.Message.id == payload.reply_to_id,
+                models.Message.conversation_id == conversation_id,
+            )
+        )
+        if quoted is None:
+            raise HTTPException(status_code=400, detail="The message you are replying to is not in this conversation")
 
     attachment = await _attachment(payload.media_id, principal.user_id) if payload.media_id else None
 
     # Text first. An attachment sent before the other side accepted has already
     # been seen by the time anybody can report it.
-    if payload.media_id or payload.kind not in ("text", ""):
+    # A sticker is our own catalogue artwork, not a file the member supplied, so
+    # it is not held back like an attachment.
+    if payload.media_id or payload.kind not in ("text", "", "sticker"):
         media_ok, media_reason = agecheck.may_send_media(db, principal.user_id, conversation_id)
         if not media_ok:
             raise HTTPException(status_code=403, detail=media_reason)
@@ -1199,31 +1255,22 @@ async def send_message(
     # than any button, and it is what people actually do.
     _accept(db, conversation_id, principal.user_id)
 
-    # An id the catalogue does not know is refused rather than ignored: storing
-    # it would leave a message that renders as nothing, and ignoring it would
-    # silently send an empty message instead of the sticker somebody picked.
-    chosen_sticker = stickers.get(payload.sticker_id)
-    if payload.sticker_id and chosen_sticker is None:
-        raise HTTPException(status_code=400, detail="Unknown sticker")
-
     message = models.Message(
         id=new_id("msg"),
         conversation_id=conversation_id,
         sender_id=principal.user_id,
         encrypted=conversation.encrypted,
         ciphertext=base64.b64decode(payload.ciphertext_b64) if payload.ciphertext_b64 else None,
-        kind="media" if attachment else ("sticker" if chosen_sticker else payload.kind),
+        kind="media" if attachment else payload.kind,
         media_url=attachment["url"] if attachment else None,
         media_id=attachment["id"] if attachment else None,
         media_kind=attachment["kind"] if attachment else None,
         media_type=attachment["content_type"] if attachment else None,
         media_size=attachment["size_bytes"] if attachment else None,
         lang=payload.lang,
-        sticker_id=chosen_sticker["id"] if chosen_sticker else None,
-        # Resolved against this conversation; an id from another thread becomes
-        # None rather than a quote of a message these people cannot read.
-        reply_to_id=_reply_target(db, conversation_id, payload.reply_to_id),
         client_id=payload.client_id,
+        reply_to_id=payload.reply_to_id,
+        sticker_id=payload.sticker_id,
         # The deadline is computed from the room's setting, not sent by the
         # client: letting the sender choose would let them set a shorter timer
         # than the room agreed to, or none at all.
@@ -1280,9 +1327,12 @@ async def send_message(
             # plaintext to send and the client fetches the ciphertext.
             "body": None if message.encrypted else _plain(message)[0],
             "kind": message.kind,
-            **_media_fields(message),
-            "sticker": chosen_sticker,
+            # The id only. Whoever receives this already holds the original
+            # (or shows "older message"); the server never echoes its text.
             "reply_to_id": message.reply_to_id,
+            "sticker_id": message.sticker_id,
+            **_media_fields(message),
+            "sticker": stickers.get(message.sticker_id),
             "created_at": message.created_at.isoformat(),
         },
     )
@@ -1318,8 +1368,44 @@ async def send_message(
     if offline:
         db.commit()
 
-    return {"id": message.id, "created_at": message.created_at, "client_id": message.client_id,
-            "reply_to_id": message.reply_to_id}
+    return {"id": message.id, "created_at": message.created_at, "client_id": message.client_id}
+
+
+# --- reactions -----------------------------------------------------------------
+#
+# One emoji per member per message (see react_to_message above). Members of the
+# conversation only, for reading and for writing: a reaction is a small piece of
+# information about who is in the room and how they took a message, so it is
+# held to the same rule as the message itself.
+
+async def _react_guard(
+    db: OrmSession, conversation_id: str, message_id: str, principal
+) -> models.Message:
+    """Membership, then that the message is in this room, then who may talk to whom."""
+    _member(db, conversation_id, principal.user_id)
+    conversation = db.get(models.Conversation, conversation_id)
+    _purge_expired(db, conversation_id)
+    message = db.scalar(
+        select(models.Message).where(
+            models.Message.id == message_id,
+            models.Message.conversation_id == conversation_id,
+        )
+    )
+    if message is None:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if conversation.kind == "direct":
+        # The same standing check as sending: a block, or "nobody can message
+        # me", ends reactions as much as it ends messages. Fails closed.
+        other = next(
+            (uid for uid in _participant_ids(db, conversation_id) if uid != principal.user_id), None
+        )
+        if other:
+            allowed, reason = await asyncio.to_thread(
+                permissions.check, principal.user_id, other, "can_message", "message this member"
+            )
+            if not allowed:
+                raise HTTPException(status_code=403, detail=reason)
+    return message
 
 
 @app.post("/conversations/{conversation_id}/read", tags=["messages"])
@@ -1389,28 +1475,32 @@ def list_messages(
             stmt.order_by(models.Message.created_at.desc()).limit(min(limit, 100))
         ).all()))
 
-    # Fetching is not reading. A catch-up in a background tab, or a page of
-    # history, must not tell the other side "Seen": the client posts /read
-    # when the thread is actually on screen.
-    # The quoted messages, in one query for the page. Only ones from this same
-    # conversation are fetched, so a reply cannot carry a line out of a thread
-    # the reader is not in.
+    # One query for the whole page: which of the quoted messages still exist.
+    # A message deleted by its sender keeps its row but not its words, so it
+    # counts as gone here: a reply must not keep pointing at something that was
+    # deleted.
+    quoted_ids = {r.reply_to_id for r in rows if r.reply_to_id}
+    alive = (
+        set(db.scalars(
+            select(models.Message.id).where(
+                models.Message.id.in_(quoted_ids),
+                models.Message.conversation_id == conversation_id,
+                models.Message.deleted_at.is_(None),
+            )
+        ).all())
+        if quoted_ids
+        else set()
+    )
+
+    # How many of each emoji under each message of this page, and which one is
+    # the reader's own: two queries for the whole page.
     ids = [r.id for r in rows]
     counts = _reaction_counts(db, ids)
     mine = _my_reactions(db, principal.user_id, ids)
-    quoted_ids = {r.reply_to_id for r in rows if r.reply_to_id}
-    quoted: dict[str, models.Message] = {}
-    if quoted_ids:
-        quoted = {
-            q.id: q
-            for q in db.scalars(
-                select(models.Message).where(
-                    models.Message.id.in_(quoted_ids),
-                    models.Message.conversation_id == conversation_id,
-                )
-            ).all()
-        }
 
+    # Fetching is not reading. A catch-up in a background tab, or a page of
+    # history, must not tell the other side "Seen": the client posts /read
+    # when the thread is actually on screen.
     return {
         "items": [
             {
@@ -1421,9 +1511,11 @@ def list_messages(
                 "ciphertext_b64": base64.b64encode(r.ciphertext).decode() if r.ciphertext else None,
                 "body": None if r.deleted_at else _plain(r)[0],
                 "kind": r.kind,
-                **_media_fields(r),
                 "reply_to_id": r.reply_to_id,
-                "reply_to": _quoted(quoted.get(r.reply_to_id or "")),
+                "sticker_id": r.sticker_id,
+                # Whether the original is gone (expired). Never its content.
+                "reply_to_deleted": bool(r.reply_to_id) and r.reply_to_id not in alive,
+                **_media_fields(r),
                 "sticker": stickers.get(r.sticker_id),
                 "edited_at": r.edited_at,
                 # A deleted message keeps its place in the thread and loses its
@@ -1711,6 +1803,10 @@ def push_subscribe(
     if not webpush.available():
         raise HTTPException(
             status_code=503, detail="Push notifications are not available on this installation")
+    if not webpush.endpoint_allowed(payload.endpoint):
+        # The server will POST to this address, so only a browser vendor's push
+        # service is accepted (see webpush.ALLOWED_PUSH_HOSTS).
+        raise HTTPException(status_code=400, detail="That is not a supported push service")
 
     existing = db.scalar(
         select(models.PushSubscription).where(models.PushSubscription.endpoint == payload.endpoint)
@@ -1724,6 +1820,16 @@ def push_subscribe(
     existing.user_agent = request.headers.get("user-agent")
     existing.failures = 0
     db.commit()
+    # Keep a member's most recent devices only.
+    surplus = db.scalars(
+        select(models.PushSubscription.id)
+        .where(models.PushSubscription.user_id == principal.user_id)
+        .order_by(models.PushSubscription.id.desc())
+        .offset(webpush.MAX_SUBSCRIPTIONS_PER_MEMBER)
+    ).all()
+    if surplus:
+        db.execute(delete(models.PushSubscription).where(models.PushSubscription.id.in_(surplus)))
+        db.commit()
     return {"subscribed": True}
 
 
@@ -1767,6 +1873,10 @@ def _push_to_member(user_id: str, payload: dict) -> None:
             select(models.PushSubscription).where(models.PushSubscription.user_id == user_id)
         ).all()
         for row in rows:
+            if not webpush.endpoint_allowed(row.endpoint):
+                # Registered before the allowlist existed, or by hand: never sent to.
+                session.delete(row)
+                continue
             subscription = {
                 "endpoint": row.endpoint,
                 "keys": {"p256dh": row.p256dh, "auth": row.auth},

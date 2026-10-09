@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Check, RefreshCw, Route } from 'lucide-react'
+import { Eyebrow } from '@/components/landing/PageKit'
+import { KL_CARD } from '@/components/landing/kl-classes'
+import { cn } from '@/lib/utils'
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 
@@ -26,9 +29,9 @@ const SCHEDULES: number[][] = [
 
 const LATENCIES = ['118ms', '204ms', '341ms', '96ms', '262ms', '187ms']
 
-const GATEWAY = { x: 280, y: 150 }
-const RX = 64 // request node right edge x
-const MX = 460 // model node x
+const GATEWAY = { x: 300, y: 150 }
+const RX = 124 // request node right edge x
+const MX = 452 // model node x
 
 function PulseDot({ fromY, toY, color, delay, round }: { fromY: number; toY: number; color: string; delay: number; round: number }) {
   return (
@@ -66,8 +69,8 @@ export default function AIGateway() {
   }, [])
 
   return (
-    <section className="noise-overlay relative bg-ink px-6 py-24 md:py-28">
-      <div className="mx-auto grid max-w-container items-center gap-14 lg:grid-cols-[5fr_6fr]">
+    <section className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)] relative">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-center gap-14 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
         {/* Left copy */}
         <motion.div
           initial={{ opacity: 0, y: 32 }}
@@ -75,11 +78,11 @@ export default function AIGateway() {
           viewport={{ once: true, margin: '-15%' }}
           transition={{ duration: 0.65, ease: EASE }}
         >
-          <p className="eyebrow text-sky">Kinjy AI Gateway</p>
-          <h3 className="h3 mt-4 font-display text-3xl font-medium">
-            One gateway. <span className="text-gold-grad">Every worthy model.</span>
-          </h3>
-          <ul className="mt-7 space-y-3.5">
+          <Eyebrow>Kinjy AI Gateway</Eyebrow>
+          <h2 className="kl-h2 mt-5 max-w-[900px]">
+            One gateway. <span className="text-[var(--kl-gold-deep)]">Every worthy model.</span>
+          </h2>
+          <ul className="mt-8 space-y-3.5 text-[16px]">
             {[
               'Never hard-coded to a single provider — the router chooses per request',
               'Routes by task, accuracy, language, cost, speed and data sensitivity',
@@ -104,14 +107,15 @@ export default function AIGateway() {
         </motion.div>
 
         {/* Right: routing diagram */}
+        <div className="kl-stage min-w-0">
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-15%' }}
           transition={{ duration: 0.7, ease: EASE }}
-          className="cloud-card overflow-hidden"
+          className={cn(KL_CARD, 'overflow-hidden')}
         >
-          <div className="flex items-center justify-between border-b border-white/10 bg-ink-3/70 px-5 py-3">
+          <div className="flex items-center justify-between border-b border-white/10 bg-[var(--kl-code)] px-5 py-3">
             <span className="mono-data flex items-center gap-2 text-xs text-text-low">
               <Route size={13} className="text-gold" aria-hidden="true" />
               gateway.kaluta.ai/route
@@ -126,16 +130,16 @@ export default function AIGateway() {
             </button>
           </div>
 
-          <div className="overflow-x-auto bg-ink-3/40 p-4">
-            <div className="relative h-[300px] w-[560px]">
+          <div className="overflow-x-auto bg-[var(--kl-code)] p-4">
+            <div className="relative h-[300px] w-[600px]">
               {/* wires */}
-              <svg viewBox="0 0 560 300" className="absolute inset-0 h-full w-full" aria-hidden="true">
+              <svg viewBox="0 0 600 300" className="absolute inset-0 h-full w-full" aria-hidden="true">
                 {REQUESTS.map((r) => (
                   <path
                     key={r.id}
-                    d={`M ${RX} ${r.y} C 150 ${r.y}, 200 ${GATEWAY.y}, ${GATEWAY.x - 26} ${GATEWAY.y}`}
+                    d={`M ${RX} ${r.y} C ${RX + 70} ${r.y}, ${GATEWAY.x - 90} ${GATEWAY.y}, ${GATEWAY.x - 26} ${GATEWAY.y}`}
                     fill="none"
-                    stroke="rgba(255,255,255,0.14)"
+                    stroke="var(--kl-dash)"
                     strokeWidth="1.3"
                   />
                 ))}
@@ -144,11 +148,11 @@ export default function AIGateway() {
                   return (
                     <motion.path
                       key={m.id}
-                      d={`M ${GATEWAY.x + 26} ${GATEWAY.y} C 360 ${GATEWAY.y}, 400 ${m.y}, ${MX} ${m.y}`}
+                      d={`M ${GATEWAY.x + 26} ${GATEWAY.y} C ${GATEWAY.x + 80} ${GATEWAY.y}, ${MX - 60} ${m.y}, ${MX} ${m.y}`}
                       fill="none"
-                      stroke={active ? 'rgba(217,166,72,0.55)' : 'rgba(255,255,255,0.1)'}
+                      stroke={active ? '#D9A648' : 'var(--kl-paper-2)'}
                       strokeWidth={active ? 1.6 : 1.2}
-                      animate={{ stroke: active ? 'rgba(217,166,72,0.55)' : 'rgba(255,255,255,0.1)' }}
+                      animate={{ stroke: active ? '#D9A648' : 'var(--kl-paper-2)' }}
                       transition={{ duration: 0.5 }}
                     />
                   )
@@ -171,16 +175,16 @@ export default function AIGateway() {
               {REQUESTS.map((r) => (
                 <div
                   key={r.id}
-                  className="force-dark absolute flex w-[104px] flex-col rounded-card-sm border px-2.5 py-1.5"
+                  className="absolute flex w-[104px] flex-col rounded-[10px] border px-2.5 py-1.5"
                   style={{
                     left: RX - 104,
                     top: r.y,
                     transform: 'translateY(-50%)',
                     borderColor: `${r.color}55`,
-                    background: 'rgba(11,14,29,0.85)',
+                    background: 'var(--kl-surface)',
                   }}
                 >
-                  <span className="font-mono text-[0.72rem] font-semibold" style={{ color: r.color }}>
+                  <span className="font-mono text-[0.72rem] font-semibold" style={{ color: r.color === '#F0C878' ? 'var(--kl-gold-deep)' : r.color === '#8FB8E8' ? 'var(--kl-sky-ink, #2F6BA8)' : r.color }}>
                     {r.label}
                   </span>
                   <span className="font-mono text-[0.58rem] text-text-low">{r.detail}</span>
@@ -189,15 +193,15 @@ export default function AIGateway() {
 
               {/* gateway node */}
               <div
-                className="force-dark absolute flex h-[68px] w-[68px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-gold/45"
-                style={{ left: GATEWAY.x, top: GATEWAY.y, background: 'radial-gradient(circle, #1A1F3B 30%, #0B0E1D 80%)' }}
+                className="kl-sheen absolute flex h-[68px] w-[68px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full shadow-[0_14px_30px_-12px_rgba(169,118,28,.55)]"
+                style={{ left: GATEWAY.x, top: GATEWAY.y }}
               >
                 <motion.span
                   key={round}
                   initial={{ rotate: 0 }}
                   animate={{ rotate: 360 }}
                   transition={{ duration: 0.9, ease: [0.65, 0, 0.35, 1] }}
-                  className="font-mono text-[0.6rem] font-semibold text-gold-soft"
+                  className="font-mono text-[0.6rem] font-bold"
                 >
                   router
                 </motion.span>
@@ -210,13 +214,13 @@ export default function AIGateway() {
                   <motion.div
                     key={m.id}
                     layout
-                    className="absolute w-[120px] rounded-card-sm border px-2.5 py-1.5"
+                    className="absolute w-[120px] rounded-[10px] border px-2.5 py-1.5"
                     style={{
                       left: MX + 12,
                       top: m.y,
                       transform: 'translateY(-50%)',
-                      borderColor: servedBy.length ? 'rgba(217,166,72,0.5)' : 'rgba(255,255,255,0.14)',
-                      background: 'rgba(11,14,29,0.85)',
+                      borderColor: servedBy.length ? '#D9A648' : 'var(--kl-paper-2)',
+                      background: 'var(--kl-surface)',
                     }}
                     animate={{ opacity: servedBy.length ? 1 : 0.55 }}
                     transition={{ duration: 0.4 }}
@@ -245,6 +249,7 @@ export default function AIGateway() {
             decision #{round + 1} · weights: accuracy 0.35 · cost 0.2 · speed 0.2 · language 0.15 · sensitivity 0.1
           </p>
         </motion.div>
+        </div>
       </div>
     </section>
   )

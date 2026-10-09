@@ -56,7 +56,24 @@ CHAT_PLAYABLE = {
     "audio/webm": "audio", "audio/mp4": "audio", "audio/aac": "audio", "audio/x-m4a": "audio",
     "audio/wave": "audio", "audio/x-wav": "audio", "audio/flac": "audio",
 }
-PURPOSES = ("post", "chat")
+PURPOSES = ("post", "chat", "memorial")
+
+# A memorial's gallery (blueprint §8: "photos/videos/voice"). Narrower than a post
+# on purpose: it is a public page that families fill from their phones, so it
+# takes only what every browser plays, caps a video where the gateway (which holds
+# a whole upload in memory) can carry it, and checks the file is what it says it
+# is — a gallery is displayed to strangers, a post to followers.
+MEMORIAL_TYPES = {
+    "image/jpeg": "image", "image/png": "image", "image/webp": "image",
+    "video/mp4": "video", "video/webm": "video",
+}
+MEMORIAL_MAX_BYTES = {"image": 25 * 1024 * 1024, "video": 50 * 1024 * 1024}
+MEMORIAL_FORMATS_HINT = (
+    "A memorial takes photos as JPEG, PNG or WebP and videos as MP4 or WebM. "
+    "A video from an iPhone (.mov, or HEVC) has to be saved as MP4 (H.264) first."
+)
+
+
 
 # The only kinds ever served inline. Anything else — HTML, SVG, XML, scripts,
 # unknown bytes — goes out as an opaque download: this service answers on the
@@ -116,7 +133,11 @@ async def upload(
     if purpose not in PURPOSES:
         raise HTTPException(status_code=400, detail=f"purpose must be one of: {', '.join(PURPOSES)}")
     content_type = (file.content_type or "application/octet-stream").split(";")[0].strip().lower()
-    if purpose == "chat":
+    if purpose == "memorial":
+        kind = MEMORIAL_TYPES.get(content_type)
+        if kind is None:
+            raise HTTPException(status_code=415, detail=f"Unsupported content type: {file.content_type}. {MEMORIAL_FORMATS_HINT}")
+    elif purpose == "chat":
         kind = CHAT_PLAYABLE.get(content_type, "file")
     else:
         kind = ALLOWED.get(content_type)
@@ -154,6 +175,7 @@ async def upload(
 
     digest = hashlib.sha256()
     written = 0
+    limit = MEMORIAL_MAX_BYTES[kind] if purpose == "memorial" else MAX_BYTES
     # The start of the file, kept to read the picture's shape from. Taken from
     # the first chunk, which is a megabyte - far more than imagesize needs - so
     # this costs a slice and no extra read.
@@ -167,15 +189,16 @@ async def upload(
                 # Refused on the first chunk, before the rest is stored.
                 out.close()
                 destination.unlink(missing_ok=True)
+                hint = f" {MEMORIAL_FORMATS_HINT}" if purpose == "memorial" else ""
                 raise HTTPException(
                     status_code=415,
-                    detail=f"The file does not look like {content_type}: its first bytes say otherwise",
+                    detail=f"The file does not look like {content_type}: its first bytes say otherwise.{hint}",
                 )
             written += len(chunk)
-            if written > MAX_BYTES:
+            if written > limit:
                 out.close()
                 destination.unlink(missing_ok=True)
-                raise HTTPException(status_code=413, detail=f"File exceeds the {MAX_BYTES // 1024 // 1024} MB limit")
+                raise HTTPException(status_code=413, detail=f"File exceeds the {limit // 1024 // 1024} MB limit")
             digest.update(chunk)
             sink.write(chunk)
         if seal:
@@ -193,6 +216,9 @@ async def upload(
             models.Asset.sha256 == sha,
             models.Asset.owner_id == principal.user_id,
             models.Asset.private.is_(private),
+            models.Asset.purpose == "memorial"
+            if purpose == "memorial"
+            else or_(models.Asset.purpose.is_(None), models.Asset.purpose != "memorial"),
         )
     )
     if existing is not None:
@@ -248,6 +274,9 @@ async def upload(
         # no public address to fall back on, and an upload nobody has attached
         # yet has no business being served without a ticket.
         **({"provider": "uploadcenter", "external_id": remote_id, "access": "restricted"} if remote_id else {}),
+        # Only a memorial's files carry a purpose here; it is what lets the
+        # discard route below delete them, and nothing else.
+        purpose="memorial" if purpose == "memorial" else None,
     )
     db.add(asset)
     try:
@@ -1137,10 +1166,12 @@ class DiscardIn(BaseModel):
 
 @app.post("/internal/media/{asset_id}/discard", status_code=204, tags=["internal"])
 def discard_profile_image(asset_id: str, payload: DiscardIn, db: OrmSession = Depends(get_db)):
-    """Delete a profile image its owner has replaced or removed.
+    """Delete a file its owner has replaced or removed: a profile image, or a
+    memorial's gallery file.
 
-    Only profile images, and only for the owner named by the caller: an
-    internal caller with a wrong id cannot delete somebody's post media.
+    Only those — they are the assets that carry a purpose — and only for the
+    owner named by the caller: an internal caller with a wrong id cannot delete
+    somebody's post media.
     Unknown or already deleted is not an error - the outcome is the same.
     """
     asset = db.get(models.Asset, asset_id)
@@ -1201,6 +1232,8 @@ def internal_asset(asset_id: str, db: OrmSession = Depends(get_db)):
         "owner_id": asset.owner_id,
         "kind": asset.kind,
         "content_type": asset.content_type,
+        "size_bytes": asset.size_bytes,
+        "provenance": asset.provenance,
         "purpose": asset.purpose,
         "status": asset.status,
         "access": asset.access,

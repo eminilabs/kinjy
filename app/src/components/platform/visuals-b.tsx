@@ -24,7 +24,7 @@ export function GraveyardVisual() {
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-paper-ink/70">
           <QrCode size={14} /> QR-linked memorial stone
         </span>
-        <Link to="/memorials" className="text-sm font-bold text-[#8a6420] hover:underline">
+        <Link to="/memorials" className="text-sm font-bold text-[var(--kl-gold-deep)] hover:underline">
           Visit Memorials →
         </Link>
       </div>
@@ -66,7 +66,7 @@ export function EventsVisual() {
             </div>
           </div>
           {/* Back — event card */}
-          <div className="absolute inset-0 flex flex-col justify-between rounded-card-md border border-gold/35 bg-gradient-to-br from-indigo-deep to-ink-3 p-4 [backface-visibility:hidden] [transform:rotateY(180deg)]">
+          <div className="absolute inset-0 flex flex-col justify-between rounded-card-md border border-gold/35 bg-[var(--kl-surface)] p-4 [backface-visibility:hidden] [transform:rotateY(180deg)]">
             <div>
               <p className="text-[0.65rem] font-bold uppercase tracking-widest text-gold">Public event</p>
               <p className="mt-1.5 font-semibold leading-snug text-text-hi">Makumbusho Night Market</p>
@@ -140,7 +140,7 @@ export function MarketplaceVisual() {
           <p className="mt-1 text-[0.65rem] uppercase tracking-widest text-text-low">Buyer pays</p>
         </div>
       </div>
-      <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/5">
+      <div className="mt-5 h-2 overflow-hidden rounded-full bg-[var(--kl-paper)]">
         <div className="flex h-full">
           <motion.div
             className="h-full bg-sky/70"
@@ -234,7 +234,7 @@ export function AffiliateVisual() {
   return (
     <div className="cloud-card mx-auto w-full max-w-sm p-6">
       <p className="text-xs font-bold uppercase tracking-widest text-text-low">Every $100 of creator revenue</p>
-      <div className="mt-5 flex h-9 overflow-hidden rounded-full bg-white/5">
+      <div className="mt-5 flex h-9 overflow-hidden rounded-full bg-[var(--kl-paper)]">
         {WATERFALL.map((w, i) => (
           <motion.div
             key={w.label}
@@ -260,7 +260,7 @@ export function AffiliateVisual() {
         <span className="rounded-full border border-gold/30 bg-gold/10 px-2.5 py-1 text-[0.68rem] font-bold text-gold-soft">
           Kinjy Leaders · monthly snapshots
         </span>
-        <span className="rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-[0.68rem] font-semibold text-text-mid">
+        <span className="rounded-full border border-white/15 bg-[var(--kl-paper)] px-2.5 py-1 text-[0.68rem] font-semibold text-text-mid">
           KYC-gated payouts
         </span>
       </div>
@@ -304,11 +304,11 @@ export function AILayerVisual() {
         </defs>
         {ORB_LINKS.map((l) => (
           <g key={`chip-${l.label}`}>
-            <circle cx={l.x} cy={l.y} r={19} fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.18)" />
+            <circle cx={l.x} cy={l.y} r={19} style={{ fill: 'var(--kl-surface)', stroke: 'var(--kl-dash)' }} />
             <foreignObject x={l.x - 10} y={l.y - 10} width={20} height={20} className="pointer-events-none">
               <ModuleGlyph id={l.glyph} size={20} />
             </foreignObject>
-            <text x={l.x} y={l.y + 34} textAnchor="middle" fill="#A7ACBF" fontSize="10" fontWeight="600" fontFamily="Manrope, sans-serif">
+            <text x={l.x} y={l.y + 34} textAnchor="middle" style={{ fill: 'var(--kl-mid)' }} fontSize="10" fontWeight="600" fontFamily="Hanken Grotesk, sans-serif">
               {l.label}
             </text>
           </g>

@@ -34,6 +34,13 @@ const FamilyTreeApp = lazy(() => import('./pages/app/FamilyTree'))
 const Graveyard = lazy(() => import('./pages/app/Graveyard'))
 const MemorialPublic = lazy(() => import('./pages/MemorialPublic'))
 const Marketplace = lazy(() => import('./pages/app/Marketplace'))
+const MarketOrders = lazy(() => import('./pages/app/MarketOrders'))
+const MarketOrder = lazy(() => import('./pages/app/MarketOrder'))
+const MarketDispute = lazy(() => import('./pages/app/MarketDispute'))
+const MarketSell = lazy(() => import('./pages/app/MarketSell'))
+const MarketSeller = lazy(() => import('./pages/app/MarketSeller'))
+const MarketVendor = lazy(() => import('./pages/app/MarketVendor'))
+const MarketProduct = lazy(() => import('./pages/app/MarketProduct'))
 const Explore = lazy(() => import('./pages/app/Explore'))
 const Live = lazy(() => import('./pages/app/Live'))
 const Shorts = lazy(() => import('./pages/app/Shorts'))
@@ -103,12 +110,19 @@ export default function App() {
           <Route path="/communities/:slug" element={<Communities />} />
           <Route path="/forums" element={<Forums />} />
           <Route path="/messages" element={<Messages />} />
-          <Route path="/tree" element={gated('familyTree', <FamilyTreeApp />, '/hub')} />
+          <Route path="/tree" element={gated('familyTreeApp', <FamilyTreeApp />, '/hub')} />
           <Route path="/graveyard" element={<Graveyard />} />
           {/* Where a memorial's QR code leads. Public: whoever scans a headstone
               usually has no account. */}
           <Route path="/memorial/:code" element={<MemorialPublic />} />
           <Route path="/market" element={gated('marketplace', <Marketplace />, '/hub')} />
+          <Route path="/market/orders" element={gated('marketplace', <MarketOrders />, '/hub')} />
+          <Route path="/market/orders/:id" element={gated('marketplace', <MarketOrder />, '/hub')} />
+          <Route path="/market/orders/:id/dispute" element={gated('marketplace', <MarketDispute />, '/hub')} />
+          <Route path="/market/products/:id" element={gated('marketplace', <MarketProduct />, '/hub')} />
+          <Route path="/market/sell" element={gated('marketplace', <MarketSell />, '/hub')} />
+          <Route path="/market/seller" element={gated('marketplace', <MarketSeller />, '/hub')} />
+          <Route path="/market/vendors/:vendorId" element={gated('marketplace', <MarketVendor />, '/hub')} />
           <Route path="/explore" element={<Explore />} />
           <Route path="/live" element={gated('live', <Live />, '/hub')} />
           <Route path="/shorts" element={<Shorts />} />

@@ -160,7 +160,7 @@ export default function FamilyTreePeek({ orb }: Props) {
                     stroke={isRoot ? '#F0C878' : onPath ? '#D9A648' : 'rgba(143,184,232,0.5)'}
                     strokeWidth={isRoot ? 2 : 1.2}
                   />
-                  <text textAnchor="middle" dy={3.5} fontSize={9} fontWeight={700} fill="#F4F2EE" fontFamily="Manrope, sans-serif">
+                  <text textAnchor="middle" dy={3.5} fontSize={9} fontWeight={700} fill="#F4F2EE" fontFamily="Hanken Grotesk, sans-serif">
                     {p.name}
                   </text>
                 </motion.g>

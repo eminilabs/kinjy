@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Baby, GraduationCap, UserRound, ShieldCheck, EyeOff, Ban, Clock, Scale, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Eyebrow } from '@/components/landing/PageKit'
+import { KL_CARD } from '@/components/landing/kl-classes'
 
 interface Mode {
   id: string
@@ -81,10 +83,10 @@ export default function AgeModes() {
   const active = MODES.find((m) => m.id === activeId) ?? MODES[0]
 
   return (
-    <section aria-labelledby="age-heading" className="twilight-field noise-overlay py-24">
-      <div className="mx-auto max-w-container px-6">
-        <p className="eyebrow text-gold">Age-appropriate spaces</p>
-        <h2 id="age-heading" className="h2 mt-3 max-w-2xl">
+    <section aria-labelledby="age-heading" className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]">
+      <div>
+        <Eyebrow>Age-appropriate spaces</Eyebrow>
+        <h2 id="age-heading" className="kl-h2 mt-5 max-w-[900px]">
           Different ages, different worlds — one account system.
         </h2>
 
@@ -102,8 +104,8 @@ export default function AgeModes() {
                 viewport={{ once: true, amount: 0.4 }}
                 transition={{ duration: 0.6, delay: i * 0.12, ease: [0.22, 1, 0.36, 1] }}
                 className={cn(
-                  'cloud-card p-5 text-start transition-colors duration-200',
-                  activeId === mode.id && 'shadow-gold-ring border-gold/40',
+                  KL_CARD, 'p-5 text-start transition-colors duration-200',
+                  activeId === mode.id && '!border-[var(--kl-gold)] border-gold/40',
                 )}
               >
                 <span className={cn('inline-flex h-11 w-11 items-center justify-center rounded-full border', mode.ring, mode.shield)}>
@@ -124,7 +126,7 @@ export default function AgeModes() {
           </div>
 
           {/* Shared preview window */}
-          <div className="cloud-card overflow-hidden">
+          <div className={cn(KL_CARD, 'overflow-hidden')}>
             <div className="flex items-center gap-2 border-b border-white/8 px-4 py-2.5">
               <span className="h-2.5 w-2.5 rounded-full bg-danger/70" />
               <span className="h-2.5 w-2.5 rounded-full bg-warning/70" />

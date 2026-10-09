@@ -31,7 +31,7 @@ export function SocialHubVisual() {
           ['18.4k', 'Followers'],
           ['42', 'Life events'],
         ].map(([v, l]) => (
-          <div key={l} className="rounded-card-sm bg-white/5 px-2 py-2.5">
+          <div key={l} className="rounded-card-sm bg-[var(--kl-paper)] px-2 py-2.5">
             <p className="mono-data text-gold-soft">{v}</p>
             <p className="mt-0.5 text-[0.68rem] text-text-low">{l}</p>
           </div>
@@ -108,7 +108,7 @@ export function PublicContentVisual() {
                 onClick={() => setLevel(i)}
                 className={cn(
                   'rounded-full px-2.5 py-1 text-xs font-semibold transition-colors',
-                  i === level ? 'bg-gradient-to-br from-gold-soft to-gold text-ink' : 'bg-white/5 text-text-mid hover:text-text-hi',
+                  i === level ? 'bg-gradient-to-br from-gold-soft to-gold text-ink' : 'bg-[var(--kl-paper)] text-text-mid hover:text-text-hi',
                 )}
               >
                 {l.label}
@@ -136,21 +136,21 @@ export function ForumsVisual() {
       <div className="mt-4 space-y-3">
         <div className="flex gap-2.5">
           <Avatar index={6} size={30} name="Zuberi M." />
-          <div className="rounded-card-sm bg-white/5 px-3 py-2 text-sm text-text-hi">
+          <div className="rounded-card-sm bg-[var(--kl-paper)] px-3 py-2 text-sm text-text-hi">
             New import duties on textiles — how is everyone handling pricing?
           </div>
         </div>
         <div className="ml-6 border-l border-white/10 pl-4">
           <div className="flex gap-2.5">
             <Avatar index={2} size={26} name="Neema R." />
-            <div className="rounded-card-sm bg-white/5 px-3 py-2 text-[0.85rem] text-text-mid">
+            <div className="rounded-card-sm bg-[var(--kl-paper)] px-3 py-2 text-[0.85rem] text-text-mid">
               We split the +20% across the whole bundle instead of per item…
             </div>
           </div>
           <div className="mt-3 ml-6 border-l border-white/10 pl-4">
             <div className="flex gap-2.5">
               <Avatar index={9} size={24} name="Khalfan S." />
-              <div className="rounded-card-sm bg-white/5 px-3 py-2 text-[0.82rem] text-text-mid">
+              <div className="rounded-card-sm bg-[var(--kl-paper)] px-3 py-2 text-[0.82rem] text-text-mid">
                 Same — buyers accept it when the math is visible.
               </div>
             </div>
@@ -224,7 +224,7 @@ export function CirclesVisual() {
             className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border"
             style={{ width: ring.r * 2, height: ring.r * 2 }}
             animate={{
-              borderColor: assigned === i ? 'rgba(240,200,120,0.9)' : 'rgba(255,255,255,0.14)',
+              borderColor: assigned === i ? 'rgba(217,166,72,0.9)' : 'var(--kl-dash)',
               boxShadow: assigned === i ? '0 0 18px rgba(217,166,72,0.35)' : '0 0 0 rgba(0,0,0,0)',
             }}
             transition={{ duration: 0.35, ease: CLOUD_EASE }}
@@ -290,7 +290,7 @@ export function CommunitiesVisual() {
             aria-pressed={tier === i}
             className={cn(
               'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
-              tier === i ? 'bg-gradient-to-br from-gold-soft to-gold text-ink' : 'bg-white/5 text-text-mid hover:text-text-hi',
+              tier === i ? 'bg-gradient-to-br from-gold-soft to-gold text-ink' : 'bg-[var(--kl-paper)] text-text-mid hover:text-text-hi',
             )}
           >
             {p.key}
@@ -355,7 +355,7 @@ export function MessengerVisual() {
   return (
     <div ref={ref} className="cloud-card mx-auto w-full max-w-sm p-5">
       <div className="space-y-2.5">
-        <div className="max-w-[75%] rounded-2xl rounded-bl-sm bg-white/8 px-3.5 py-2.5 text-sm text-text-hi">
+        <div className="max-w-[75%] rounded-2xl rounded-bl-sm bg-[var(--kl-paper)] px-3.5 py-2.5 text-sm text-text-hi">
           Did the shipment clear customs?
         </div>
         <div className="ml-auto max-w-[75%] rounded-2xl rounded-br-sm bg-indigo/45 px-3.5 py-2.5 text-sm text-text-hi">
@@ -516,8 +516,8 @@ export function FamilyTreeVisual() {
             transition={{ duration: 0.5, ease: [0.34, 1.56, 0.64, 1], delay: n.gen * 0.28 + (n.id % 3) * 0.07 }}
             style={{ transformOrigin: `${n.x}px ${n.y}px` }}
           >
-            <circle cx={n.x} cy={n.y} r={15} fill="rgba(255,255,255,0.07)" stroke={n.gen === 2 ? 'rgba(240,200,120,0.7)' : 'rgba(255,255,255,0.2)'} strokeWidth="1.2" />
-            <text x={n.x} y={n.y + 4} textAnchor="middle" fill={n.gen === 2 ? '#F0C878' : '#A7ACBF'} fontSize="9" fontWeight="700" fontFamily="'JetBrains Mono', monospace">
+            <circle cx={n.x} cy={n.y} r={15} style={{ fill: 'var(--kl-surface)', stroke: n.gen === 2 ? '#D9A648' : 'var(--kl-dash)' }} strokeWidth="1.2" />
+            <text x={n.x} y={n.y + 4} textAnchor="middle" style={{ fill: n.gen === 2 ? 'var(--kl-gold-deep)' : 'var(--kl-mid)' }} fontSize="9" fontWeight="700" fontFamily="'JetBrains Mono', monospace">
               L{n.gen + 1}
             </text>
           </motion.g>

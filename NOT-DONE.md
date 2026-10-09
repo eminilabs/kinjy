@@ -154,6 +154,9 @@ Each of these was checked against https://kinjy.com, not only locally.
 
 ## 3e. What /family promises, measured against what it does
 
+*Checked 20/08. Partly superseded on 06/10: see "Family tree (06/10)" at the end,
+which records what was found still open and what changed.*
+
 Checked on production 2026-08-20, promise by promise.
 
 - **"Family-only by default. Trees are private."** — was **false, and it was a
@@ -203,8 +206,8 @@ Checked on production 2026-08-20, promise by promise.
   answer; no screen calls them. The marketing page promises an archive, an
   interactive timeline, a narrated documentary and biographies. None of that
   has a UI.
-- **3-relative corroboration for deceased persons** — modelled with the family
-  tree, which is hidden. The memorial death verification itself (UNCONFIRMED →
+- **3-relative corroboration for deceased persons** — built with the family
+  tree, which is open in the app since 06/10 (see "Family tree" below). The memorial death verification itself (UNCONFIRMED →
   REPORTED → UNDER REVIEW → VERIFIED) now has its UI; see Graveyard below.
 - **Smoke test leaves data behind** — `smoke-test.sh` registers two members and
   posts several items on every run, and never cleans up. Fine locally, wrong
@@ -293,11 +296,15 @@ guest book; and the public `/memorials` page showed a dead button, a candle that
 was never sent anywhere, a made-up legacy contact and a paid tier that does not
 exist.
 
+**Gallery of photos and videos (06/10)** — built (`info.md` §8, "photos/videos/voice"),
+covered by `backend/tests/e2e_graveyard_gallery.py` (66 checks) and a browser
+pass of the grid, the viewer, the family's screen, light mode and 390px (55
+checks, WCAG AA). The family adds, captions, orders and removes up to 60 photos
+and videos (500 MB in all); each carries an origin label; some can be marked
+sensitive; an approved visitor photo can be promoted into it.
+
 Not built — in the blueprint (`info.md` §8):
 
-- **Photos and videos.** The blueprint says "photos/videos/voice". A memorial
-  has one portrait, one cover and one voice recording, and a visitor's message
-  may carry a photo; there is no gallery and no video anywhere.
 - **Paid flowers and candles** ("free + paid"). `paid` and `amount` exist on
   tributes; nothing charges, and the public pages no longer show a paid tier.
   The age rule is already settled — every checkout passes the `payments` gate
@@ -309,8 +316,37 @@ Deferred by the blueprint itself:
 
 - **AR memorials** — "future AR memorials".
 - **"Family" visibility** is accepted and treated as private (administrators
-  only): the family is whoever the family tree says, and the tree is hidden
+  only): the family is whoever the family tree says. The tree is open in the app
+  (`FEATURES.familyTreeApp`, 06/10); the public `/family` page stays hidden
   (`FEATURES.familyTree`).
+
+Known limits of the gallery:
+
+- **No thumbnails.** There is no ffmpeg in media-service, so the grid loads the
+  pictures themselves (25 MB at most each, twelve before "Show all"), and a
+  video's first frame stands in for a poster.
+- **A video must be playable where it is watched.** MP4 and WebM only; an iPhone
+  `.mov` is refused with what to do. An MP4 encoded as HEVC passes the checks but
+  Chrome and Firefox cannot play it — the viewer offers the download. Nothing is
+  converted.
+- **50 MB per video** because the gateway holds a whole upload in memory
+  (`await request.body()`). Raising it means streaming the body through the
+  gateway first.
+- **Media is not age-rated.** The classifier cannot look at a picture, and posts
+  with media stay adult-only until a person reviews them. A memorial gallery is
+  shown to everyone — signed-out visitors, who are the people at the grave, and
+  minors included — and the family's "sensitive" mark (blurred until shown) is
+  the only guard. A decision, not an oversight; AGE-SAFETY.md says so.
+- **Only the gallery's own files are deleted** with their item or their
+  memorial. The portrait, cover, voice and tribute photos still stay in
+  media-service, because the same bytes can be shared with a post.
+- **A video's link lasts an hour, a picture's five minutes.** A picture whose
+  link ran out asks for fresh ones and a second failure within ten seconds is
+  believed. The page does not renew links while it is untouched.
+- **Error red on the dark theme is 4.3:1.** The theme's `--danger` is `#DE5C5C`;
+  small text needs 4.5:1. The gallery shows problems in normal text with a red
+  icon; the other 17 uses in Circles and Graveyard (51 in the app) are a token
+  change away from passing.
 
 Known limits:
 
@@ -324,8 +360,9 @@ Known limits:
   family, so nothing they write appears unreviewed.
 - **A tribute's author cannot withdraw it.** Only an administrator can take it
   down.
-- **Deleting a memorial leaves its files** in media-service, restricted and
-  owned by whoever uploaded them.
+- **Deleting a memorial leaves its portrait, cover, voice and tribute photos** in
+  media-service, restricted and owned by whoever uploaded them (the gallery's
+  files are deleted).
 - **The reporter of a death is not told the outcome** unless they administer
   the memorial; the family is.
 - **Reminders fall at midnight UTC** on the anniversary, not at the family's
@@ -632,6 +669,167 @@ What the tests do not cover:
 - **Nothing refreshes a link card.** A page that changes its title keeps the
   old one for seven days, and a dead link keeps its card until then too.
 
+## Family tree (06/10)
+
+The tree was hidden behind one switch since 28/09. It is open **in the app**
+(`FEATURES.familyTreeApp`: `/tree`, its privacy settings, the family search in
+Explore). The public site's `/family` page and every line of copy advertising it
+stay hidden (`FEATURES.familyTree`) on purpose, because that copy still promises
+what is not built (below).
+
+**Found and fixed, each reproduced against the running service before the change:**
+
+- ~~"Trees are private" was still false after 20/08.~~ `GET /family/persons`
+  listed **every person on the platform to anyone, with no token** (added after
+  the earlier fix, to fill the screen's picker), and `/persons/{id}`, `/timeline`,
+  `/duplicates`, `/heritage` and `/disputes` answered anyone too. All now answer
+  the family only; a stranger gets 404, never 403.
+- ~~Anyone with an account could write into anyone's tree.~~ Linking two people
+  who were not members, confirming, and **disputing** (which marks the person
+  `disputed`) needed no place in the tree. Writing now needs being in it; a
+  member's node also needs that member's `who_can_add_family`.
+- ~~The model accepted what cannot be true:~~ the same marriage written both ways,
+  a spouse who is also a parent, two parent edges for one pair, a parent born
+  after the child, dates in the future or out of order. Refused by the service,
+  and backed by two partial unique indexes.
+- ~~`PATCH` could not clear a field and could reassign `user_id` (a 500).~~
+- ~~No way to remove a person.~~ `DELETE /family/persons/{id}`.
+- ~~Siblings declared without a shared parent never appeared in the tree.~~
+- ~~Every read loaded the whole relationships table.~~ Now only the family's
+  connected component, and a tree response is capped at 250 people.
+
+**Still not built (and stated, not hidden):**
+
+- **Links are never verified.** A relationship is created `pending` and nothing
+  moves it to `verified`; only *people* are corroborated. The screen therefore
+  shows no verified/pending mark on lines, and "how are we related" reports 0
+  verified links.
+- **A member does not confirm a claim made about them.** The privacy setting only
+  decides who may link their node; there is no "X says you are their cousin —
+  accept?". (The setting's hint used to say there was; it no longer does.)
+- **A dispute has no resolution path.** `disputes.status` can be `resolved` but no
+  endpoint resolves one, so a disputed person stays disputed.
+- **A deleted account leaves its node behind.** `user.deletion_requested` has no
+  consumer; the node keeps a `user_id` that no longer exists and stays readable.
+  `memorial.person_id` can likewise point at a person who was removed (services do
+  not read each other's tables).
+- **No age rule.** Nothing here treats a minor's node differently; the only
+  protection is the owner's `who_can_see_family` / `who_can_add_family`
+  settings, which parental supervision already constrains.
+- **No cap on parents.** A person can have any number of `parent_of` edges; the
+  graph assumes at most two for "full sibling" but does not enforce it. A product
+  decision, not an invention to make here.
+- **Per-branch sharing, legacy contacts, GEDCOM export, Heritage AI screens:**
+  unchanged from 3e, and the reason the public page stays hidden.
+- **The unique indexes need a clean table.** They are created by the service's
+  migrations; on a database that already holds duplicate spouse or parent rows
+  the migration fails (logged, not fatal) and only the service-level check
+  applies. Look for `migration failed (family-service)` after deploying.
+- Relation labels still stop at "cousin (degree N)" and otherwise say "related
+  through N steps" (a step-parent shows that way), rather than invent a term.
+- The tree and list views were exercised in a headless browser at 1440 and 390 px
+  in both light and dark; not on a real phone, and not with a screen reader.
+
+## Family tree against `todo copy.md` (07/10)
+
+The product reference for the family tree is Module 5 of `todo copy.md` (untracked;
+there is no `todo.md`). Compared with what was built on 06/10, before the second pass:
+
+| `todo copy.md` says | State before this pass | Decision |
+|---|---|---|
+| Primitive edges only (`parent_of`, `spouse_of`, `adoptive_parent_of`, `guardian_of`, `sibling_of`); half-sibling and every complex relation computed, never stored | Matches. Checked on a blended family: full and half siblings were derived correctly from shared parents | Kept. A father/mother `role` is an *attribute of a parent edge*, not a new edge kind |
+| Level model: root 0, ancestors positive, descendants negative | Matches | Kept |
+| Trees strictly private, 404 for a stranger; 3 close confirmations for a deceased person | Matches (hardened on 06/10) | Untouched |
+| Mobile: `Vue Générations` with **expandable cards Parents / Moi & Conjoint / Enfants** | A list by generation, **not expandable**, no such grouping | Rebuilt as expandable sections |
+| Mobile: pinch-to-zoom and pan on the graph | Missing (the graph only scrolled inside its box) | Added, with zoom buttons |
+| Graph view by default on desktop, generations view by default on mobile | Matches | Kept |
+| Phase 2: invite a relative by link and claim the node on sign-up | Not built | Out of this pass |
+| Phase 3: record oral histories on a person | Not built | Out of this pass |
+| Phase 4: set `FEATURES.familyTree: true` | **Not done on purpose.** The app side is open through `FEATURES.familyTreeApp`; `familyTree` keeps hiding the public `/family` page while its copy promises what is not built | Deliberate gap, unchanged |
+| *(silent)* gender, father/mother, how unions are drawn, blended families, layout rules | Gender was optional free text; no father/mother; "add a sibling" wrote a `sibling_of` edge; lines ran parent-to-child one by one and crossed cards | Decided with the product owner, below |
+| *(outdated)* names `FamilyGraph.tsx` and the branch `feat/family-tree-mobile-ux` | `FamilyGraph.tsx` was replaced on 06/10; work is on `feat/family-tree` | Noted |
+
+**Decisions where the todo is silent** (validated 07/10):
+
+- `relationships.role` is nullable (`father`, `mother`, or unknown) and only on
+  `parent_of` / `adoptive_parent_of`. `gender` belongs to the person; `role` to the
+  relationship; **neither is ever derived from the other**.
+- No "one father, one mother" limit. Biological and adoptive parents must coexist,
+  and a rule across filiation types is not in the todo. The integrity checks that
+  already exist (no loop, no duplicate pair, no parent born after the child) stay.
+  The narrow rule *"within `parent_of` only, a child has at most one `father` and
+  one `mother`"* is **proposed, not introduced**; it needs a product decision.
+- Adding a sibling asks which parents are shared and writes real parent edges;
+  `sibling_of` remains only for "parents unknown". Half-sibling stays derived.
+- A union is a drawing device (the parents of a child), not a stored entity.
+- End of a union (`relationships.until`) stays unexposed: the todo does not ask.
+- Labels: Father / Mother when the role is known, otherwise Parent. No attempt
+  yet at grandfather, uncle or cousin beyond what the graph already derives.
+
+**Done in this pass (07/10), and what it still does not do:**
+
+- Father / mother as a role of the parent link, gender as a choice on the person; a
+  parent is added by saying father, mother or "parent, role not given". Existing
+  links have no role and read "Parent" until it is set (the Links list lets the
+  member who made a link set or clear it). Gender entered earlier as free text is
+  shown as entered and drawn neutral unless it reads as woman or man.
+- A brother or sister is added by ticking the parents they share; real parent links
+  are written and half/full is derived. A child can name the other parent, so a
+  person with several partners can have children from each union.
+- The tree is drawn as a genealogy: generations in rows, one stem and bar per set of
+  parents, partners side by side, nothing drawn across a card (measured on the
+  rendered page for a simple family, many siblings, half-siblings by the mother and by
+  the father, two unions, three generations, on a wide screen and at 390 px).
+- Phone: Parents / the person and partners / Children as expandable sections; the
+  graph zooms (pinch, Ctrl+wheel, buttons) and pans (drag).
+
+Still open, stated rather than hidden:
+
+- **"One father, one mother" is not enforced** and is proposed only: *within
+  `parent_of`, a child has at most one `father` and one `mother`*. Adoptive links are
+  excluded on purpose. It needs a product decision before it becomes a rule.
+- **Parents on two different generations** (a person reached by two paths at different
+  levels) can make a stem run across a card in between. Not seen in any family built
+  here; the layout does not detect it.
+- **More than two partners in a row**: a person can touch only two of them; the others
+  are joined by a line under the cards (a person with three unions in a row is placed
+  without overlap or crossing, but one of the partners is not adjacent).
+- **Pinch and drag were exercised with emulated touch**, not on a real phone.
+- Phases 2 (invite a relative by link, claim the node on sign-up), 3 (oral histories)
+  and 4 (`FEATURES.familyTree`) of the todo are untouched.
+
+### Layout engine rewritten (07/10, third pass)
+
+The positions used to come from a relaxation (order by the parents' average, then a
+least-squares compaction), so nothing guaranteed that a union's children were centred
+or that a subtree stayed together. They now come from `arrange.ts`, a pure function
+of the family structure: unions (the parents of a child) → chains (partners and
+co-parents side by side) → one block per chain with a group of children per union →
+bottom-up packing by contour → each group centred exactly under the point between its
+parents (parents move apart rather than the children together) → top-level families
+packed the same way. Ties are broken by birth date then name, never by the order the
+server lists things in, and the person you are viewing is not the origin.
+`layout.ts` only turns the positions into cards and connectors.
+
+- Data model: unchanged. The one server change: adding a brother or sister with exactly
+  one shared parent can name their *other* parent (someone in the tree who is not a
+  parent of the person added to), so a half-sibling is a child of the other union and is
+  never drawn under the first person's other parent. Parents unknown stays declared siblings.
+- Tests: `app/scripts/test-family-layout.mjs` runs the algorithm on synthetic families
+  (no browser): same generation = same Y, no overlap, no connector through a card,
+  parent above child, each child drawn under its real parents only, children centred
+  on their union to the pixel, half-sibling in the right group, unions not interleaved,
+  same positions for the same data in any input order, and a new grandchild not
+  reordering the rows above. Run: `docker compose exec web node scripts/test-family-layout.mjs`.
+- Honest limits: two families joined by a marriage (a person who is a child of two
+  trees) are drawn as two trees side by side; the second one's parents stand as near as
+  they can to their child and the bar runs longer (`Layout.crossLinked`), it is not
+  centred. A mother between two unions with wide descendants gets a long partner line.
+  A tree this wide shows small cards when fitted on a desktop (zoom floor lowered to 25%).
+- The line between two parents of the same child belongs to the union and is computed
+  from the final positions; a `spouse_of` link is not needed to draw it (and none is
+  created). When the pair are also recorded spouses, the spouse line is the one drawn.
+
 ## Layout, cards and the black /hub (06/10)
 
 - ~~`/hub` went black on refresh.~~ Fixed on 06/10: three paging hooks sat
@@ -682,3 +880,15 @@ What the tests do not cover:
   actually looked at these pages on a phone.
 - **`pointer: coarse` was exercised in emulation only.** A real touch device
   may match differently.
+
+## Sync of main into develop (08/10)
+
+What came from where: replies, the composer's emoji/sticker panel, the redesign and the voice-note player are develop's; reactions (one emoji per person, counts not names), edit, delete, the sticker catalogue (glyphs, packs, age tier), push notifications, the arrival sound and the message toast are main's. A sticker reaction (BART's) no longer exists.
+
+- **Anything that deletes a message leaves its attachment behind.** `DELETE /conversations/{id}/messages/{id}` clears the text and the reference, but media-service keeps the file, and a signed link issued before stays valid for up to its lifetime. Both `/internal/media/*/discard` endpoints exclude chat attachments on purpose. It belongs with the chat-attachment lifecycle work (`e2e_chat_attachment_expiry.py`), not with a patch on delete.
+- **Deleting is allowed to a blocked member, and nothing keeps what was deleted.** Retracting your own words is a feature, but on a platform that takes child safety seriously it also means a message can be wiped after it was reported. A decision, not an oversight: either keep a short-lived evidence copy for reported messages, or accept it.
+- **`/internal/*` authenticates nobody.** The gateway not routing them is the only protection, which is why one server-side request forgery (the push endpoint, fixed in this sync) reached order funding and age review. A shared-secret header on internal calls would make the next one harmless.
+- **A push endpoint known to somebody else can be re-registered under their account** (the row is reassigned by design, so a browser that changes account keeps working). The endpoint is a long unguessable URL, so it takes a leak first; not changed.
+- **`/forums` and `/tree` have the redesign's layout only partly**: both were rewritten on develop while the redesign restyled the old versions, so develop's pages were kept whole.
+- **Explore's empty state** shows main's discovery lists (people to connect with, spaces to join) instead of the redesign's "Start typing to explore" card.
+- **Legacy sticker reactions** are kept in `messaging.message_reactions_legacy` after the migration renames them; nothing reads them. Drop the table once nobody needs them.

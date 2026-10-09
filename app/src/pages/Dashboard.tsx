@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Navigate, Link, useSearchParams } from 'react-router'
-import { Check, Copy, LogOut, ShieldCheck } from 'lucide-react'
+import { Check, Copy, Gift, KeyRound, Lock, LogOut, Settings, ShieldCheck, SlidersHorizontal, UserRound, Wallet, type LucideIcon } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import Earnings from '@/components/dashboard/Earnings'
 import Security from '@/components/dashboard/Security'
@@ -11,19 +11,21 @@ import Privacy from '@/components/dashboard/Privacy'
 import ProfileEditor from '@/components/dashboard/ProfileEditor'
 import { Badge, Panel } from '@/components/dashboard/primitives'
 import AppShell from '@/components/app/AppShell'
+import MemberAvatar from '@/components/social/MemberAvatar'
+import { useMyProfile } from '@/hooks/useMyProfile'
 import { cn } from '@/lib/utils'
 
-const TABS = [
-  { id: 'earnings', label: 'Earnings' },
-  { id: 'profile', label: 'Profile' },
-  { id: 'verification', label: 'Verification' },
-  { id: 'privacy', label: 'Privacy' },
-  { id: 'experience', label: 'Feed & experience' },
-  { id: 'security', label: 'Security' },
-  { id: 'account', label: 'Account' },
-] as const
+const TABS: ReadonlyArray<{ id: string; label: string; icon: LucideIcon }> = [
+  { id: 'earnings', label: 'Earnings', icon: Wallet },
+  { id: 'profile', label: 'Profile', icon: UserRound },
+  { id: 'verification', label: 'Verification', icon: ShieldCheck },
+  { id: 'privacy', label: 'Privacy', icon: Lock },
+  { id: 'experience', label: 'Feed & experience', icon: SlidersHorizontal },
+  { id: 'security', label: 'Security', icon: KeyRound },
+  { id: 'account', label: 'Account', icon: Settings },
+]
 
-type TabId = (typeof TABS)[number]['id']
+type TabId = 'earnings' | 'profile' | 'verification' | 'privacy' | 'experience' | 'security' | 'account'
 
 function InviteCard({ code }: { code: string }) {
   const [copied, setCopied] = useState(false)
@@ -41,33 +43,47 @@ function InviteCard({ code }: { code: string }) {
   }
 
   return (
-    <Panel title="Invite" subtitle="You earn 20% of Kinjy's revenue on everything they do here.">
-      <p className="caption">Your referral code</p>
-      <p className="mono-data mt-1 text-2xl tracking-[0.2em] text-gold-soft">{code}</p>
+    <section className="cloud-card relative overflow-hidden !border-gold/50 p-6 md:p-7">
+      <span aria-hidden="true" className="absolute -right-16 -top-16 h-52 w-52 rounded-full bg-gold/20 blur-3xl" />
+      <div className="relative flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-start gap-4">
+          <span aria-hidden="true" className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gold/20 text-gold-soft">
+            <Gift size={22} />
+          </span>
+          <div>
+            <h2 className="text-[1.25rem] font-bold tracking-[-0.025em] text-text-hi">Invite</h2>
+            <p className="mt-1 text-sm text-text-low">You earn 20% of Kinjy's revenue on everything they do here.</p>
+          </div>
+        </div>
+        <div className="rounded-2xl bg-text-hi/[0.06] px-5 py-3 text-center">
+          <p className="mono-data text-[0.65rem] font-bold uppercase tracking-[0.14em] text-text-low">Your referral code</p>
+          <p className="mono-data mt-1 text-2xl font-bold tracking-[0.2em] text-gold-soft">{code}</p>
+        </div>
+      </div>
 
-      <div className="mt-4 flex gap-2">
+      <div className="relative mt-6 flex gap-2">
         <input
           readOnly
           value={link}
           onFocus={(e) => e.currentTarget.select()}
-          className="w-full rounded-card-sm border border-white/10 bg-ink-2/70 px-3 py-2 text-xs text-text-mid focus:outline-none"
+          className="w-full min-w-0 rounded-full border border-transparent bg-text-hi/[0.07] px-5 py-3 text-sm text-text-mid focus:border-gold/50 focus:outline-none"
           aria-label="Your invitation link"
         />
         <button
           type="button"
           onClick={copy}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/12 px-3.5 py-2 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-br from-gold-soft to-gold px-6 py-3 text-sm font-bold text-ink"
         >
-          {copied ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
+          {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
           {copied ? 'Copied' : 'Copy'}
         </button>
       </div>
 
-      <p className="caption mt-3">
+      <p className="relative mt-4 text-sm leading-relaxed text-text-low">
         One level, and it is yours for good: nobody above you earns on your members, and you are
         paid out of Kinjy's own margin rather than out of what anyone pays a seller.
       </p>
-    </Panel>
+    </section>
   )
 }
 
@@ -77,6 +93,7 @@ export default function Dashboard() {
   // Seeded from the URL so a link can point at one tab — the wellbeing notice
   // sends the member straight to the setting it is about.
   const [params] = useSearchParams()
+  const profile = useMyProfile()
   const requested = params.get('tab')
   const [tab, setTab] = useState<TabId>(
     TABS.some((t) => t.id === requested) ? (requested as TabId) : 'earnings',
@@ -94,67 +111,80 @@ export default function Dashboard() {
   // empty dashboard that 401s panel by panel.
   if (!user) return <Navigate to="/join?mode=signin" replace />
 
-  return (
-    <AppShell
-      title={user.display_name}
-      subtitle="Your earnings, verification, devices and account lifecycle."
-      action={
-        <div className="flex items-center gap-2">
-          {(user.role === 'admin' || user.role === 'superadmin') && (
-            <Link
-              to="/admin"
-              className="rounded-full border border-white/12 px-4 py-2 text-sm font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
-            >
-              Admin console
-            </Link>
-          )}
-          <button
-            type="button"
-            onClick={() => void signOut()}
-            className="inline-flex items-center gap-2 rounded-full border border-white/12 px-4 py-2 text-sm font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
-          >
-            <LogOut size={14} aria-hidden="true" />
-            Sign out
-          </button>
-        </div>
-      }
-    >
-      <div className="mb-5 flex flex-wrap items-center gap-2">
-        <span className="mono-data text-sm text-text-mid">@{user.handle}</span>
-        <Badge tone={user.kyc_verified ? 'good' : 'neutral'}>
-          {user.kyc_verified ? (
-            <>
-              <ShieldCheck size={12} className="mr-1 inline" aria-hidden="true" />
-              Verified
-            </>
-          ) : (
-            'Unverified'
-          )}
-        </Badge>
-        {user.role !== 'member' && <Badge tone="warn">{user.role}</Badge>}
-        {user.status !== 'active' && <Badge tone="bad">{user.status}</Badge>}
-      </div>
+  const isAdmin = user.role === 'admin' || user.role === 'superadmin'
+  const ghost =
+    'inline-flex items-center gap-2 rounded-full border border-[var(--cloud-border)] bg-[var(--cloud)] px-4 py-2 text-sm font-semibold text-text-mid transition-colors hover:border-gold/50 hover:text-text-hi'
 
-      <nav className="flex flex-wrap gap-1 border-b border-white/8" aria-label="Dashboard sections">
+  return (
+    <AppShell>
+      {/* Who this space belongs to, and the two things you do from it */}
+      <section className="cloud-card mb-5 overflow-hidden">
+        <div aria-hidden="true" className="h-28 bg-gradient-to-r from-[#F0C878] via-[#F2B8A2] to-[#C9CDF5]" />
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4 px-6 pb-6 md:px-8">
+          <div className="-mt-12 flex min-w-0 items-end gap-5">
+            <MemberAvatar
+              handle={user.handle}
+              displayName={profile?.display_name ?? user.display_name}
+              avatarUrl={profile?.avatar_url}
+              size={96}
+              ring
+              className="shrink-0 border-4 border-[var(--cloud)]"
+            />
+            <div className="min-w-0 pb-1 pt-[3.4rem]">
+              <p className="mono-data text-[0.72rem] font-bold uppercase tracking-[0.15em] text-gold-soft">Your space</p>
+              <h1 className="mt-1 truncate text-[clamp(28px,3.6vw,42px)] font-bold leading-[1.05] tracking-[-0.04em] text-text-hi">
+                {user.display_name}
+              </h1>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 pb-1">
+            {isAdmin && (
+              <Link to="/admin" className={ghost}>
+                Admin console
+              </Link>
+            )}
+            <button type="button" onClick={() => void signOut()} className={ghost}>
+              <LogOut size={14} aria-hidden="true" />
+              Sign out
+            </button>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--cloud-border)] px-6 py-4 md:px-8">
+          <span className="mono-data text-sm text-text-mid">@{user.handle}</span>
+          <Badge tone={user.kyc_verified ? 'good' : 'neutral'}>
+            {user.kyc_verified ? (
+              <>
+                <ShieldCheck size={12} className="mr-1 inline" aria-hidden="true" />
+                Verified
+              </>
+            ) : (
+              'Unverified'
+            )}
+          </Badge>
+          {user.role !== 'member' && <Badge tone="warn">{user.role}</Badge>}
+          {user.status !== 'active' && <Badge tone="bad">{user.status}</Badge>}
+        </div>
+      </section>
+
+      <nav
+        className="flex gap-1 overflow-x-auto rounded-full bg-text-hi/[0.06] p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        aria-label="Dashboard sections"
+      >
         {TABS.map((t) => (
           <button
             key={t.id}
             type="button"
-            onClick={() => setTab(t.id)}
+            onClick={() => setTab(t.id as TabId)}
             aria-current={tab === t.id ? 'page' : undefined}
             className={cn(
-              'relative px-4 py-3 text-sm font-medium',
-              tab === t.id ? 'text-gold-soft' : 'text-text-mid hover:text-text-hi',
+              'inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-colors',
+              tab === t.id
+                ? 'bg-gradient-to-br from-gold-soft to-gold text-ink shadow-[0_8px_18px_-10px_rgba(169,118,28,.6)]'
+                : 'text-text-mid hover:text-text-hi',
             )}
           >
+            <t.icon size={15} aria-hidden="true" />
             {t.label}
-            {tab === t.id && (
-              <span
-                aria-hidden="true"
-                className="absolute inset-x-3 -bottom-px h-0.5 rounded-full"
-                style={{ background: 'var(--grad-arc)' }}
-              />
-            )}
           </button>
         ))}
       </nav>
@@ -172,7 +202,7 @@ export default function Dashboard() {
         {tab === 'experience' && <Experience />}
         {tab === 'security' && <Security />}
         {tab === 'account' && (
-          <div className="grid gap-5 lg:grid-cols-2">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
             <Panel
               title="Account details"
               subtitle={
@@ -189,7 +219,7 @@ export default function Dashboard() {
                 </>
               }
             >
-              <dl className="space-y-3 text-sm">
+              <dl className="divide-y divide-[var(--cloud-border)] text-sm">
                 {[
                   ['Display name', user.display_name],
                   ['Handle', `@${user.handle}`],
@@ -197,9 +227,9 @@ export default function Dashboard() {
                   ['Language', user.lang],
                   ['Member id', user.id],
                 ].map(([label, value]) => (
-                  <div key={label} className="flex justify-between gap-4">
-                    <dt className="caption">{label}</dt>
-                    <dd className="truncate text-text-hi">{value}</dd>
+                  <div key={label} className="flex justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                    <dt className="text-text-low">{label}</dt>
+                    <dd className="truncate font-medium text-text-hi">{value}</dd>
                   </div>
                 ))}
               </dl>

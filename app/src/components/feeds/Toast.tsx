@@ -27,7 +27,7 @@ export function useToasts() {
   return useContext(Ctx)
 }
 
-/** Lightweight glass toast stack (bottom-center), with undo-style actions. */
+/** Lightweight toast stack (bottom-center), with undo-style actions. */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
   const idRef = useRef(0)
@@ -59,9 +59,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 12, scale: 0.97 }}
               transition={{ duration: 0.3, ease: CLOUD_EASE }}
-              className="pointer-events-auto flex items-center gap-3 rounded-full cloud-glass bg-ink-2/95 py-2.5 pl-5 pr-2.5 shadow-cloud"
+              className="kl-card-shadow pointer-events-auto flex items-center gap-3 rounded-full border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] py-2 pl-5 pr-2 text-[var(--kl-ink)]"
             >
-              <p className="text-sm font-medium text-text-hi">{t.message}</p>
+              <p className="text-sm font-medium">{t.message}</p>
               {t.actions?.map((a) => (
                 <button
                   key={a.label}
@@ -72,8 +72,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                   }}
                   className={
                     a.gold
-                      ? 'flex items-center gap-1.5 rounded-full bg-gradient-to-br from-gold-soft to-gold px-3.5 py-1.5 text-xs font-bold text-ink'
-                      : 'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-sky hover:bg-white/5'
+                      ? 'kl-sheen flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold'
+                      : 'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-[var(--kl-gold-deep)] hover:bg-[var(--kl-paper)]'
                   }
                 >
                   {!a.gold && <Undo2 size={12} />}

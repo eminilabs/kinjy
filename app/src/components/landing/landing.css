@@ -3,19 +3,21 @@
  *
  * Which one is decided by Home and stamped as data-kl-theme on the root:
  * the member's own display choice when they have made one, otherwise the
- * visitor's system setting. The colours live here as tokens rather than in
- * the app's theme variables, whose "cloud" default would otherwise paint
- * every first-time visitor's landing page dark.
+ * visitor's system setting. The brand colours come from the shared
+ * primitives (--k-* in index.css); the light/dark mapping lives here rather
+ * than in the app's theme variables, whose "cloud" default would otherwise
+ * paint every first-time visitor's landing page dark.
  */
 .kl {
   /* Surfaces */
-  --kl-bg: #ffffff;              /* page and frame */
-  --kl-surface: #ffffff;         /* cards sitting on the page */
-  --kl-paper: #f6f1e7;           /* soft panels, hover */
-  --kl-paper-2: #ede4d3;         /* hairlines, skeleton bars */
+  --kl-bg: var(--k-white);        /* page and frame */
+  --kl-surface: var(--k-white);   /* cards sitting on the page */
+  --kl-paper: var(--k-paper);     /* soft panels, hover */
+  --kl-paper-2: var(--k-paper-2); /* hairlines, skeleton bars */
   --kl-stage-a: #f6f1e7;         /* feature stages, gradient ends */
   --kl-stage-b: #ede4d3;
   --kl-dash: #d9c9a8;            /* dashed rings, "coming soon" outlines */
+  --kl-code: #f3f4f9;            /* code windows: a cool grey, not the warm paper */
   --kl-cutout: #ffffff;          /* the ring that separates an avatar from what is behind it */
   --kl-glass-bg: rgba(255, 255, 255, 0.66);
   --kl-glass-border: rgba(255, 255, 255, 0.95);
@@ -28,22 +30,22 @@
   --kl-shadow: rgba(36, 31, 22, 0.35);
 
   /* Text */
-  --kl-ink: #241f16;
-  --kl-mid: #5c5344;
-  --kl-low: #6e6555;
-  --kl-gold-deep: #8a6414;       /* gold that reads as text on this background */
-  --kl-on-pastel: #241f16;       /* initials on pastel avatars, in both themes */
+  --kl-ink: var(--k-paper-ink);
+  --kl-mid: var(--k-paper-mid);
+  --kl-low: var(--k-paper-low);
+  --kl-gold-deep: var(--k-gold-deep); /* gold that reads as text on this background */
+  --kl-on-pastel: var(--k-paper-ink); /* initials on pastel avatars, in both themes */
 
   /* Fixed brand colours, identical in both themes */
-  --kl-gold: #d9a648;
-  --kl-gold-soft: #f0c878;
-  --kl-night: #0b0e1d;
-  --kl-night-2: #1a1f3b;
-  --kl-night-text: #f4f2ee;
-  --kl-night-mid: #a7acbf;
-  --kl-sky: #8fb8e8;
-  --kl-coral: #e07856;
-  --kl-indigo: #4a52e0;
+  --kl-gold: var(--k-gold);
+  --kl-gold-soft: var(--k-gold-soft);
+  --kl-night: var(--k-night);
+  --kl-night-2: var(--k-night-3);
+  --kl-night-text: var(--k-night-text);
+  --kl-night-mid: var(--k-night-mid);
+  --kl-sky: var(--k-sky);
+  --kl-coral: var(--k-coral);
+  --kl-indigo: var(--k-indigo);
   --kl-gold-sheen: linear-gradient(135deg, #f0c878, #d9a648);
   --kl-orb: conic-gradient(#4a52e0, #8fb8e8, #f0c878, #4a52e0);
 
@@ -57,14 +59,15 @@
 /* Night: the Cloud palette the app already uses, so the landing page and the
    app it leads into look like one product. */
 .kl[data-kl-theme='dark'] {
-  --kl-bg: #0b0e1d;
-  --kl-surface: #12162b;
+  --kl-bg: var(--k-night);
+  --kl-surface: var(--k-night-2);
   --kl-paper: #151935;
   --kl-paper-2: #262b4a;
   --kl-stage-a: #141833;
   --kl-stage-b: #1c2144;
   --kl-dash: #3a4068;
-  --kl-cutout: #0b0e1d;
+  --kl-code: #0f1329;
+  --kl-cutout: var(--k-night);
   --kl-glass-bg: rgba(255, 255, 255, 0.06);
   --kl-glass-border: rgba(255, 255, 255, 0.12);
   --kl-bubble: rgba(255, 255, 255, 0.09);
@@ -74,10 +77,10 @@
   --kl-section-edge: rgba(255, 255, 255, 0.08);
   --kl-shadow: rgba(0, 0, 0, 0.6);
 
-  --kl-ink: #f4f2ee;
+  --kl-ink: var(--k-night-text);
   --kl-mid: #b3b8cb;
   --kl-low: #8f95ab;
-  --kl-gold-deep: #f0c878;
+  --kl-gold-deep: var(--k-gold-soft);
 
   color-scheme: dark;
 }
@@ -184,3 +187,35 @@
     transition: none !important;
   }
 }
+
+/* The sober voice every redesigned public page uses: headings drop the serif
+   for the body face, a touch heavier and tighter so they still lead. The
+   wordmark (.kl-brand) keeps its serif — it is the logo, not a heading. */
+.kl-plain :is(.kl-serif, .kl-h2, .kl-h3, .font-display, .display-xl, .display-lg, .h1, .h2):not(.kl-brand) {
+  font-family: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  font-style: normal;
+}
+.kl-plain :is(.kl-serif, .kl-h2, .kl-h3, .font-display, .display-xl, .display-lg, .h1, .h2):not(.kl-brand) .italic,
+.kl-plain .font-display.italic { font-style: normal; }
+
+/* A soft stage the page's demos rest on: the landing's feature-row panel. */
+.kl-stage {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 20px;
+  padding: clamp(16px, 3vw, 40px);
+  background: linear-gradient(160deg, var(--kl-stage-a), var(--kl-stage-b));
+}
+.kl-stage::before,
+.kl-stage::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  border-radius: 9999px;
+  filter: blur(90px);
+}
+.kl-stage::before { width: 280px; height: 280px; right: -64px; top: -80px; background: var(--kl-sky); opacity: 0.35; }
+.kl-stage::after { width: 260px; height: 260px; left: -64px; bottom: -96px; background: #d9a648; opacity: 0.3; }

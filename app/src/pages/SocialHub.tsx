@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Navigate, Link, useSearchParams } from 'react-router'
-import { Loader2, PenLine, Sparkles, TrendingUp } from 'lucide-react'
+import { Loader2, PenLine, RefreshCw, Sparkles, TrendingUp } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import AppShell, { RailCard } from '@/components/app/AppShell'
 import { useViewTracking } from '@/hooks/useViewTracking'
@@ -338,9 +338,9 @@ export default function SocialHub() {
       {/* Docked "why am I seeing this", as /app presents it: the explanation of
           the *feed* lives here, and each card keeps its own Why? button for the
           explanation of that post. */}
-      <div className="rounded-card-lg cloud-glass p-4">
-        <p className="eyebrow text-gold">Why am I seeing this?</p>
-        <p className="mt-2 text-xs leading-relaxed text-text-mid">
+      <div className="rounded-[20px] cloud-glass p-5">
+        <p className="mono-data text-[0.72rem] font-bold uppercase tracking-[0.15em] text-gold-soft">Why am I seeing this?</p>
+        <p className="mt-3 text-[0.85rem] leading-relaxed text-text-mid">
           Your feed is currently ranked by{' '}
           <span className="font-bold text-text-hi">
             {feed?.algorithm_name ?? feed?.algorithm ?? 'chronological order'}
@@ -354,20 +354,20 @@ export default function SocialHub() {
           ).map((reason) => (
             <li
               key={reason}
-              className="rounded-full border border-sky/30 bg-sky/10 px-2.5 py-1 text-[0.65rem] font-semibold text-sky"
+              className="rounded-md bg-sky/10 px-2.5 py-1.5 text-xs font-semibold text-sky"
             >
               {reason}
             </li>
           ))}
         </ul>
-        <p className="mt-2.5 text-[0.65rem] text-text-low">
+        <p className="mt-3 text-xs leading-relaxed text-text-low">
           Every post carries its own Why? button.
         </p>
       </div>
 
       {trending.length > 0 && (
-        <div className="rounded-card-lg cloud-glass p-4">
-          <p className="mb-2.5 flex items-center gap-1.5 text-sm font-bold text-text-hi">
+        <div className="rounded-[20px] cloud-glass p-5">
+          <p className="mb-3 flex items-center gap-1.5 text-[0.95rem] font-bold tracking-[-0.01em] text-text-hi">
             <TrendingUp size={14} className="text-coral" aria-hidden="true" />
             Trending in this feed
           </p>
@@ -435,13 +435,21 @@ export default function SocialHub() {
   return (
     <AppShell aside={rail}>
       <div className="min-w-0">
-          <FeedModeMenu
-            modes={catalog.modes}
-            active={mode}
-            onSelect={setMode}
-            onRefresh={() => void load()}
-            loading={loading}
-          />
+        <h1 className="sr-only">
+          {catalog.modes.find((m) => m.id === mode)?.label ?? 'Feed'}
+        </h1>
+
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <FeedModeMenu modes={catalog.modes} active={mode} onSelect={setMode} />
+          <button
+            type="button"
+            onClick={() => void load()}
+            aria-label="Refresh the feed"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-text-mid transition-colors hover:bg-text-hi/5"
+          >
+            <RefreshCw size={17} className={cn(loading && 'animate-spin')} aria-hidden="true" />
+          </button>
+        </div>
 
           {/* The place or topic the geographic/topic modes filter on */}
           {(mode === 'local' || mode === 'country' || mode === 'topics') && (
@@ -550,9 +558,11 @@ export default function SocialHub() {
             )}
 
             {!loading && !error && feed?.items.length === 0 && (
-              <div className="cloud-card p-8 text-center">
-                <Sparkles size={20} className="mx-auto text-gold" aria-hidden="true" />
-                <p className="mt-3 text-sm text-text-mid">
+              <div className="cloud-card p-10 text-center">
+                <span className="mx-auto grid h-12 w-12 place-items-center rounded-[14px] bg-gold/15 text-gold-soft">
+                  <Sparkles size={22} aria-hidden="true" />
+                </span>
+                <p className="mx-auto mt-4 max-w-sm text-[15px] leading-relaxed text-text-mid">
                   {EMPTY_REASON[feed.empty_reason ?? ''] ?? 'Nothing here yet — publish the first post.'}
                 </p>
               </div>

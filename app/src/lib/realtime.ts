@@ -6,6 +6,10 @@ export interface RealtimeEvent {
   /** chat */
   conversation_id?: string
   message_id?: string
+  /** chat: the message a new message answers (id only) */
+  reply_to_id?: string | null
+  /** chat: the catalogue id of a sticker message */
+  sticker_id?: string | null
   sender_id?: string
   encrypted?: boolean
   body?: string | null
@@ -18,7 +22,6 @@ export interface RealtimeEvent {
   edited_at?: string | null
   /** Set on a new message that is a sticker, so the bubble can draw it at once. */
   sticker?: { id: string; glyph: string; label: string; image_url: string | null } | null
-  reply_to_id?: string | null
   created_at?: string
   /** engagement */
   post_id?: string

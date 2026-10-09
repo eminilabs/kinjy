@@ -2052,8 +2052,12 @@ def readable_posts(payload: ReadableIn, db: OrmSession = Depends(get_db)):
         models.Post.status == "published",
         _audience_clause(_viewer_audience(payload.viewer)),
     )
-    stmt = agefilter.restrict_query(stmt, _viewer_age(payload.viewer))
-    return {"post_ids": list(db.scalars(stmt).all())}
+    age = _viewer_age(payload.viewer)
+    stmt = agefilter.restrict_query(stmt, age)
+    # The SQL filter is the coarse one; the engine that decides whether the post
+    # opens has the last word, or a teenager could listen to a post they cannot read.
+    kept = agefilter.filter_items(db, age, [{"id": post_id} for post_id in db.scalars(stmt).all()])
+    return {"post_ids": [item["id"] for item in kept]}
 
 
 @app.get("/shorts", tags=["shorts"])

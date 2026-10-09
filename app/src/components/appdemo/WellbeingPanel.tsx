@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { BarChart3, Coffee, HeartPulse, Leaf, ShieldCheck, Sun } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Eyebrow } from '@/components/landing/PageKit'
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 const SNAP: [number, number, number, number] = [0.34, 1.56, 0.64, 1]
@@ -46,8 +47,8 @@ export default function WellbeingPanel() {
   const [action, setAction] = useState<'positive' | 'break' | null>(null)
 
   return (
-    <section className="noise-overlay relative bg-ink-2/30 px-6 py-24 md:py-28">
-      <div className="mx-auto max-w-container">
+    <section className="kl-pad-x scroll-mt-24 border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]">
+      <div>
         <motion.div
           initial={{ opacity: 0, y: 28 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -55,11 +56,11 @@ export default function WellbeingPanel() {
           transition={{ duration: 0.6, ease: EASE }}
           className="mb-12 max-w-2xl"
         >
-          <p className="eyebrow text-gold">Wellbeing &amp; session intelligence</p>
-          <h3 className="h3 mt-3 font-display text-3xl font-medium">
-            Nudges, not penalties. <span className="text-gold-grad">Yours alone.</span>
-          </h3>
-          <p className="mt-3 text-sm leading-relaxed text-text-mid">
+          <Eyebrow>Wellbeing &amp; session intelligence</Eyebrow>
+          <h2 className="kl-h2 mt-5 max-w-[900px]">
+            Nudges, not penalties. <span className="text-[var(--kl-gold-deep)]">Yours alone.</span>
+          </h2>
+          <p className="kl-lead mt-6 !max-w-[560px]">
             Kinjy notices session patterns and gently offers a change of pace — never a lock-out, never a
             lecture. Everything below is private to the member and off by default.
           </p>
