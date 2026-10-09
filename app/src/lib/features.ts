@@ -16,7 +16,7 @@ export const FEATURES = {
   /** Voice and video calls in the messenger. */
   calls: false,
   /** Buying and selling, and the /commerce page that presents it. */
-  marketplace: false,
+  marketplace: true,
   /** The family tree inside the app: /tree, its privacy settings, the family search. */
   familyTreeApp: true,
   /**

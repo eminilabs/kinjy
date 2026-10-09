@@ -68,6 +68,11 @@ class Order(Base):
     # not release the money: only the buyer, or the window expiring, does that.
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     delivery_note: Mapped[str | None] = mapped_column(Text)
+    carrier: Mapped[str | None] = mapped_column(String(80))
+    tracking_number: Mapped[str | None] = mapped_column(String(120))
+    tracking_url: Mapped[str | None] = mapped_column(String(500))
+    # JSON blob; only the buyer, the vendor and admins ever see it.
+    shipping_address: Mapped[str | None] = mapped_column(Text)
     refunded_amount: Mapped[Decimal] = mapped_column(AMOUNT, default=Decimal("0"))
     ledger_journal_id: Mapped[str | None] = mapped_column(String(40))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
@@ -186,3 +191,19 @@ DISPUTE_CATEGORIES = (
     "unauthorised",
     "other",
 )
+
+
+class ProductReview(Base):
+    """A review tied to one settled order, so only real buyers can rate."""
+
+    __tablename__ = "product_reviews"
+    __table_args__ = {"schema": SCHEMA}
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("rev"))
+    order_id: Mapped[str] = mapped_column(String(40), unique=True)
+    product_id: Mapped[str] = mapped_column(String(40), index=True)
+    vendor_id: Mapped[str] = mapped_column(String(40), index=True)
+    author_id: Mapped[str] = mapped_column(String(40), index=True)
+    rating: Mapped[int] = mapped_column(Integer)
+    comment: Mapped[str | None] = mapped_column(String(2000))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

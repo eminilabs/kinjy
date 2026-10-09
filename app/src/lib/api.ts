@@ -1050,11 +1050,130 @@ export interface Product {
   country: string | null
   city: string | null
   images: string[]
+  vendor?: VendorBrief
+  rating_average?: number | null
+  rating_count?: number
+}
+
+export interface VendorBrief {
+  user_id: string
+  handle: string | null
+  display_name: string | null
+  avatar_url: string | null
+}
+
+export interface ProductPricing {
+  vendor_price: string
+  margin: string
+  customer_price: string
+  markup_pct: string
+}
+
+export interface VendorStats {
+  listings_active: number
+  sales_settled: number
+}
+
+/** Owners also get the full price split; everyone else only customer_price. */
+export interface ProductDetail {
+  id: string
+  title: string
+  description: string
+  kind: string
+  stock: number | null
+  country: string | null
+  city: string | null
+  images: string[]
+  currency: string
+  /** active | paused | removed */
+  status: string
+  created_at: string
+  vendor_id: string
+  vendor: VendorBrief
+  vendor_since: string | null
+  vendor_stats: VendorStats
+  is_owner: boolean
+  customer_price: string
+  vendor_price?: string
+  margin?: string
+  markup_pct?: string
+}
+
+export interface MyProduct extends ProductPricing {
+  id: string
+  title: string
+  description: string
+  kind: string
+  stock: number | null
+  status: string
+  currency: string
+  country: string | null
+  city: string | null
+  images: string[]
+  created_at: string
+}
+
+export interface ProductPatch {
+  title?: string
+  description?: string
+  vendor_price?: string
+  stock?: number | null
+  country?: string | null
+  city?: string | null
+  images?: string[]
+  status?: 'active' | 'paused'
+}
+
+export interface Sale extends Order {
+  product_title: string | null
+  buyer: VendorBrief
+  /** In escrow and not yet handed over. */
+  to_ship: boolean
+}
+
+export interface SellerFinances {
+  currency: string
+  escrow_pending: string
+  released: string
+  refunded: string
+  counts: { escrow_pending: number; to_ship: number; settled: number; refunded: number; disputed: number }
+}
+
+export interface StorefrontResponse {
+  vendor: VendorBrief
+  since: string | null
+  stats: VendorStats
+  total: number
+  items: Product[]
+}
+
+export interface OrderProduct {
+  id: string
+  title: string
+  description: string | null
+  kind: string
+  images: string[]
+  country: string | null
+  city: string | null
+  /** False when the seller removed or paused the listing; the buyer still sees what they bought. */
+  available: boolean
+}
+
+export interface OrderCounterpart {
+  user_id: string
+  handle: string | null
+  display_name: string | null
+  avatar_url: string | null
 }
 
 export interface Order {
   id: string
   role: string | null
+  product?: OrderProduct | null
+  /** The other party: the seller for a buyer, the buyer for a seller. */
+  counterpart?: OrderCounterpart | null
+  /** The viewer already reviewed this order. */
+  reviewed?: boolean
   product_id: string
   quantity: number
   customer_price: string
@@ -1071,7 +1190,53 @@ export interface Order {
   dispute_window_ends: string | null
   escrow_released_at: string | null
   dispute_id?: string | null
+  /** Only present for the buyer and the vendor of the order. */
+  shipping?: OrderShipping | null
+  carrier?: string | null
+  tracking_number?: string | null
+  tracking_url?: string | null
   created_at: string
+}
+
+export interface OrderPayment {
+  payment_id: string
+  rail: string
+  /** True when no live payment rail is configured: nothing real is charged. */
+  mock: boolean
+  amount: string
+  pay_address?: string | null
+  pay_currency?: string | null
+  checkout_url?: string | null
+  status: string
+}
+
+export interface OrderShipping {
+  full_name: string
+  line1: string
+  line2?: string | null
+  city: string
+  region?: string | null
+  postal_code?: string | null
+  /** ISO 3166-1 alpha-2 */
+  country: string
+  phone?: string | null
+}
+
+export interface ProductReview {
+  id: string
+  rating: number
+  comment: string | null
+  created_at: string
+  author_id: string
+  reviewer?: { id?: string; handle?: string; display_name?: string; avatar_url?: string | null } | null
+}
+
+export interface ReviewsSummary {
+  average: number
+  count: number
+  /** Review counts keyed '1'..'5'. */
+  distribution: Record<string, number>
+  items: ProductReview[]
 }
 
 export interface EscrowTerms {
@@ -1092,6 +1257,12 @@ export interface DisputeMessage {
   body: string
   evidence: string[]
   created_at: string
+  author?: DisputeParty['profile']
+}
+
+export interface DisputeParty {
+  id: string
+  profile: { id?: string; handle?: string; display_name?: string; avatar_url?: string | null } | null
 }
 
 export interface Dispute {
@@ -1113,6 +1284,24 @@ export interface Dispute {
   resolved_at: string | null
   created_at: string
   messages?: DisputeMessage[]
+  /** Detail-only fields, from GET /commerce/disputes/{id}. */
+  viewer_role?: 'buyer' | 'seller' | 'admin'
+  can_reply?: boolean
+  can_withdraw?: boolean
+  can_concede?: boolean
+  seconds_left_to_respond?: number | null
+  seconds_left_to_arbitrate?: number | null
+  buyer?: DisputeParty
+  seller?: DisputeParty
+  order?: {
+    id: string
+    product_id: string
+    title: string | null
+    quantity: number
+    customer_price: string
+    currency: string
+    status: string
+  }
 }
 
 export interface LeaderStanding {
@@ -2055,33 +2244,107 @@ export const kaluta = {
   },
 
   market: {
-    products: (params: { q?: string; country?: string; limit?: number } = {}) => {
+    products: (
+      params: {
+        q?: string
+        country?: string
+        city?: string
+        kind?: string
+        min_price?: string
+        max_price?: string
+        sort?: 'recent' | 'price_asc' | 'price_desc'
+        limit?: number
+        offset?: number
+        /** Only the signed-in member's own active listings. Needs the token, unlike the public list. */
+        mine?: boolean
+      } = {},
+    ) => {
       const query = new URLSearchParams()
       if (params.q) query.set('q', params.q)
+      if (params.mine) query.set('mine', 'true')
+      if (params.offset) query.set('offset', String(params.offset))
       if (params.country) query.set('country', params.country)
+      if (params.city) query.set('city', params.city)
+      if (params.kind) query.set('kind', params.kind)
+      if (params.min_price) query.set('min_price', params.min_price)
+      if (params.max_price) query.set('max_price', params.max_price)
+      if (params.sort) query.set('sort', params.sort)
       query.set('limit', String(params.limit ?? 30))
-      return api.get<{ total: number; items: Product[] }>(`/commerce/products?${query}`, { auth: false })
+      return api.get<{ total: number; items: Product[] }>(`/commerce/products?${query}`, {
+        auth: params.mine === true,
+      })
     },
-    createProduct: (input: { title: string; description?: string; vendor_price: string; country?: string }) =>
+    createProduct: (input: {
+      title: string
+      description?: string
+      kind?: 'product' | 'service' | 'digital'
+      vendor_price: string
+      stock?: number | null
+      country?: string
+      city?: string
+      images?: string[]
+    }) =>
       api.post<{ id: string; pricing: Record<string, string> }>('/commerce/products', input),
-    order: (productId: string, quantity = 1) =>
+    order: (productId: string, quantity = 1, shipping?: OrderShipping) =>
       api.post<{ id: string; status: string; customer_price: string }>('/commerce/orders', {
         product_id: productId,
         quantity,
+        ...(shipping ? { shipping } : {}),
       }),
-    myOrders: () => api.get<{ items: Order[] }>('/commerce/orders/me'),
+    myOrders: (params: { status?: string; role?: 'buyer' | 'seller' } = {}) => {
+      const query = new URLSearchParams()
+      if (params.status) query.set('status', params.status)
+      if (params.role) query.set('role', params.role)
+      const qs = query.toString()
+      return api.get<{ items: Order[] }>(`/commerce/orders/me${qs ? `?${qs}` : ''}`)
+    },
     order_: (id: string) => api.get<Order>(`/commerce/orders/${id}`),
+
+    /** Public; signed in, the owner also gets the price breakdown. */
+    product: (id: string) => api.get<ProductDetail>(`/commerce/products/${id}`),
+    myProducts: () => api.get<{ items: MyProduct[] }>('/commerce/products/mine'),
+    updateProduct: (id: string, patch: ProductPatch) =>
+      api.patch<{ id: string; status: string; pricing: ProductPricing }>(`/commerce/products/${id}`, patch),
+    removeProduct: (id: string) => api.delete<{ id: string; status: string }>(`/commerce/products/${id}`),
+    sales: (status?: string) =>
+      api.get<{ total: number; items: Sale[] }>(
+        `/commerce/sales${status ? `?status=${encodeURIComponent(status)}` : ''}`,
+      ),
+    sellerFinances: () => api.get<SellerFinances>('/commerce/seller/finances'),
+    vendor: (id: string, params: { limit?: number; offset?: number } = {}) => {
+      const query = new URLSearchParams()
+      if (params.limit != null) query.set('limit', String(params.limit))
+      if (params.offset != null) query.set('offset', String(params.offset))
+      return api.get<StorefrontResponse>(`/commerce/vendors/${id}?${query}`, { auth: false })
+    },
 
     /** Who holds the money and for how long. Readable signed out on purpose. */
     escrowTerms: () => api.get<EscrowTerms>('/commerce/escrow/terms', { auth: false }),
 
     /** The seller says it has shipped. This does not release the money. */
-    markDelivered: (orderId: string, note = '') =>
-      api.post<Order>(`/commerce/orders/${orderId}/delivered`, { note }),
+    markDelivered: (
+      orderId: string,
+      input: string | { note?: string; carrier?: string; tracking_number?: string; tracking_url?: string } = '',
+    ) =>
+      api.post<Order>(
+        `/commerce/orders/${orderId}/delivered`,
+        typeof input === 'string' ? { note: input } : input,
+      ),
 
     /** The buyer releases the escrow. Only they can. */
     confirmDelivery: (orderId: string) =>
       api.post<{ id: string; status: string }>(`/commerce/orders/${orderId}/confirm-delivery`, {}),
+
+    /**
+     * Start paying for an order. The amount must be the order's price: the server
+     * checks it, so a different one is refused. Without a live payment rail the
+     * reply is a mock checkout that `settleMockPayment` completes; with one,
+     * `checkout_url` and `pay_address` say where to pay.
+     */
+    payOrder: (orderId: string, amount: string) =>
+      api.post<OrderPayment>('/payments/checkout', { purpose: 'order', amount, reference: orderId }),
+    settleMockPayment: (paymentId: string) =>
+      api.post<{ payment_id: string; status: string; mock: boolean }>(`/payments/${paymentId}/mock-settle`, {}),
 
     openDispute: (
       orderId: string,
@@ -2094,6 +2357,26 @@ export const kaluta = {
       api.post<{ ok: boolean; status: string }>(`/commerce/disputes/${id}/messages`, input),
     withdrawDispute: (id: string) => api.post<Dispute>(`/commerce/disputes/${id}/withdraw`, {}),
     concedeDispute: (id: string) => api.post<Dispute>(`/commerce/disputes/${id}/concede`, {}),
+
+    /** Buyer only, once the order is settled; one review per order. */
+    reviewOrder: (orderId: string, input: { rating: number; comment?: string }) =>
+      api.post<{ id: string; order_id: string; product_id: string; rating: number; comment: string | null }>(
+        `/commerce/orders/${orderId}/review`,
+        input,
+      ),
+    productReviews: (productId: string, params: { limit?: number; offset?: number } = {}) => {
+      const query = new URLSearchParams()
+      if (params.limit != null) query.set('limit', String(params.limit))
+      if (params.offset != null) query.set('offset', String(params.offset))
+      const qs = query.toString()
+      return api.get<ReviewsSummary>(`/commerce/products/${productId}/reviews${qs ? `?${qs}` : ''}`, {
+        auth: false,
+      })
+    },
+    vendorRating: (vendorId: string) =>
+      api.get<{ vendor_id: string; average: number; count: number }>(`/commerce/vendors/${vendorId}/rating`, {
+        auth: false,
+      }),
   },
 
   /** Kinjy Leaders — 5% of monthly revenue, split by commission earned. */
