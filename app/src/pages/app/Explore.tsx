@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { BadgeCheck, ChevronRight, Compass, Package, Search, TreeDeciduous, UserRound, UsersRound } from 'lucide-react'
+import { useAppTheme } from '@/components/appdemo/theme'
 import AppShell from '@/components/app/AppShell'
 import { People, Places } from '@/components/social/Suggestions'
 import MemberAvatar from '@/components/social/MemberAvatar'
@@ -90,6 +91,51 @@ function ResultRow({ to, title, detail }: { to: string; title: string; detail: s
  * section instead of emptying the page: a marketplace outage should not make it
  * look like there are no communities either.
  */
+
+/**
+ * Results on their way.
+ *
+ * A search here fans out to four services, so on a slow connection the page
+ * used to answer a query by showing nothing at all - the sections only exist
+ * once something has come back. These are those sections, empty: the member
+ * sees where the answers will be while they are being fetched.
+ */
+function ResultsSkeleton() {
+  // The theme's own subtle surface. A fixed grey is invisible on one of the
+  // three themes, and an opacity modifier on a variable colour has already
+  // cost this codebase one skeleton that was in the DOM and not on screen.
+  const { tok } = useAppTheme()
+  const bar = cn('block animate-pulse rounded', tok.subtleBg)
+
+  const card = (rows: number, className?: string) => (
+    <section className={cn('cloud-card p-5 md:p-6', className)}>
+      <div className="mb-4 flex items-center gap-2.5">
+        <span className={cn('h-8 w-8 shrink-0 rounded-[10px]', bar)} />
+        <span className={cn('h-4 w-28', bar)} />
+        <span className={cn('ms-auto h-5 w-8 rounded-full', bar)} />
+      </div>
+      <ul className="space-y-3">
+        {Array.from({ length: rows }, (_, row) => (
+          <li key={row} className="flex items-center gap-3">
+            <span className={cn('h-10 w-10 shrink-0 rounded-full', bar)} />
+            <span className="min-w-0 flex-1">
+              <span className={cn('h-3.5', bar)} style={{ width: `${70 - row * 9}%` }} />
+              <span className={cn('mt-1.5 h-2.5', bar)} style={{ width: `${48 - row * 6}%` }} />
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+
+  return (
+    <div className={cn('mt-6 grid gap-5', GRID_COLS)} role="status" aria-label="Searching">
+      {card(3, FULL_ROW)}
+      {Array.from({ length: COLUMNS }, (_, column) => <div key={column}>{card(2)}</div>)}
+    </div>
+  )
+}
+
 export default function Explore() {
   const [params] = useSearchParams()
   const urlQuery = params.get('q') ?? ''
@@ -163,8 +209,7 @@ export default function Explore() {
   return (
     <AppShell>
       <header className="mb-6">
-        <p className="mono-data text-[0.72rem] font-bold uppercase tracking-[0.15em] text-gold-soft">Explore</p>
-        <h1 className="mt-2 text-[clamp(38px,5vw,56px)] font-bold leading-[1.02] tracking-[-0.045em] text-text-hi">
+        <h1 className="text-[clamp(38px,5vw,56px)] font-bold leading-[1.02] tracking-[-0.045em] text-text-hi">
           Find anything on Kinjy
         </h1>
         <p className="mt-3 max-w-xl text-[0.95rem] leading-relaxed text-text-low">Search {SCOPE_TEXT} at once.</p>
@@ -206,6 +251,8 @@ export default function Explore() {
           Could not reach: {errors.join(', ')}. The other results are complete.
         </p>
       )}
+
+      {searching && !members && !communities && !products && !people && <ResultsSkeleton />}
 
       {active && (members || communities || products || people) && (
         <div className={cn('mt-6 grid gap-5', GRID_COLS)}>

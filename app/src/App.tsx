@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react'
 import type { ReactNode } from 'react'
-import { Navigate, Routes, Route } from 'react-router'
+import { Navigate, Routes, Route, useLocation } from 'react-router'
+import RouteSkeleton from './components/app/RouteSkeleton'
 import Layout from './components/Layout'
 import Home from './pages/Home'
 import { useAuth } from './hooks/useAuth'
@@ -51,15 +52,37 @@ const TrustSafety = lazy(() => import('./pages/TrustSafety'))
 const Moderation = lazy(() => import('./pages/app/Moderation'))
 const Profile = lazy(() => import('./pages/app/Profile'))
 
+/**
+ * Shown while a route's chunk downloads.
+ *
+ * It used to be an orb centred in an empty box, which on the dark theme is a
+ * black screen with a dot on it - and on a slow connection, a black screen for
+ * several seconds every time somebody touches a menu item. The skeleton holds
+ * the page's shape instead.
+ *
+ * Which shape depends on where you are going: the app routes sit in the
+ * three-column shell, and the public pages do not, so giving those rails would
+ * be a worse lie than the orb was.
+ */
+/**
+ * The routes that render inside the app shell, so the fallback knows which
+ * shape to hold. Listed rather than inferred: the public pages are the
+ * exception and there are more of them, and a wrong guess here shows up as a
+ * page that jumps sideways the moment it loads.
+ */
+const APP_ROUTE_PREFIXES = [
+  '/hub', '/p', '/explore', '/messages', '/communities', '/forums', '/circles',
+  '/connections', '/u', '/dashboard', '/market', '/tree', '/graveyard',
+  '/memorial', '/live', '/shorts', '/earn', '/supervision', '/settings',
+  '/moderation', '/trust-safety', '/admin',
+]
+
 function PageFallback() {
-  return (
-    <div className="flex min-h-[60dvh] items-center justify-center" role="status" aria-label="Loading page">
-      <div
-        className="h-14 w-14 rounded-full animate-orb-breathe"
-        style={{ background: 'var(--grad-orb)', filter: 'blur(0.5px)' }}
-      />
-    </div>
+  const { pathname } = useLocation()
+  const inApp = APP_ROUTE_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   )
+  return <RouteSkeleton shell={inApp} />
 }
 
 /**

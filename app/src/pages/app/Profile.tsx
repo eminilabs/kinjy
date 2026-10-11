@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link,useNavigate, useParams } from 'react-router'
 import { Check, Clock, MapPin, MessageSquare, Pencil, UserPlus, Users } from 'lucide-react'
 import AppShell from '@/components/app/AppShell'
+import { ProfileAsideSkeleton, ProfileSkeleton } from '@/components/app/ProfileSkeleton'
 import MediaLightbox from '@/components/social/MediaLightbox'
 import MemberAvatar from '@/components/social/MemberAvatar'
 import PostCard from '@/components/social/PostCard'
@@ -124,8 +125,8 @@ export default function Profile() {
 
   if (loading) {
     return (
-      <AppShell>
-        <p className={cn('py-16 text-center text-sm', tok.low)}>Loading profile…</p>
+      <AppShell aside={<ProfileAsideSkeleton />}>
+        <ProfileSkeleton />
       </AppShell>
     )
   }
