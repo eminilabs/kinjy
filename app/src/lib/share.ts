@@ -95,3 +95,80 @@ export async function shareLink(
     return 'failed'
   }
 }
+
+/**
+ * Where a post can be sent, and the address that sends it there.
+ *
+ * Each network takes the link as a query parameter on a share endpoint, so
+ * there is no SDK and no script to load - which is the point. Embedding a
+ * share button from each of these means embedding their tracking into every
+ * page that shows a post, and a URL does the same job with nobody watching.
+ *
+ * WhatsApp first because of where most of this audience is. Email and SMS last
+ * because they are the fallbacks that always work.
+ */
+export type ShareTarget = {
+  id: string
+  label: string
+  /** Build the address that opens this network's share screen. */
+  href: (url: string, text: string) => string
+  /** Brand colour, for the button's ring. */
+  tint: string
+}
+
+export const SHARE_TARGETS: ShareTarget[] = [
+  {
+    id: 'whatsapp',
+    label: 'WhatsApp',
+    tint: '#25D366',
+    href: (url, text) => `https://wa.me/?text=${encodeURIComponent(`${text} ${url}`)}`,
+  },
+  {
+    id: 'facebook',
+    label: 'Facebook',
+    tint: '#1877F2',
+    href: (url) => `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
+  },
+  {
+    id: 'x',
+    label: 'X',
+    // Black, not the near-white of their dark site: the tint is drawn on the
+    // dialog, which is light, and #E7E9EA there is a blank circle.
+    tint: '#0F1419',
+    href: (url, text) =>
+      `https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`,
+  },
+  {
+    id: 'telegram',
+    label: 'Telegram',
+    tint: '#2AABEE',
+    href: (url, text) =>
+      `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`,
+  },
+  {
+    id: 'linkedin',
+    label: 'LinkedIn',
+    tint: '#0A66C2',
+    href: (url) => `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
+  },
+  {
+    id: 'reddit',
+    label: 'Reddit',
+    tint: '#FF4500',
+    href: (url, text) =>
+      `https://reddit.com/submit?url=${encodeURIComponent(url)}&title=${encodeURIComponent(text)}`,
+  },
+  {
+    id: 'email',
+    label: 'Email',
+    tint: '#A7ACBF',
+    href: (url, text) =>
+      `mailto:?subject=${encodeURIComponent(text)}&body=${encodeURIComponent(`${text}\n\n${url}`)}`,
+  },
+  {
+    id: 'sms',
+    label: 'SMS',
+    tint: '#8FB8E8',
+    href: (url, text) => `sms:?&body=${encodeURIComponent(`${text} ${url}`)}`,
+  },
+]

@@ -21,7 +21,7 @@ import { ApiError, kaluta, type Post, type WhyFactor } from '@/lib/api'
 import { useTopic } from '@/hooks/useRealtime'
 import { htmlToText, looksLikeHtml, readableText, sanitizeHtml } from '@/lib/richtext'
 import { useAuth } from '@/hooks/useAuth'
-import { postUrl, shareLink } from '@/lib/share'
+import { postUrl, shareLink, SHARE_TARGETS } from '@/lib/share'
 import { cn } from '@/lib/utils'
 import Comments from './Comments'
 import MemberAvatar from './MemberAvatar'
@@ -347,6 +347,15 @@ export default function PostCard({
   const shareable = target.visibility === 'public'
   const myRef = withRef ? me?.referral_code ?? null : null
   const shareUrl = postUrl(target.id, myRef)
+  // What the networks put beside the link. The post's own words where there
+  // are any, trimmed to something a tweet or an email subject can hold -
+  // otherwise the author's name, which is still better than "Kinjy".
+  const shareText = (() => {
+    const words = readableText(target.body ?? '').trim().replace(/\s+/g, ' ')
+    if (words) return words.length > 110 ? `${words.slice(0, 107)}…` : words
+    const who = target.author?.display_name ?? 'Someone'
+    return `${who} on Kinjy`
+  })()
 
   const doShare = async () => {
     // The author can be null when the profile lookup did not resolve. That is
@@ -763,19 +772,54 @@ export default function PostCard({
         )}
       </footer>
 
-      {shareOpen && shareable && (
-        <div className="mt-2 rounded-xl border border-text-low/25 p-3">
-          <p className="text-xs font-semibold text-text-hi">Share this outside Kinjy</p>
+      {/* A dialog, not a panel opened under the post.
+          In place it pushed every post below it down the page, and it put a
+          long URL and a checkbox into the middle of a feed. Sharing is a
+          decision with a few choices in it, which is what a dialog is for. */}
+      <Dialog open={shareOpen && shareable} onOpenChange={setShareOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Share2 size={16} className="text-gold" aria-hidden="true" />
+              Share this post
+            </DialogTitle>
+          </DialogHeader>
+
+          {/* Where it can go. Plain links to each network's own share screen:
+              no SDK and no embedded button, which would mean loading their
+              tracking into every page that shows a post. Opened in a new tab
+              so the member does not lose the feed they were reading. */}
+          <div className="grid grid-cols-4 gap-2">
+            {SHARE_TARGETS.map((target) => (
+              <a
+                key={target.id}
+                href={target.href(shareUrl, shareText)}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setShareNote(`Opening ${target.label}…`)}
+                className="flex flex-col items-center gap-1.5 rounded-xl border border-white/10 px-2 py-3 text-[0.7rem] font-semibold text-text-mid hover:border-white/25 hover:text-text-hi"
+              >
+                <span
+                  aria-hidden="true"
+                  className="grid h-9 w-9 place-items-center rounded-full text-sm font-bold"
+                  style={{ backgroundColor: `${target.tint}22`, color: target.tint }}
+                >
+                  {target.label.slice(0, 1)}
+                </span>
+                {target.label}
+              </a>
+            ))}
+          </div>
 
           {/* The link is shown rather than only copied. A member about to put
               their name on something in a group chat should be able to read
               what they are about to send, including the code on the end. */}
-          <p className="mt-2 break-all rounded-lg bg-ink-2/50 px-2.5 py-2 text-[0.7rem] text-text-mid">
+          <p className="mt-1 break-all rounded-lg bg-ink-2/50 px-2.5 py-2 text-[0.7rem] text-text-mid">
             {shareUrl}
           </p>
 
           {me?.referral_code && (
-            <label className="mt-2.5 flex items-start gap-2 text-xs text-text-mid">
+            <label className="flex items-start gap-2 text-xs text-text-mid">
               <input
                 type="checkbox"
                 checked={withRef}
@@ -792,7 +836,7 @@ export default function PostCard({
             </label>
           )}
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={doShare}
@@ -808,8 +852,8 @@ export default function PostCard({
               </span>
             )}
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {reporting && !reported && (
         <div className="mt-2 rounded-xl border border-text-low/25 p-3">
