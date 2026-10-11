@@ -892,3 +892,31 @@ What came from where: replies, the composer's emoji/sticker panel, the redesign 
 - **`/forums` and `/tree` have the redesign's layout only partly**: both were rewritten on develop while the redesign restyled the old versions, so develop's pages were kept whole.
 - **Explore's empty state** shows main's discovery lists (people to connect with, spaces to join) instead of the redesign's "Start typing to explore" card.
 - **Legacy sticker reactions** are kept in `messaging.message_reactions_legacy` after the migration renames them; nothing reads them. Drop the table once nobody needs them.
+
+## The develop merge (11/10)
+
+- ~~main was 117 commits behind develop.~~ Fast-forwarded and deployed: 282
+  files, 8 backend services, 6 additive migrations, verified on production.
+- **Three branches are still outside develop** and were deliberately not
+  merged - they are other people's in-flight work, and integrating them is
+  their call, not a deploy step:
+  - `design/all-refonte` (17 commits) - reels, per-column scrolling, age
+    declaration, video in comments
+  - `feat/community-forum-access-v2` (2 commits) - paid seats, secret entry,
+    forum governance, knowledge base
+  - `feat/voice-note-player-and-adaptive-timestamp` (2 commits) - waveform
+    player, inline timestamps
+- **The feed is 722px again, not 560.** The redesign replaced AppShell with a
+  1320px container and 220/1fr/300 columns, which dropped both the reading cap
+  and the `wide` prop Messages used to opt out of it. Messages is fine - it
+  gets the full column now - but the LinkedIn width that was asked for on
+  06/10 is gone. Restoring it means capping the feed page rather than the
+  shell, so the redesign's own layout is left alone.
+- **`eslint .` reports 54 problems on develop** (49 errors, mostly
+  react-hooks/set-state-in-effect). They are develop's own state, not the
+  merge's: the merge added no commits. `tsc -b` and `vite build` both pass, and
+  lint is not in the build, so nothing is blocked - but the gate is red.
+- `app/src/components/family/FamilyGraph.tsx` was deleted upstream. deploy by
+  tar never removes files, so the stale copy was moved to
+  /root/removed-FamilyGraph.tsx.bak on the server. Nothing imports it.
+- Pre-merge source backup: /root/kaluta-pre-merge-20261011-1053.tar.gz
