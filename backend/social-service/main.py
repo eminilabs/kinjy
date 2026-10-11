@@ -87,12 +87,17 @@ def seed_algorithms() -> None:
 # content_safety is a new table; create_all makes it, but existing posts have
 # no row. restrict_query treats a missing row as UNCLASSIFIED, i.e. hidden from
 # minors, so the gap is closed in the safe direction until the backfill runs.
-MIGRATIONS: list[str] = []
+MIGRATIONS: list[str] = [
+    # create_all creates tables and never alters one, so a new column on an
+    # existing table has to be stated here.
+    f"ALTER TABLE {models.SCHEMA}.comments ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ",
+]
 
 app = create_app(
     name="social-service",
     schema=models.SCHEMA,
     description="Posts, multiple feed modes, the algorithm marketplace, reactions and comments.",
+    migrations=MIGRATIONS,
     on_startup=[seed_algorithms],
 )
 
@@ -135,6 +140,20 @@ HASHTAG_RE = re.compile(r"#([\wÀ-ɏ؀-ۿ一-鿿][\wÀ-ɏ؀-ۿ一-鿿-]{1,49})")
 
 # A handle as somebody types it into a post. Deliberately the same shape the
 # client highlights, so what gets notified is what the author saw turn gold.
+# How long a post or comment may still be edited after it is written.
+EDIT_WINDOW = timedelta(hours=24)
+
+
+def _aware(value: datetime) -> datetime:
+    """A stored timestamp as an aware one.
+
+    Rows written before the columns were timezone-aware come back naive, and
+    subtracting a naive datetime from an aware one raises - which would turn
+    "edit your post" into a 500 for exactly the oldest posts.
+    """
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
 MENTION_RE = re.compile(r"@([a-z0-9_.]{2,40})", re.IGNORECASE)
 
 
@@ -1273,6 +1292,76 @@ def report_comment(
     return _report(comment_id, "comment", payload, principal, db)
 
 
+class CommentEdit(BaseModel):
+    body: str = Field(min_length=1, max_length=5000)
+
+
+@app.patch("/comments/{comment_id}", tags=["comments"])
+def edit_comment(
+    comment_id: str, payload: CommentEdit, principal: CurrentUser, db: OrmSession = Depends(get_db)
+):
+    """Fix a comment, within the same day the post itself allows.
+
+    The same window as a post, for the same reason: a reply people have
+    answered should not turn into different words underneath them. Measured
+    from when it was written, so editing repeatedly cannot hold the window
+    open.
+    """
+    comment = db.get(models.Comment, comment_id)
+    if comment is None or comment.status != "published" or comment.author_id != principal.user_id:
+        # The same answer whether it is missing or somebody else's: telling
+        # them apart would confirm which ids exist.
+        raise HTTPException(status_code=404, detail="Comment not found")
+
+    if datetime.now(timezone.utc) - _aware(comment.created_at) > EDIT_WINDOW:
+        raise HTTPException(
+            status_code=403,
+            detail="A comment can only be edited in the first 24 hours.",
+        )
+
+    comment.body = payload.body
+    comment.edited_at = datetime.now(timezone.utc)
+    db.commit()
+    # Anyone newly named hears about it. Mentions already notified are not
+    # re-sent, because _notify_mentions is only given the new text - somebody
+    # named in both versions would otherwise be told twice for one comment.
+    _notify_mentions(payload.body, principal.user_id, comment.post_id, "comment")
+    return {"id": comment.id, "body": comment.body, "edited_at": comment.edited_at}
+
+
+@app.delete("/comments/{comment_id}", status_code=204, tags=["comments"])
+def delete_comment(comment_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """Remove a comment. The author's, or the post author's to moderate.
+
+    The row is marked rather than dropped, because replies hang off it: a hard
+    delete would orphan every answer to it, and a thread with holes in it reads
+    as data loss. The body is cleared, so "deleted" means the words are gone
+    rather than merely hidden behind a flag some other reader might not honour.
+
+    No time limit, deliberately. An edit window stops a conversation being
+    rewritten; it must never stop somebody taking back something they regret.
+    """
+    comment = db.get(models.Comment, comment_id)
+    if comment is None or comment.status != "published":
+        raise HTTPException(status_code=404, detail="Comment not found")
+
+    post = db.get(models.Post, comment.post_id)
+    owns_post = post is not None and post.author_id == principal.user_id
+    if comment.author_id != principal.user_id and not owns_post:
+        raise HTTPException(status_code=404, detail="Comment not found")
+
+    comment.status = "deleted"
+    comment.body = ""
+    db.commit()
+
+    # The counter on the post has to follow, or the card says 3 replies and
+    # shows 2 for as long as anybody looks at it.
+    if post is not None:
+        post.comments_count = max(0, (post.comments_count or 0) - 1)
+        db.commit()
+    return None
+
+
 @app.post("/comments/{comment_id}/reaction", tags=["comments"])
 def toggle_comment_like(comment_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
     """Like a comment, or take the like back. One call either way.
@@ -1752,6 +1841,23 @@ def edit_post(post_id: str, payload: PostIn, principal: CurrentUser, db: OrmSess
     post = db.get(models.Post, post_id)
     if post is None or post.author_id != principal.user_id:
         raise HTTPException(status_code=404, detail="Post not found")
+
+    # A day to fix it, and then it stands.
+    #
+    # An edit with no limit means the thing people replied to can be replaced
+    # by something else entirely, and every reply underneath becomes a reply to
+    # words that were never said. A day is long enough for the typo and the
+    # wrong link, and short enough that a conversation cannot be rewritten
+    # under the people having it.
+    #
+    # Measured from created_at, not from the last edit: otherwise editing once
+    # an hour keeps the window open forever.
+    age = datetime.now(timezone.utc) - _aware(post.created_at)
+    if age > EDIT_WINDOW:
+        raise HTTPException(
+            status_code=403,
+            detail="A post can only be edited in the first 24 hours. Older posts stand as written.",
+        )
     post.body = payload.body
     post.topics = _merge_topics(payload.topics, payload.body)
     post.edited_at = datetime.now(timezone.utc)
@@ -3119,6 +3225,7 @@ def list_comments(
                 "body": r.body,
                 "lang": r.lang,
                 "created_at": r.created_at,
+                "edited_at": r.edited_at,
                 "likes": like_counts.get(r.id, 0),
                 "liked": r.id in mine,
             }

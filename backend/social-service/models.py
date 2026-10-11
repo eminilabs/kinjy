@@ -151,6 +151,9 @@ class Comment(Base):
     lang: Mapped[str] = mapped_column(String(5), default="en")
     status: Mapped[str] = mapped_column(String(20), default="published")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    # Set when the author fixes it. Shown as "edited", so a reply that no
+    # longer matches what it answers is at least explained.
+    edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class CommentReaction(Base):

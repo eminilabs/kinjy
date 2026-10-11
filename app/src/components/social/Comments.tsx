@@ -175,6 +175,47 @@ export default function Comments({
   // `items` so a like does not mean re-fetching the thread, and so the button
   // answers immediately - the request is in flight while the state already
   // shows what the member just did.
+  // The comment being rewritten, and its draft. One at a time: two open
+  // editors in a thread is two ways to lose what you typed.
+  const [editing, setEditing] = useState<{ id: string; body: string } | null>(null)
+  const [removed, setRemoved] = useState<Set<string>>(new Set())
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  /** A comment can be fixed for a day; after that it stands. */
+  const withinEditWindow = (createdAt: string) =>
+    Date.now() - new Date(createdAt).getTime() < 24 * 60 * 60 * 1000
+
+  const saveEdit = async () => {
+    if (!editing || !editing.body.trim()) return
+    setBusyId(editing.id)
+    try {
+      await kaluta.posts.editComment(editing.id, editing.body.trim())
+      setEditing(null)
+      await load()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not save the change')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const removeComment = async (id: string) => {
+    setBusyId(id)
+    try {
+      await kaluta.posts.deleteComment(id)
+      // Hidden immediately as well as refetched: the refetch is what makes it
+      // true, this is what stops the comment sitting there looking undeleted
+      // while the request is in flight.
+      setRemoved((current) => new Set(current).add(id))
+      onCountChange(-1)
+      await load()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not delete the comment')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   const me = useMyProfile()
   const [likeEdits, setLikeEdits] = useState<Record<string, { liked: boolean; likes: number }>>({})
 
@@ -197,7 +238,11 @@ export default function Comments({
     }
   }
 
-  const Row = ({ node }: { node: Tree }) => (
+  const Row = ({ node }: { node: Tree }) => {
+    if (removed.has(node.id)) return null
+    const isMine = node.author_id === currentUserId
+    const canEdit = isMine && withinEditWindow(node.created_at)
+    return (
     <li>
       <div className="flex gap-2">
         <span className="mt-0.5">
@@ -237,9 +282,44 @@ export default function Comments({
             {/* tok.text, not tok.mid: in a bubble the comment is the content,
                 and dimming it made every reply read as secondary to the name
                 above it. The name carries the weight instead. */}
-            <p className={cn('mt-0.5 whitespace-pre-wrap text-[0.9375rem] leading-[1.35]', tok.text)}>
-              {withMentions(node.body)}
-            </p>
+            {editing?.id === node.id ? (
+              /* Edited in place, inside its own bubble: a dialog for one line
+                 of text loses the thread it belongs to. */
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  void saveEdit()
+                }}
+                className="mt-1"
+              >
+                <input
+                  autoFocus
+                  value={editing.body}
+                  onChange={(e) => setEditing({ id: node.id, body: e.target.value })}
+                  onKeyDown={(e) => e.key === 'Escape' && setEditing(null)}
+                  aria-label="Edit comment"
+                  className={cn('w-full rounded-lg px-2 py-1 text-[0.9375rem]', tok.input, tok.text)}
+                />
+                <div className="mt-1 flex items-center gap-2 text-[0.72rem]">
+                  <button type="submit" disabled={busyId === node.id} className="font-semibold text-gold-soft disabled:opacity-50">
+                    Save
+                  </button>
+                  <button type="button" onClick={() => setEditing(null)} className={tok.low}>
+                    Cancel
+                  </button>
+                  <span className={tok.low}>Escape to cancel</span>
+                </div>
+              </form>
+            ) : (
+              <p className={cn('mt-0.5 whitespace-pre-wrap text-[0.9375rem] leading-[1.35]', tok.text)}>
+                {withMentions(node.body)}
+                {node.edited_at && (
+                  /* Said plainly, because a reply underneath may be answering
+                     words that are no longer there. */
+                  <span className={cn('ms-1.5 text-[0.72rem]', tok.low)}>(edited)</span>
+                )}
+              </p>
+            )}
           </div>
 
           {/* Like, Reply, then the time - the order Facebook uses, and the
@@ -266,6 +346,29 @@ export default function Comments({
               Reply
             </button>
             <span className={cn('text-[0.75rem]', tok.low)}>{when(node.created_at)}</span>
+            {/* Only the author's own, and Edit only while it can still be
+                edited - a button that answers "too late" is worse than no
+                button. Delete has no window: taking back something you regret
+                must always be possible. */}
+            {canEdit && editing?.id !== node.id && (
+              <button
+                type="button"
+                onClick={() => setEditing({ id: node.id, body: node.body })}
+                className={cn('text-[0.75rem] font-semibold hover:underline', tok.low)}
+              >
+                Edit
+              </button>
+            )}
+            {isMine && (
+              <button
+                type="button"
+                onClick={() => void removeComment(node.id)}
+                disabled={busyId === node.id}
+                className={cn('text-[0.75rem] font-semibold hover:underline disabled:opacity-50', tok.low)}
+              >
+                Delete
+              </button>
+            )}
             {likeState(node).likes > 0 && (
               /* The count sits on the row, not inside the bubble: a bubble that
                  changes size when somebody likes it makes the thread jump. */
@@ -288,15 +391,36 @@ export default function Comments({
         </div>
       </div>
     </li>
-  )
+    )
+  }
 
   return (
     <div className={cn('mt-3 border-t pt-3', tok.divider, 'border-t-current/10')}>
+      {/* A skeleton rather than the word "Loading".
+          The shape of what is coming is more use than the news that something
+          is: the thread does not jump when it arrives, because the space is
+          already the right size, and a spinner on a short thread flashed for
+          long enough to notice and not long enough to read. */}
       {items === null && !error && (
-        <p className={cn('flex items-center gap-2 py-2 text-xs', tok.low)}>
-          <Loader2 size={12} className="animate-spin" aria-hidden="true" />
-          Loading comments…
-        </p>
+        <ul className="space-y-3" aria-hidden="true">
+          {[0, 1, 2].map((row) => (
+            <li key={row} className="flex gap-2">
+              <span className={cn('h-7 w-7 shrink-0 animate-pulse rounded-full', tok.subtleBg)} />
+              <span className="min-w-0 flex-1">
+                <span
+                  className={cn('block animate-pulse rounded-[18px]', tok.subtleBg)}
+                  // Three different widths, so it reads as comments rather
+                  // than as a loading bar repeated three times.
+                  style={{ height: 46, width: ['78%', '58%', '68%'][row] }}
+                />
+                <span className={cn('mt-1 block h-2.5 w-24 animate-pulse rounded', tok.subtleBg)} />
+              </span>
+            </li>
+          ))}
+          <li className="sr-only" aria-live="polite">
+            Loading comments
+          </li>
+        </ul>
       )}
 
       {items && items.length === 0 && (
