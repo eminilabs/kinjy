@@ -51,6 +51,7 @@ import {
   SwipeToReply,
   type QuoteTarget,
 } from '@/components/social/MessageReply'
+import { ConversationSkeleton, ThreadSkeleton } from '@/components/social/MessageSkeleton'
 import MemberAvatar from '@/components/social/MemberAvatar'
 import { useApi } from '@/hooks/useApi'
 import { useRealtime } from '@/hooks/useRealtime'
@@ -1464,7 +1465,7 @@ export default function Messages() {
               )}
             </div>
 
-            {connections.loading && !connections.data && <p className="caption">Loading…</p>}
+            {connections.loading && !connections.data && <ConversationSkeleton count={2} />}
             {connections.data && friends.length === 0 && (
               <p className="caption">
                 No connections yet. Accepted connections appear here, ready to message.
@@ -1675,7 +1676,7 @@ export default function Messages() {
               </p>
             )}
 
-            {conversations.loading && !conversations.data && <p className="text-sm text-text-low">Loading…</p>}
+            {conversations.loading && !conversations.data && <ConversationSkeleton count={4} />}
             {conversations.data?.items.length === 0 && (
               <p className="text-sm text-text-low">
                 No conversations yet. Tap a friend above, or use “New”.
@@ -1895,7 +1896,7 @@ export default function Messages() {
                     </button>
                   </div>
                 )}
-                {loadingThread && <p className="text-sm text-text-low">Loading messages…</p>}
+                {loadingThread && <ThreadSkeleton count={6} />}
                 {!loadingThread && messages.length === 0 && (
                   <p className="text-sm text-text-low">No messages yet. Say hello.</p>
                 )}
