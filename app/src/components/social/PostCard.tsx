@@ -270,6 +270,30 @@ export default function PostCard({
   // Starts as whatever the server judged safe to send. Data saver strips heavy
   // URLs, so this list is what actually exists client-side until asked otherwise.
   const [media, setMedia] = useState(target.media)
+
+  /**
+   * One dialog for the whole post, whichever part of it was clicked.
+   *
+   * Clicking a picture opened the viewer - the picture large, with the post
+   * and its comments beside it - and clicking the text opened a different,
+   * smaller dialog. Two ways into the same post that look nothing alike, and
+   * the better one was reachable only if the post happened to have a picture
+   * you were willing to aim at.
+   *
+   * So the text and the comment count now open the viewer too, whenever there
+   * is something to view. A post with no picture, or one whose media the data
+   * saver has not downloaded, still gets the plain dialog: a photo viewer with
+   * no photo in it is a black screen with a sidebar.
+   */
+  const openDetail = () => {
+    if (media.length > 0 && media[0]?.url) {
+      setPreview(0)
+      return
+    }
+    if (onOpen) onOpen()
+    else setShowComments(true)
+  }
+
   const [loadingMedia, setLoadingMedia] = useState(false)
   const [reposts, setReposts] = useState(target.reposts_count)
   const [views, setViews] = useState(target.views_count ?? 0)
@@ -564,7 +588,7 @@ export default function PostCard({
               // not a request to open the post.
               if ((event.target as HTMLElement).closest('a,button')) return
               if (window.getSelection()?.toString()) return
-              onOpen()
+              openDetail()
             }}
             className={cn(
               'whitespace-pre-wrap text-[0.95rem] leading-relaxed text-text-hi',
@@ -616,7 +640,7 @@ export default function PostCard({
 
         <button
           type="button"
-          onClick={() => (onOpen ? onOpen() : setShowComments(true))}
+          onClick={openDetail}
           className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-text-mid hover:text-text-hi"
         >
           <MessageCircle size={13} aria-hidden="true" />
