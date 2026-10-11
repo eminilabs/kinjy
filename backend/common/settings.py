@@ -166,6 +166,13 @@ UPLOADCENTER_CDN_HOSTS = _str("UPLOADCENTER_CDN_HOSTS", "cdn.uploadscenter.com")
 # else, or UploadCenter being unconfigured, means local. Files already stored
 # stay where they are; each asset records its own provider.
 POST_MEDIA_PROVIDER = _str("POST_MEDIA_PROVIDER", "local")
+# How long a media ticket lasts (common/mediasign.py). It was a constant five
+# minutes, which is shorter than people look at a feed: a tab left open, or a
+# picture opened six minutes after the page loaded, asked for a ticket that had
+# already run out and got a broken tile. An hour is still short enough that a
+# copied URL is a nuisance rather than a permanent address, and a ticket is
+# refused outright for anyone signed in as somebody else whatever its age.
+MEDIA_TICKET_TTL_SECONDS = _int("MEDIA_TICKET_TTL_SECONDS", 3600)
 
 # --- Languages (platform-wide) ---------------------------------------------
 SUPPORTED_LANGS = ["en", "sw", "fr", "ar", "zh"]

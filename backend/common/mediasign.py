@@ -27,10 +27,10 @@ import time
 
 from common import settings
 
-# Minted tickets are valid for this long. Short enough that a leaked URL is a
-# nuisance rather than a permanent bypass, long enough that a slow connection
-# finishes a video it started. A player that outlives it re-fetches the post.
-DEFAULT_TTL_SECONDS = 300
+# Minted tickets are valid for at least this long. Short enough that a leaked
+# URL is a nuisance rather than a permanent bypass, long enough that a feed
+# somebody is still reading does not turn into broken tiles underneath them.
+DEFAULT_TTL_SECONDS = settings.MEDIA_TICKET_TTL_SECONDS
 
 # Derived from the platform secret rather than adding another one to rotate.
 # A distinct label means rotating the JWT secret invalidates tickets too, which
@@ -63,7 +63,19 @@ def mint(asset_id: str, viewer_id: str | None, *, ttl: int = DEFAULT_TTL_SECONDS
     cannot be replayed as somebody's authenticated one.
     """
     viewer = viewer_id or "anon"
-    expires = int(time.time()) + max(30, ttl)
+    ttl = max(30, ttl)
+    # Rounded up to a shared boundary rather than counted from this instant.
+    #
+    # Minting from `now` gives the same picture a different URL on every
+    # request, so a browser can never reuse the copy it already has: scrolling
+    # a feed back up re-downloaded every image in it. Rounding up means the
+    # same viewer asking for the same asset gets the *same* URL for a while,
+    # which is what makes the cache headers on the response mean anything.
+    #
+    # It only ever lengthens a ticket, never shortens one: the life is between
+    # ttl and ttl + step.
+    step = max(60, ttl // 4)
+    expires = -(-(int(time.time()) + ttl) // step) * step
     return {"v": viewer, "e": str(expires), "s": _sign(asset_id, viewer, expires)}
 
 

@@ -130,8 +130,13 @@ if signed:
         else signed
     r = httpx.get(direct, timeout=10)
     check("the signed URL serves the bytes", r.status_code == 200, f"{r.status_code}")
+    # The property is that no *shared* cache may hold it, which `private` is
+    # what says. It used to be asserted as the literal "no-store", which also
+    # forbade the viewer's own browser from keeping a picture it was looking
+    # at - so every scroll re-fetched the whole feed.
+    cache = r.headers.get("cache-control", "")
     check("a restricted byte range is not shared-cacheable",
-          "no-store" in r.headers.get("cache-control", ""), r.headers.get("cache-control"))
+          "private" in cache and "public" not in cache, cache)
 
     print("\n== the copied URL, pasted into someone else's session ==")
     r = httpx.get(direct, headers=auth(other_tok), timeout=10)

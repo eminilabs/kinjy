@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { preview } from '@/lib/mediaurl'
 import { cn } from '@/lib/utils'
 import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
@@ -152,7 +153,12 @@ export default function MediaLightbox({
           />
         ) : (
           <img
-            src={item.url ?? undefined}
+            // The display copy here too. Its long edge is 1440 px, which fills
+            // a full-screen view on anything short of a retina desktop, and it
+            // is the picture the feed has just finished downloading - so
+            // opening one is instant instead of fetching the camera file
+            // again. The original is still what a download gives.
+            src={preview(item.url)}
             alt={item.alt_text ?? ''}
             className="max-h-[92svh] max-w-full object-contain"
           />

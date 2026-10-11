@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { preview } from '@/lib/mediaurl'
 import type { PostMedia } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import VideoPlayer from './VideoPlayer'
@@ -316,7 +317,8 @@ function Tile({
       className={cn('relative block w-full overflow-hidden', single && boxed && 'h-full', className)}
     >
       <img
-        src={item.url}
+        // The feed-sized copy, not the camera file. A tap opens the original.
+        src={preview(item.url)}
         alt={item.alt_text ?? ''}
         loading="lazy"
         onError={() => setBroken(true)}

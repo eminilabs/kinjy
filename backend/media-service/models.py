@@ -80,6 +80,13 @@ class Asset(Base):
     width: Mapped[int | None] = mapped_column(Integer)
     height: Mapped[int | None] = mapped_column(Integer)
 
+    # A display-sized copy on the media volume (preview.py). The original is
+    # whole and untouched wherever it lives; this is what a feed is served.
+    # Null means there is none and the original is sent, which is what every
+    # picture did before this existed.
+    preview_path: Mapped[str | None] = mapped_column(String(500))
+    preview_bytes: Mapped[int | None] = mapped_column(BigInteger)
+
     # A chat attachment: served only on a link signed by the service that knows
     # who may see it, never on its bare URL.
     private: Mapped[bool] = mapped_column(Boolean, default=False)

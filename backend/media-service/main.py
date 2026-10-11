@@ -30,6 +30,7 @@ from common.service import create_app
 import models
 import profileimages
 import imagesize
+import preview
 import signatures
 import uploadcenter
 
@@ -101,6 +102,10 @@ MIGRATIONS = [
     # which keeps being measured in the browser as it was.
     f"ALTER TABLE {models.SCHEMA}.assets ADD COLUMN IF NOT EXISTS width INTEGER",
     f"ALTER TABLE {models.SCHEMA}.assets ADD COLUMN IF NOT EXISTS height INTEGER",
+    # The feed-sized copy. Null for everything stored before it existed, until
+    # /internal/media/backfill-previews has been over them.
+    f"ALTER TABLE {models.SCHEMA}.assets ADD COLUMN IF NOT EXISTS preview_path VARCHAR(500)",
+    f"ALTER TABLE {models.SCHEMA}.assets ADD COLUMN IF NOT EXISTS preview_bytes BIGINT",
 ]
 
 app = create_app(
@@ -225,6 +230,19 @@ async def upload(
         destination.unlink(missing_ok=True)
         return {**_describe(existing), "deduplicated": True}
 
+    # The feed-sized copy, built from the staging file while it is still here.
+    # It has to happen before the original goes to UploadCenter, because the
+    # local copy is deleted the moment it does.
+    preview_path: str | None = None
+    preview_bytes: int | None = None
+    if not seal and not private and preview.wanted(content_type, written):
+        previews = ROOT / "previews" / principal.user_id[:12]
+        previews.mkdir(parents=True, exist_ok=True)
+        candidate = previews / f"{asset_id}{preview.PREVIEW_SUFFIX}"
+        built = await run_in_threadpool(preview.build, destination, candidate)
+        if built:
+            preview_path, preview_bytes = str(candidate), built
+
     # Post media can live at UploadCenter instead of on the volume. It goes there
     # as a *private* file and is read back only through media-service, after the
     # viewer's ticket has been checked (see _serve_remote): no address that would
@@ -268,6 +286,8 @@ async def upload(
         alt_text=alt_text,
         width=size[0] if size else None,
         height=size[1] if size else None,
+        preview_path=preview_path,
+        preview_bytes=preview_bytes,
         private=private,
         sealed_with=crypto.keyring().active_id if seal else None,
         # Restricted from the first byte, not only once attached: the file has
@@ -529,6 +549,7 @@ def serve(
     s: str | None = None,
     exp: str | None = None,
     sig: str | None = None,
+    p: str | None = None,
     db: OrmSession = Depends(get_db),
 ):
     """Serve the bytes.
@@ -586,12 +607,30 @@ def serve(
     media_type = asset.content_type if inline else "application/octet-stream"
     headers = _serve_headers(asset.content_type if inline else None)
     if asset.access == "restricted":
-        # Never let a shared cache hold a restricted byte range: a CDN that
-        # caches one viewer's authorised response serves it to the next.
-        headers["Cache-Control"] = "private, no-store"
+        # `private` is what keeps a shared cache out: a CDN that holds one
+        # viewer's authorised response would serve it to the next. It was
+        # `no-store`, which also forbade the *viewer's own* browser from
+        # keeping it - so every scroll back up re-fetched every picture in the
+        # feed, from object storage, through here. Nothing is shared by
+        # letting a member's own browser keep a picture it is already looking
+        # at, and only for as long as their ticket would have let them ask
+        # again anyway.
+        headers["Cache-Control"] = f"private, max-age={_ticket_seconds_left(e)}"
     elif asset.private:
         # Signed links are personal; no shared cache may keep one's response.
         headers["Cache-Control"] = "private, max-age=3600"
+
+    # The feed and the grid ask for the display copy; the lightbox, a download
+    # and anything that wants the real thing ask for the original. The ticket
+    # is the same either way - it is signed over the asset, and this is the
+    # same picture, smaller.
+    if p and asset.preview_path and os.path.exists(asset.preview_path):
+        return FileResponse(
+            asset.preview_path,
+            media_type=preview.PREVIEW_CONTENT_TYPE,
+            headers={**_serve_headers(preview.PREVIEW_CONTENT_TYPE), **headers},
+            content_disposition_type="inline",
+        )
 
     if remote:
         return _serve_remote(asset, request, media_type, inline, headers)
@@ -604,6 +643,20 @@ def serve(
             headers=headers,
         )
     return _serve_sealed(asset, request, media_type, inline, headers)
+
+
+def _ticket_seconds_left(expires: str | None) -> int:
+    """How long the viewer's ticket still has, as a cache lifetime.
+
+    Caching past the ticket would leave a browser showing a picture it could
+    no longer ask for, so the two run out together. Clamped at both ends: a
+    malformed or absent value caches nothing, and nothing caches for a day.
+    """
+    try:
+        left = int(expires or 0) - int(time.time())
+    except ValueError:
+        return 0
+    return max(0, min(left, 86400))
 
 
 def _serve_sealed(asset: models.Asset, request: Request, media_type: str, inline: bool, headers: dict) -> Response:
@@ -798,6 +851,126 @@ def sign_assets(payload: dict):
     }
 
 
+@app.post("/internal/media/backfill-previews", tags=["internal"])
+def backfill_previews(limit: int = 50, dry_run: bool = True, db: OrmSession = Depends(get_db)):
+    """Build the display copy for pictures uploaded before there was one.
+
+    Everything stored until now is served whole - a median of 375 kB and a
+    long tail into the megabytes, into a column 560 px wide. This reads each
+    original once, writes the derivative next to the others on the volume, and
+    moves on; from then on the feed is served the small one.
+
+    Unlike the dimensions backfill this does download whole files, because a
+    picture cannot be resized from its header. It is therefore deliberately
+    batched and slow, and safe to stop: a second run picks up where it left
+    off, since a row with a preview is no longer selected.
+
+    dry_run is the default. Reaching this needs access to the container,
+    since /internal is not routed through the gateway.
+    """
+    assets = db.scalars(
+        select(models.Asset)
+        .where(
+            models.Asset.kind == "image",
+            models.Asset.preview_path.is_(None),
+            models.Asset.private.is_(False),
+            models.Asset.status == "ready",
+            models.Asset.content_type.in_(sorted(preview.SOURCES)),
+            models.Asset.size_bytes > 120 * 1024,
+        )
+        .order_by(models.Asset.size_bytes.desc())  # the worst offenders first
+        .limit(max(1, min(limit, 200)))
+    ).all()
+
+    built = skipped = failed = 0
+    saved = 0
+    reasons: dict[str, int] = {}
+
+    def note(reason: str) -> None:
+        reasons[reason] = reasons.get(reason, 0) + 1
+
+    for asset in assets:
+        previews = ROOT / "previews" / asset.owner_id[:12]
+        previews.mkdir(parents=True, exist_ok=True)
+        candidate = previews / f"{asset.id}{preview.PREVIEW_SUFFIX}"
+        # Where the original is read from, and whether this leaves a temporary
+        # file behind to delete afterwards.
+        staged: Path | None = None
+        try:
+            if asset.provider == "uploadcenter" and asset.external_id:
+                staged = previews / f"{asset.id}.staging"
+                client = response = None
+                try:
+                    client, response = uploadcenter.open_stream(_remote_link(asset), None)
+                    if response.status_code != 200:
+                        note(f"remote http {response.status_code}")
+                        failed += 1
+                        continue
+                    with staged.open("wb") as out:
+                        for chunk in response.iter_raw(1024 * 1024):
+                            out.write(chunk)
+                finally:
+                    if response is not None:
+                        response.close()
+                    if client is not None:
+                        client.close()
+                source = staged
+            elif asset.storage_path and os.path.exists(asset.storage_path):
+                source = Path(asset.storage_path)
+            else:
+                note("nowhere to read from")
+                failed += 1
+                continue
+
+            size = preview.build(source, candidate)
+        except Exception as exc:  # noqa: BLE001 - one bad file must not stop the run
+            log.warning("preview backfill could not read %s: %s", asset.id, exc)
+            note("read failed")
+            failed += 1
+            continue
+        finally:
+            if staged is not None:
+                staged.unlink(missing_ok=True)
+
+        if size is None:
+            # Animated, already small enough, or unreadable. Counted, not retried.
+            note("no preview worth building")
+            skipped += 1
+            continue
+
+        saved += max(0, (asset.size_bytes or 0) - size)
+        if not dry_run:
+            asset.preview_path, asset.preview_bytes = str(candidate), size
+        else:
+            candidate.unlink(missing_ok=True)
+        built += 1
+
+    if not dry_run:
+        db.commit()
+
+    remaining = db.scalar(
+        select(func.count())
+        .select_from(models.Asset)
+        .where(
+            models.Asset.kind == "image",
+            models.Asset.preview_path.is_(None),
+            models.Asset.private.is_(False),
+            models.Asset.content_type.in_(sorted(preview.SOURCES)),
+            models.Asset.size_bytes > 120 * 1024,
+        )
+    )
+    return {
+        "dry_run": dry_run,
+        "examined": len(assets),
+        "built": built,
+        "skipped": skipped,
+        "failed": failed,
+        "reasons": reasons,
+        "bytes_saved_per_view": saved,
+        "still_without_preview": remaining,
+    }
+
+
 @app.get("/media/{asset_id}/provenance", tags=["media"])
 def provenance(asset_id: str, db: OrmSession = Depends(get_db)):
     asset = db.get(models.Asset, asset_id)
@@ -838,6 +1011,10 @@ def _discard_bytes(asset: models.Asset) -> None:
     """Delete the stored bytes. A remote failure is logged, never raised: the
     member asked for the row to go, and an orphaned remote file is recoverable
     from UploadCenter's console where a stuck delete button is not."""
+    # The derivative goes with the original. It is our copy of a picture
+    # somebody asked us to forget.
+    if asset.preview_path:
+        Path(asset.preview_path).unlink(missing_ok=True)
     _discard_stored(asset.provider, asset.external_id, asset.storage_path)
 
 
