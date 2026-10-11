@@ -847,7 +847,45 @@ export default function PostCard({
       )}
 
       {preview !== null && (
-        <MediaLightbox media={media} index={preview} onClose={() => setPreview(null)} />
+        <MediaLightbox
+          media={media}
+          index={preview}
+          onClose={() => setPreview(null)}
+          // The post and its conversation beside the picture, which is what a
+          // photo viewer on a social network is for: you open a picture to
+          // look at it *and* to read what people said about it. Without this
+          // the viewer is a dead end you have to back out of to reply.
+          aside={
+            <div className="space-y-3">
+              <div className="flex items-center gap-2.5">
+                <MemberAvatar
+                  handle={target.author?.handle}
+                  displayName={target.author?.display_name}
+                  avatarUrl={target.author?.avatar_url}
+                  size={36}
+                />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-text-hi">
+                    {target.author?.display_name ?? target.author_id.slice(0, 12)}
+                  </p>
+                  <p className="text-[0.75rem] text-text-low">{ago(target.created_at)}</p>
+                </div>
+              </div>
+
+              {plainBody.trim() !== '' && (
+                <p className="whitespace-pre-wrap text-[0.9375rem] leading-relaxed text-text-hi">
+                  {withHashtags(readableText(plainBody))}
+                </p>
+              )}
+
+              <Comments
+                postId={target.id}
+                currentUserId={currentUserId}
+                onCountChange={(delta) => setComments((n) => n + delta)}
+              />
+            </div>
+          }
+        />
       )}
 
       {note && <p className="caption mt-2 text-gold-soft">{note}</p>}

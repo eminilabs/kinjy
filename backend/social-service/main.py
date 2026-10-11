@@ -1206,6 +1206,36 @@ def report_comment(
     return _report(comment_id, "comment", payload, principal, db)
 
 
+@app.post("/comments/{comment_id}/reaction", tags=["comments"])
+def toggle_comment_like(comment_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """Like a comment, or take the like back. One call either way.
+
+    A toggle rather than a like and an unlike endpoint: the client knows
+    whether it is currently liked, but the server is the one that can say so
+    without a race, and two endpoints invite the double-like that the primary
+    key would then reject as an error rather than as the no-op it is.
+    """
+    comment = db.get(models.Comment, comment_id)
+    if comment is None or comment.status != "published":
+        raise HTTPException(status_code=404, detail="Comment not found")
+
+    existing = db.get(models.CommentReaction, (comment_id, principal.user_id))
+    if existing is not None:
+        db.delete(existing)
+        liked = False
+    else:
+        db.add(models.CommentReaction(comment_id=comment_id, user_id=principal.user_id))
+        liked = True
+    db.commit()
+
+    likes = db.scalar(
+        select(func.count())
+        .select_from(models.CommentReaction)
+        .where(models.CommentReaction.comment_id == comment_id)
+    )
+    return {"liked": liked, "likes": likes or 0}
+
+
 @app.get("/moderation/decisions", tags=["moderation"])
 def my_decisions(principal: CurrentUser, db: OrmSession = Depends(get_db)):
     """What has been restricted on this account, and where each appeal stands.
@@ -2967,6 +2997,32 @@ def list_comments(
 
     people = _authors({r.author_id for r in rows} | {r.reply_to for r in rows if r.reply_to})
 
+    # Likes for the comments on this page, in two queries rather than two per
+    # comment. A thread of eighty replies would otherwise be a hundred and
+    # sixty round trips to render one screen.
+    ids = [r.id for r in rows]
+    like_counts: dict[str, int] = {}
+    mine: set[str] = set()
+    if ids:
+        like_counts = {
+            cid: n
+            for cid, n in db.execute(
+                select(models.CommentReaction.comment_id, func.count())
+                .where(models.CommentReaction.comment_id.in_(ids))
+                .group_by(models.CommentReaction.comment_id)
+            ).all()
+        }
+        if principal is not None:
+            mine = {
+                cid
+                for (cid,) in db.execute(
+                    select(models.CommentReaction.comment_id).where(
+                        models.CommentReaction.comment_id.in_(ids),
+                        models.CommentReaction.user_id == principal.user_id,
+                    )
+                ).all()
+            }
+
     def describe(uid: str | None) -> dict | None:
         if not uid:
             return None
@@ -2992,6 +3048,8 @@ def list_comments(
                 "body": r.body,
                 "lang": r.lang,
                 "created_at": r.created_at,
+                "likes": like_counts.get(r.id, 0),
+                "liked": r.id in mine,
             }
             for r in rows
         ],

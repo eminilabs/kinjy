@@ -153,6 +153,27 @@ class Comment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
+class CommentReaction(Base):
+    """A like on a comment.
+
+    Separate from Reaction, which is keyed on a post: a comment like is a
+    different thing counted in a different place, and overloading one table
+    with a nullable post_id would make every post-reaction query carry a
+    filter it does not need.
+
+    One row per person per comment - the primary key says so, rather than a
+    uniqueness rule written in the endpoint and forgotten the next time
+    somebody inserts here.
+    """
+
+    __tablename__ = "comment_reactions"
+    __table_args__ = {"schema": SCHEMA}
+
+    comment_id: Mapped[str] = mapped_column(String(40), primary_key=True, index=True)
+    user_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
 class FeedSignal(Base):
     """Explicit user control over ranking (blueprint §1).
 

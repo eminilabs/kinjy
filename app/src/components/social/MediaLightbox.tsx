@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { cn } from '@/lib/utils'
 import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import type { PostMedia } from '@/lib/api'
@@ -15,10 +16,22 @@ export default function MediaLightbox({
   media,
   index,
   onClose,
+  aside,
 }: {
   media: PostMedia[]
   index: number
   onClose: () => void
+  /**
+   * What sits beside the picture on a wide screen - the post and its
+   * comments, for a feed photo.
+   *
+   * Optional, because not every picture has a conversation around it: the
+   * product gallery and a chat attachment are pictures and nothing else, and
+   * giving them an empty panel would be worse than giving them none. Hidden
+   * below lg, where the photo wants the whole screen and the comments are a
+   * tap away on the post itself.
+   */
+  aside?: React.ReactNode
 }) {
   const [current, setCurrent] = useState(index)
 
@@ -52,14 +65,21 @@ export default function MediaLightbox({
       role="dialog"
       aria-modal="true"
       aria-label="Media preview"
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/92"
+      className={cn(
+        'fixed inset-0 z-[90] flex bg-black',
+        // Pure black, not black/92: a photo viewer that lets the page glow
+        // through reads as an overlay rather than as somewhere you have gone.
+        aside ? 'items-stretch' : 'items-center justify-center',
+      )}
       onClick={onClose}
     >
       <button
         type="button"
         onClick={onClose}
         aria-label="Close preview"
-        className="absolute end-4 top-4 z-10 rounded-full bg-white/10 p-2.5 text-white hover:bg-white/20"
+        // Top-left, where every photo viewer puts it - and away from the
+        // comments panel's own controls on the right.
+        className="absolute start-4 top-4 z-20 rounded-full bg-white/10 p-2.5 text-white hover:bg-white/20"
       >
         <X size={18} />
       </button>
@@ -93,6 +113,10 @@ export default function MediaLightbox({
         </>
       )}
 
+      {/* The picture's half. flex-1 so it takes whatever the panel leaves,
+          and centred inside that rather than inside the window - otherwise the
+          photo sits behind the comments on a narrow desktop. */}
+      <div className={cn('relative flex min-w-0 flex-1 items-center justify-center', aside && 'lg:pe-0')}>
       {/* Stop the backdrop's close handler from firing on the media itself. */}
       <div className="max-h-[92svh] max-w-[92vw]" onClick={(e) => e.stopPropagation()}>
         {item.kind === 'video' ? (
@@ -124,6 +148,18 @@ export default function MediaLightbox({
         <p className="absolute bottom-12 max-w-lg px-6 text-center text-sm text-white/80">
           {item.alt_text}
         </p>
+      )}
+      </div>
+
+      {/* The conversation, beside the picture. Its own scroll, so a long
+          thread never pushes the photo out of the window. */}
+      {aside && (
+        <aside
+          onClick={(e) => e.stopPropagation()}
+          className="hidden w-[360px] shrink-0 overflow-y-auto overscroll-contain bg-ink-2 p-4 lg:block xl:w-[400px]"
+        >
+          {aside}
+        </aside>
       )}
     </div>,
     document.body,

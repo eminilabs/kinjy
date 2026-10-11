@@ -583,6 +583,9 @@ export interface CommentNode {
   body: string
   lang: string
   created_at: string
+  /** Likes on this comment, and whether this viewer is one of them. */
+  likes: number
+  liked: boolean
 }
 
 export interface PersonSuggestion {
@@ -1713,6 +1716,9 @@ export const kaluta = {
       api.get<{ total: number; items: Post[] }>(`/posts/by/${userId}?limit=${limit}`),
     remove: (id: string) => api.delete<void>(`/posts/${id}`),
     /** Share to your own audience. A body makes it a quote rather than a plain share. */
+    /** Like a comment, or take it back. One call either way; the server answers with the new state. */
+    likeComment: (commentId: string) =>
+      api.post<{ liked: boolean; likes: number }>(`/comments/${commentId}/reaction`, {}),
     repost: (id: string, body = '') => api.post<Post>(`/posts/${id}/repost`, { body }),
     undoRepost: (id: string) => api.delete<void>(`/posts/${id}/repost`),
     /**
