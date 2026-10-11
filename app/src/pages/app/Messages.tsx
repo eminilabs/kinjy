@@ -1323,6 +1323,14 @@ export default function Messages() {
         })
       : []
 
+  // The other person, when there is exactly one of them. A group has no
+  // single profile behind its name, and a conversation whose profile never
+  // resolved has no handle to go to.
+  const headerProfile =
+    active && active.kind === 'direct' && activeOthers.length === 1
+      ? (active.profiles?.[activeOthers[0]] ?? null)
+      : null
+
   const headerSubtitle = (() => {
     if (!active) return null
     if (typingNames.length) return `${typingNames.join(', ')} ${typingNames.length > 1 ? 'are' : 'is'} typing…`
@@ -1832,13 +1840,42 @@ export default function Messages() {
                 >
                   <ArrowLeft size={18} className="rtl:rotate-180" aria-hidden="true" />
                 </button>
-                <PresenceAvatar
-                  profile={active.profiles?.[activeOthers[0]]}
-                  online={active.kind === 'direct' && presence[activeOthers[0]]?.online}
-                  size={44}
-                />
+                {/* The person's face and name lead to the person. In a one
+                    to one conversation that is the obvious thing to tap and
+                    it did nothing; in a group there is no single profile to
+                    go to, so there the header stays what it was. The status
+                    line below is not part of the link - it is what they are
+                    doing, not who they are. */}
+                {headerProfile ? (
+                  <Link
+                    to={`/u/${headerProfile.handle}`}
+                    aria-label={`View ${headerProfile.display_name}'s profile`}
+                    className="shrink-0 rounded-full"
+                  >
+                    <PresenceAvatar
+                      profile={headerProfile}
+                      online={presence[activeOthers[0]]?.online}
+                      size={44}
+                    />
+                  </Link>
+                ) : (
+                  <PresenceAvatar
+                    profile={active.profiles?.[activeOthers[0]]}
+                    online={active.kind === 'direct' && presence[activeOthers[0]]?.online}
+                    size={44}
+                  />
+                )}
                 <div className="min-w-0">
-                  <p className="truncate text-base font-bold leading-tight text-text-hi">{titleOf(active, activeOthers)}</p>
+                  {headerProfile ? (
+                    <Link
+                      to={`/u/${headerProfile.handle}`}
+                      className="block truncate text-base font-bold leading-tight text-text-hi hover:text-gold-soft hover:underline"
+                    >
+                      {titleOf(active, activeOthers)}
+                    </Link>
+                  ) : (
+                    <p className="truncate text-base font-bold leading-tight text-text-hi">{titleOf(active, activeOthers)}</p>
+                  )}
                   <p
                     className={cn('truncate text-xs text-text-low', typingNames.length > 0 && 'text-gold-soft')}
                     aria-live="polite"
