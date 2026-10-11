@@ -84,6 +84,19 @@ export default function MediaLightbox({
         <X size={18} />
       </button>
 
+
+      {/* The picture's half. flex-1 so it takes whatever the panel leaves,
+          and centred inside that rather than inside the window - otherwise the
+          photo sits behind the comments on a narrow desktop. */}
+      <div className="relative flex min-w-0 flex-1 items-center justify-center overflow-hidden p-4">
+      {/* The arrows belong to the picture, so they live in its column.
+          On the dialog itself, `end-3` is the far right of the whole window -
+          which, with the panel open, is the far side of the comments, not the
+          far side of the photo. They also lost their centring there: the
+          dialog switches to items-stretch to let the panel fill the height, so
+          the arrows stretched with it instead of sitting at the middle. They
+          now centre themselves and are measured against the picture's own
+          column. */}
       {media.length > 1 && (
         <>
           <button
@@ -94,7 +107,7 @@ export default function MediaLightbox({
             }}
             disabled={current === 0}
             aria-label="Previous"
-            className="absolute start-3 z-10 rounded-full bg-white/10 p-3 text-white hover:bg-white/20 disabled:opacity-25"
+            className="absolute start-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/10 p-3 text-white hover:bg-white/20 disabled:opacity-25"
           >
             <ChevronLeft size={20} />
           </button>
@@ -106,17 +119,12 @@ export default function MediaLightbox({
             }}
             disabled={current === media.length - 1}
             aria-label="Next"
-            className="absolute end-3 z-10 rounded-full bg-white/10 p-3 text-white hover:bg-white/20 disabled:opacity-25"
+            className="absolute end-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/10 p-3 text-white hover:bg-white/20 disabled:opacity-25"
           >
             <ChevronRight size={20} />
           </button>
         </>
       )}
-
-      {/* The picture's half. flex-1 so it takes whatever the panel leaves,
-          and centred inside that rather than inside the window - otherwise the
-          photo sits behind the comments on a narrow desktop. */}
-      <div className="relative flex min-w-0 flex-1 items-center justify-center overflow-hidden p-4">
       {/* Stop the backdrop's close handler from firing on the media itself. */}
       {/* Bounded by this column, not by the window.
           max-w-[92vw] is 92% of the *viewport*, which knows nothing about the
