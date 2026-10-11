@@ -1,28 +1,12 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  Columns2,
-  Eye,
-  EyeOff,
-  Flag,
-  HelpCircle,
-  Languages,
-  Lock,
-  MapPin,
-  MessageCircle,
-  Repeat2,
-  SlidersHorizontal,
-  Trash2,
-  Link2,
-  Check,
-  Share2,
-} from 'lucide-react'
+import { Check, Columns2, Eye, EyeOff, Flag, HelpCircle, Languages, Link2, Lock, MapPin, MessageCircle, Pencil, Repeat2, Share2, SlidersHorizontal, Trash2 } from 'lucide-react'
 import { ApiError, kaluta, type Post, type WhyFactor } from '@/lib/api'
 import { useTopic } from '@/hooks/useRealtime'
 import { htmlToText, looksLikeHtml, readableText, sanitizeHtml } from '@/lib/richtext'
 import { useAuth } from '@/hooks/useAuth'
-import { isLink, LINK_RE, splitTrailing } from '@/lib/linkify'
-import { postUrl, shareLink, SHARE_TARGETS } from '@/lib/share'
+import { isLink, LINK_RE, splitTrailing, TAG_OR_MENTION } from '@/lib/linkify'
+import { copyLink, postUrl, SHARE_TARGETS } from '@/lib/share'
 import { cn } from '@/lib/utils'
 import Comments from './Comments'
 import MemberAvatar from './MemberAvatar'
@@ -87,12 +71,11 @@ function withHashtags(text: string) {
     // Mentions join the same split, for the same reason hashtags did: an @ or
     // a # inside an address must stay part of the address rather than being
     // lifted out of the middle of a link.
-    .split(
-      new RegExp(
-        `${LINK_RE.source}|(#[\wÀ-ÿ؀-ۿ一-鿿][\wÀ-ÿ؀-ۿ一-鿿-]{1,49}|@[a-z0-9_.]{2,40})`,
-        'gi',
-      ),
-    )
+    // Built from regex literals rather than a template string: a single
+    // backslash inside a template literal is dropped, which turned the
+    // hashtag class into [w...-] and rendered whole sentences as one topic
+    // link. .source keeps each pattern exactly as written.
+    .split(new RegExp(`${LINK_RE.source}|(${TAG_OR_MENTION.source})`, 'gi'))
     .map((part, index) => {
       if (part === undefined || part === '') return null
       // split() with more than one capturing group yields undefined for
@@ -313,6 +296,46 @@ export default function PostCard({
    * saver has not downloaded, still gets the plain dialog: a photo viewer with
    * no photo in it is a black screen with a sidebar.
    */
+  // The post being rewritten, as a draft. Null when not editing.
+  //
+  // The body is edited rather than the whole post: the pictures, the audience
+  // and the community it was posted to are not typos, and offering to change
+  // them here would turn a correction into a re-post.
+  const [draft, setDraft] = useState<string | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
+  // The body as saved, once this card has edited it. The post arrives as a
+  // prop from the feed, which does not refetch just because one card changed.
+  const [editedBody, setEditedBody] = useState<string | null>(null)
+
+  /**
+   * A post can be fixed for a day, then it stands - the server enforces the
+   * same window, this only decides whether to offer the button.
+   *
+   * Never on a repost: the words belong to whoever wrote them, and `target`
+   * there is somebody else's post.
+   */
+  const editable =
+    isOwn &&
+    !post.repost_of &&
+    Date.now() - new Date(target.created_at).getTime() < 24 * 60 * 60 * 1000
+
+  const saveEdit = async () => {
+    if (draft === null || !draft.trim()) return
+    setSavingEdit(true)
+    try {
+      const updated = await kaluta.posts.edit(target.id, draft.trim())
+      // The server's copy, not the draft: it re-derives the topics and may
+      // have reclassified the post, so the card shows what was stored rather
+      // than what was typed.
+      setEditedBody(updated.body)
+      setDraft(null)
+    } catch (err) {
+      setNote(err instanceof ApiError ? err.message : 'Could not save the change')
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
   const openDetail = () => {
     if (media.length > 0 && media[0]?.url) {
       setPreview(0)
@@ -370,18 +393,11 @@ export default function PostCard({
   })()
 
   const doShare = async () => {
-    // The author can be null when the profile lookup did not resolve. That is
-    // a reason for a plainer share title, not for the share to fail.
-    const who = source.author?.display_name
-    const result = await shareLink(shareUrl, who ? `${who} on Kinjy` : 'A post on Kinjy')
+    const result = await copyLink(shareUrl)
     setShareNote(
-      result === 'shared'
-        ? null
-        : result === 'copied'
-          ? 'Link copied.'
-          : result === 'cancelled'
-            ? null
-            : 'Could not copy — select the link and copy it by hand.',
+      result === 'copied'
+        ? 'Link copied.'
+        : 'Could not copy — select the link and copy it by hand.',
     )
   }
 
@@ -479,10 +495,12 @@ export default function PostCard({
   const source = target
 
   // Articles are stored as markup; everything else is plain text.
-  const isRichArticle = source.format === 'article' && looksLikeHtml(source.body) && !translation
-  const body = translation && !sideBySide ? translation.text : source.body
+  // The edited text once this card has saved one, otherwise what arrived.
+  const sourceBody = editedBody ?? source.body
+  const isRichArticle = source.format === 'article' && looksLikeHtml(sourceBody) && !translation
+  const body = translation && !sideBySide ? translation.text : sourceBody
   /** Text without the tags — for translation, and for the side-by-side column. */
-  const plainBody = looksLikeHtml(source.body) ? htmlToText(source.body) : source.body
+  const plainBody = looksLikeHtml(sourceBody) ? htmlToText(sourceBody) : sourceBody
   // The first link in the body is the one worth unfurling; a post full of
   // links is a list, and five cards under it is not a post any more. Declared
   // after plainBody, which it reads - a const used above its declaration is a
@@ -617,6 +635,41 @@ export default function PostCard({
            interactive elements inside a button is invalid and unreadable to a
            screen reader. A plain click handler leaves them alone, and the
            header already offers a keyboard route to the same place. */
+        draft !== null ? (
+        /* Edited in place. The pictures, the audience and the community stay
+           as they are: those are not typos, and offering to change them here
+           would turn a correction into a re-post. */
+        <form
+          onSubmit={(event) => {
+            event.preventDefault()
+            void saveEdit()
+          }}
+          className="mt-3"
+        >
+          <textarea
+            autoFocus
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => event.key === 'Escape' && setDraft(null)}
+            rows={4}
+            aria-label="Edit your post"
+            className="w-full resize-y rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-[0.95rem] leading-relaxed text-text-hi focus:border-gold/40 focus:outline-none"
+          />
+          <div className="mt-2 flex items-center gap-3 text-xs">
+            <button
+              type="submit"
+              disabled={savingEdit || !draft.trim()}
+              className="rounded-full bg-gradient-to-br from-gold-soft to-gold px-3.5 py-1.5 font-bold text-ink disabled:opacity-40"
+            >
+              {savingEdit ? 'Saving…' : 'Save'}
+            </button>
+            <button type="button" onClick={() => setDraft(null)} className="text-text-low hover:text-text-hi">
+              Cancel
+            </button>
+            <span className="text-text-low">Escape to cancel · editable for 24 hours</span>
+          </div>
+        </form>
+        ) : (
         <Expandable collapsedHeight={BODY_COLLAPSED} lines={BODY_LINES} className="mt-3" deps={[body]}>
           <p
             onClick={(event) => {
@@ -635,6 +688,7 @@ export default function PostCard({
             {withHashtags(readableText(body))}
           </p>
         </Expandable>
+        )
       )}
 
       {/* Only when the post has no media of its own: a post with a photo and a
@@ -758,6 +812,20 @@ export default function PostCard({
           >
             <Flag size={13} aria-hidden="true" />
             {reported ? 'Reported' : 'Report'}
+          </button>
+        )}
+
+        {isOwn && editable && draft === null && (
+          /* Only while it can still be edited. A button that answers "too
+             late" is worse than no button, and the server would refuse it
+             anyway. */
+          <button
+            type="button"
+            onClick={() => setDraft(plainBody)}
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-text-low hover:text-text-hi"
+          >
+            <Pencil size={13} aria-hidden="true" />
+            Edit
           </button>
         )}
 

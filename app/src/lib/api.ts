@@ -1718,6 +1718,8 @@ export const kaluta = {
       api.get<{ total: number; items: Post[] }>(`/posts/by/${userId}?limit=${limit}`),
     remove: (id: string) => api.delete<void>(`/posts/${id}`),
     /** Share to your own audience. A body makes it a quote rather than a plain share. */
+    /** Fix your own post, within its first 24 hours. */
+    edit: (postId: string, body: string) => api.patch<Post>(`/posts/${postId}`, { body }),
     /** Fix a comment, within its first 24 hours. */
     editComment: (commentId: string, body: string) =>
       api.patch<{ id: string; body: string; edited_at: string }>(`/comments/${commentId}`, { body }),

@@ -76,3 +76,14 @@ export function splitTrailing(part: string): { href: string; text: string; trail
   const href = /^https?:\/\//i.test(text) ? text : `https://${text}`
   return { href, text, trailing }
 }
+
+/**
+ * A hashtag or an @mention, as one pattern.
+ *
+ * A regex literal, not a string: a backslash inside a template literal is
+ * dropped, so writing this inline as `[\w…]` silently became `[w…]` - and with
+ * the trailing dash in the class that matched whole phrases, turning a
+ * sentence into a single topic link. `.source` keeps it exactly as written.
+ */
+export const TAG_OR_MENTION =
+  /#[\wÀ-ÿ؀-ۿ一-鿿][\wÀ-ÿ؀-ۿ一-鿿-]{1,49}|@[a-z0-9_.]{2,40}/

@@ -74,6 +74,25 @@ export function clearPendingRef(): void {
  * AbortError when somebody closes the sheet, which is a choice rather than a
  * failure and is reported as such.
  */
+/**
+ * Put the link on the clipboard. Nothing else.
+ *
+ * Deliberately not navigator.share: that hands the link to the operating
+ * system's own share sheet, which on Windows is a full window that covers the
+ * page. That was the right thing when a button labelled "Share" was the only
+ * way out of a post, but the share dialog now lists the destinations itself -
+ * so the sheet is a second share UI stacked on the first, and the member who
+ * pressed "Copy link" asked for the clipboard, not for a chooser.
+ */
+export async function copyLink(url: string): Promise<'copied' | 'failed'> {
+  try {
+    await navigator.clipboard.writeText(url)
+    return 'copied'
+  } catch {
+    return 'failed'
+  }
+}
+
 export async function shareLink(
   url: string,
   title: string,
