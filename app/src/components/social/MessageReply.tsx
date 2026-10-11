@@ -59,10 +59,18 @@ export function ReplyQuote({
   mine: boolean
   onJump?: () => void
 }) {
-  const surface = mine ? 'bg-black/15' : 'bg-black/20'
+  // On my own bubble everything is drawn on Messenger blue, so the quote is
+  // white at reduced opacity: gold on blue is both poor contrast and the wrong
+  // palette, and the grey used on their bubble disappears entirely. A white
+  // wash also reads as "inside this bubble", where a black one read as a hole
+  // punched through it.
+  const surface = mine ? 'bg-white/20' : 'bg-black/20'
+  const nameTone = mine ? 'text-white' : 'text-gold-soft'
+  const bodyTone = mine ? 'text-white/80' : 'text-text-mid'
+  const hover = mine ? 'hover:bg-white/30' : 'hover:bg-black/25'
   if (target.state !== 'found') {
     return (
-      <div className={cn('mb-1 rounded-card-sm px-2.5 py-1.5 text-xs italic text-text-low', EDGE, surface)}>
+      <div className={cn('mb-1 rounded-card-sm px-2.5 py-1.5 text-xs italic', bodyTone, EDGE, surface)}>
         {target.state === 'deleted' ? 'Message deleted' : 'Older message'}
       </div>
     )
@@ -74,13 +82,14 @@ export function ReplyQuote({
       onClick={onJump}
       aria-label={`Go to the message from ${name}: ${quoteText(message)}`}
       className={cn(
-        'mb-1 block w-full rounded-card-sm px-2.5 py-1.5 text-start hover:bg-black/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold/60',
+        'mb-1 block w-full rounded-card-sm px-2.5 py-1.5 text-start focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold/60',
+        hover,
         EDGE,
         surface,
       )}
     >
-      <span className="block truncate text-xs font-semibold text-gold-soft">{name}</span>
-      <span className="flex items-center gap-1 text-xs text-text-mid">
+      <span className={cn('block truncate text-xs font-semibold', nameTone)}>{name}</span>
+      <span className={cn('flex items-center gap-1 text-xs', bodyTone)}>
         <MediaGlyph kind={message.media_kind} />
         <span className="line-clamp-2 break-words">{quoteText(message)}</span>
       </span>

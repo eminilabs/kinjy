@@ -666,6 +666,11 @@ export default function Messages() {
       replyToId?: string | null,
       stickerId?: string | null,
     ) => {
+      // Clear the last complaint before making a new attempt. It was only ever
+      // set and never unset, so one failed send left "could not send" on
+      // screen through every message that went out afterwards - telling
+      // somebody their conversation is broken while it plainly is not.
+      setError(null)
       try {
         let mediaId: string | undefined
         if (file) {
