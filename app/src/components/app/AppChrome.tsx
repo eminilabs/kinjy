@@ -229,6 +229,81 @@ export function AppChipBar({ pathname, search }: { pathname: string; search: str
     ...EXTRA_NAV.map((e) => ({ ...e, Icon: Clapperboard })),
   ]
 
+  // The rail scrolls, and the chip for the page you are on can be past its
+  // edge: on a phone the chips are 442px wide in a 267px rail, so "Messages"
+  // sat half off-screen reading "Messa" while you were on Messages. Scrolled
+  // into view whenever the active page changes, so the bar always shows where
+  // you are.
+  //
+  // `nearest` rather than `center`: it moves the rail only as far as it has to,
+  // so a chip already visible does not jump.
+  /**
+   * Bring the chip for the current page into the rail.
+   *
+   * The chips are wider than the rail on a phone - 442px of them in 267 - so
+   * the one for the page you are on can sit past the edge: "Messages" read
+   * "Messa" while you were on Messages.
+   *
+   * A callback ref rather than an effect, because the timing is the whole
+   * problem. An effect on mount runs before the chips are laid out, and an
+   * effect keyed on the route runs before the chip for that route exists; both
+   * earlier attempts measured nothing and decided nothing was wrong. A
+   * callback ref fires exactly when the active chip is attached, which is the
+   * moment there is something to measure.
+   *
+   * Measured against the rail's own content box. offsetLeft is relative to the
+   * nearest positioned ancestor, which here is a card further up, so it was
+   * off by the card's padding - correct-looking and wrong.
+   */
+  // The chip for the page you are on, once it is on screen.
+  const [activeChip, setActiveChip] = useState<HTMLDivElement | null>(null)
+
+  /**
+   * Keep the current page's chip inside the rail.
+   *
+   * The chips are wider than the rail on a phone - 442px of them in 267 - so
+   * the chip for the page you are on can sit past the edge: "Messages" read
+   * "Messa" while you were on Messages.
+   *
+   * Watched rather than done once, so the initial reflow and a rotation are
+   * both covered: the rail is not its final size when the page first lays
+   * out.
+   *
+   * Measured against the rail's own content box, because offsetLeft is
+   * relative to the nearest positioned ancestor - a card further up - which
+   * was off by its padding and looked right.
+   */
+  useEffect(() => {
+    const rail = activeChip?.closest<HTMLElement>('[data-chip-rail]')
+    if (!activeChip || !rail) return
+
+    const bring = () => {
+      const left =
+        activeChip.getBoundingClientRect().left -
+        rail.getBoundingClientRect().left +
+        rail.scrollLeft
+      const right = left + activeChip.offsetWidth
+      // Only as far as it has to move, and only when it is actually outside:
+      // a chip already in view must not jump.
+      // behavior: 'auto', not 'smooth'. Smooth silently did nothing here -
+      // measured ending at 0 where auto lands at 48 - which is what made this
+      // look like the effect was never running. It is also the right answer on
+      // its own merits: the bar should already be in the right place when the
+      // page appears, not animate into it.
+      if (right > rail.scrollLeft + rail.clientWidth) {
+        rail.scrollTo({ left: right - rail.clientWidth + 12, behavior: 'auto' })
+      } else if (left < rail.scrollLeft) {
+        rail.scrollTo({ left: Math.max(0, left - 12), behavior: 'auto' })
+      }
+    }
+
+    bring()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(bring)
+    observer.observe(rail)
+    return () => observer.disconnect()
+  }, [activeChip, active])
+
   // The current page always has a chip, even when it is not pinned — otherwise
   // the bar would show no active state and the member loses their bearings.
   const onBar = all.filter((m) => pinned.includes(m.key) || active === m.key)
@@ -236,11 +311,14 @@ export function AppChipBar({ pathname, search }: { pathname: string; search: str
   return (
     <div className={cn('relative border-x-0 border-t-0 border-b', tok.card)}>
       <div className="mx-auto flex h-[56px] w-full max-w-[1320px] items-center gap-2 px-4 md:h-[60px] md:px-6">
-        <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div
+          data-chip-rail=""
+          className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
             {onBar.map((m) => {
               const isActive = active === m.key
               return (
-                <div key={m.key} className="shrink-0">
+                <div key={m.key} className="shrink-0" ref={isActive ? setActiveChip : undefined}>
                   <Link
                     to={m.route}
                     aria-current={isActive ? 'page' : undefined}
