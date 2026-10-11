@@ -212,20 +212,21 @@ function recorderType(): string | undefined {
 /**
  * The time of a message, and for my own the delivery ticks: one line, so a short
  * message or a voice note does not grow a row of its own for it.
- * `onGold`: drawn on my gold bubble, so in its fixed dark ink (the `ink` token turns
- * white in the light theme) rather than the thread's grey.
+ * `onOwnBubble`: drawn on my own bubble, which is Messenger's blue and the
+ * same blue in every theme - so the meta is white at reduced opacity rather
+ * than the thread's grey, which disappears against it.
  */
 function MessageMeta({
   message,
   locale,
   mine,
-  onGold,
+  onOwnBubble,
   isRead,
 }: {
   message: ChatMessage
   locale: string
   mine: boolean
-  onGold: boolean
+  onOwnBubble: boolean
   isRead: boolean
 }) {
   const sending = message.status === 'sending'
@@ -234,7 +235,7 @@ function MessageMeta({
     <span
       className={cn(
         'inline-flex select-none items-center gap-1 whitespace-nowrap text-[0.68rem] leading-none',
-        onGold ? 'text-[#0b0e1d]/70' : 'text-text-low',
+        onOwnBubble ? 'text-white/70' : 'text-text-low',
       )}
       title={fullStamp(message.created_at, locale)}
     >
@@ -253,7 +254,7 @@ function MessageMeta({
           {sending ? (
             <Clock size={11} className="opacity-70" aria-label="Sending" />
           ) : isRead ? (
-            <CheckCheck size={13} className={onGold ? 'text-[#0b0e1d]' : 'text-gold-soft'} aria-label="Seen" />
+            <CheckCheck size={13} className={onOwnBubble ? 'text-white' : 'text-gold-soft'} aria-label="Seen" />
           ) : (
             <CheckCheck size={13} className="opacity-45" aria-label="Delivered" />
           )}
@@ -1758,7 +1759,7 @@ export default function Messages() {
                           </span>
                           {unread && (
                             <span
-                              className="ms-auto grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-gradient-to-br from-gold-soft to-gold px-1.5 text-[0.7rem] font-bold text-ink"
+                              className="ms-auto grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-[#0084FF] px-1.5 text-[0.7rem] font-bold text-white"
                               aria-label={`${conversation.unread} unread`}
                             >
                               {conversation.unread}
@@ -1930,7 +1931,7 @@ export default function Messages() {
                       message={message}
                       locale={locale}
                       mine={mine}
-                      onGold={mine && !bareSticker}
+                      onOwnBubble={mine && !bareSticker}
                       isRead={seenByThem}
                     />
                   )
@@ -2004,7 +2005,7 @@ export default function Messages() {
                             bareSticker
                               ? 'text-text-hi'
                               : mine
-                                ? 'bg-gradient-to-br from-gold-soft to-gold text-ink'
+                                ? 'bg-[#0084FF] text-white'
                                 : 'bg-text-hi/[0.07] text-text-hi',
                             message.status === 'sending' && 'opacity-80',
                             message.status === 'failed' && 'border border-red-400/40',
@@ -2018,7 +2019,7 @@ export default function Messages() {
                             />
                           )}
                           {message.deleted && (
-                            <p className={cn('text-[15px] italic leading-snug', mine ? 'text-[#0b0e1d]/70' : 'text-text-low')}>
+                            <p className={cn('text-[15px] italic leading-snug', mine ? 'text-white/70' : 'text-text-low')}>
                               This message was deleted
                             </p>
                           )}
@@ -2032,7 +2033,7 @@ export default function Messages() {
                             </span>
                           )}
                           {isSticker && !sticker && (
-                            <p className={cn('text-[15px] italic leading-snug', mine ? 'text-[#0b0e1d]/70' : 'text-text-low')}>
+                            <p className={cn('text-[15px] italic leading-snug', mine ? 'text-white/70' : 'text-text-low')}>
                               Sticker no longer available
                             </p>
                           )}
@@ -2193,7 +2194,7 @@ export default function Messages() {
                     <button
                       type="button"
                       onClick={() => void saveEdit()}
-                      className="rounded-full bg-gradient-to-br from-gold-soft to-gold px-3 py-1 text-xs font-bold text-[#0b0e1d]"
+                      className="rounded-full bg-[#0084FF] px-3 py-1 text-xs font-bold text-white"
                     >
                       Save
                     </button>
@@ -2230,7 +2231,7 @@ export default function Messages() {
                       type="button"
                       onClick={() => stopRecording(false)}
                       aria-label="Stop and send the voice message"
-                      className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-gold-soft to-gold text-ink"
+                      className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#0084FF] text-white"
                     >
                       <Square size={15} aria-hidden="true" />
                     </button>
@@ -2264,7 +2265,7 @@ export default function Messages() {
                       <button
                         type="submit"
                         aria-label="Send"
-                        className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-gold-soft to-gold text-ink"
+                        className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#0084FF] text-white"
                       >
                         <Send size={15} aria-hidden="true" />
                       </button>
