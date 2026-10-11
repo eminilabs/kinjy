@@ -116,9 +116,21 @@ export default function MediaLightbox({
       {/* The picture's half. flex-1 so it takes whatever the panel leaves,
           and centred inside that rather than inside the window - otherwise the
           photo sits behind the comments on a narrow desktop. */}
-      <div className={cn('relative flex min-w-0 flex-1 items-center justify-center', aside && 'lg:pe-0')}>
+      <div className="relative flex min-w-0 flex-1 items-center justify-center overflow-hidden p-4">
       {/* Stop the backdrop's close handler from firing on the media itself. */}
-      <div className="max-h-[92svh] max-w-[92vw]" onClick={(e) => e.stopPropagation()}>
+      {/* Bounded by this column, not by the window.
+          max-w-[92vw] is 92% of the *viewport*, which knows nothing about the
+          comments panel - so with the panel open the picture was drawn across
+          it and sliced the first words off every line of the post. Sizing
+          against the container is what makes the two halves share the screen
+          instead of overlapping.
+
+          Height is still capped against the window: the panel is beside the
+          picture, not above it, so it never contests the height - and
+          max-h-full here is circular, because this wrapper's height is set by
+          the very image it would be constraining. A 1000x1600 poster rendered
+          at full size and ran off the bottom. */}
+      <div className="flex max-w-full items-center" onClick={(e) => e.stopPropagation()}>
         {item.kind === 'video' ? (
           // The same player as in the feed, so the controls do not change shape
           // between the card and the full-size view. Unmuted here: opening a
@@ -128,13 +140,13 @@ export default function MediaLightbox({
             autoplay
             startMuted={false}
             fill
-            className="max-w-[92vw] rounded-lg"
+            className="max-h-[92svh] max-w-full rounded-lg"
           />
         ) : (
           <img
             src={item.url ?? undefined}
             alt={item.alt_text ?? ''}
-            className="max-h-[92svh] max-w-[92vw] object-contain"
+            className="max-h-[92svh] max-w-full object-contain"
           />
         )}
       </div>
