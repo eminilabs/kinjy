@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { preview } from '@/lib/mediaurl'
 import { cn } from '@/lib/utils'
 import { createPortal } from 'react-dom'
-import { ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, MessageCircle, X } from 'lucide-react'
 import type { PostMedia } from '@/lib/api'
 import VideoPlayer from './VideoPlayer'
 
@@ -13,11 +13,27 @@ import VideoPlayer from './VideoPlayer'
  * ground and keyboard paging, and fighting a centred, padded, max-width panel
  * into that shape costs more than the ~60 lines here.
  */
+/** lg and up, watched rather than read once: a tablet turns. */
+function useWide(): boolean {
+  const [wide, setWide] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)')
+    const update = () => setWide(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
+  return wide
+}
+
 export default function MediaLightbox({
   media,
   index,
   onClose,
   aside,
+  asideOpen,
 }: {
   media: PostMedia[]
   index: number
@@ -28,13 +44,30 @@ export default function MediaLightbox({
    *
    * Optional, because not every picture has a conversation around it: the
    * product gallery and a chat attachment are pictures and nothing else, and
-   * giving them an empty panel would be worse than giving them none. Hidden
-   * below lg, where the photo wants the whole screen and the comments are a
-   * tap away on the post itself.
+   * giving them an empty panel would be worse than giving them none.
+   *
+   * On a phone it is a sheet along the bottom rather than a column at the
+   * side. It used to be `lg:block` and nothing else, on the reasoning that a
+   * photo wants the whole screen and the comments are a tap away on the post
+   * - but the comment button on a post *with* a picture opens this viewer, so
+   * on a phone tapping "comments" gave you a black screen, a photo, and no
+   * comments anywhere.
    */
   aside?: React.ReactNode
+  /**
+   * Whether the sheet starts open on a phone. True when the member asked for
+   * the conversation (the comment button), false when they asked for the
+   * picture (tapping it) - which is the distinction Facebook makes too.
+   */
+  asideOpen?: boolean
 }) {
   const [current, setCurrent] = useState(index)
+  const [sheet, setSheet] = useState(Boolean(asideOpen))
+  // Which shape the panel takes, decided in JavaScript rather than by two
+  // elements with `hidden lg:block` between them. Rendering both would mount
+  // the conversation twice - two fetches, two composers, two counts - and the
+  // hidden one would answer every change the visible one made.
+  const wide = useWide()
 
   useEffect(() => setCurrent(index), [index])
 
@@ -70,7 +103,12 @@ export default function MediaLightbox({
         'fixed inset-0 z-[90] flex bg-black',
         // Pure black, not black/92: a photo viewer that lets the page glow
         // through reads as an overlay rather than as somewhere you have gone.
-        aside ? 'items-stretch' : 'items-center justify-center',
+        //
+        // With a conversation attached the two share the screen: stacked on a
+        // phone, side by side from lg. Stacking in the flow rather than
+        // floating the sheet over the photo is what lets the picture give up
+        // the height it needs to - a sheet drawn on top would simply cover it.
+        aside ? 'flex-col items-stretch lg:flex-row' : 'items-center justify-center',
       )}
       onClick={onClose}
     >
@@ -89,7 +127,7 @@ export default function MediaLightbox({
       {/* The picture's half. flex-1 so it takes whatever the panel leaves,
           and centred inside that rather than inside the window - otherwise the
           photo sits behind the comments on a narrow desktop. */}
-      <div className="relative flex min-w-0 flex-1 items-center justify-center overflow-hidden p-4">
+      <div className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden p-4">
       {/* The arrows belong to the picture, so they live in its column.
           On the dialog itself, `end-3` is the far right of the whole window -
           which, with the panel open, is the far side of the comments, not the
@@ -139,7 +177,7 @@ export default function MediaLightbox({
           max-h-full here is circular, because this wrapper's height is set by
           the very image it would be constraining. A 1000x1600 poster rendered
           at full size and ran off the bottom. */}
-      <div className="flex max-w-full items-center" onClick={(e) => e.stopPropagation()}>
+      <div className="flex h-full max-w-full items-center justify-center" onClick={(e) => e.stopPropagation()}>
         {item.kind === 'video' ? (
           // The same player as in the feed, so the controls do not change shape
           // between the card and the full-size view. Unmuted here: opening a
@@ -149,7 +187,7 @@ export default function MediaLightbox({
             autoplay
             startMuted={false}
             fill
-            className="max-h-[92svh] max-w-full rounded-lg"
+            className="max-h-full max-w-full rounded-lg"
           />
         ) : (
           <img
@@ -160,7 +198,7 @@ export default function MediaLightbox({
             // again. The original is still what a download gives.
             src={preview(item.url)}
             alt={item.alt_text ?? ''}
-            className="max-h-[92svh] max-w-full object-contain"
+            className="max-h-full max-w-full object-contain"
           />
         )}
       </div>
@@ -179,13 +217,52 @@ export default function MediaLightbox({
 
       {/* The conversation, beside the picture. Its own scroll, so a long
           thread never pushes the photo out of the window. */}
-      {aside && (
+      {aside && wide && (
         <aside
           onClick={(e) => e.stopPropagation()}
-          className="hidden w-[360px] shrink-0 overflow-y-auto overscroll-contain bg-ink-2 p-4 lg:block xl:w-[400px]"
+          className="w-[360px] shrink-0 overflow-y-auto overscroll-contain bg-ink-2 p-4 xl:w-[400px]"
         >
           {aside}
         </aside>
+      )}
+
+      {/* The same conversation on a phone, as a sheet under the picture.
+          Closed, it is a bar you tap; open, it takes the lower half and the
+          photo keeps the rest. */}
+      {aside && !wide && (
+        <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+          {sheet ? (
+            <section className="flex max-h-[62svh] flex-col rounded-t-2xl bg-ink-2">
+              <button
+                type="button"
+                onClick={() => setSheet(false)}
+                aria-label="Hide comments"
+                aria-expanded="true"
+                className="flex shrink-0 justify-center py-2.5"
+              >
+                {/* The handle every sheet on a phone has. It is the control,
+                    not decoration: tapping anywhere on this row closes it.
+                    Drawn in the panel's own text colour - the first version
+                    was white/25, which is invisible on the light theme the
+                    panel actually uses. */}
+                <span className="h-1 w-9 rounded-full bg-text-hi/25" />
+              </button>
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                {aside}
+              </div>
+            </section>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setSheet(true)}
+              aria-expanded="false"
+              className="flex w-full items-center justify-center gap-2 rounded-t-2xl bg-ink-2 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] text-sm font-semibold text-text-hi"
+            >
+              <MessageCircle size={16} aria-hidden="true" />
+              Comments
+            </button>
+          )}
+        </div>
       )}
     </div>,
     document.body,

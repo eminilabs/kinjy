@@ -338,6 +338,10 @@ export default function PostCard({
 
   const openDetail = () => {
     if (media.length > 0 && media[0]?.url) {
+      // Asked for the conversation, so the viewer opens with it showing. On a
+      // phone that is the difference between tapping "comments" and getting a
+      // photo on a black screen, and tapping it and reading the comments.
+      setWantsComments(true)
       setPreview(0)
       return
     }
@@ -345,6 +349,9 @@ export default function PostCard({
     else setShowComments(true)
   }
 
+  // Which of the two things the member asked for when the viewer opened: the
+  // picture, or what people said about it.
+  const [wantsComments, setWantsComments] = useState(false)
   const [loadingMedia, setLoadingMedia] = useState(false)
   const [reposts, setReposts] = useState(target.reposts_count)
   const [views, setViews] = useState(target.views_count ?? 0)
@@ -702,7 +709,10 @@ export default function PostCard({
       {media.length > 0 && (
         <MediaGrid
           media={media}
-          onOpen={setPreview}
+          onOpen={(at) => {
+            setWantsComments(false)
+            setPreview(at)
+          }}
           onLoadDeferred={loadMedia}
           loadingDeferred={loadingMedia}
           autoplay={post.autoplay !== false}
@@ -1015,6 +1025,7 @@ export default function PostCard({
           media={media}
           index={preview}
           onClose={() => setPreview(null)}
+          asideOpen={wantsComments}
           // The post and its conversation beside the picture, which is what a
           // photo viewer on a social network is for: you open a picture to
           // look at it *and* to read what people said about it. Without this
