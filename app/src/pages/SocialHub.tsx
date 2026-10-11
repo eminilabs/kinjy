@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Navigate, Link, useSearchParams } from 'react-router'
+import { Navigate, Link, useSearchParams, useParams } from 'react-router'
 import { Loader2, PenLine, RefreshCw, Sparkles, TrendingUp } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import AppShell, { RailCard } from '@/components/app/AppShell'
@@ -129,6 +129,18 @@ export default function SocialHub() {
   const [feed, setFeed] = useState<FeedPage | null>(null)
   // The post opened over the feed, and the paging state for scroll-to-load.
   const [openPost, setOpenPost] = useState<Post | null>(null)
+
+  // A shared link lands here, not on a page of its own.
+  //
+  // /p/{id} used to render the post alone, which is where a shared link
+  // normally dead-ends: you read the one post and there is nothing around it,
+  // so the thing a share is for - arriving somewhere alive - does not happen.
+  // The route now mounts the feed and opens that post over it, which is what
+  // every other network does with a shared link.
+  //
+  // The URL is unchanged, because the unfurlers key on it and the Caddy
+  // matcher rewrites /p/* for them.
+  const { postId: sharedPostId } = useParams()
   const [loadingMore, setLoadingMore] = useState(false)
   const observer = useRef<IntersectionObserver | null>(null)
   // Cards report themselves as seen from here rather than each card firing its
@@ -233,6 +245,25 @@ export default function SocialHub() {
     if (user && defaultsReady) void load()
   }, [user, defaultsReady, load])
   useEffect(() => () => inFlight.current?.abort(), [])
+
+  // Fetch the shared post and open it. Only when arriving on /p/{id}: the
+  // feed itself sets openPost directly from the card that was clicked, and
+  // already has the post in hand.
+  useEffect(() => {
+    if (!sharedPostId) return
+    let cancelled = false
+    kaluta.posts
+      .get(sharedPostId)
+      .then((post) => {
+        if (!cancelled) setOpenPost(post)
+      })
+      // A post that is gone, or not for this viewer, simply leaves the feed
+      // showing - which is a better landing than an error page.
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [sharedPostId])
 
   // These three sit above the early returns below, and must stay there.
   // A hook after a conditional return runs on some renders and not others,

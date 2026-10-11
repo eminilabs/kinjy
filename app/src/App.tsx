@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Navigate, Routes, Route } from 'react-router'
 import Layout from './components/Layout'
 import Home from './pages/Home'
+import { useAuth } from './hooks/useAuth'
 import { FEATURES, type Feature } from './lib/features'
 
 // Route-level code-splitting (C5 performance budget): every sub-page ships as
@@ -70,6 +71,22 @@ function gated(feature: Feature, page: ReactNode, fallback: string) {
   return FEATURES[feature] ? page : <Navigate to={fallback} replace />
 }
 
+/**
+ * A shared post, shown where it belongs to whoever opened it.
+ *
+ * A member gets the feed with the post open over it, because a shared link
+ * should land somewhere alive rather than on one post with nothing around it.
+ * Somebody signed out gets the standalone page: the feed would only bounce
+ * them to a sign-in, and a link that demands an account before showing
+ * anything is a link nobody forwards. The public page is also the one that
+ * carries the invitation and the way to join.
+ */
+function SharedPost() {
+  const { user, loading } = useAuth()
+  if (loading) return null
+  return user ? <SocialHub /> : <PostPage />
+}
+
 export default function App() {
   return (
     <Layout>
@@ -97,7 +114,7 @@ export default function App() {
           {/* Where a post shared outside Kinjy lands. Public to a visitor:
               a link that demands a sign-in before showing anything is a link
               nobody forwards. ?ref= carries the sharer's invitation. */}
-          <Route path="/p/:postId" element={<PostPage />} />
+          <Route path="/p/:postId" element={<SharedPost />} />
           <Route path="/dashboard" element={<Dashboard />} />
           {/* The member's real feed. /feeds stays the public marketing page. */}
           <Route path="/hub" element={<SocialHub />} />
