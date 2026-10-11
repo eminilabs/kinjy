@@ -22,14 +22,45 @@ const when = (iso: string) => {
  * writing HTML into a mention.
  */
 function withMentions(body: string) {
-  return body.split(/(@[a-z0-9_.]+)/gi).map((part, index) =>
-    part.startsWith('@') ? (
-      <span key={index} className="font-semibold text-gold-soft">
-        {part}
-      </span>
-    ) : (
-      part
-    ),
+  return (
+    body
+      // One split over both, so an @ inside an address - https://x.com/@someone,
+      // or any path with a handle in it - is not pulled out of the link and
+      // rendered as a mention of somebody who may not exist.
+      .split(/(https?:\/\/[^\s<>"']+|@[a-z0-9_.]+)/gi)
+      .map((part, index) => {
+        if (/^https?:\/\//i.test(part)) {
+          // Trailing punctuation belongs to the sentence, not the address:
+          // "see https://example.com." ends in a full stop that is not part of
+          // the link.
+          const trailing = part.match(/[.,;:!?)\]]+$/)?.[0] ?? ''
+          const href = trailing ? part.slice(0, -trailing.length) : part
+          return (
+            <span key={index}>
+              <a
+                href={href}
+                target="_blank"
+                // noreferrer as well as noopener: the destination has no
+                // business learning which thread the reader came from.
+                rel="noopener noreferrer nofollow"
+                className="font-medium text-sky hover:underline"
+                onClick={(event) => event.stopPropagation()}
+              >
+                {href}
+              </a>
+              {trailing}
+            </span>
+          )
+        }
+        if (part.startsWith('@')) {
+          return (
+            <span key={index} className="font-semibold text-gold-soft">
+              {part}
+            </span>
+          )
+        }
+        return part
+      })
   )
 }
 
