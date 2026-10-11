@@ -21,6 +21,7 @@ import { ApiError, kaluta, type Post, type WhyFactor } from '@/lib/api'
 import { useTopic } from '@/hooks/useRealtime'
 import { htmlToText, looksLikeHtml, readableText, sanitizeHtml } from '@/lib/richtext'
 import { useAuth } from '@/hooks/useAuth'
+import { isLink, LINK_RE, splitTrailing } from '@/lib/linkify'
 import { postUrl, shareLink, SHARE_TARGETS } from '@/lib/share'
 import { cn } from '@/lib/utils'
 import Comments from './Comments'
@@ -86,12 +87,20 @@ function withHashtags(text: string) {
     // Mentions join the same split, for the same reason hashtags did: an @ or
     // a # inside an address must stay part of the address rather than being
     // lifted out of the middle of a link.
-    .split(/(https?:\/\/[^\s<>"']+|#[\wÀ-ÿ؀-ۿ一-鿿][\wÀ-ÿ؀-ۿ一-鿿-]{1,49}|@[a-z0-9_.]{2,40})/gi)
+    .split(
+      new RegExp(
+        `${LINK_RE.source}|(#[\wÀ-ÿ؀-ۿ一-鿿][\wÀ-ÿ؀-ۿ一-鿿-]{1,49}|@[a-z0-9_.]{2,40})`,
+        'gi',
+      ),
+    )
     .map((part, index) => {
-      if (/^https?:\/\//i.test(part)) {
+      if (part === undefined || part === '') return null
+      // split() with more than one capturing group yields undefined for
+      // every group that did not take part in the match, so each match
+      // produces a hole beside it. Skipped rather than rendered.
+      if (isLink(part)) {
         // Trailing punctuation belongs to the sentence, not the address.
-        const trailing = part.match(/[.,;:!?)\]]+$/)?.[0] ?? ''
-        const href = trailing ? part.slice(0, -trailing.length) : part
+        const { href, text, trailing } = splitTrailing(part)
         return (
           <span key={index}>
             <a
@@ -103,7 +112,10 @@ function withHashtags(text: string) {
               rel="noopener noreferrer nofollow"
               className="font-medium text-sky hover:underline"
             >
-              {href}
+              {/* As typed. A bare domain gets https:// to be followable, but
+                  showing it back with a scheme nobody wrote reads as the app
+                  editing what somebody said. */}
+              {text}
             </a>
             {trailing}
           </span>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { CornerDownRight, Loader2, Send, ThumbsUp } from 'lucide-react'
 import { useAppTheme } from '@/components/appdemo/theme'
 import { ApiError, kaluta, type CommentNode } from '@/lib/api'
+import { isLink, LINK_RE, splitTrailing } from '@/lib/linkify'
 import { cn } from '@/lib/utils'
 import MemberAvatar from './MemberAvatar'
 import { useMyProfile } from '@/hooks/useMyProfile'
@@ -27,14 +28,15 @@ function withMentions(body: string) {
       // One split over both, so an @ inside an address - https://x.com/@someone,
       // or any path with a handle in it - is not pulled out of the link and
       // rendered as a mention of somebody who may not exist.
-      .split(/(https?:\/\/[^\s<>"']+|@[a-z0-9_.]+)/gi)
+      .split(new RegExp(`${LINK_RE.source}|(@[a-z0-9_.]+)`, 'gi'))
       .map((part, index) => {
-        if (/^https?:\/\//i.test(part)) {
-          // Trailing punctuation belongs to the sentence, not the address:
-          // "see https://example.com." ends in a full stop that is not part of
-          // the link.
-          const trailing = part.match(/[.,;:!?)\]]+$/)?.[0] ?? ''
-          const href = trailing ? part.slice(0, -trailing.length) : part
+        if (part === undefined || part === '') return null
+        // split() with more than one capturing group yields undefined for
+        // every group that did not take part in the match, so each match
+        // produces a hole beside it. Skipped rather than rendered.
+        if (isLink(part)) {
+          // Trailing punctuation belongs to the sentence, not the address.
+          const { href, text, trailing } = splitTrailing(part)
           return (
             <span key={index}>
               <a
@@ -46,7 +48,7 @@ function withMentions(body: string) {
                 className="font-medium text-sky hover:underline"
                 onClick={(event) => event.stopPropagation()}
               >
-                {href}
+                {text}
               </a>
               {trailing}
             </span>
