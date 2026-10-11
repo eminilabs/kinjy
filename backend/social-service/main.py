@@ -133,6 +133,70 @@ class SignalIn(BaseModel):
 
 HASHTAG_RE = re.compile(r"#([\wÀ-ɏ؀-ۿ一-鿿][\wÀ-ɏ؀-ۿ一-鿿-]{1,49})")
 
+# A handle as somebody types it into a post. Deliberately the same shape the
+# client highlights, so what gets notified is what the author saw turn gold.
+MENTION_RE = re.compile(r"@([a-z0-9_.]{2,40})", re.IGNORECASE)
+
+
+def _mentioned_handles(body: str) -> list[str]:
+    """The handles named in a body, lower-cased and de-duplicated.
+
+    Capped: a post naming fifty people is an announcement, and past that the
+    cost is a notification storm rather than a mention. The cap matches the one
+    user-service puts on the lookup.
+    """
+    seen: list[str] = []
+    for handle in MENTION_RE.findall(body or ""):
+        lowered = handle.lower()
+        if lowered not in seen:
+            seen.append(lowered)
+        if len(seen) >= 50:
+            break
+    return seen
+
+
+def _notify_mentions(body: str, actor_id: str, post_id: str, where: str) -> None:
+    """Tell the people named in a body that they were named.
+
+    Best-effort on purpose, like the other notifications here: the post is
+    already committed by the time this runs, and a user-service hiccup must
+    cost a notification rather than the post.
+
+    The author is skipped - mentioning yourself is not news - and so is anyone
+    the lookup does not recognise, because "@everyone", an email address and a
+    price all look like mentions to a regex and none of them is a person.
+    """
+    handles = _mentioned_handles(body)
+    if not handles:
+        return
+    try:
+        response = httpx.post(
+            f"{USER_SERVICE}/internal/profiles/by-handle", json={"handles": handles}, timeout=5
+        )
+        response.raise_for_status()
+        people = response.json().get("profiles", {})
+    except Exception as exc:
+        log.warning("could not resolve mentions: %s", exc)
+        return
+
+    actor = _authors({actor_id}).get(actor_id) or {}
+    who = actor.get("display_name") or actor.get("handle") or "Someone"
+    for profile in people.values():
+        target = profile.get("user_id")
+        if not target or target == actor_id:
+            continue
+        notify.notify(
+            target,
+            kind="mention",
+            title=f"{who} mentioned you in a {where}",
+            body=(body or "")[:140],
+            # /p/{id} opens the post in the feed and is the same address a
+            # shared link uses, so one route has to keep working rather than
+            # two.
+            link=f"/p/{post_id}",
+        )
+
+
 
 def extract_hashtags(body: str) -> list[str]:
     r"""Pull #tags out of a body.
@@ -840,6 +904,9 @@ async def create_post(payload: PostIn, principal: CurrentUser, db: OrmSession = 
         live("shorts" if post.format == "short" else "feed", "post",
              post_id=post.id, author_id=post.author_id, format=post.format,
              mature=post.mature)
+
+    # After the write, so a mention can never cost the post.
+    _notify_mentions(post.body, principal.user_id, post.id, "post")
     return _post_out(post, db, viewer=principal.user_id)
 
 
@@ -2942,6 +3009,10 @@ def add_comment(post_id: str, payload: CommentIn, principal: CurrentUser, db: Or
             body=payload.body[:140],
             link=f"/hub?post={post_id}",
         )
+    # Anyone named in the comment hears about it, whether or not they are the
+    # author of the post or the person being replied to - those two already
+    # have their own notification above, and _notify_mentions skips the actor.
+    _notify_mentions(payload.body, principal.user_id, post_id, "comment")
     return {
         "id": comment.id,
         "created_at": comment.created_at,

@@ -83,7 +83,10 @@ function withHashtags(text: string) {
   return text
     // One split over both, so a hashtag inside a URL's fragment is not turned
     // into a topic link in the middle of an address.
-    .split(/(https?:\/\/[^\s<>"']+|#[\wÀ-ÿ؀-ۿ一-鿿][\wÀ-ÿ؀-ۿ一-鿿-]{1,49})/g)
+    // Mentions join the same split, for the same reason hashtags did: an @ or
+    // a # inside an address must stay part of the address rather than being
+    // lifted out of the middle of a link.
+    .split(/(https?:\/\/[^\s<>"']+|#[\wÀ-ÿ؀-ۿ一-鿿][\wÀ-ÿ؀-ۿ一-鿿-]{1,49}|@[a-z0-9_.]{2,40})/gi)
     .map((part, index) => {
       if (/^https?:\/\//i.test(part)) {
         // Trailing punctuation belongs to the sentence, not the address.
@@ -104,6 +107,19 @@ function withHashtags(text: string) {
             </a>
             {trailing}
           </span>
+        )
+      }
+      if (part.startsWith('@')) {
+        // The person named, linked to their profile - the server has just
+        // told them they were named, so the name had better go somewhere.
+        return (
+          <Link
+            key={index}
+            to={`/u/${part.slice(1).toLowerCase()}`}
+            className="font-semibold text-gold-soft hover:underline"
+          >
+            {part}
+          </Link>
         )
       }
       if (part.startsWith('#')) {

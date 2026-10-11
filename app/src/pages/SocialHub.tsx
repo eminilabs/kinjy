@@ -140,7 +140,13 @@ export default function SocialHub() {
   //
   // The URL is unchanged, because the unfurlers key on it and the Caddy
   // matcher rewrites /p/* for them.
-  const { postId: sharedPostId } = useParams()
+  const { postId: routePostId } = useParams()
+  // ?post= is what the notifications have always linked to, and nothing read
+  // it - so every "someone replied to you" landed on the feed with the post it
+  // was about nowhere in sight. Both spellings open the same dialog, because
+  // notifications already sent carry the query form and will for as long as
+  // anybody's bell has unread items in it.
+  const sharedPostId = routePostId ?? params.get('post') ?? undefined
   const [loadingMore, setLoadingMore] = useState(false)
   const observer = useRef<IntersectionObserver | null>(null)
   // Cards report themselves as seen from here rather than each card firing its

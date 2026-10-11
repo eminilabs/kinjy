@@ -1878,6 +1878,12 @@ class ProfileIds(BaseModel):
     ids: list[str] = Field(default_factory=list, max_length=300)
 
 
+class ProfileHandles(BaseModel):
+    # Capped like the id lookup: a body full of handles is a body full of
+    # work, and a post mentioning three hundred people is not a mention.
+    handles: list[str] = Field(default_factory=list, max_length=50)
+
+
 class ProfileSeed(BaseModel):
     user_id: str
     handle: str
@@ -1913,6 +1919,37 @@ def seed_profile(payload: ProfileSeed, db: OrmSession = Depends(get_db)):
         db.add(models.Preferences(user_id=payload.user_id))
     db.commit()
     return {"created": True}
+
+
+@app.post("/internal/profiles/by-handle", tags=["internal"])
+def profiles_by_handle(payload: ProfileHandles, db: OrmSession = Depends(get_db)):
+    """Resolve @handles to the people behind them.
+
+    The mirror of the id lookup, and social-service's half of a mention: it
+    reads "@ama" out of a post and has to learn who that is before it can tell
+    them. Keyed on the lower-cased handle in the answer, because that is what
+    the caller matched on - a handle typed @Ama must find the same person.
+
+    A handle nobody has is simply absent from the result rather than an error:
+    a post may mention an email address, a price, or somebody who has since
+    left, and none of those should fail the post.
+    """
+    wanted = {h.strip().lstrip("@").lower() for h in payload.handles if h and h.strip()}
+    if not wanted:
+        return {"profiles": {}}
+    rows = db.scalars(
+        select(models.Profile).where(func.lower(models.Profile.handle).in_(wanted))
+    ).all()
+    return {
+        "profiles": {
+            row.handle.lower(): {
+                "user_id": row.user_id,
+                "handle": row.handle,
+                "display_name": row.display_name,
+            }
+            for row in rows
+        }
+    }
 
 
 @app.post("/internal/profiles", tags=["internal"])

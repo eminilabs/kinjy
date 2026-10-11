@@ -53,10 +53,17 @@ function withMentions(body: string) {
           )
         }
         if (part.startsWith('@')) {
+          // A mention is a person, so it goes to them. It was styled as a link
+          // and did nothing, which is the most annoying kind of not-a-link.
           return (
-            <span key={index} className="font-semibold text-gold-soft">
+            <Link
+              key={index}
+              to={`/u/${part.slice(1).toLowerCase()}`}
+              onClick={(event) => event.stopPropagation()}
+              className="font-semibold text-gold-soft hover:underline"
+            >
               {part}
-            </span>
+            </Link>
           )
         }
         return part
