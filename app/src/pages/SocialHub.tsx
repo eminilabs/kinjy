@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Navigate, Link, useSearchParams, useParams } from 'react-router'
-import { Loader2, PenLine, RefreshCw, Sparkles, TrendingUp } from 'lucide-react'
+import { PenLine, RefreshCw, Sparkles, TrendingUp } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import AppShell, { RailCard } from '@/components/app/AppShell'
 import { useViewTracking } from '@/hooks/useViewTracking'
@@ -9,6 +9,7 @@ import FeedModeMenu from '@/components/social/FeedModeMenu'
 import Suggestions from '@/components/social/Suggestions'
 import PostCard from '@/components/social/PostCard'
 import PostDialog from '@/components/social/PostDialog'
+import PostSkeleton, { PostSkeletonList } from '@/components/social/PostSkeleton'
 import { ApiError, kaluta, type Algorithm, type FeedMode, type FeedPage, type Post } from '@/lib/api'
 import { FEATURES } from '@/lib/features'
 import { slotAboveOrb } from '@/lib/floating'
@@ -540,12 +541,10 @@ export default function SocialHub() {
 
           {/* Feed */}
           <div className="mt-4 space-y-4" ref={feedRef}>
-            {loading && (
-              <div className="flex items-center gap-2 py-10 text-text-low" role="status">
-                <Loader2 size={16} className="animate-spin" aria-hidden="true" />
-                <span className="text-sm">Building your feed…</span>
-              </div>
-            )}
+            {/* The shape of the feed rather than the word "loading": the
+                cards are already the right size, so nothing shifts under a
+                thumb when the posts land. */}
+            {loading && <PostSkeletonList count={3} />}
 
             {!loading && error && (
               <div
@@ -628,9 +627,10 @@ export default function SocialHub() {
             {!loading && feed?.has_more && (
               <div ref={watchEnd} className="py-6 text-center" aria-hidden="true">
                 {loadingMore && (
-                  <span className="inline-flex items-center gap-2 text-sm text-text-low" role="status">
-                    <Loader2 size={14} className="animate-spin" aria-hidden="true" />
-                    Loading more…
+                  /* One card's worth, for the same reason: the next post
+                     arrives where the skeleton already is. */
+                  <span className="block w-full" role="status" aria-label="Loading more posts">
+                    <PostSkeleton index={1} />
                   </span>
                 )}
               </div>
