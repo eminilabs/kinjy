@@ -1871,7 +1871,18 @@ export default function Messages() {
                 </span>
               </header>
 
+              {/* justify-start with a top margin that collapses, not
+                  justify-end: a flex column that justifies to the end makes
+                  the overflowing top unreachable in every browser that has
+                  ever shipped, so a long thread could not be scrolled back.
+                  mt-auto on the first child does the same job and resolves to
+                  zero the moment the content is taller than the box. */}
               <div ref={listRef} onScroll={onScroll} className="flex flex-1 flex-col overflow-y-auto px-3 py-3 sm:px-5">
+                {/* Pushes a short conversation down to sit on the composer,
+                    the way a thread does everywhere else. Without it four
+                    messages hung at the top of the screen with a void
+                    underneath them. */}
+                <div className="mt-auto" aria-hidden="true" />
                 {hasOlder && (
                   <div className="mb-2 text-center">
                     <button
