@@ -244,16 +244,16 @@ def may_link_member(principal, member_id: str | None) -> None:
         raise HTTPException(status_code=403, detail=reason)
 
 
-def can_edit(principal, person: models.Person, family: Family | None = None) -> bool:
-    if principal.is_admin or person.user_id == principal.user_id:
+def can_edit(principal, person: models.Person, family: Family | None = None, include_admin: bool = True) -> bool:
+    if (include_admin and principal.is_admin) or person.user_id == principal.user_id:
         return True
     if family is None:
         return False
     return family.can("owner") or (family.can("contributor") and person.created_by == principal.user_id)
 
 
-def can_delete(principal, person: models.Person, family: Family | None = None) -> bool:
-    if principal.is_admin:
+def can_delete(principal, person: models.Person, family: Family | None = None, include_admin: bool = True) -> bool:
+    if include_admin and principal.is_admin:
         return True
     if person.user_id == principal.user_id:
         # A viewer only reads: they may correct their own details but not remove their place.

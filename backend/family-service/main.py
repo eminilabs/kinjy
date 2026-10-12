@@ -377,6 +377,8 @@ def update_person(person_id: str, payload: PersonUpdate, principal: CurrentUser,
         access.require_can_read(db, principal, family)
     if not access.can_edit(principal, person, family):
         raise HTTPException(status_code=403, detail="You may edit what you added, or the place that is yours; an owner may edit any")
+    if principal.is_admin and not access.can_edit(principal, person, family, include_admin=False):
+        roles.record(db, "admin_edit_person", principal.user_id, person.user_id, person.id)  # platform staff acting outside the tree's own rules
 
     changes = payload.model_dump(exclude_unset=True)
     # A field that was sent as null is a field the member cleared; one that was not sent is untouched.
@@ -432,6 +434,8 @@ async def delete_person(person_id: str, principal: CurrentUser, db: OrmSession =
         access.require_can_read(db, principal, family)
     if not access.can_delete(principal, person, family):
         raise HTTPException(status_code=403, detail="You may remove what you added, or your own place; an owner may remove any node that is not a member's")
+    if principal.is_admin and not access.can_delete(principal, person, family, include_admin=False):
+        roles.record(db, "admin_delete_person", principal.user_id, person.user_id, person.id)
 
     # A removal that splits the tree must not leave a part without an owner.
     memberships.refuse_if_orphaning(db, family.people, {person_id}, f"{person.given_name}")
@@ -737,10 +741,11 @@ async def add_relationship(payload: RelationshipIn, principal: CurrentUser, db: 
 
 def _may_change_link(db: OrmSession, principal, edge: models.Relationship, verb: str) -> None:
     """The one who asserted a link, if still a contributor; an owner of the tree; platform staff as before."""
-    if principal.is_admin:
-        return
     family = access.load_family(db, principal.user_id, edge.from_person_id)
     if family.can("owner") or (family.can("contributor") and edge.asserted_by == principal.user_id):
+        return
+    if principal.is_admin:
+        roles.record(db, "admin_change_link", principal.user_id, None, edge.from_person_id, f"{verb} {edge.kind}")  # staff acting outside the tree's own rules
         return
     if not family.viewer_belongs:
         raise HTTPException(status_code=404, detail="Relationship not found")
