@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useLocation } from 'react-router'
-import { kaluta } from '@/lib/api'
+import { ApiError, kaluta } from '@/lib/api'
 import { pendingRef, refFromSearch, rememberInviter, rememberRef } from '@/lib/share'
 
 /**
@@ -59,18 +59,25 @@ export default function ReferralWatch() {
         if (cancelled) return
         rememberRef(inviter.code)
         rememberInviter(inviter.display_name)
-      } catch {
-        // Either the code is not one of ours, or the lookup could not be
-        // made at all. Both end the same way when something is already
-        // stored: keep it. An unverified code is not worth the invitation we
-        // are already holding.
+      } catch (err) {
+        if (cancelled) return
+        // Two failures that look alike and are not, which is the distinction
+        // the first version of this missed. On production it stored
+        // "WHATSAPP" off a mangled share, because an explicit refusal and an
+        // unanswered request went down the same branch.
         //
-        // With nothing stored there is nothing to protect, so a well-formed
-        // code is kept unverified rather than dropped - a visitor who arrived
-        // on a real link while the network was flapping should still credit
-        // the person who sent it, and an unknown code costs nothing because
-        // the sign-up drops it rather than refusing the account.
-        if (cancelled || pendingRef()) return
+        // 404 is an answer: the server looked and this is not one of our
+        // codes. Never keep it, whether or not we are holding something
+        // else.
+        if (err instanceof ApiError && err.status === 404) return
+        // Anything else - offline, a timeout, a 5xx, the rate limit - is not
+        // an answer. Keep what we already have if we have something, and
+        // otherwise keep the candidate unverified rather than dropping it: a
+        // visitor who followed a real link while the network was flapping
+        // should still credit whoever sent it, and a code the server turns
+        // out not to know costs nothing, because the sign-up drops it rather
+        // than refusing the account.
+        if (pendingRef()) return
         rememberRef(candidate)
       }
     })()
