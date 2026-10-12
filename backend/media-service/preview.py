@@ -22,6 +22,7 @@ left alone and served as they are.
 from __future__ import annotations
 
 import logging
+import shutil
 from pathlib import Path
 
 log = logging.getLogger("media-service")
@@ -44,13 +45,52 @@ PREVIEW_CONTENT_TYPE = "image/webp"
 PREVIEW_SUFFIX = ".webp"
 
 
-def wanted(content_type: str, size_bytes: int) -> bool:
-    """Is a derivative worth building for this upload?
+def wanted(content_type: str, size_bytes: int, remote: bool = False) -> bool:
+    """Should this upload get a local copy?
 
-    Below the threshold the original is already feed-sized, and a second copy
-    would cost storage to save nothing.
+    Two different reasons to make one, and the second is the one that was
+    missed first time round:
+
+    - **Size.** A camera file sent whole into a 560 px column is the headline
+      cost, and anything already feed-sized gains nothing from a second copy.
+    - **Distance.** A picture stored at UploadCenter is fetched by asking
+      their API for a signed link and then streaming the bytes from object
+      storage through this process - two network round trips, on every view,
+      for every reader. At that point a 30 kB thumbnail is slow for reasons
+      that have nothing to do with its size, and their API rate limit (100
+      requests a minute) is shared by every image on the page.
+
+    So a remote picture always gets one, however small. Local files are left
+    alone below the threshold: they are already a disk read away.
     """
-    return content_type in SOURCES and size_bytes > 120 * 1024
+    if content_type not in SOURCES:
+        return False
+    return remote or size_bytes > 120 * 1024
+
+
+def localise(source: Path, destination: Path, content_type: str) -> tuple[Path, int, str] | None:
+    """Keep a local copy of a picture: shrunk if that helps, verbatim if not.
+
+    `build` refuses when the derivative would not be smaller, which is the
+    right answer for a file that is already on this disk and the wrong one for
+    a file that is two network hops away. This is the second case: take the
+    saving when there is one, and when there is not, copy the bytes anyway so
+    the next reader is served from here.
+    """
+    derived = destination.with_suffix(PREVIEW_SUFFIX)
+    size = build(source, derived)
+    if size is not None:
+        return derived, size, PREVIEW_CONTENT_TYPE
+    verbatim = destination.with_suffix(_SUFFIXES.get(content_type, ".bin"))
+    try:
+        shutil.copyfile(source, verbatim)
+    except OSError as exc:
+        log.warning("no local copy for %s: %s", source.name, exc)
+        return None
+    return verbatim, verbatim.stat().st_size, content_type
+
+
+_SUFFIXES = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
 
 
 def build(source: Path, destination: Path) -> int | None:

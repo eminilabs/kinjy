@@ -86,6 +86,10 @@ class Asset(Base):
     # picture did before this existed.
     preview_path: Mapped[str | None] = mapped_column(String(500))
     preview_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    # Usually WebP, but a copy kept only to put the bytes on this disk keeps
+    # the format it arrived in, so the type has to be recorded rather than
+    # assumed.
+    preview_type: Mapped[str | None] = mapped_column(String(100))
 
     # A chat attachment: served only on a link signed by the service that knows
     # who may see it, never on its bare URL.

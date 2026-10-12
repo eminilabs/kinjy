@@ -106,6 +106,7 @@ MIGRATIONS = [
     # /internal/media/backfill-previews has been over them.
     f"ALTER TABLE {models.SCHEMA}.assets ADD COLUMN IF NOT EXISTS preview_path VARCHAR(500)",
     f"ALTER TABLE {models.SCHEMA}.assets ADD COLUMN IF NOT EXISTS preview_bytes BIGINT",
+    f"ALTER TABLE {models.SCHEMA}.assets ADD COLUMN IF NOT EXISTS preview_type VARCHAR(100)",
 ]
 
 app = create_app(
@@ -235,20 +236,22 @@ async def upload(
     # local copy is deleted the moment it does.
     preview_path: str | None = None
     preview_bytes: int | None = None
-    if not seal and not private and preview.wanted(content_type, written):
+    preview_type: str | None = None
+    goes_remote = _stores_remotely(purpose)
+    if not seal and not private and preview.wanted(content_type, written, remote=goes_remote):
         previews = ROOT / "previews" / principal.user_id[:12]
         previews.mkdir(parents=True, exist_ok=True)
-        candidate = previews / f"{asset_id}{preview.PREVIEW_SUFFIX}"
-        built = await run_in_threadpool(preview.build, destination, candidate)
-        if built:
-            preview_path, preview_bytes = str(candidate), built
+        made = await run_in_threadpool(preview.localise, destination, previews / asset_id, content_type)
+        if made:
+            path, size_on_disk, kind_on_disk = made
+            preview_path, preview_bytes, preview_type = str(path), size_on_disk, kind_on_disk
 
     # Post media can live at UploadCenter instead of on the volume. It goes there
     # as a *private* file and is read back only through media-service, after the
     # viewer's ticket has been checked (see _serve_remote): no address that would
     # work without that check is ever handed to anyone.
     remote_id: str | None = None
-    if _stores_remotely(purpose):
+    if goes_remote:
         if not _claim_remote_slot(principal.user_id):
             destination.unlink(missing_ok=True)
             raise HTTPException(status_code=503, detail="Too many uploads are in progress; try again in a moment")
@@ -288,6 +291,7 @@ async def upload(
         height=size[1] if size else None,
         preview_path=preview_path,
         preview_bytes=preview_bytes,
+        preview_type=preview_type,
         private=private,
         sealed_with=crypto.keyring().active_id if seal else None,
         # Restricted from the first byte, not only once attached: the file has
@@ -625,10 +629,11 @@ def serve(
     # is the same either way - it is signed over the asset, and this is the
     # same picture, smaller.
     if p and asset.preview_path and os.path.exists(asset.preview_path):
+        local_type = asset.preview_type or preview.PREVIEW_CONTENT_TYPE
         return FileResponse(
             asset.preview_path,
-            media_type=preview.PREVIEW_CONTENT_TYPE,
-            headers={**_serve_headers(preview.PREVIEW_CONTENT_TYPE), **headers},
+            media_type=local_type,
+            headers={**_serve_headers(local_type), **headers},
             content_disposition_type="inline",
         )
 
@@ -876,7 +881,11 @@ def backfill_previews(limit: int = 50, dry_run: bool = True, db: OrmSession = De
             models.Asset.private.is_(False),
             models.Asset.status == "ready",
             models.Asset.content_type.in_(sorted(preview.SOURCES)),
-            models.Asset.size_bytes > 120 * 1024,
+            # Big ones wherever they are stored, and *every* remote one
+            # however small: a 30 kB thumbnail fetched through UploadCenter's
+            # API and then from object storage is slow for reasons that have
+            # nothing to do with its size.
+            or_(models.Asset.size_bytes > 120 * 1024, models.Asset.external_id.isnot(None)),
         )
         .order_by(models.Asset.size_bytes.desc())  # the worst offenders first
         .limit(max(1, min(limit, 200)))
@@ -892,7 +901,6 @@ def backfill_previews(limit: int = 50, dry_run: bool = True, db: OrmSession = De
     for asset in assets:
         previews = ROOT / "previews" / asset.owner_id[:12]
         previews.mkdir(parents=True, exist_ok=True)
-        candidate = previews / f"{asset.id}{preview.PREVIEW_SUFFIX}"
         # Where the original is read from, and whether this leaves a temporary
         # file behind to delete afterwards.
         staged: Path | None = None
@@ -922,7 +930,7 @@ def backfill_previews(limit: int = 50, dry_run: bool = True, db: OrmSession = De
                 failed += 1
                 continue
 
-            size = preview.build(source, candidate)
+            made = preview.localise(source, previews / asset.id, asset.content_type)
         except Exception as exc:  # noqa: BLE001 - one bad file must not stop the run
             log.warning("preview backfill could not read %s: %s", asset.id, exc)
             note("read failed")
@@ -932,17 +940,18 @@ def backfill_previews(limit: int = 50, dry_run: bool = True, db: OrmSession = De
             if staged is not None:
                 staged.unlink(missing_ok=True)
 
-        if size is None:
-            # Animated, already small enough, or unreadable. Counted, not retried.
-            note("no preview worth building")
+        if made is None:
+            # Animated, unreadable, or the copy could not be written.
+            note("no local copy could be made")
             skipped += 1
             continue
 
+        path, size, kind_on_disk = made
         saved += max(0, (asset.size_bytes or 0) - size)
         if not dry_run:
-            asset.preview_path, asset.preview_bytes = str(candidate), size
+            asset.preview_path, asset.preview_bytes, asset.preview_type = str(path), size, kind_on_disk
         else:
-            candidate.unlink(missing_ok=True)
+            path.unlink(missing_ok=True)
         built += 1
 
     if not dry_run:
@@ -956,7 +965,7 @@ def backfill_previews(limit: int = 50, dry_run: bool = True, db: OrmSession = De
             models.Asset.preview_path.is_(None),
             models.Asset.private.is_(False),
             models.Asset.content_type.in_(sorted(preview.SOURCES)),
-            models.Asset.size_bytes > 120 * 1024,
+            or_(models.Asset.size_bytes > 120 * 1024, models.Asset.external_id.isnot(None)),
         )
     )
     return {
