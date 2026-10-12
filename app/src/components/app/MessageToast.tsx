@@ -4,6 +4,7 @@ import { X } from 'lucide-react'
 import MemberAvatar from '@/components/social/MemberAvatar'
 import { useTopic } from '@/hooks/useRealtime'
 import { useAuth } from '@/hooks/useAuth'
+import { playMessageChime } from '@/lib/chime'
 import { kaluta, type Conversation } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -68,10 +69,23 @@ export default function MessageToast() {
     [],
   )
 
+  // Messages already heard about, so a reconnect that replays what was missed
+  // does not ring once per message.
+  const chimedFor = useRef<Set<string>>(new Set())
+
   useTopic(user?.id ? `user:${user.id}` : null, (event) => {
     if (event.type !== 'message') return
     // Your own message, arriving in your other tabs. Not news to you.
     if (event.sender_id === user?.id) return
+
+    // The sound belongs here rather than on the Messages page, which is where
+    // it was: a message arriving while you are reading the feed is exactly
+    // the one you need telling about, and that page is not mounted then. This
+    // component is in the shell, so it hears every message wherever you are.
+    if (event.message_id && !chimedFor.current.has(event.message_id)) {
+      chimedFor.current.add(event.message_id)
+      playMessageChime()
+    }
 
     const path = here.current.pathname
     const open = new URLSearchParams(here.current.search).get('c')

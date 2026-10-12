@@ -1,8 +1,10 @@
+import { useEffect } from 'react'
 import type { ReactNode } from 'react'
 import { NavLink, Navigate, useLocation } from 'react-router'
 import { Compass, Home, MessageSquare, Plus, User } from 'lucide-react'
 import { useAppTheme } from '@/components/appdemo/theme'
 import { useAuth } from '@/hooks/useAuth'
+import { primeSound } from '@/lib/chime'
 import { cn } from '@/lib/utils'
 import { AppChipBar, AppTopBar } from './AppChrome'
 import ProfileCard from './ProfileCard'
@@ -66,6 +68,22 @@ export default function AppShell({
   const { tok, frameStyle, rtl, resolved } = useAppTheme()
   const location = useLocation()
   const unread = useUnreadMessages()
+
+  // Browsers refuse to start audio that no gesture asked for, so the chime
+  // needs one click - any click - before it can ever be heard. It used to be
+  // primed only by opening a conversation, which meant a member who had not
+  // opened one yet got silence for exactly the messages they most needed
+  // telling about. The first interaction anywhere does it, once.
+  useEffect(() => {
+    const unlock = () => primeSound()
+    const options = { once: true, passive: true } as const
+    window.addEventListener('pointerdown', unlock, options)
+    window.addEventListener('keydown', unlock, options)
+    return () => {
+      window.removeEventListener('pointerdown', unlock)
+      window.removeEventListener('keydown', unlock)
+    }
+  }, [])
 
   if (loading) {
     return (

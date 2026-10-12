@@ -64,6 +64,8 @@ import {
   type Presence,
   type Sticker,
 } from '@/lib/api'
+import LinkPreview from '@/components/social/LinkPreview'
+import { LINK_RE, isLink, splitTrailing } from '@/lib/linkify'
 import { FEATURES } from '@/lib/features'
 import { realtime } from '@/lib/realtime'
 import { cn } from '@/lib/utils'
@@ -111,6 +113,46 @@ const DAY_MS = 86_400_000
 
 function startOfDay(date: Date): number {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+}
+
+/**
+ * A message's text, with its addresses made followable.
+ *
+ * The same splitting the feed and the comments use, from lib/linkify, so a
+ * link that works in a post works in a message - they were written once and
+ * then pasted into both, which is how one of them ends up linkifying
+ * something the other does not.
+ */
+function withLinks(body: string) {
+  return body
+    .split(LINK_RE)
+    .map((part, index) => {
+      // split() with a capturing group leaves a hole beside every match.
+      if (part === undefined || part === '') return null
+      if (!isLink(part)) return part
+      const { href, text, trailing } = splitTrailing(part)
+      return (
+        <span key={index}>
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer nofollow"
+            className="underline underline-offset-2 hover:opacity-80"
+          >
+            {text}
+          </a>
+          {trailing}
+        </span>
+      )
+    })
+}
+
+/** The first address in a message, for the card under it. */
+function firstLink(body: string): string | null {
+  for (const part of body.split(LINK_RE)) {
+    if (part && isLink(part)) return splitTrailing(part).href
+  }
+  return null
 }
 
 /** Whole calendar days between a date and today: 0 today, 1 yesterday. */
@@ -1034,6 +1076,26 @@ export default function Messages() {
   const friends = useMemo(() => connections.data?.accepted ?? [], [connections.data])
   const invitations = connections.data?.incoming ?? []
 
+  /**
+   * Connections you have never written to.
+   *
+   * They have no conversation, so they are in no list - and a connection you
+   * cannot find is a connection you do not write to. They sit under the
+   * conversations, where one tap starts one, rather than in a strip above
+   * them that pushed the conversations off the screen.
+   */
+  const unwritten = useMemo(() => {
+    const spoken = new Set<string>()
+    for (const c of conversations.data?.items ?? []) {
+      for (const p of c.participants) if (p !== user?.id) spoken.add(p)
+    }
+    return friends
+      .filter((f) => !spoken.has(f.user_id))
+      .sort((a, b) =>
+        (a.profile?.display_name ?? '').localeCompare(b.profile?.display_name ?? ''),
+      )
+  }, [friends, conversations.data, user])
+
   const presenceIds = useMemo(() => {
     const ids = new Set<string>(friends.map((f) => f.user_id))
     for (const c of conversations.data?.items ?? []) c.participants.forEach((p) => ids.add(p))
@@ -1363,6 +1425,17 @@ export default function Messages() {
         <div className={cn('cloud-card flex min-h-0 min-w-0 flex-col overflow-hidden !rounded-none', showThread && 'hidden lg:flex')}>
           <div className="space-y-3 px-4 pb-2 pt-4">
             <div className="flex items-center gap-2">
+              {/* The way out. This screen takes the whole window and hides the
+                  chip row that every other page navigates by, so without this
+                  the only exit is the browser's back button. */}
+              <Link
+                to="/hub"
+                aria-label="Leave messages"
+                title="Back to Kinjy"
+                className="-ms-1 shrink-0 rounded-full p-1.5 text-text-mid hover:bg-text-hi/[0.07] hover:text-text-hi"
+              >
+                <ArrowLeft size={20} className="rtl:rotate-180" aria-hidden="true" />
+              </Link>
               <h1 className="text-[26px] font-bold leading-none tracking-[-0.03em] text-text-hi">Chats</h1>
               {connected ? (
                 <span title="Connected" className="inline-flex text-success">
@@ -1668,6 +1741,44 @@ export default function Messages() {
                 </ul>
               )
             })()}
+
+            {/* The connections you have not written to, after the ones you
+                have. Same row, same tap: the only difference is that there is
+                no conversation behind it yet. */}
+            {!searched && !unreadOnly && unwritten.length > 0 && (
+              <section aria-labelledby="unwritten-heading" className="pt-2">
+                <h2 id="unwritten-heading" className="caption px-2 pb-1">
+                  Say hello
+                </h2>
+                <ul className="space-y-0.5">
+                  {unwritten.map((friend) => (
+                    <li key={friend.user_id}>
+                      <button
+                        type="button"
+                        onClick={() => void startWith(friend.user_id)}
+                        className="flex w-full items-center gap-3 rounded-card-sm p-2.5 text-start hover:bg-text-hi/[0.05]"
+                      >
+                        <PresenceAvatar
+                          profile={friend.profile}
+                          online={presence[friend.user_id]?.online}
+                          size={52}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[0.95rem] font-semibold text-text-hi">
+                            {friend.profile?.display_name ?? 'Member'}
+                          </span>
+                          <span className="caption block truncate">
+                            {presence[friend.user_id]
+                              ? lastSeenLabel(presence[friend.user_id], locale)
+                              : 'No messages yet'}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
           </div>
           </div>
         </div>
@@ -1863,6 +1974,7 @@ export default function Messages() {
                   // line, or (a photo, a sticker) on a row of its own. Never a row after text.
                   const metaInPlayer = isAudio && !hasText && !message.encrypted
                   const metaInText = hasText || (message.encrypted && !isSticker)
+                  const linkInBody = hasText ? firstLink(message.body ?? '') : null
                   const metaOnItsOwnRow = !metaInPlayer && !metaInText
                   const seenByThem =
                     mine && activeOthers.some((uid) => {
@@ -2010,7 +2122,7 @@ export default function Messages() {
                                   Encrypted — only your device can read this.
                                 </span>
                               ) : (
-                                message.body
+                                withLinks(message.body ?? '')
                               )}
                               {showMeta && (
                                 <>
@@ -2028,6 +2140,16 @@ export default function Messages() {
                           {metaOnItsOwnRow && showMeta && (
                             <div className={cn('flex justify-end', mediaOnly || bareSticker ? 'px-1.5 pt-1' : 'mt-1')}>
                               {meta}
+                            </div>
+                          )}
+                          {/* The card for an address somebody sent. Only for
+                              the first one - a message with four links is a
+                              list, not four cards - and never for an
+                              encrypted body, where there is no text to read a
+                              link out of in the first place. */}
+                          {hasText && !message.deleted && linkInBody && (
+                            <div className="mt-1.5 max-w-[320px]">
+                              <LinkPreview url={linkInBody} />
                             </div>
                           )}
                         </div>
