@@ -451,6 +451,41 @@ def people_suggestions(principal: CurrentUser, limit: int = 5, db: OrmSession = 
     )
     excluded = following | blocked | blocking | {principal.user_id}
 
+    # Where this viewer already stands with each of them. Without it the rail
+    # offered "Connect" to somebody you had invited an hour earlier: the button
+    # knew it had been pressed, but only until the page was reloaded, because
+    # that knowledge lived in the browser and nowhere else. Sending the same
+    # invitation twice is refused by the server, so the member was told their
+    # request failed for asking again.
+    #
+    # Not an exclusion: somebody you have asked still belongs in the list, with
+    # the answer pending on it.
+    standing: dict[str, str] = {}
+    for other, status, requester in db.execute(
+        select(
+            case(
+                (models.Connection.requester_id == principal.user_id, models.Connection.addressee_id),
+                else_=models.Connection.requester_id,
+            ),
+            models.Connection.status,
+            models.Connection.requester_id,
+        ).where(
+            or_(
+                models.Connection.requester_id == principal.user_id,
+                models.Connection.addressee_id == principal.user_id,
+            ),
+            models.Connection.status.in_(("pending", "accepted")),
+        )
+    ).all():
+        if status == "accepted":
+            standing[other] = "connected"
+        elif requester == principal.user_id:
+            standing[other] = "invited"
+        else:
+            # They asked us. The button accepts rather than asks again, which
+            # is what the invite endpoint already does with such a pair.
+            standing[other] = "invites_you"
+
     # Over-fetched because minors are trimmed out below for adult viewers, and a
     # page that comes back three-quarters empty is worse than one extra query.
     rows = db.scalars(
@@ -474,6 +509,8 @@ def people_suggestions(principal: CurrentUser, limit: int = 5, db: OrmSession = 
                 "country": r.country,
                 "followers_count": r.followers_count,
                 "verified": r.verified,
+                # none | invited | invites_you | connected
+                "connection": standing.get(r.user_id, "none"),
             }
             for r in rows
         ],

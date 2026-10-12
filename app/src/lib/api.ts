@@ -607,6 +607,14 @@ export interface PersonSuggestion {
   country: string | null
   followers_count: number
   verified: boolean
+  /**
+   * Where the viewer already stands with this person, as the server knows it:
+   * `none`, `invited` (we asked, they have not answered), `invites_you` (they
+   * asked us) or `connected`.
+   *
+   * Optional so an older server simply reads as `none`.
+   */
+  connection?: 'none' | 'invited' | 'invites_you' | 'connected'
 }
 
 export interface Discoveries {

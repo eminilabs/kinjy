@@ -28,6 +28,10 @@ export function People({ limit = 4, title = 'People to follow' }: { limit?: numb
   const { tok } = useAppTheme()
   const suggestions = useApi(() => kaluta.suggestions.people(limit), [limit])
   const [followed, setFollowed] = useState<Set<string>>(new Set())
+  // Only the ones invited in *this* session. What the server already knows is
+  // read from each person's own `connection`, because a Set in a component
+  // dies with the page - which is exactly why somebody who had sent a request
+  // an hour earlier came back to a button saying "Connect".
   const [invited, setInvited] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
@@ -68,6 +72,10 @@ export function People({ limit = 4, title = 'People to follow' }: { limit?: numb
 
   const items = suggestions.data?.items ?? []
   if (!suggestions.loading && items.length === 0) return null
+
+  /** What the Connect button means for this person right now. */
+  const standing = (person: PersonSuggestion) =>
+    invited.has(person.user_id) ? 'invited' : (person.connection ?? 'none')
 
   return (
     <RailCard title={title}>
@@ -124,19 +132,45 @@ export function People({ limit = 4, title = 'People to follow' }: { limit?: numb
               <button
                 type="button"
                 onClick={() => invite(person)}
-                disabled={busy === person.user_id || invited.has(person.user_id)}
-                title="Connect — they have to accept before you can message them"
+                // Nothing to press once we have asked or are already
+                // connected. "Accept" is still a press: they asked us, and
+                // the invite endpoint turns a crossing pair into a
+                // connection rather than a second request.
+                disabled={
+                  busy === person.user_id ||
+                  standing(person) === 'invited' ||
+                  standing(person) === 'connected'
+                }
+                title={
+                  standing(person) === 'invited'
+                    ? 'Waiting for them to accept'
+                    : standing(person) === 'invites_you'
+                      ? 'They invited you — accept to connect'
+                      : standing(person) === 'connected'
+                        ? 'Already connected'
+                        : 'Connect — they have to accept before you can message them'
+                }
                 className={cn(
                   'inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors',
-                  invited.has(person.user_id)
-                    ? cn('border-[var(--cloud-border)]', tok.low)
-                    : 'border-sky/50 text-sky hover:bg-sky/10',
+                  standing(person) === 'none' || standing(person) === 'invites_you'
+                    ? 'border-sky/50 text-sky hover:bg-sky/10'
+                    : cn('border-[var(--cloud-border)]', tok.low),
                 )}
               >
-                {invited.has(person.user_id) ? (
+                {standing(person) === 'invited' ? (
                   <>
                     <Clock size={12} aria-hidden="true" />
-                    Pending
+                    Request sent
+                  </>
+                ) : standing(person) === 'connected' ? (
+                  <>
+                    <Check size={12} aria-hidden="true" />
+                    Connected
+                  </>
+                ) : standing(person) === 'invites_you' ? (
+                  <>
+                    <Check size={12} aria-hidden="true" />
+                    Accept
                   </>
                 ) : (
                   <>
