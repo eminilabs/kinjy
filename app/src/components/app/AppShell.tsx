@@ -34,6 +34,7 @@ export default function AppShell({
   action,
   aside,
   rail = true,
+  full = false,
   children,
 }: {
   /**
@@ -48,6 +49,17 @@ export default function AppShell({
   aside?: ReactNode
   /** The left rail (profile, pinned modules, circles). A page that is a workspace of its own turns it off. */
   rail?: boolean
+  /**
+   * Give the page the whole window.
+   *
+   * For a workspace that is already a full screen of its own - the
+   * conversations, which are a list and a thread side by side. Nested under
+   * the chip row and inside the page's own padding, the thread was a panel
+   * inside a page inside a frame, and the messages had whatever height was
+   * left over. This drops the chip row and the page padding; the top bar
+   * stays, because a screen with no way out of it is not a feature.
+   */
+  full?: boolean
   children: ReactNode
 }) {
   const { user, loading } = useAuth()
@@ -89,12 +101,14 @@ export default function AppShell({
       <div className="sticky top-0 z-30">
         <WellbeingBar />
         <AppTopBar />
-        <AppChipBar pathname={location.pathname} search={location.search} />
+        {!full && <AppChipBar pathname={location.pathname} search={location.search} />}
       </div>
 
       <div
         className={cn(
-          'mx-auto grid w-full max-w-[1320px] gap-[26px] px-4 pb-24 pt-6 md:px-6 lg:pb-16 lg:pt-9',
+          full
+            ? 'grid w-full'
+            : 'mx-auto grid w-full max-w-[1320px] gap-[26px] px-4 pb-24 pt-6 md:px-6 lg:pb-16 lg:pt-9',
           !rail
             ? 'lg:grid-cols-[minmax(0,1fr)]'
             : aside
