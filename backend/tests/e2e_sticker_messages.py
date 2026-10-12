@@ -71,7 +71,7 @@ alice_h, alice_t, alice = register()
 bob_h, bob_t, bob = register()
 carol_h, carol_t, carol = register()
 cid = convo(alice_h, bob)
-LIKE = "classic.like"
+LIKE = "react.yes"
 
 print("Sending a sticker")
 r = send(alice_h, cid, kind="sticker", sticker_id=LIKE)
@@ -87,17 +87,17 @@ check("it can be sent again (stickers are not deduplicated by content)", r2.stat
 cl = "same-" + tag()
 a, b = send(alice_h, cid, kind="sticker", sticker_id=LIKE, client_id=cl), send(alice_h, cid, kind="sticker", sticker_id=LIKE, client_id=cl)
 check("a retried send with the same client_id is stored once", a.json().get("id") == b.json().get("id") and b.json().get("duplicate") is True, f"{a.text} {b.text}")
-reply = send(bob_h, cid, kind="sticker", sticker_id="classic.love", reply_to_id=mid)
+reply = send(bob_h, cid, kind="sticker", sticker_id="react.love", reply_to_id=mid)
 check("a sticker can answer a message", reply.status_code == 201, reply.text[:120])
 raw, items = thread(alice_h, cid)
 check("the reply keeps its link", items[reply.json()["id"]].get("reply_to_id") == mid)
-rx = c.put(f"/conversations/{cid}/messages/{mid}/reaction", headers=bob_h, json={"sticker_id": "classic.fire"})
+rx = c.post(f"/conversations/{cid}/messages/{mid}/reactions", headers=bob_h, json={"emoji": "\U0001F525"})
 check("a sticker message can be reacted to", rx.status_code == 200, rx.text[:120])
 
 print("\nWhat the server refuses")
 before = len(thread(alice_h, cid)[1])
 cases = {
-    "an id outside the catalogue": dict(kind="sticker", sticker_id="classic.nonexistent"),
+    "an id outside the catalogue": dict(kind="sticker", sticker_id="react.nonexistent"),
     "a URL instead of an id": dict(kind="sticker", sticker_id="https://evil.example/x.png"),
     "a path instead of an id": dict(kind="sticker", sticker_id="../../etc/passwd"),
     "no id at all": dict(kind="sticker"),
@@ -151,7 +151,7 @@ async def live():
     async with websockets.connect(WS) as ws:
         await ws.send(json.dumps({"action": "auth", "token": bob_t}))
         await asyncio.wait_for(ws.recv(), 5)
-        await asyncio.to_thread(send, alice_h, cid, kind="sticker", sticker_id="classic.party")
+        await asyncio.to_thread(send, alice_h, cid, kind="sticker", sticker_id="joy.party")
         try:
             while True:
                 f = json.loads(await asyncio.wait_for(ws.recv(), 4))
@@ -164,7 +164,7 @@ async def live():
 frame = asyncio.run(live())
 check("the other participant receives it live", bool(frame), "no frame")
 check("the frame carries kind and sticker id, no body",
-      bool(frame) and frame["kind"] == "sticker" and frame["sticker_id"] == "classic.party" and not frame.get("body"), str(frame))
+      bool(frame) and frame["kind"] == "sticker" and frame["sticker_id"] == "joy.party" and not frame.get("body"), str(frame))
 
 print("\n" + ("ALL CHECKS PASSED" if ok else "THERE ARE FAILURES ABOVE"))
 sys.exit(0 if ok else 1)

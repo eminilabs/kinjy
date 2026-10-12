@@ -51,7 +51,7 @@ export default function FamilyTreeGraph() {
     <div className="relative">
       {/* The global Kinjy Assistant orb docks top-left of this canvas (mounted in Layout) */}
 
-      <div className="cloud-glass rounded-card-xl p-4 pt-10 shadow-cloud">
+      <div className="rounded-[20px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] p-4 pt-6 shadow-[0_24px_48px_-34px_var(--kl-shadow)]">
         <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="group" aria-label="Interactive family relationship graph">
           <defs>
             <radialGradient id="nodeGold" cx="35%" cy="30%" r="80%">
@@ -70,11 +70,11 @@ export default function FamilyTreeGraph() {
             const y = TOP_Y + (lvl - minLevel) * LEVEL_H
             return (
               <g key={lvl}>
-                <line x1={8} x2={W - 8} y1={y} y2={y} stroke="rgba(255,255,255,0.05)" strokeDasharray="2 6" />
-                <text x={12} y={y - 30} className="fill-[#A7ACBF]" fontSize={9} fontFamily="'JetBrains Mono', monospace" letterSpacing={1.5}>
+                <line x1={8} x2={W - 8} y1={y} y2={y} stroke="var(--kl-paper-2)" strokeDasharray="2 6" />
+                <text x={12} y={y - 30} className="fill-[var(--kl-mid)]" fontSize={9} fontFamily="'JetBrains Mono', monospace" letterSpacing={1.5}>
                   {`LEVEL ${lvl === 0 ? '0' : Math.abs(lvl)}${lvl < 0 ? ' ↑' : lvl > 0 ? ' ↓' : ''}`}
                 </text>
-                <text x={12} y={y - 18} className="fill-[#6B7186]" fontSize={8.5}>
+                <text x={12} y={y - 18} className="fill-[var(--kl-low)]" fontSize={8.5}>
                   {LEVEL_NAMES[String(lvl)] ?? (lvl < 0 ? 'Ancestors' : 'Descendants')}
                 </text>
               </g>
@@ -94,7 +94,7 @@ export default function FamilyTreeGraph() {
                 <motion.path
                   d={d}
                   fill="none"
-                  stroke={pending ? '#E0A33E' : isSpouse ? 'rgba(143,184,232,0.6)' : 'url(#edgeArc)'}
+                  stroke={pending ? '#D9A648' : isSpouse ? '#8FB8E8' : 'url(#edgeArc)'}
                   strokeWidth={pending ? 1.4 : 1.8}
                   strokeDasharray={pending ? '4 4' : undefined}
                   initial={{ pathLength: 0, opacity: 0 }}
@@ -108,7 +108,7 @@ export default function FamilyTreeGraph() {
                   animate={{ d }}
                 />
                 <motion.text
-                  className={pending ? 'fill-[#E0A33E]' : 'fill-[#8FB8E8]'}
+                  className={pending ? 'fill-[var(--kl-gold-deep)]' : 'fill-[var(--kl-low)]'}
                   fontSize={7.5}
                   fontFamily="'JetBrains Mono', monospace"
                   textAnchor="middle"
@@ -151,12 +151,12 @@ export default function FamilyTreeGraph() {
               >
                 <motion.g initial={false} animate={{ x: pos.x, y: pos.y }} transition={transition}>
                   {(isRoot || isHover) && (
-                    <circle r={30} fill="none" stroke="rgba(240,200,120,0.5)" strokeWidth={1} />
+                    <circle r={30} fill="none" stroke="var(--kl-gold)" strokeWidth={1} />
                   )}
                   <motion.circle
                     r={22}
-                    fill={isRoot ? 'url(#nodeGold)' : '#1A1F3B'}
-                    stroke={isRoot ? '#F0C878' : 'rgba(217,166,72,0.55)'}
+                    fill={isRoot ? 'url(#nodeGold)' : 'var(--kl-paper)'}
+                    stroke={isRoot ? '#D9A648' : 'var(--kl-gold)'}
                     strokeWidth={isRoot ? 2 : 1.4}
                     initial={false}
                     animate={{ scale: isHover || isRoot ? 1.12 : 1 }}
@@ -170,7 +170,7 @@ export default function FamilyTreeGraph() {
                     dy={3.5}
                     fontSize={11}
                     fontWeight={700}
-                    className={isRoot ? 'fill-[#0B0E1D]' : 'fill-[#F0C878]'}
+                    className={isRoot ? 'fill-[#0B0E1D]' : 'fill-[var(--kl-gold-deep)]'}
                     style={{ pointerEvents: 'none' }}
                   >
                     {p.name
@@ -183,7 +183,7 @@ export default function FamilyTreeGraph() {
                     y={38}
                     fontSize={10}
                     fontWeight={600}
-                    className={cn(isRoot ? 'fill-[#F0C878]' : 'fill-[#A7ACBF]')}
+                    className={cn(isRoot ? 'fill-[var(--kl-gold-deep)]' : 'fill-[var(--kl-mid)]')}
                     style={{ pointerEvents: 'none' }}
                   >
                     {p.name}
@@ -195,7 +195,7 @@ export default function FamilyTreeGraph() {
                       fontSize={8}
                       fontFamily="'JetBrains Mono', monospace"
                       letterSpacing={1}
-                      className="fill-[#F0C878]"
+                      className="fill-[var(--kl-gold-deep)]"
                       style={{ pointerEvents: 'none' }}
                     >
                       LEVEL 0
@@ -208,13 +208,13 @@ export default function FamilyTreeGraph() {
         </svg>
 
         {/* Re-root caption */}
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3">
-          <p className="caption" aria-live="polite">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--kl-paper-2)] pt-3">
+          <p className="text-[13px] text-[var(--kl-mid)]" aria-live="polite">
             Now viewing from:{' '}
-            <strong className="font-display text-base text-gold-soft">{PERSON_MAP[root].name}</strong>
+            <strong className="kl-serif text-base text-[var(--kl-gold-deep)]">{PERSON_MAP[root].name}</strong>
             {' '}— Level 0
           </p>
-          <p className="mono-data text-[0.7rem] text-text-low">
+          <p className="kl-mono text-[0.7rem] text-[var(--kl-low)]">
             Hover any person → “View tree from this person”
           </p>
         </div>

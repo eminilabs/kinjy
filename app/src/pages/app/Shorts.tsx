@@ -83,20 +83,27 @@ export default function Shorts() {
   if (!user) return <Navigate to="/join?mode=signin" replace />
 
   return (
-    <AppShell
-      title="Shorts"
-      subtitle="Swipe, or use the arrow keys. Only the clip on screen plays."
-      action={
+    <AppShell>
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+        <div className="min-w-0">
+          <p className="mono-data text-[0.72rem] font-bold uppercase tracking-[0.15em] text-gold-soft">Shorts</p>
+          <h1 className="mt-2 text-[clamp(38px,5vw,56px)] font-bold leading-[1.02] tracking-[-0.045em] text-text-hi">
+            Quick, vertical, yours
+          </h1>
+          <p className="mt-3 max-w-xl text-[0.95rem] leading-relaxed text-text-low">
+            Swipe, or use the arrow keys. Only the clip on screen plays.
+          </p>
+        </div>
         <button
           type="button"
           onClick={() => setComposing(true)}
-          className="inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-2 text-sm font-bold text-ink hover:brightness-110"
+          className="inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-gold-soft to-gold px-6 py-3 text-sm font-bold text-ink shadow-[0_8px_20px_-10px_rgba(166,120,57,0.6)] hover:brightness-110"
         >
-          <Plus size={15} aria-hidden="true" />
+          <Plus size={16} aria-hidden="true" />
           New short
         </button>
-      }
-    >
+      </header>
+
       {loading && (
         <div className="flex items-center justify-center gap-2 py-16 text-text-low" role="status">
           <Loader2 size={16} className="animate-spin" aria-hidden="true" />
@@ -104,18 +111,23 @@ export default function Shorts() {
         </div>
       )}
 
-      {error && <p className="py-4 text-sm text-amber-200">{error}</p>}
+      {error && (
+        <p role="alert" className="mb-4 rounded-xl bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          {error}
+        </p>
+      )}
 
       {!loading && items.length === 0 && (
-        <div className="mx-auto max-w-md rounded-card-md border border-white/8 bg-ink-2/60 p-10 text-center">
-          <Clapperboard size={24} className="mx-auto text-text-low" aria-hidden="true" />
-          <p className="mt-3 text-sm text-text-mid">
-            No shorts yet. Yours would be the first.
-          </p>
+        <div className="cloud-card mx-auto max-w-lg px-8 py-14 text-center">
+          <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-gold/15 text-gold-soft">
+            <Clapperboard size={26} aria-hidden="true" />
+          </span>
+          <p className="mt-5 text-lg font-bold tracking-[-0.02em] text-text-hi">No shorts yet</p>
+          <p className="mt-1.5 text-sm leading-relaxed text-text-low">Yours would be the first.</p>
           <button
             type="button"
             onClick={() => setComposing(true)}
-            className="mt-5 inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-2.5 text-sm font-bold text-ink hover:brightness-110"
+            className="mt-6 inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-gold-soft to-gold px-6 py-3 text-sm font-bold text-ink hover:brightness-110"
           >
             <Plus size={15} aria-hidden="true" />
             Post a short
@@ -134,7 +146,7 @@ export default function Shorts() {
             }}
           />
           {!autoplay && (
-            <p className="caption mt-3 text-center">
+            <p className="mt-4 text-center text-sm text-text-low">
               Autoplay is off in your settings — tap a clip to start it.
             </p>
           )}

@@ -1,9 +1,10 @@
-"""Sticker reactions on messages, against the live API.
+"""Emoji reactions on messages, against the live API.
 
-What must hold: one reaction per member per message (another replaces it, the
-same one is not a second vote), only members of the conversation can react or
-see reactions, only catalogue ids are accepted, the other participant is told
-live, and a reaction never outlives an expired message.
+What must hold: one reaction per member per message (tapping another replaces it,
+tapping the same one takes it back), only members of the conversation can react
+or see reactions, only the allowed emoji are accepted, a member who closed their
+messages cannot be reacted to either, the other participant is told live without
+being told who, and a reaction never outlives an expired message.
 """
 import asyncio
 import json
@@ -63,18 +64,23 @@ def say(h, cid, body):
     return r.json()["id"]
 
 
-def put(h, cid, mid, sticker):
-    return c.put(f"/conversations/{cid}/messages/{mid}/reaction", headers=h, json={"sticker_id": sticker})
+def react(h, cid, mid, emoji):
+    """One tap: sets the reaction, swaps it, or (the same emoji again) takes it back."""
+    return c.post(f"/conversations/{cid}/messages/{mid}/reactions", headers=h, json={"emoji": emoji})
 
 
-def drop(h, cid, mid):
-    return c.delete(f"/conversations/{cid}/messages/{mid}/reaction", headers=h)
-
-
-def reactions(h, cid, mid):
+def message(h, cid, mid):
     r = c.get(f"/conversations/{cid}/messages", headers=h)
     assert r.status_code == 200, r.text[:120]
-    return next(m for m in r.json()["items"] if m["id"] == mid)["reactions"]
+    return next(m for m in r.json()["items"] if m["id"] == mid)
+
+
+def counts(h, cid, mid):
+    return message(h, cid, mid)["reactions"]
+
+
+def mine(h, cid, mid):
+    return message(h, cid, mid)["my_reaction"]
 
 
 alice_h, alice_t, alice = register()
@@ -83,56 +89,62 @@ carol_h, carol_t, carol = register()
 cid = convo(alice_h, bob)
 other = convo(alice_h, carol)
 mid = say(alice_h, cid, "react to me")
+LIKE, LOVE, FIRE = "\U0001F44D", "❤️", "\U0001F525"
 
-print("The catalogue")
+print("The sticker catalogue the composer reads")
 r = c.get("/stickers", headers=alice_h)
-cat = r.json() if r.status_code == 200 else {}
-ids = [s["id"] for s in cat.get("items", [])]
-check("the catalogue is served to a member", r.status_code == 200 and len(ids) >= 6, r.text[:120])
-check("every sticker has a readable name", all(s.get("name") for s in cat.get("items", [])))
+packs = r.json().get("packs", []) if r.status_code == 200 else []
+stickers = [s for p in packs for s in p.get("stickers", [])]
+check("the catalogue is served to a member, in packs", r.status_code == 200 and len(packs) >= 1 and len(stickers) >= 6, r.text[:120])
+check("every sticker has an id, a glyph and a label", all(s.get("id") and s.get("glyph") and s.get("label") for s in stickers))
 check("the catalogue needs a signed-in member", c.get("/stickers").status_code in (401, 403))
-LIKE, LOVE = "classic.like", "classic.love"
-check("the catalogue holds the stickers used below", LIKE in ids and LOVE in ids)
 
 print("\nReact, change, take back")
-r = put(bob_h, cid, mid, LIKE)
+r = react(bob_h, cid, mid, LIKE)
 check("a member reacts", r.status_code == 200, f"{r.status_code} {r.text[:120]}")
-rx = reactions(alice_h, cid, mid)
-check("the reaction is listed with who and what", rx == [{"user_id": bob["id"], "sticker_id": LIKE}], str(rx))
-r = put(bob_h, cid, mid, LOVE)
-rx = reactions(alice_h, cid, mid)
-check("another sticker replaces the previous one", r.status_code == 200 and rx == [{"user_id": bob["id"], "sticker_id": LOVE}], str(rx))
-put(bob_h, cid, mid, LOVE)
-rx = reactions(alice_h, cid, mid)
-check("the same sticker twice is still one vote", len(rx) == 1, str(rx))
-put(alice_h, cid, mid, LIKE)
-rx = reactions(bob_h, cid, mid)
-check("each member has their own reaction", sorted(x["user_id"] for x in rx) == sorted([alice["id"], bob["id"]]), str(rx))
-r = drop(bob_h, cid, mid)
-rx = reactions(alice_h, cid, mid)
-check("a member takes their reaction back", r.status_code == 200 and [x["user_id"] for x in rx] == [alice["id"]], str(rx))
-check("taking it back twice is harmless", drop(bob_h, cid, mid).status_code == 200)
+check("the thread carries the count", counts(alice_h, cid, mid) == {LIKE: 1}, str(counts(alice_h, cid, mid)))
+check("the reaction is the reactor's own, and only theirs",
+      mine(bob_h, cid, mid) == LIKE and mine(alice_h, cid, mid) is None)
+r = react(bob_h, cid, mid, LOVE)
+check("another emoji replaces the previous one", r.status_code == 200 and counts(alice_h, cid, mid) == {LOVE: 1}, str(counts(alice_h, cid, mid)))
+react(alice_h, cid, mid, LIKE)
+check("each member has their own reaction", counts(bob_h, cid, mid) == {LIKE: 1, LOVE: 1}, str(counts(bob_h, cid, mid)))
+r = react(bob_h, cid, mid, LOVE)
+check("tapping the same emoji again takes it back", r.status_code == 200 and counts(alice_h, cid, mid) == {LIKE: 1}, str(counts(alice_h, cid, mid)))
+check("and it is no longer the member's own", mine(bob_h, cid, mid) is None)
+react(bob_h, cid, mid, LOVE)
+check("a third tap puts it back", counts(alice_h, cid, mid) == {LIKE: 1, LOVE: 1})
 
 print("\nRefusals")
-before = reactions(alice_h, cid, mid)
-for label, value in (("a sticker outside the catalogue", "classic.nonexistent"),
-                     ("a URL instead of an id", "https://evil.example/x.png"),
-                     ("an empty id", "")):
-    r = put(bob_h, cid, mid, value)
-    check(f"{label} is refused (400)", r.status_code == 400, f"{r.status_code} {r.text[:100]}")
-check("nothing was stored by those refusals", reactions(alice_h, cid, mid) == before)
-r = put(carol_h, cid, mid, LIKE)
+before = counts(alice_h, cid, mid)
+for label, value in (("a sticker id", "react.yes"),
+                     ("a URL", "https://evil.example/x.png"),
+                     ("an emoji outside the set", "\U0001F355"),
+                     ("two emoji at once", LIKE + LOVE),
+                     ("an empty value", "")):
+    r = react(bob_h, cid, mid, value)
+    check(f"{label} is refused (422)", r.status_code == 422, f"{r.status_code} {r.text[:100]}")
+check("nothing was stored by those refusals", counts(alice_h, cid, mid) == before)
+r = react(carol_h, cid, mid, LIKE)
 check("a non-member cannot react (404)", r.status_code == 404, f"{r.status_code} {r.text[:100]}")
-r = drop(carol_h, cid, mid)
-check("a non-member cannot remove (404)", r.status_code == 404, f"{r.status_code} {r.text[:100]}")
 r = c.get(f"/conversations/{cid}/messages", headers=carol_h)
 check("a non-member cannot read the reactions (404)", r.status_code == 404, f"{r.status_code}")
 foreign = say(alice_h, other, "a message in another room")
-r = put(bob_h, cid, foreign, LIKE)
+r = react(bob_h, cid, foreign, LIKE)
 check("a message of another conversation cannot be reacted to (404)", r.status_code == 404, f"{r.status_code} {r.text[:100]}")
-r = put(bob_h, cid, "msg_doesnotexist", LIKE)
+r = react(bob_h, cid, "msg_doesnotexist", LIKE)
 check("an unknown message is refused (404)", r.status_code == 404, f"{r.status_code} {r.text[:100]}")
-check("a stranger's reaction attempt left no trace", reactions(alice_h, other, foreign) == [])
+check("a stranger's reaction attempt left no trace", counts(alice_h, other, foreign) == {})
+
+print("\nStanding checks still apply")
+erin_h, erin_t, erin = register()
+room = convo(alice_h, erin)
+said = say(erin_h, room, "hello")
+check("a reaction works while the other side is open", react(alice_h, room, said, LIKE).status_code == 200)
+c.patch("/preferences", headers=erin_h, json={"who_can_message": "nobody"})
+r = react(alice_h, room, said, FIRE)
+check("a member who closed their messages cannot be reacted to (403)", r.status_code == 403, f"{r.status_code} {r.text[:100]}")
+check("and nothing changed", counts(erin_h, room, said) == {LIKE: 1}, str(counts(erin_h, room, said)))
 
 print("\nLive delivery")
 
@@ -141,22 +153,22 @@ async def live():
     async with websockets.connect(WS) as ws:
         await ws.send(json.dumps({"action": "auth", "token": alice_t}))
         assert json.loads(await asyncio.wait_for(ws.recv(), 5))["type"] == "ready"
-        await asyncio.to_thread(put, bob_h, cid, mid, LOVE)
+        await asyncio.to_thread(react, bob_h, cid, mid, FIRE)
         frames = []
         try:
             while True:
                 frames.append(json.loads(await asyncio.wait_for(ws.recv(), 3)))
-                if frames[-1].get("type") == "reaction":
+                if frames[-1].get("type") == "message_reaction":
                     break
         except asyncio.TimeoutError:
             pass
-        first = next((f for f in frames if f.get("type") == "reaction"), None)
-        await asyncio.to_thread(drop, bob_h, cid, mid)
+        first = next((f for f in frames if f.get("type") == "message_reaction"), None)
+        await asyncio.to_thread(react, bob_h, cid, mid, FIRE)
         second = None
         try:
             while True:
                 f = json.loads(await asyncio.wait_for(ws.recv(), 3))
-                if f.get("type") == "reaction":
+                if f.get("type") == "message_reaction":
                     second = f
                     break
         except asyncio.TimeoutError:
@@ -166,21 +178,23 @@ async def live():
 
 first, second = asyncio.run(live())
 check("the other participant receives the reaction live", bool(first), "no frame")
-check("the frame says who, which message and which sticker",
-      bool(first) and first["user_id"] == bob["id"] and first["message_id"] == mid
-      and first["sticker_id"] == LOVE and first["conversation_id"] == cid, str(first))
-check("taking it back is announced with sticker_id null", bool(second) and second["sticker_id"] is None, str(second))
+check("the frame says which message and the new counts",
+      bool(first) and first["message_id"] == mid and first["conversation_id"] == cid
+      and first["counts"].get(FIRE) == 1, str(first))
+check("the frame does not say who reacted", bool(first) and "user_id" not in first, str(first))
+check("taking it back is announced with the counts without it",
+      bool(second) and FIRE not in second["counts"], str(second))
 
 
 async def outsider_hears_nothing():
     async with websockets.connect(WS) as ws:
         await ws.send(json.dumps({"action": "auth", "token": carol_t}))
         await asyncio.wait_for(ws.recv(), 5)
-        await asyncio.to_thread(put, bob_h, cid, mid, LIKE)
+        await asyncio.to_thread(react, bob_h, cid, mid, FIRE)
         try:
             while True:
                 f = json.loads(await asyncio.wait_for(ws.recv(), 2))
-                if f.get("type") == "reaction":
+                if f.get("type") == "message_reaction" and f.get("message_id") == mid:
                     return f
         except asyncio.TimeoutError:
             return None
@@ -192,17 +206,17 @@ print("\nA reaction does not outlive an expired message")
 r = c.post(f"/conversations/{cid}/disappearing", headers=alice_h, json={"seconds": 2})
 fleeting = say(alice_h, cid, "this one will expire")
 c.post(f"/conversations/{cid}/disappearing", headers=alice_h, json={"seconds": 0})
-check("a reaction can be put on a message about to expire", put(bob_h, cid, fleeting, LIKE).status_code == 200)
+check("a reaction can be put on a message about to expire", react(bob_h, cid, fleeting, LIKE).status_code == 200)
 time.sleep(3.5)
 c.get(f"/conversations/{cid}/messages", headers=alice_h)  # reading is what purges
-r = put(bob_h, cid, fleeting, LIKE)
+r = react(bob_h, cid, fleeting, LIKE)
 check("reacting to the expired message is refused (404)", r.status_code == 404, f"{r.status_code} {r.text[:100]}")
 left = None
 try:
     import subprocess
     out = subprocess.run(
-        ["docker", "compose", "--project-directory", "/home/ghost/eminiProjects/kinjy", "exec", "-T", "postgres",
-         "sh", "-c", f"psql -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\" -tAc \"select count(*) from messaging.message_reactions where message_id='{fleeting}'\""],
+        ["docker", "exec", "kaluta-postgres", "sh", "-c",
+         f"psql -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\" -tAc \"select count(*) from messaging.message_reactions where message_id='{fleeting}'\""],
         capture_output=True, text=True, timeout=60)
     left = out.stdout.strip()
 except Exception as exc:  # the host may not have docker on its path; the API checks above still ran

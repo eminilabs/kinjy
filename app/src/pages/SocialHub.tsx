@@ -234,15 +234,10 @@ export default function SocialHub() {
   }, [user, defaultsReady, load])
   useEffect(() => () => inFlight.current?.abort(), [])
 
-  if (authLoading) {
-    return (
-      <div className="flex min-h-[60svh] items-center justify-center" role="status" aria-label="Loading">
-        <div className="h-12 w-12 rounded-full animate-orb-breathe" style={{ background: 'var(--grad-orb)' }} />
-      </div>
-    )
-  }
-  if (!user) return <Navigate to="/join?mode=signin" replace />
-
+  // These three sit above the early returns below, and must stay there.
+  // A hook after a conditional return runs on some renders and not others,
+  // which is React error #310 and an unmounted tree - /hub went black on
+  // refresh for exactly this reason.
   /**
    * The next page, appended.
    *
@@ -310,6 +305,15 @@ export default function SocialHub() {
   )
 
   useEffect(() => () => observer.current?.disconnect(), [])
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-[60svh] items-center justify-center" role="status" aria-label="Loading">
+        <div className="h-12 w-12 rounded-full animate-orb-breathe" style={{ background: 'var(--grad-orb)' }} />
+      </div>
+    )
+  }
+  if (!user) return <Navigate to="/join?mode=signin" replace />
 
   const prepend = (post: Post) => setFeed((f) => (f ? { ...f, items: [post, ...f.items] } : f))
   const drop = (postId: string) =>
@@ -431,32 +435,21 @@ export default function SocialHub() {
   return (
     <AppShell aside={rail}>
       <div className="min-w-0">
-          {/* Header: which feed this is, and what it promises */}
-          <header className="mb-5 flex items-end justify-between gap-4">
-            <div className="min-w-0">
-              <p className="mono-data text-[0.72rem] font-bold uppercase tracking-[0.15em] text-gold-soft">Your feed</p>
-              <h1 className="mt-2 text-[clamp(38px,5vw,56px)] font-bold leading-[1.02] tracking-[-0.045em] text-text-hi">
-                {catalog.modes.find((m) => m.id === mode)?.label ?? 'Feed'}
-              </h1>
-              {catalog.modes.find((m) => m.id === mode)?.description && (
-                <p className="mt-3 max-w-xl text-[0.9rem] leading-relaxed text-text-low">
-                  {catalog.modes.find((m) => m.id === mode)?.description}
-                </p>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => void load()}
-              aria-label="Refresh the feed"
-              className="mb-1 grid h-9 w-9 shrink-0 place-items-center rounded-full text-text-mid transition-colors hover:bg-text-hi/5"
-            >
-              <RefreshCw size={17} className={cn(loading && 'animate-spin')} aria-hidden="true" />
-            </button>
-          </header>
+        <h1 className="sr-only">
+          {catalog.modes.find((m) => m.id === mode)?.label ?? 'Feed'}
+        </h1>
 
-          <div className="mb-4">
-            <FeedModeMenu modes={catalog.modes} active={mode} onSelect={setMode} />
-          </div>
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <FeedModeMenu modes={catalog.modes} active={mode} onSelect={setMode} />
+          <button
+            type="button"
+            onClick={() => void load()}
+            aria-label="Refresh the feed"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-text-mid transition-colors hover:bg-text-hi/5"
+          >
+            <RefreshCw size={17} className={cn(loading && 'animate-spin')} aria-hidden="true" />
+          </button>
+        </div>
 
           {/* The place or topic the geographic/topic modes filter on */}
           {(mode === 'local' || mode === 'country' || mode === 'topics') && (

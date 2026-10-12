@@ -19,16 +19,17 @@ import {
 } from 'lucide-react'
 import { ApiError, kaluta, type Post, type WhyFactor } from '@/lib/api'
 import { useTopic } from '@/hooks/useRealtime'
-import { htmlToText, looksLikeHtml, sanitizeHtml } from '@/lib/richtext'
+import { htmlToText, looksLikeHtml, readableText, sanitizeHtml } from '@/lib/richtext'
 import { useAuth } from '@/hooks/useAuth'
 import { postUrl, shareLink } from '@/lib/share'
 import { cn } from '@/lib/utils'
 import Comments from './Comments'
 import MemberAvatar from './MemberAvatar'
 import KnownActors from './KnownActors'
+import Expandable from './Expandable'
 import LinkPreview, { firstLink } from './LinkPreview'
+import MediaGrid from './MediaGrid'
 import MediaLightbox from './MediaLightbox'
-import VideoPlayer from './VideoPlayer'
 import Reactions from './Reactions'
 import {
   Dialog,
@@ -37,6 +38,24 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Link } from 'react-router'
+
+/**
+ * How much of a post's text the card shows before it offers to open.
+ *
+ * About five lines at the body size, which is roughly where LinkedIn cuts and
+ * a little more than Facebook. The point is that every card is about the size
+ * of every other card: one long post owning the screen is the thing that makes
+ * a feed tiring to scroll.
+ *
+ * Only a cut that is real is shown - Expandable measures first, so a post that
+ * fits gets no fade and no button rather than a "See more" that does nothing.
+ *
+ * Running text is cut by line and an article body by height, because
+ * -webkit-line-clamp needs a -webkit-box, which an article's paragraphs and
+ * lists cannot live inside.
+ */
+const BODY_LINES = 5
+const BODY_COLLAPSED = 140
 
 /** Who can read a restricted post, said on the card so nobody has to guess. */
 const AUDIENCE: Record<string, { label: string; hint: string }> = {
@@ -509,42 +528,52 @@ export default function PostCard({
         <div className="mt-3 grid gap-4 sm:grid-cols-2">
           <div>
             <p className="caption mb-1 uppercase">{post.lang} · original</p>
-            <p className="whitespace-pre-wrap text-[0.95rem] leading-relaxed text-text-hi">{plainBody}</p>
+            {/* withHashtags here too: a link does not stop being a link
+                because the reader asked to see the translation beside it. */}
+            <p className="whitespace-pre-wrap text-[0.95rem] leading-relaxed text-text-hi">
+              {withHashtags(readableText(plainBody))}
+            </p>
           </div>
           <div className="sm:border-s sm:border-white/8 sm:ps-4">
             <p className="caption mb-1 uppercase">{uiLang} · translated</p>
-            <p className="whitespace-pre-wrap text-[0.95rem] leading-relaxed text-text-hi">{translation.text}</p>
+            <p className="whitespace-pre-wrap text-[0.95rem] leading-relaxed text-text-hi">
+              {withHashtags(translation.text)}
+            </p>
           </div>
         </div>
       ) : isRichArticle ? (
         /* Sanitised again at render time: the database can hold anything, and
            trusting what was cleaned on the way in would only move the risk. */
-        <div
-          className="prose-article mt-3 text-[0.95rem] text-text-hi"
-          dangerouslySetInnerHTML={{ __html: sanitizeHtml(body) }}
-        />
+        <Expandable collapsedHeight={BODY_COLLAPSED} className="mt-3" deps={[body]}>
+          <div
+            className="prose-article text-[0.95rem] text-text-hi"
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(body) }}
+          />
+        </Expandable>
       ) : (
         /* The body opens the post. Not a <button>: the text contains links and
            hashtags that must stay clickable in their own right, and nesting
            interactive elements inside a button is invalid and unreadable to a
            screen reader. A plain click handler leaves them alone, and the
            header already offers a keyboard route to the same place. */
-        <p
-          onClick={(event) => {
-            if (!onOpen) return
-            // A click that landed on a link, a hashtag or a text selection is
-            // not a request to open the post.
-            if ((event.target as HTMLElement).closest('a,button')) return
-            if (window.getSelection()?.toString()) return
-            onOpen()
-          }}
-          className={cn(
-            'mt-3 whitespace-pre-wrap text-[0.95rem] leading-relaxed text-text-hi',
-            onOpen && 'cursor-pointer',
-          )}
-        >
-          {withHashtags(body)}
-        </p>
+        <Expandable collapsedHeight={BODY_COLLAPSED} lines={BODY_LINES} className="mt-3" deps={[body]}>
+          <p
+            onClick={(event) => {
+              if (!onOpen) return
+              // A click that landed on a link, a hashtag or a text selection is
+              // not a request to open the post.
+              if ((event.target as HTMLElement).closest('a,button')) return
+              if (window.getSelection()?.toString()) return
+              onOpen()
+            }}
+            className={cn(
+              'whitespace-pre-wrap text-[0.95rem] leading-relaxed text-text-hi',
+              onOpen && 'cursor-pointer',
+            )}
+          >
+            {withHashtags(readableText(body))}
+          </p>
+        </Expandable>
       )}
 
       {/* Only when the post has no media of its own: a post with a photo and a
@@ -553,67 +582,16 @@ export default function PostCard({
 
       <KnownActors actors={target.known_actors} />
 
-      {/* Attached media — one full-width, several in a grid, videos playable. */}
+      {/* Attached media. The layout follows the count - see MediaGrid: a
+          single picture is never cropped, a grid is. */}
       {media.length > 0 && (
-        <ul
-          className={cn(
-            '-mx-5 mt-3 grid gap-0.5 border-y border-white/8',
-            media.length === 1 ? 'grid-cols-1' : 'grid-cols-2',
-          )}
-        >
-          {media.map((item, index) => (
-            <li key={item.url ?? `deferred-${index}`} className="relative bg-ink">
-              {/* An image tile is one big button into the viewer. A video
-                  cannot be, or every tap on the scrubber would open the
-                  lightbox instead of seeking - it carries its own expand
-                  control into the same viewer. */}
-              {item.url === null ? (
-                /* Data saver: the server never sent this URL, so nothing has
-                   downloaded. The tap is what asks for it. */
-                <button
-                  type="button"
-                  onClick={loadMedia}
-                  disabled={loadingMedia}
-                  className="flex w-full flex-col items-center justify-center gap-1 bg-white/4 py-10 hover:bg-white/8 disabled:opacity-60"
-                >
-                  <span className="text-sm text-text-hi">
-                    {loadingMedia ? 'Loading…' : `Tap to load ${item.kind}`}
-                  </span>
-                  <span className="caption text-text-low">
-                    Data saver is on — nothing downloaded yet
-                  </span>
-                </button>
-              ) : item.kind === 'video' ? (
-                // Starts muted: a browser blocks unmuted autoplay anyway, and
-                // sound starting by itself in a feed is nobody's setting. The
-                // player stops it when it scrolls out of view.
-                <VideoPlayer
-                  src={item.url}
-                  autoplay={post.autoplay !== false}
-                  onExpand={() => setPreview(index)}
-                  className="w-full"
-                />
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setPreview(index)}
-                  aria-label={item.alt_text || 'Open image'}
-                  className="block w-full"
-                >
-                  <img
-                    src={item.url}
-                    alt={item.alt_text ?? ''}
-                    loading="lazy"
-                    className={cn(
-                      'w-full cursor-zoom-in object-cover hover:opacity-95',
-                      media.length === 1 ? 'max-h-[460px]' : 'h-44',
-                    )}
-                  />
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
+        <MediaGrid
+          media={media}
+          onOpen={setPreview}
+          onLoadDeferred={loadMedia}
+          loadingDeferred={loadingMedia}
+          autoplay={post.autoplay !== false}
+        />
       )}
 
       {translation && (

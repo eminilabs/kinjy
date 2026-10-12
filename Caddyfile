@@ -26,7 +26,10 @@ kinjy.com {
 	# and anything not on it simply gets the app, which is the safe default.
 	@unfurler {
 		path /p/*
-		header_regexp User-Agent (?i)(whatsapp|facebookexternalhit|facebookcatalog|twitterbot|telegrambot|linkedinbot|slackbot|discordbot|skypeuripreview|redditbot|pinterest|applebot|googlebot|bingbot|embedly|quora link preview|vkshare|w3c_validator|bitlybot|signal)
+		# Quoted: Caddy splits a bare argument on whitespace, and one of these
+		# agents has a space in its name - unquoted it became three arguments and
+		# the config refused to load.
+		header_regexp User-Agent "(?i)(whatsapp|facebookexternalhit|facebookcatalog|twitterbot|telegrambot|linkedinbot|slackbot|discordbot|skypeuripreview|redditbot|pinterest|applebot|googlebot|bingbot|embedly|quora|vkshare|bitlybot|signal)"
 	}
 	handle @unfurler {
 		rewrite * /api/share{uri}

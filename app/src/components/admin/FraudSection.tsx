@@ -113,7 +113,7 @@ export default function FraudSection() {
 
   return (
     <section aria-labelledby="fraud-heading" className="border-t border-white/8 px-5 py-10 md:px-8">
-      <p className="eyebrow text-gold">Refinement #21 · Anti-fraud center</p>
+      <p className="eyebrow text-gold">Anti-fraud center</p>
       <h2 id="fraud-heading" className="h3 mt-2 text-xl">
         The economy only works if it's real.
       </h2>

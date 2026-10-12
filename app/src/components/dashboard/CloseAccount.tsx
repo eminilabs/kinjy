@@ -76,7 +76,7 @@ export default function CloseAccount() {
               'rounded-full border px-4 py-2 text-sm font-semibold',
               mode === m
                 ? 'border-gold/50 bg-gold/10 text-gold-soft'
-                : 'border-white/12 text-text-mid hover:text-text-hi',
+                : 'border-[var(--cloud-border)] text-text-mid hover:text-text-hi',
             )}
           >
             {m === 'deactivate' ? 'Deactivate' : 'Delete permanently'}
@@ -117,7 +117,7 @@ export default function CloseAccount() {
           Continue
         </button>
       ) : (
-        <div className="mt-6 rounded-card-sm border border-red-400/25 bg-red-500/5 p-4">
+        <div className="mt-6 rounded-2xl border border-red-400/25 bg-red-500/5 p-4">
           <label className="block">
             <span className="caption mb-1.5 block">Confirm it is you — enter your password</span>
             <input
@@ -147,7 +147,7 @@ export default function CloseAccount() {
             <button
               type="button"
               onClick={() => setConfirming(false)}
-              className="rounded-full border border-white/12 px-5 py-2.5 text-sm font-semibold text-text-mid"
+              className="rounded-full border border-[var(--cloud-border)] px-5 py-2.5 text-sm font-semibold text-text-mid"
             >
               Cancel
             </button>

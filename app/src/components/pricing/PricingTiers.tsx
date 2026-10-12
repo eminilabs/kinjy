@@ -43,6 +43,7 @@ const TIERS: Tier[] = [
       FEATURES.marketplace
         ? { label: 'Messenger (E2E), Events, Marketplace buying', tip: 'Encrypted messages, event planning and buyer-side commerce.' }
         : { label: 'Messenger (E2E) and Events', tip: 'Encrypted messages and event planning.' },
+      { label: 'Advertising included in every plan', tip: 'Ads fund Kinjy, so they appear on every plan and are on by default.' },
       { label: 'Monthly AI credit allowance', tip: 'A free monthly bundle for translation, drafting and studio tasks.' },
     ],
   },
@@ -81,6 +82,11 @@ const TIERS: Tier[] = [
       { label: 'Custom algorithm feeds', strong: true, tip: 'Compose and save your own feed algorithms from the marketplace.' },
       { label: 'API allowance (Developer Platform)', strong: true, tip: 'Monthly API credits for building on Kinjy.' },
       { label: 'Premium themes (incl. all Cloud ambient skies)', strong: true, tip: 'Twilight, Dawn, Savanna and Ocean — every ambient sky.' },
+      {
+        label: 'Ads on or off, your choice',
+        strong: true,
+        tip: 'Ads are on by default on every plan. Premium members can switch ad display off or on at any time.',
+      },
       { label: 'Everything in Basic', tip: 'Every Basic feature carries over, always.' },
     ],
   },
@@ -248,6 +254,12 @@ export default function PricingTiers() {
           </motion.div>
         ))}
       </div>
+
+      {/* What the plans have in common, said once and plainly. */}
+      <p className="mx-auto mt-10 max-w-2xl text-center text-sm leading-relaxed text-[var(--kl-low)]">
+        Advertising is part of every plan and is on by default. Premium members can switch ad display off
+        or back on whenever they like.
+      </p>
     </section>
   )
 }

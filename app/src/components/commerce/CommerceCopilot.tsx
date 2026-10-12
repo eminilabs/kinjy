@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Camera, Check, LineChart, Mic2, RotateCcw, ShoppingBasket, Sparkles } from 'lucide-react'
-import { ArcButton } from '@/components/ui-kit'
+import { KlButton } from '@/components/landing/PageKit'
 import { EASE, useReducedMotion } from '@/components/creators/motion-utils'
 
 const LISTING = {
@@ -94,13 +94,13 @@ export default function CommerceCopilot() {
   )
 
   return (
-    <section className="noise-overlay px-6 py-24 md:py-32" style={{ background: 'var(--ink)' }}>
+    <section className="kl-pad-x border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]" style={{ background: 'var(--ink)' }}>
       <div className="mx-auto max-w-container">
-        <p className="eyebrow text-sky">Commerce Copilot — seller AI</p>
-        <h2 className="h2 mt-4 max-w-2xl">
-          Snap a photo. <span className="text-gold-grad font-display italic">Get a shop floor.</span>
+        <p className="kl-mono text-xs uppercase tracking-[.14em] text-[var(--kl-gold-deep)] ">Commerce Copilot — seller AI</p>
+        <h2 className="kl-h2 mt-5 max-w-2xl">
+          Snap a photo. <span className="italic text-[var(--kl-gold-deep)]">Get a shop floor.</span>
         </h2>
-        <p className="body-lg mt-4 max-w-2xl text-text-mid">
+        <p className="text-[17px] leading-[1.55] mt-4 max-w-2xl text-[var(--kl-mid)]">
           The Commerce Copilot turns one seller photo into a complete listing — title, description,
           honest price suggestion — then forecasts demand and rides along as your live-shopping
           host assistant.
@@ -108,20 +108,20 @@ export default function CommerceCopilot() {
 
         <div className="mt-12 grid items-start gap-8 lg:grid-cols-2">
           {/* Left: photo → generate */}
-          <div className="cloud-card overflow-hidden">
+          <div className="rounded-[20px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] shadow-[0_24px_48px_-34px_var(--kl-shadow)] overflow-hidden">
             <div className="relative flex h-56 items-center justify-center bg-gradient-to-br from-gold/50 via-coral/30 to-ink-3">
-              <ShoppingBasket size={72} className="text-gold-soft drop-shadow-[0_8px_24px_rgba(0,0,0,0.5)]" aria-hidden="true" />
-              <span className="mono-data absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-ink/70 px-3 py-1 text-xs text-text-mid">
+              <ShoppingBasket size={72} className="text-[var(--kl-gold-deep)] drop-shadow-[0_8px_24px_rgba(0,0,0,0.5)]" aria-hidden="true" />
+              <span className="mono-data absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-[var(--kl-surface)] px-3 py-1 text-xs text-[var(--kl-mid)]">
                 <Camera size={12} aria-hidden="true" /> seller photo · IMG_4471.jpg
               </span>
               {stage === 0 && (
-                <span className="absolute bottom-4 right-4 rounded-full border border-white/20 bg-ink/60 px-3 py-1 text-xs text-text-mid">
+                <span className="absolute bottom-4 right-4 rounded-full border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] px-3 py-1 text-xs text-[var(--kl-mid)]">
                   no listing yet
                 </span>
               )}
             </div>
             <div className="p-6">
-              <ArcButton onClick={run} disabled={running} className="w-full">
+              <KlButton onClick={run} disabled={running} className="w-full">
                 {stage >= 5 ? (
                   <>
                     <RotateCcw size={15} aria-hidden="true" /> Regenerate listing
@@ -131,8 +131,8 @@ export default function CommerceCopilot() {
                     <Sparkles size={15} aria-hidden="true" /> {running ? 'Copilot is writing…' : 'Generate listing'}
                   </>
                 )}
-              </ArcButton>
-              <p className="caption mt-3 text-center">
+              </KlButton>
+              <p className="text-xs text-[var(--kl-low)] mt-3 text-center">
                 Trained on Kinjy marketplace conventions — never invents claims about your product.
               </p>
             </div>
@@ -141,8 +141,8 @@ export default function CommerceCopilot() {
           {/* Right: generated output */}
           <div className="flex min-h-[380px] flex-col gap-4">
             {stage === 0 && (
-              <div className="cloud-card flex flex-1 items-center justify-center border-dashed p-8 text-center">
-                <p className="caption max-w-xs">
+              <div className="rounded-[20px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] shadow-[0_24px_48px_-34px_var(--kl-shadow)] flex flex-1 items-center justify-center border-dashed p-8 text-center">
+                <p className="text-xs text-[var(--kl-low)] max-w-xs">
                   Your generated listing, demand forecast and live-host assistant appear here.
                 </p>
               </div>
@@ -150,50 +150,50 @@ export default function CommerceCopilot() {
 
             {reveal(
               1,
-              <div className="cloud-card p-5">
-                <p className="eyebrow text-text-low">Generated listing</p>
-                <h3 className="mt-2 font-sans text-lg font-semibold text-text-hi">{LISTING.title}</h3>
+              <div className="rounded-[20px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] shadow-[0_24px_48px_-34px_var(--kl-shadow)] p-5">
+                <p className="kl-mono text-xs uppercase tracking-[.14em] text-[var(--kl-gold-deep)] ">Generated listing</p>
+                <h3 className="mt-2 font-sans text-lg font-semibold text-[var(--kl-ink)]">{LISTING.title}</h3>
               </div>,
             )}
             {reveal(
               2,
-              <div className="cloud-card p-5">
-                <p className="text-sm leading-relaxed text-text-mid">{LISTING.description}</p>
+              <div className="rounded-[20px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] shadow-[0_24px_48px_-34px_var(--kl-shadow)] p-5">
+                <p className="text-sm leading-relaxed text-[var(--kl-mid)]">{LISTING.description}</p>
               </div>,
             )}
             {reveal(
               3,
-              <div className="cloud-card flex items-center justify-between gap-4 p-5 shadow-gold-ring">
+              <div className="rounded-[20px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] shadow-[0_24px_48px_-34px_var(--kl-shadow)] flex items-center justify-between gap-4 p-5 shadow-[0_0_0_1px_var(--kl-gold)]">
                 <div>
-                  <p className="eyebrow text-text-low">Price suggestion</p>
-                  <p className="caption mt-1">{LISTING.priceNote}</p>
+                  <p className="kl-mono text-xs uppercase tracking-[.14em] text-[var(--kl-gold-deep)] ">Price suggestion</p>
+                  <p className="text-xs text-[var(--kl-low)] mt-1">{LISTING.priceNote}</p>
                 </div>
-                <span className="mono-data text-3xl font-semibold text-gold-soft">{LISTING.price}</span>
+                <span className="mono-data text-3xl font-semibold text-[var(--kl-gold-deep)]">{LISTING.price}</span>
               </div>,
             )}
             {reveal(
               4,
-              <div className="cloud-card p-5">
+              <div className="rounded-[20px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] shadow-[0_24px_48px_-34px_var(--kl-shadow)] p-5">
                 <div className="flex items-center justify-between">
-                  <p className="eyebrow inline-flex items-center gap-2 text-text-low">
+                  <p className="kl-mono text-xs uppercase tracking-[.14em] text-[var(--kl-gold-deep)] ">
                     <LineChart size={14} aria-hidden="true" /> Demand forecast · 12 weeks
                   </p>
                   <span className="mono-data text-xs text-success">▲ trending +38%</span>
                 </div>
                 <ForecastSparkline active={stage >= 4} reduced={reduced} />
-                <p className="caption">Peak expected around the holiday market season — stock 30+ units.</p>
+                <p className="text-xs text-[var(--kl-low)]">Peak expected around the holiday market season — stock 30+ units.</p>
               </div>,
             )}
             {reveal(
               5,
-              <div className="cloud-card gold p-5">
+              <div className="rounded-[20px] border border-[var(--kl-gold)] bg-[var(--kl-surface)] shadow-[0_0_0_1px_var(--kl-gold),0_30px_60px_-36px_rgba(169,118,28,.5)] p-5">
                 <div className="flex items-center gap-3">
                   <span className="flex h-9 w-9 items-center justify-center rounded-full" style={{ background: 'var(--grad-orb)' }}>
-                    <Mic2 size={15} className="text-ink" aria-hidden="true" />
+                    <Mic2 size={15} className="text-[var(--kl-night)]" aria-hidden="true" />
                   </span>
                   <div>
-                    <p className="text-sm font-semibold text-text-hi">Live-shopping host assistant</p>
-                    <p className="caption">whispers in your ear while you stream</p>
+                    <p className="text-sm font-semibold text-[var(--kl-ink)]">Live-shopping host assistant</p>
+                    <p className="text-xs text-[var(--kl-low)]">whispers in your ear while you stream</p>
                   </div>
                   <span className="mono-data ml-auto inline-flex items-center gap-1.5 rounded-full border border-coral/50 bg-coral/15 px-2.5 py-0.5 text-[0.65rem] text-coral">
                     <span className="h-1.5 w-1.5 rounded-full bg-coral" aria-hidden="true" /> LIVE
@@ -201,8 +201,8 @@ export default function CommerceCopilot() {
                 </div>
                 <ul className="mt-4 space-y-2">
                   {TALKING_POINTS.map((t) => (
-                    <li key={t} className="flex items-start gap-2 text-sm text-text-mid">
-                      <Check size={14} className="mt-0.5 shrink-0 text-gold-soft" aria-hidden="true" />
+                    <li key={t} className="flex items-start gap-2 text-sm text-[var(--kl-mid)]">
+                      <Check size={14} className="mt-0.5 shrink-0 text-[var(--kl-gold-deep)]" aria-hidden="true" />
                       {t}
                     </li>
                   ))}

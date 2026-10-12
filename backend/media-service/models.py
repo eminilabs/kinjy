@@ -71,6 +71,15 @@ class Asset(Base):
 
     alt_text: Mapped[str | None] = mapped_column(String(500))
 
+    # The picture's shape, read from its header at upload (imagesize.py).
+    # The feed reserves a box from it before the bytes arrive, so the card does
+    # not open at a placeholder height and jump when the image lands. Null for
+    # everything uploaded before this existed, for video and audio, and for any
+    # header that would not parse - all of which fall back to being measured in
+    # the browser.
+    width: Mapped[int | None] = mapped_column(Integer)
+    height: Mapped[int | None] = mapped_column(Integer)
+
     # A chat attachment: served only on a link signed by the service that knows
     # who may see it, never on its bare URL.
     private: Mapped[bool] = mapped_column(Boolean, default=False)

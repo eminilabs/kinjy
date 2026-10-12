@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { KeyRound, MailCheck, ShieldCheck } from 'lucide-react'
 import { ApiError, kaluta } from '@/lib/api'
+import PublicShell from '@/components/landing/PublicShell'
+import { Stage } from '@/components/landing/PageKit'
 
 const PASSWORD_MIN = 10
 
@@ -91,32 +93,38 @@ export default function ResetPassword() {
   }
 
   const field =
-    'w-full rounded-card-sm bg-ink-2/70 border border-white/10 px-4 py-3 text-text-hi placeholder:text-text-low focus:border-gold/50 focus:outline-none'
+    'w-full rounded-[12px] border border-[var(--kl-paper-2)] bg-[var(--kl-bg)] px-4 py-3 text-[16px] text-[var(--kl-ink)] placeholder:text-[var(--kl-low)] focus:border-[var(--kl-gold)] focus:outline-none focus:ring-2 focus:ring-[var(--kl-gold)]/25'
   const button =
-    'inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-3 text-sm font-bold text-ink disabled:opacity-40'
+    'kl-sheen inline-flex w-full items-center justify-center gap-2 rounded-[16px] px-5 py-3.5 text-[15px] font-bold shadow-[0_14px_30px_-14px_rgba(169,118,28,.55)] transition-transform enabled:hover:-translate-y-0.5 disabled:cursor-default disabled:opacity-50'
+  const label = 'mb-1.5 block text-[13px] font-semibold text-[var(--kl-mid)]'
+  const title = 'mt-4 text-[clamp(26px,3.4vw,34px)] font-bold leading-[1.05] tracking-[-0.04em]'
+  const text = 'mt-3 text-[0.95rem] leading-relaxed text-[var(--kl-mid)]'
+  const tile = 'grid h-12 w-12 place-items-center rounded-[14px] bg-[#F6EBD3] text-[#8A6414]'
+  const link = 'font-semibold text-[var(--kl-gold-deep)] hover:underline'
 
   return (
-    <section className="twilight-field noise-overlay flex min-h-[calc(100svh-72px)] items-center px-6 py-16">
-      <div className="mx-auto w-full max-w-md">
-        <div className="cloud-card p-7 md:p-8">
+    <PublicShell>
+    <section className="kl-pad-x py-[clamp(40px,7vw,96px)]">
+      <Stage className="mx-auto w-full max-w-[520px] p-[clamp(14px,3vw,32px)]" glows={['var(--kl-sky)', '#D9A648']}>
+        <div className="rounded-[20px] bg-[var(--kl-surface)] p-7 shadow-[0_30px_60px_-34px_var(--kl-shadow)] md:p-8">
           {done ? (
             <>
-              <ShieldCheck size={22} className="text-gold" aria-hidden="true" />
-              <h1 className="h3 mt-3">{t('reset.doneTitle')}</h1>
-              <p className="mt-2 text-sm leading-relaxed text-text-mid">{t('reset.doneText')}</p>
+              <span className={tile}><ShieldCheck size={22} aria-hidden="true" /></span>
+              <h1 className={title}>{t('reset.doneTitle')}</h1>
+              <p className={text}>{t('reset.doneText')}</p>
               <Link to="/join" className={`${button} mt-6`}>
                 {t('reset.goSignIn')}
               </Link>
             </>
           ) : token ? (
             <>
-              <KeyRound size={22} className="text-gold" aria-hidden="true" />
-              <h1 className="h3 mt-3">{t('reset.chooseTitle')}</h1>
-              <p className="mt-2 text-sm leading-relaxed text-text-mid">{t('reset.chooseText')}</p>
+              <span className={tile}><KeyRound size={22} aria-hidden="true" /></span>
+              <h1 className={title}>{t('reset.chooseTitle')}</h1>
+              <p className={text}>{t('reset.chooseText')}</p>
 
               <form onSubmit={setNewPassword} className="mt-6 space-y-4" noValidate>
                 <label className="block">
-                  <span className="caption mb-1.5 block">{t('reset.newPassword')}</span>
+                  <span className={label}>{t('reset.newPassword')}</span>
                   <input
                     className={field}
                     type="password"
@@ -128,14 +136,14 @@ export default function ResetPassword() {
                   />
                   <span
                     id="reset-rule"
-                    className={`mt-1.5 block text-xs ${weak ? 'text-amber-300' : 'text-text-low'}`}
+                    className={`mt-1.5 block text-[13px] ${weak ? 'text-[#9A6B12]' : 'text-[var(--kl-low)]'}`}
                   >
                     {weak ?? t('reset.rule', { count: PASSWORD_MIN })}
                   </span>
                 </label>
 
                 <label className="block">
-                  <span className="caption mb-1.5 block">{t('reset.again')}</span>
+                  <span className={label}>{t('reset.again')}</span>
                   <input
                     className={field}
                     type="password"
@@ -145,14 +153,14 @@ export default function ResetPassword() {
                     required
                   />
                   {mismatch && (
-                    <span className="mt-1.5 block text-xs text-amber-300">
+                    <span className="mt-1.5 block text-[13px] text-[#9A6B12]">
                       {t('reset.noMatch')}
                     </span>
                   )}
                 </label>
 
                 {error && (
-                  <p role="alert" className="text-sm text-red-300">
+                  <p role="alert" className="rounded-[12px] bg-[#B23B3B]/10 px-4 py-3 text-sm text-[#B23B3B]">
                     {error}
                   </p>
                 )}
@@ -160,39 +168,39 @@ export default function ResetPassword() {
                 <button type="submit" disabled={!ready || busy} className={button}>
                   {busy ? t('reset.setting') : t('reset.setPassword')}
                 </button>
-                <p className="text-xs leading-relaxed text-text-low">{t('reset.signsOutAll')}</p>
+                <p className="text-[13px] leading-relaxed text-[var(--kl-low)]">{t('reset.signsOutAll')}</p>
               </form>
             </>
           ) : sent ? (
             <>
-              <MailCheck size={22} className="text-gold" aria-hidden="true" />
-              <h1 className="h3 mt-3">{t('reset.sentTitle')}</h1>
+              <span className={tile}><MailCheck size={22} aria-hidden="true" /></span>
+              <h1 className={title}>{t('reset.sentTitle')}</h1>
               {/* Deliberately not "we sent you an email": we do not say whether
                   the address has an account, so we cannot claim to have sent. */}
-              <p className="mt-2 text-sm leading-relaxed text-text-mid">{t('reset.sentText')}</p>
-              <Link to="/join" className="mt-6 inline-block text-sm text-gold hover:underline">
+              <p className={text}>{t('reset.sentText')}</p>
+              <Link to="/join" className={`${link} mt-6 inline-block text-sm`}>
                 {t('reset.backToSignIn')}
               </Link>
             </>
           ) : available === false ? (
             <>
-              <h1 className="h3">{t('reset.unavailableTitle')}</h1>
-              <p className="mt-2 text-sm leading-relaxed text-text-mid">
+              <h1 className={title}>{t('reset.unavailableTitle')}</h1>
+              <p className={text}>
                 {t('reset.unavailableText')}
               </p>
-              <Link to="/join" className="mt-6 inline-block text-sm text-gold hover:underline">
+              <Link to="/join" className={`${link} mt-6 inline-block text-sm`}>
                 {t('reset.backToSignIn')}
               </Link>
             </>
           ) : (
             <>
-              <KeyRound size={22} className="text-gold" aria-hidden="true" />
-              <h1 className="h3 mt-3">{t('reset.askTitle')}</h1>
-              <p className="mt-2 text-sm leading-relaxed text-text-mid">{t('reset.askText')}</p>
+              <span className={tile}><KeyRound size={22} aria-hidden="true" /></span>
+              <h1 className={title}>{t('reset.askTitle')}</h1>
+              <p className={text}>{t('reset.askText')}</p>
 
               <form onSubmit={askForLink} className="mt-6 space-y-4" noValidate>
                 <label className="block">
-                  <span className="caption mb-1.5 block">{t('reset.email')}</span>
+                  <span className={label}>{t('reset.email')}</span>
                   <input
                     className={field}
                     type="email"
@@ -205,7 +213,7 @@ export default function ResetPassword() {
                 </label>
 
                 {error && (
-                  <p role="alert" className="text-sm text-red-300">
+                  <p role="alert" className="rounded-[12px] bg-[#B23B3B]/10 px-4 py-3 text-sm text-[#B23B3B]">
                     {error}
                   </p>
                 )}
@@ -215,13 +223,14 @@ export default function ResetPassword() {
                 </button>
               </form>
 
-              <Link to="/join" className="mt-5 inline-block text-sm text-gold hover:underline">
+              <Link to="/join" className={`${link} mt-5 inline-block text-sm`}>
                 {t('reset.backToSignIn')}
               </Link>
             </>
           )}
         </div>
-      </div>
+      </Stage>
     </section>
+    </PublicShell>
   )
 }

@@ -41,7 +41,14 @@ const APP_ROUTES = [
 
 /** Public pages already on the new design: they bring their own navigation and
  *  footer (components/landing/PublicShell), so the old marketing ones step aside. */
-const OWN_CHROME_PAGES = ['/', '/memorials', '/platform', '/feeds', '/creators', '/pricing', '/payments', '/safety', '/developers', '/app', '/join']
+const OWN_CHROME_PAGES = ['/', '/memorials', '/platform', '/feeds', '/creators', '/pricing', '/payments', '/safety', '/developers', '/app', '/join', '/admin', '/commerce', '/family', '/assistant']
+
+/** Public pages with a dynamic part (/p/:postId, /memorial/:code) and the sign-in helpers. */
+const OWN_CHROME_PREFIXES = ['/p/', '/memorial/', '/reset-password']
+
+function hasOwnChrome(pathname: string): boolean {
+  return OWN_CHROME_PAGES.includes(pathname) || OWN_CHROME_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+}
 
 export function isAppRoute(pathname: string): boolean {
   return APP_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`))
@@ -65,7 +72,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   // The landing page brings its own navigation, footer and paper palette (the
   // "Kinjy Landing" design); the dark marketing chrome around it would frame
   // a light page in a second, different header.
-  const ownChrome = inApp || OWN_CHROME_PAGES.includes(location.pathname)
+  const ownChrome = inApp || hasOwnChrome(location.pathname)
 
   // Scroll behavior on route change: honor hash deep links (e.g.
   // /family#reunion-planner) after the lazy page mounts; otherwise scroll to top.
@@ -95,13 +102,22 @@ export default function Layout({ children }: { children: ReactNode }) {
   const showAssistant = FEATURES.assistant && !location.pathname.startsWith('/app')
 
   return (
-    <div className="min-h-[100dvh] bg-ink text-text-hi">
+    // overflow-x-clip is the mobile guard for the scroll-reveal animations.
+    // Sections enter with a translateX, so until they scroll into view they sit
+    // 40-60px right of where they belong. On a desktop container that slack is
+    // absorbed; at 375px it became real page width, and the whole site could be
+    // dragged sideways.
+    //
+    // clip, not hidden: hidden would make this a scroll container, which breaks
+    // the sticky rails inside the app shell and lets the page trap scroll. clip
+    // just cuts the overflow off and changes nothing else.
+    <div className="min-h-[100dvh] overflow-x-clip bg-ink text-text-hi">
       {!ownChrome && <Navbar />}
       <main className={ownChrome ? undefined : 'pt-[72px]'}>{children}</main>
       {!ownChrome && <Footer />}
       {showAssistant && <LiveAssistant />}
       {/* Film grain belongs to the dark surfaces; on white paper it reads as dirt. */}
-      {!OWN_CHROME_PAGES.includes(location.pathname) && <div className="global-grain" aria-hidden="true" />}
+      {!hasOwnChrome(location.pathname) && <div className="global-grain" aria-hidden="true" />}
     </div>
   )
 }

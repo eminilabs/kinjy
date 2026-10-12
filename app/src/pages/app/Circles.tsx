@@ -47,18 +47,29 @@ function describeRule(rule: CircleRule): string {
 }
 
 const field =
-  'w-full rounded-full border border-text-low/40 bg-text-low/5 px-4 py-2.5 text-sm text-text-hi placeholder:text-text-low focus:border-gold/40 focus:outline-none'
+  'w-full rounded-full border border-transparent bg-text-hi/[0.07] px-5 py-3 text-[0.95rem] text-text-hi placeholder:text-text-low focus:border-gold/50 focus:bg-transparent focus:outline-none'
 const chip = (on: boolean) =>
   cn(
-    'rounded-full border px-3.5 py-1.5 text-xs font-semibold',
-    on ? 'border-gold/50 bg-gold/10 text-text-hi' : 'border-text-low/40 text-text-mid hover:text-text-hi',
+    'rounded-full px-4 py-2 text-sm font-semibold transition-colors',
+    on ? 'bg-gold/20 text-gold-soft' : 'text-text-mid hover:bg-text-hi/[0.07] hover:text-text-hi',
   )
+const label = 'mono-data text-[0.7rem] font-bold uppercase tracking-[0.15em] text-gold-soft'
+
+/** One tile colour per circle kind, so the list reads at a glance. */
+const KIND_TILE: Record<string, string> = {
+  family: 'bg-coral/15 text-coral',
+  close_friends: 'bg-gold/20 text-gold-soft',
+  business: 'bg-sky/15 text-sky',
+  customers: 'bg-success/15 text-success',
+  custom: 'bg-text-hi/[0.08] text-text-mid',
+  smart: 'bg-indigo/15 text-indigo',
+}
 
 /** Source, country and city of a smart circle. */
 function RuleFields({ rule, onChange }: { rule: CircleRule; onChange: (rule: CircleRule) => void }) {
   return (
-    <div className="mt-3 space-y-2 rounded-card-md border border-text-low/25 bg-text-low/5 p-3">
-      <p className="caption">Members are worked out each time someone reads — nobody to add by hand.</p>
+    <div className="mt-4 space-y-3 rounded-2xl bg-text-hi/[0.05] p-4">
+      <p className="text-sm text-text-low">Members are worked out each time someone reads — nobody to add by hand.</p>
       <div className="flex flex-wrap gap-2">
         {SOURCES.map((s) => (
           <button key={s.id} type="button" aria-pressed={rule.source === s.id} onClick={() => onChange({ ...rule, source: s.id })} className={chip(rule.source === s.id)}>
@@ -66,7 +77,7 @@ function RuleFields({ rule, onChange }: { rule: CircleRule; onChange: (rule: Cir
           </button>
         ))}
       </div>
-      <div className="grid gap-2 sm:grid-cols-[120px_1fr]">
+      <div className="grid gap-2 sm:grid-cols-[170px_1fr]">
         <input
           value={rule.country ?? ''}
           onChange={(e) => onChange({ ...rule, country: e.target.value.toUpperCase().slice(0, 2) || null })}
@@ -128,8 +139,8 @@ function CreateCircle({ onCreated }: { onCreated: (circle: CircleDetail) => void
   }
 
   return (
-    <form onSubmit={create} className="cloud-card p-5">
-      <h2 className="mb-3 text-sm font-semibold text-text-hi">New circle</h2>
+    <form onSubmit={create} className="cloud-card p-5 md:p-6">
+      <h2 className={cn(label, 'mb-3')}>New circle</h2>
       <div className="flex flex-wrap gap-2">
         {KINDS.map((k) => (
           <button key={k.id} type="button" aria-pressed={kind === k.id} onClick={() => setKind(k.id)} className={chip(kind === k.id)}>
@@ -139,7 +150,7 @@ function CreateCircle({ onCreated }: { onCreated: (circle: CircleDetail) => void
         ))}
       </div>
       {kind === 'smart' && <RuleFields rule={rule} onChange={setRule} />}
-      <div className="mt-3 flex gap-2">
+      <div className="mt-4 flex gap-2">
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -151,9 +162,9 @@ function CreateCircle({ onCreated }: { onCreated: (circle: CircleDetail) => void
         <button
           type="submit"
           disabled={!name.trim() || busy || countryInvalid}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gold-soft px-4 py-2.5 text-sm font-bold text-ink disabled:opacity-40"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gold-soft px-5 py-3 text-sm font-bold text-ink disabled:opacity-40"
         >
-          <Plus size={14} aria-hidden="true" />
+          <Plus size={15} aria-hidden="true" />
           Create
         </button>
       </div>
@@ -211,14 +222,14 @@ function AddPeople({ circle, onAdded }: { circle: CircleDetail; onAdded: () => v
 
   return (
     <div className="mt-5">
-      <label className="flex items-center gap-2.5 rounded-full border border-text-low/40 bg-text-low/5 px-4 py-2.5">
-        <Search size={15} className="shrink-0 text-text-low" aria-hidden="true" />
+      <label className="flex items-center gap-3 rounded-full bg-text-hi/[0.07] px-5 py-3 focus-within:ring-1 focus-within:ring-gold/50">
+        <Search size={16} className="shrink-0 text-text-low" aria-hidden="true" />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Add people — type a name"
           aria-label="Search people to add"
-          className="w-full bg-transparent text-sm text-text-hi placeholder:text-text-low focus:outline-none"
+          className="w-full bg-transparent text-[0.95rem] text-text-hi placeholder:text-text-low focus:outline-none"
         />
         {query && (
           <button type="button" onClick={() => setQuery('')} aria-label="Clear search" className="text-text-low hover:text-text-hi">
@@ -230,8 +241,8 @@ function AddPeople({ circle, onAdded }: { circle: CircleDetail; onAdded: () => v
         <ul className="mt-2 space-y-1">
           {results.length === 0 && <li className="caption px-2">No member whose name starts with “{q}”.</li>}
           {results.map((person) => (
-            <li key={person.user_id} className="flex items-center gap-3 rounded-card-sm px-2 py-1.5 hover:bg-text-low/10">
-              <MemberAvatar handle={person.handle} displayName={person.display_name} avatarUrl={person.avatar_url} size={30} />
+            <li key={person.user_id} className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-text-hi/[0.05]">
+              <MemberAvatar handle={person.handle} displayName={person.display_name} avatarUrl={person.avatar_url} size={40} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm text-text-hi">{person.display_name}</span>
                 <span className="caption block truncate">@{person.handle}</span>
@@ -245,7 +256,7 @@ function AddPeople({ circle, onAdded }: { circle: CircleDetail; onAdded: () => v
                   type="button"
                   onClick={() => void add(person)}
                   disabled={busy === person.user_id}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-full border border-gold/40 px-3 py-1 text-xs font-semibold text-text-hi hover:bg-gold/10 disabled:opacity-40"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-gold/50 px-4 py-1.5 text-sm font-semibold text-text-hi hover:bg-gold/10 disabled:opacity-40"
                 >
                   <UserPlus size={12} aria-hidden="true" /> Add
                 </button>
@@ -322,11 +333,11 @@ function EditCircle({
         <button
           type="submit"
           disabled={!name.trim() || busy || countryInvalid}
-          className="rounded-full bg-gold-soft px-4 py-2 text-xs font-bold text-ink disabled:opacity-40"
+          className="rounded-full bg-gold-soft px-5 py-2.5 text-sm font-bold text-ink disabled:opacity-40"
         >
           Save
         </button>
-        <button type="button" onClick={onCancel} className="rounded-full border border-text-low/40 px-4 py-2 text-xs font-semibold text-text-mid hover:text-text-hi">
+        <button type="button" onClick={onCancel} className="rounded-full border border-[var(--cloud-border)] px-5 py-2.5 text-sm font-semibold text-text-mid hover:text-text-hi">
           Cancel
         </button>
       </div>
@@ -391,8 +402,8 @@ function CirclePanel({ id, onChanged, onDeleted }: { id: string; onChanged: () =
       ) : (
         <div className="flex flex-wrap items-start gap-3">
           <div className="min-w-0 flex-1">
-            <h2 className="truncate font-display text-2xl text-text-hi">{circle.name}</h2>
-            <p className="caption mt-1">
+            <h2 className="truncate text-[clamp(26px,3vw,34px)] font-bold leading-tight tracking-[-0.035em] text-text-hi">{circle.name}</h2>
+            <p className="mt-1.5 text-sm text-text-low">
               {KIND_LABEL[circle.kind] ?? circle.kind} · reaches {circle.members_count}{' '}
               {circle.members_count === 1 ? 'person' : 'people'}
             </p>
@@ -400,20 +411,20 @@ function CirclePanel({ id, onChanged, onDeleted }: { id: string; onChanged: () =
           <button
             type="button"
             onClick={() => setEditing(true)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-text-low/40 px-3.5 py-1.5 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-text-hi"
+            className="inline-flex items-center gap-1.5 rounded-full border border-[var(--cloud-border)] px-4 py-2 text-sm font-semibold text-text-mid hover:border-gold/50 hover:text-text-hi"
           >
-            <Pencil size={12} aria-hidden="true" /> Edit
+            <Pencil size={13} aria-hidden="true" /> Edit
           </button>
           {confirmDelete ? (
             <span className="inline-flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={() => void deleteCircle()}
-                className="rounded-full bg-red-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-red-700"
+                className="rounded-full bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700"
               >
                 Delete it
               </button>
-              <button type="button" onClick={() => setConfirmDelete(false)} className="text-xs text-text-mid hover:text-text-hi">
+              <button type="button" onClick={() => setConfirmDelete(false)} className="text-sm text-text-mid hover:text-text-hi">
                 Keep
               </button>
             </span>
@@ -430,8 +441,8 @@ function CirclePanel({ id, onChanged, onDeleted }: { id: string; onChanged: () =
         </div>
       )}
 
-      <p className="mt-4 flex items-start gap-2 rounded-card-sm border border-text-low/25 bg-text-low/5 px-3 py-2 text-xs text-text-mid">
-        <Lock size={13} className="mt-0.5 shrink-0 text-gold" aria-hidden="true" />
+      <p className="mt-5 flex items-start gap-3 rounded-2xl bg-text-hi/[0.05] px-4 py-3 text-sm leading-relaxed text-text-mid">
+        <Lock size={15} className="mt-0.5 shrink-0 text-gold" aria-hidden="true" />
         Only you see this list. Members are not told they are in it, and a post you share here is read by
         them and you — nobody else, and it cannot be reshared.
       </p>
@@ -450,7 +461,7 @@ function CirclePanel({ id, onChanged, onDeleted }: { id: string; onChanged: () =
 
       {!smart && !editing && <AddPeople circle={circle} onAdded={changed} />}
 
-      <h3 className="mt-6 text-xs font-semibold uppercase tracking-wider text-text-mid">
+      <h3 className={cn(label, 'mt-7')}>
         {smart ? 'Reached right now' : 'Members'}
       </h3>
       {circle.members.length === 0 ? (
@@ -460,10 +471,10 @@ function CirclePanel({ id, onChanged, onDeleted }: { id: string; onChanged: () =
             : 'Nobody yet. Search above to add people.'}
         </p>
       ) : (
-        <ul className="mt-2 divide-y divide-text-low/15">
+        <ul className="mt-3 divide-y divide-[var(--cloud-border)]">
           {circle.members.map((m) => (
-            <li key={m.user_id} className="flex items-center gap-3 py-2.5">
-              <MemberAvatar handle={m.handle} displayName={m.display_name} avatarUrl={m.avatar_url} size={34} />
+            <li key={m.user_id} className="flex items-center gap-3.5 py-3">
+              <MemberAvatar handle={m.handle} displayName={m.display_name} avatarUrl={m.avatar_url} size={44} />
               <div className="min-w-0 flex-1">
                 {m.handle ? (
                   <Link to={`/u/${m.handle}`} className="flex items-center gap-1 text-sm font-semibold text-text-hi underline-offset-2 hover:underline">
@@ -529,11 +540,17 @@ export default function Circles() {
   }
 
   return (
-    <AppShell
-      title="Circles"
-      subtitle="Private, filtered networks. A post shared to a circle is visible to that circle only."
-    >
-      <div className="grid gap-5 lg:grid-cols-[340px_minmax(0,1fr)]">
+    <AppShell>
+      <header className="mb-6">
+        <p className="mono-data text-[0.72rem] font-bold uppercase tracking-[0.15em] text-gold-soft">Circles</p>
+        <h1 className="mt-2 text-[clamp(38px,5vw,56px)] font-bold leading-[1.02] tracking-[-0.045em] text-text-hi">
+          Share with the right people
+        </h1>
+        <p className="mt-3 max-w-2xl text-[0.95rem] leading-relaxed text-text-low">
+          Private, filtered networks. A post shared to a circle is visible to that circle only.
+        </p>
+      </header>
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
         <div className="space-y-4">
           <CreateCircle
             onCreated={(created) => {
@@ -542,13 +559,16 @@ export default function Circles() {
             }}
           />
 
-          <div className="space-y-2">
+          <div className="space-y-3">
             {circles.loading && !circles.data && <p className="text-sm text-text-mid">Loading your circles…</p>}
             {circles.error && <p className="text-sm text-warning">{circles.error}</p>}
             {circles.data?.length === 0 && (
-              <p className="text-sm text-text-mid">
-                No circles yet. Create one above, then choose it in the composer to share privately.
-              </p>
+              <div className="cloud-card px-6 py-10 text-center">
+                <p className="text-base font-semibold text-text-hi">No circles yet</p>
+                <p className="mt-1 text-sm leading-relaxed text-text-low">
+                  Create one above, then choose it in the composer to share privately.
+                </p>
+              </div>
             )}
             {(circles.data ?? []).map((circle) => (
               <button
@@ -557,19 +577,19 @@ export default function Circles() {
                 onClick={() => open(circle.id)}
                 aria-current={openId === circle.id ? 'true' : undefined}
                 className={cn(
-                  'cloud-card flex w-full items-center gap-3 p-4 text-start',
-                  openId === circle.id ? 'ring-1 ring-gold/50' : 'hover:border-text-low/50',
+                  'cloud-card flex w-full items-center gap-3.5 p-4 text-start transition-colors',
+                  openId === circle.id ? '!border-gold/60 ring-1 ring-gold/40' : 'hover:border-gold/40',
                 )}
               >
                 <span
                   aria-hidden="true"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo/25 text-sky"
+                  className={cn('flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px]', KIND_TILE[circle.kind] ?? KIND_TILE.custom)}
                 >
-                  {circle.kind === 'smart' ? <Sparkles size={16} /> : <Users size={17} />}
+                  {circle.kind === 'smart' ? <Sparkles size={19} /> : <Users size={20} />}
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate text-sm font-semibold text-text-hi">{circle.name}</span>
-                  <span className="caption block">
+                  <span className="block truncate text-[1.05rem] font-bold tracking-[-0.015em] text-text-hi">{circle.name}</span>
+                  <span className="block text-sm text-text-low">
                     {KIND_LABEL[circle.kind] ?? circle.kind} · {circle.members_count}{' '}
                     {circle.members_count === 1 ? 'person' : 'people'}
                   </span>
@@ -579,7 +599,7 @@ export default function Circles() {
           </div>
         </div>
 
-        <section className="cloud-card min-h-[320px] p-6" aria-label="Circle details">
+        <section className="cloud-card min-h-[320px] p-6 md:p-8" aria-label="Circle details">
           {openId ? (
             <CirclePanel
               key={openId}
@@ -591,10 +611,13 @@ export default function Circles() {
               }}
             />
           ) : (
-            <div className="flex h-full min-h-[260px] flex-col items-center justify-center gap-2 text-center">
-              <Users size={22} className="text-text-low" aria-hidden="true" />
-              <p className="max-w-sm text-sm text-text-mid">
-                Open a circle to see who it reaches, add people, or change its rule.
+            <div className="flex h-full min-h-[260px] flex-col items-center justify-center text-center">
+              <span className="grid h-14 w-14 place-items-center rounded-2xl bg-gold/15 text-gold-soft">
+                <Users size={26} aria-hidden="true" />
+              </span>
+              <p className="mt-5 text-lg font-bold tracking-[-0.02em] text-text-hi">Open a circle</p>
+              <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-text-low">
+                See who it reaches, add people, or change its rule.
               </p>
             </div>
           )}

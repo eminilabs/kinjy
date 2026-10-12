@@ -169,6 +169,12 @@ export default function UniversalNav() {
         <div className="mt-14 grid grid-cols-[minmax(0,1fr)] items-center gap-12 lg:grid-cols-12">
           {/* Desktop bar replica */}
           <motion.div
+            // min-w-0 because this column holds AppShellBar, whose chip rail is
+            // a horizontal scroller. A grid item defaults to min-width:auto, so
+            // the column refused to shrink below the rail's full content and
+            // sized itself to ~1500px - on a 375px screen that pushed the whole
+            // page sideways. With the floor removed the rail scrolls, which is
+            // what it was built to do.
             className="min-w-0 lg:col-span-7"
             initial={reduced ? false : { opacity: 0, y: -40 }}
             whileInView={{ opacity: 1, y: 0 }}

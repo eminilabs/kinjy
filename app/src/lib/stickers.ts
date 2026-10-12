@@ -1,15 +1,9 @@
 /**
- * A sticker id is `<pack>.<name>`; its image is a file we host at
- * /stickers/<pack>/<name>.svg. The path is derived from the id and the id is
- * checked against a strict pattern, so nothing a server or a peer sends can
- * make an <img> point anywhere but our own folder.
+ * A sticker id is `<pack>.<name>`. The catalogue is the server's: what a sticker
+ * looks like (its glyph, or artwork it provides) comes with it, so an id on its
+ * own is only checked against this pattern before it is kept as a recent.
  */
 const ID = /^([a-z0-9-]+)\.([a-z0-9-]+)$/
-
-export function stickerUrl(id: string): string | null {
-  const match = ID.exec(id)
-  return match ? `/stickers/${match[1]}/${match[2]}.svg` : null
-}
 
 /** Lower-case, accent-free: "cœur", "Coeur" and "coeur" all match the same sticker. */
 export function fold(text: string): string {

@@ -1,7 +1,10 @@
 import { Link } from 'react-router'
 import { motion, useReducedMotion } from 'framer-motion'
-import { ArrowRight, Download, KeyRound, Lock, Share2 } from 'lucide-react'
-import { ArcButton } from '@/components/ui-kit'
+import { ArrowDown, ArrowRight, Download, KeyRound, Lock, Share2 } from 'lucide-react'
+import PublicShell from '@/components/landing/PublicShell'
+import { ClosingStage, Eyebrow, Stage } from '@/components/landing/PageKit'
+import { KL_BTN_GHOST, KL_BTN_GOLD, KL_CARD } from '@/components/landing/kl-classes'
+import { MODULE_TONES } from '@/components/platform/tones'
 import FamilyTreeGraph from '@/components/family/FamilyTreeGraph'
 import VerificationJourney from '@/components/family/VerificationJourney'
 import PathFinder from '@/components/family/PathFinder'
@@ -29,86 +32,72 @@ const ARCHITECTURE_POINTS = [
   },
 ]
 
+const SECTION = 'kl-pad-x border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]'
+
 /**
- * /family — Family Tree. Every claim on this page is one the app keeps (see NOT-DONE.md, FT-07).
- * Paper treatment (archival warmth) with a twilight “engine room” panel
- * for the relationship-graph architecture.
+ * /family — Family Tree, on the landing's paper design. Every claim on this page is one the app keeps (NOT-DONE.md, FT-07).
  */
 export default function Family() {
   const reduced = useReducedMotion()
+  const rise = (delay: number) =>
+    reduced ? {} : { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, transition: { delay, duration: 0.6, ease: cloudEase } }
 
   return (
-    <div className="bg-paper text-paper-ink">
-      {/* ── Section 1 — Page hero (paper) ─────────────────────────────── */}
-      <section className="px-6 py-20 lg:py-28">
-        <div className="mx-auto grid max-w-container items-center gap-12 lg:grid-cols-2">
-          <div>
-            <p className="eyebrow text-[#9A6B1F]">Module H — Family Tree</p>
-            <WordRise
-              as="h1"
-              text="Every family is a living graph."
-              className="display-lg mt-4 block text-paper-ink"
-              rise={40}
-              stagger={0.08}
-            />
-            <motion.p
-              initial={reduced ? false : { opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5, duration: 0.6, ease: cloudEase }}
-              className="body-lg mt-5 max-w-xl text-[#5A5245]"
-            >
-              Persons and relationships — confirmed by the people who know them,
-              computed across as many generations as you record, and never invented by AI.
-            </motion.p>
-            <motion.div
-              initial={reduced ? false : { opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.65, duration: 0.6, ease: cloudEase }}
-              className="mt-8 flex flex-wrap gap-3"
-            >
-              <Link to="/join?mode=signup"><ArcButton size="lg">Start your tree</ArcButton></Link>
-              <a
-                href="#verification"
-                className="inline-flex items-center gap-2 rounded-full border border-[#241F16]/20 px-8 py-4 font-semibold text-paper-ink transition-colors duration-200 hover:border-[#D9A648] hover:text-[#9A6B1F]"
-              >
-                How confirmation works ↓
-              </a>
-            </motion.div>
-          </div>
-
-          {/* archival frame + overlapping mini tree */}
-          <motion.div
-            initial={reduced ? false : { opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3, duration: 0.8, ease: cloudEase }}
-            className="relative"
-          >
-            <div className="overflow-hidden rounded-card-xl shadow-[0_32px_70px_-24px_rgba(36,31,22,0.45)] ring-1 ring-[#D9A648]/30">
-              <div className="rounded-card-xl border-2 border-[#D9A648]/60">
-                <motion.img
-                  src="/family-archive-1.jpg"
-                  alt="Three generations of an East African family on a veranda at golden hour"
-                  className="aspect-[3/2] w-full object-cover"
-                  initial={false}
-                  animate={reduced ? undefined : { scale: [1, 1.08, 1] }}
-                  transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
-                />
-              </div>
-            </div>
-            <div className="absolute -bottom-8 -left-6 w-32 lg:-left-12 lg:w-44">
-              <HeroMiniTree />
-            </div>
+    <PublicShell>
+      {/* ── Section 1 — Page hero ─────────────────────────────────────── */}
+      <header className="kl-split kl-pad-x gap-[clamp(40px,6vw,96px)] pb-24 pt-14">
+        <div className="min-w-0">
+          <motion.div {...rise(0.1)}>
+            <Eyebrow>Module H · Family Tree</Eyebrow>
+          </motion.div>
+          <WordRise
+            as="h1"
+            text="Every family is a living graph."
+            className="kl-serif mt-6 block text-[clamp(44px,6.6vw,96px)] font-semibold leading-[0.96] tracking-[-0.02em]"
+            rise={40}
+            stagger={0.08}
+          />
+          <motion.p className="mt-8 max-w-[480px] text-[19px] leading-[1.55] text-[var(--kl-mid)]" {...rise(0.45)}>
+            Persons and relationships — confirmed by the people who know them, computed
+            across as many generations as you record, and never invented by AI.
+          </motion.p>
+          <motion.div className="mt-10 flex flex-wrap items-center gap-4" {...rise(0.6)}>
+            <Link to="/app" className={KL_BTN_GOLD}>
+              Start your tree <ArrowRight size={17} aria-hidden="true" />
+            </Link>
+            <a href="#verification" className={KL_BTN_GHOST}>
+              How verification works <ArrowDown size={16} aria-hidden="true" />
+            </a>
           </motion.div>
         </div>
-      </section>
 
-      {/* ── Section 2 — The graph beneath (twilight engine room) ─────── */}
-      <section className="twilight-field noise-overlay px-6 py-24 text-text-hi">
-        <div className="mx-auto grid max-w-container items-center gap-12 lg:grid-cols-12">
-          <div className="lg:col-span-5">
-            <p className="eyebrow text-gold">Architecture</p>
-            <h2 className="h2 mt-3">A relationship graph is the truth. The tree is just a view.</h2>
-            <ul className="mt-8 space-y-6">
+        {/* archival frame + overlapping mini tree */}
+        <motion.div className="relative min-w-0" {...rise(0.3)}>
+          <Stage glows={['var(--kl-gold)', 'var(--kl-sky)']} className="p-4 sm:p-6">
+            <div className="overflow-hidden rounded-[14px] shadow-[0_24px_48px_-28px_var(--kl-shadow)] ring-1 ring-[var(--kl-gold)]/40">
+              <motion.img
+                src="/family-archive-1.jpg"
+                alt="Three generations of an East African family on a veranda at golden hour"
+                className="aspect-[3/2] w-full object-cover"
+                initial={false}
+                animate={reduced ? undefined : { scale: [1, 1.08, 1] }}
+                transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
+              />
+            </div>
+          </Stage>
+          <div className="absolute -bottom-8 left-4 w-28 rounded-[16px] bg-[var(--kl-surface)] p-2 shadow-[0_20px_40px_-26px_var(--kl-shadow)] sm:-left-6 sm:w-40 lg:-left-10">
+            <HeroMiniTree />
+          </div>
+        </motion.div>
+      </header>
+
+      {/* ── Section 2 — The graph beneath ─────────────────────────────── */}
+      <section className={SECTION}>
+        <div className="grid items-center gap-12 lg:grid-cols-12">
+          <div className="min-w-0 lg:col-span-5">
+            <Eyebrow>Architecture</Eyebrow>
+            <h2 className="kl-h2 mt-5">A relationship graph is the truth. The tree is just a view.</h2>
+            <ul className="mt-10 space-y-6">
               {ARCHITECTURE_POINTS.map((p, i) => (
                 <motion.li
                   key={p.label}
@@ -116,80 +105,78 @@ export default function Family() {
                   whileInView={{ opacity: 1, x: 0 }}
                   viewport={{ once: true, amount: 0.6 }}
                   transition={{ delay: i * 0.12, duration: 0.5, ease: cloudEase }}
-                  className="border-l-2 border-gold/40 pl-4"
+                  className="border-l-2 border-[var(--kl-gold)] pl-4"
                 >
-                  <p className="mono-data text-[0.78rem] font-semibold tracking-wide text-gold-soft">{p.label}</p>
-                  <p className="mt-1 text-[0.95rem] leading-relaxed text-text-mid">{p.body}</p>
+                  <p className="kl-mono text-[0.78rem] font-semibold tracking-wide text-[var(--kl-gold-deep)]">{p.label}</p>
+                  <p className="mt-1 text-[15px] leading-relaxed text-[var(--kl-mid)]">{p.body}</p>
                 </motion.li>
               ))}
             </ul>
           </div>
-          <div className="lg:col-span-7">
+          <div className="min-w-0 lg:col-span-7">
             <FamilyTreeGraph />
           </div>
         </div>
       </section>
 
       {/* ── Section 3 — Trust by corroboration ────────────────────────── */}
-      <section id="verification" className="px-6 py-24">
-        <div className="mx-auto max-w-container">
-          <div className="mx-auto max-w-2xl text-center">
-            <p className="eyebrow text-[#9A6B1F]">Trust by corroboration</p>
-            <h2 className="h2 mt-3 text-paper-ink">Every person starts as pending, and is confirmed by those who know them.</h2>
-          </div>
-          <div className="mt-14">
-            <VerificationJourney />
-          </div>
+      <section id="verification" className={SECTION}>
+        <div className="mx-auto max-w-3xl text-center">
+          <Eyebrow>Trust by corroboration</Eyebrow>
+          <h2 className="kl-h2 mt-5">Every person starts as pending, and is confirmed by those who know them.</h2>
+        </div>
+        <div className="mt-14">
+          <VerificationJourney />
         </div>
       </section>
 
       {/* ── Section 4 — “How are we related?” path finder ────────────── */}
-      <section id="path-finder" className="bg-paper-2 px-6 py-24">
-        <div className="mx-auto max-w-container">
-          <div className="mx-auto max-w-2xl text-center">
-            <p className="eyebrow text-[#9A6B1F]">Path finder</p>
-            <h2 className="h2 mt-3 text-paper-ink">“How are we related?”</h2>
-            <p className="body-lg mt-4 text-[#5A5245]">
-              Ask the graph. The shortest recorded path lights up hop by hop — and the
-              shared ancestors reveal themselves.
-            </p>
-          </div>
-          <div className="mt-12">
-            <PathFinder />
-          </div>
+      <section id="path-finder" className={SECTION}>
+        <div className="mx-auto max-w-3xl text-center">
+          <Eyebrow>Path finder</Eyebrow>
+          <h2 className="kl-h2 mt-5">“How are we related?”</h2>
+          <p className="mx-auto mt-5 max-w-xl text-[18px] leading-[1.6] text-[var(--kl-mid)]">
+            Ask the graph. The shortest recorded path lights up hop by hop — and the
+            shared ancestors reveal themselves.
+          </p>
+        </div>
+        <div className="mt-12">
+          <PathFinder />
         </div>
       </section>
 
       {/* ── Section 5 — Memories and timeline (written by members; nothing is generated) ── */}
-      <section className="px-6 py-24">
-        <div className="mx-auto max-w-container">
-          <div className="mx-auto max-w-2xl text-center">
-            <p className="eyebrow text-[#9A6B1F]">Memories</p>
-            <h2 className="h2 mt-3 text-paper-ink">What the family remembers, kept with the person.</h2>
-            <ul className="mx-auto mt-7 max-w-xl space-y-4 text-left text-[1.02rem] leading-relaxed text-[#5A5245]">
-              <li className="flex gap-3">
-                <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-[#D9A648]" />
-                Members write <strong className="text-paper-ink">memories</strong> on a person’s page: who they were, what happened, when.
-              </li>
-              <li className="flex gap-3">
-                <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-[#D9A648]" />
-                Each person has a <strong className="text-paper-ink">timeline</strong> built from their own record and their dated memories.
-              </li>
-              <li className="flex gap-3">
-                <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-[#D9A648]" />
-                Only members of the tree can read them, as far as their role allows.
-              </li>
-            </ul>
-            <p className="caption mt-6 !text-[#6B5F4E]">
-              Nothing here is generated. Photos, documents and recordings, and any AI help to organise them, are not part of Kinjy yet.
-            </p>
-          </div>
+      <section className={SECTION}>
+        <div className="mx-auto max-w-3xl text-center">
+          <Eyebrow>Memories</Eyebrow>
+          <h2 className="kl-h2 mt-5">What the family remembers, kept with the person.</h2>
+          <ul className="mx-auto mt-8 max-w-xl space-y-5 text-left text-[17px] leading-relaxed text-[var(--kl-mid)]">
+            <li className="flex gap-3">
+              <span className="mt-2.5 h-2 w-2 shrink-0 rounded-full bg-[var(--kl-gold)]" />
+              <span>
+                Members write <strong className="text-[var(--kl-ink)]">memories</strong> on a person’s page: who they were, what happened, when.
+              </span>
+            </li>
+            <li className="flex gap-3">
+              <span className="mt-2.5 h-2 w-2 shrink-0 rounded-full bg-[var(--kl-gold)]" />
+              <span>
+                Each person has a <strong className="text-[var(--kl-ink)]">timeline</strong> built from their own record and their dated memories.
+              </span>
+            </li>
+            <li className="flex gap-3">
+              <span className="mt-2.5 h-2 w-2 shrink-0 rounded-full bg-[var(--kl-gold)]" />
+              <span>Only members of the tree can read them, as far as their role allows.</span>
+            </li>
+          </ul>
+          <p className="mt-7 text-[13px] leading-relaxed text-[var(--kl-low)]">
+            Nothing here is generated. Photos, documents and recordings, and any AI help to organise them, are not part of Kinjy yet.
+          </p>
         </div>
       </section>
 
       {/* ── Section 6 — Privacy & permanence strip ────────────────────── */}
-      <section className="bg-paper-2 px-6 py-20">
-        <div className="mx-auto grid max-w-container gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <section className={SECTION}>
+        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
           {[
             {
               icon: Lock,
@@ -211,40 +198,47 @@ export default function Family() {
               title: 'Export for owners',
               body: 'Owners can download the tree as a GEDCOM file. Living people and unverified records are hidden as “Private”; no photos or documents.',
             },
-          ].map((c, i) => (
-            <motion.div
-              key={c.title}
-              initial={reduced ? false : { opacity: 0, y: 28 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.7 }}
-              transition={{ delay: i * 0.1, duration: 0.55, ease: cloudEase }}
-              className="rounded-card-lg border border-[#241F16]/10 bg-[#FFFDF8]/70 p-6 shadow-[0_16px_40px_-16px_rgba(36,31,22,0.2)] backdrop-blur-sm"
-            >
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#D9A648]/15 text-[#9A6B1F]">
-                <c.icon size={20} />
-              </span>
-              <h3 className="h3 mt-4 text-paper-ink">{c.title}</h3>
-              <p className="mt-2 text-[0.95rem] leading-relaxed text-[#5A5245]">{c.body}</p>
-            </motion.div>
-          ))}
+          ].map((c, i) => {
+            const [ink, tile] = MODULE_TONES[i % MODULE_TONES.length]
+            return (
+              <motion.div
+                key={c.title}
+                initial={reduced ? false : { opacity: 0, y: 28 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.5 }}
+                transition={{ delay: i * 0.1, duration: 0.55, ease: cloudEase }}
+                className={`${KL_CARD} p-7`}
+              >
+                <span className="grid h-11 w-11 place-items-center rounded-[12px]" style={{ background: tile, color: ink }}>
+                  <c.icon size={20} aria-hidden="true" />
+                </span>
+                <h3 className="kl-serif mt-5 text-[26px] font-semibold leading-tight">{c.title}</h3>
+                <p className="mt-3 text-[15px] leading-relaxed text-[var(--kl-mid)]">{c.body}</p>
+              </motion.div>
+            )
+          })}
         </div>
       </section>
 
       {/* ── Section 7 — CTA ───────────────────────────────────────────── */}
-      <section className="px-6 py-24 text-center">
-        <div className="mx-auto max-w-2xl">
-          <h2 className="h2 text-paper-ink">Begin with one person. The graph grows with you.</h2>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-            <Link to="/join?mode=signup"><ArcButton size="lg">Start your family tree</ArcButton></Link>
-            <Link
-              to="/memorials"
-              className="inline-flex items-center gap-2 rounded-full border border-[#241F16]/20 px-8 py-4 font-semibold text-paper-ink transition-colors duration-200 hover:border-[#D9A648] hover:text-[#9A6B1F]"
-            >
-              Visit the Digital Graveyard <ArrowRight size={16} />
-            </Link>
-          </div>
+      <ClosingStage
+        eyebrow="Start your tree"
+        glow="var(--kl-sky)"
+        title={
+          <>
+            Begin with one person. <span className="italic text-[var(--kl-gold-deep)]">The graph grows with you.</span>
+          </>
+        }
+      >
+        <div className="mt-12 flex flex-col items-center justify-center gap-4 sm:flex-row">
+          <Link to="/app" className={KL_BTN_GOLD}>
+            Start your family tree <ArrowRight size={17} aria-hidden="true" />
+          </Link>
+          <Link to="/memorials" className={KL_BTN_GHOST}>
+            Visit the Digital Graveyard <ArrowRight size={17} aria-hidden="true" />
+          </Link>
         </div>
-      </section>
-    </div>
+      </ClosingStage>
+    </PublicShell>
   )
 }

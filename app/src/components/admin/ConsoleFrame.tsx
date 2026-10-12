@@ -36,12 +36,12 @@ const RAIL = ALL_RAIL.filter((item) => FEATURES.assistant || !item.assistant)
  */
 export default function ConsoleFrame({ children }: { children: ReactNode }) {
   return (
-    <div className="overflow-hidden rounded-card-xl border border-white/10 bg-ink-2 shadow-cloud">
+    <div className="overflow-hidden rounded-[20px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] shadow-[0_30px_60px_-36px_var(--kl-shadow)]">
       <div className="flex">
         {/* Left icon rail */}
         <nav
           aria-label="Admin modules"
-          className="hidden md:flex w-[76px] shrink-0 flex-col items-center gap-1 border-r border-white/8 bg-ink-3/60 py-5"
+          className="hidden md:flex w-[76px] shrink-0 flex-col items-center gap-1 border-r border-[var(--kl-paper-2)] bg-[var(--kl-paper)] py-5"
         >
           {RAIL.map((item, i) => (
             <motion.div
@@ -57,10 +57,10 @@ export default function ConsoleFrame({ children }: { children: ReactNode }) {
                 aria-label={item.label}
                 aria-current={item.active ? 'page' : undefined}
                 className={cn(
-                  'flex h-11 w-11 items-center justify-center rounded-card-md transition-colors duration-200 ease-cloud-ease',
+                  'flex h-11 w-11 items-center justify-center rounded-[14px] transition-colors duration-200 ease-cloud-ease',
                   item.active
-                    ? 'bg-gold/15 text-gold-soft shadow-[inset_0_0_0_1px_rgba(217,166,72,0.35)]'
-                    : 'text-text-low hover:bg-white/5 hover:text-text-hi',
+                    ? 'bg-gradient-to-br from-gold-soft to-gold text-ink shadow-[0_8px_20px_-10px_rgba(166,120,57,0.6)]'
+                    : 'text-text-low hover:bg-text-hi/[0.07] hover:text-text-hi',
                 )}
               >
                 <item.icon size={19} strokeWidth={1.8} />

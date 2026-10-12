@@ -4,6 +4,8 @@ import MemorialView from '@/components/graveyard/MemorialView'
 import { TICKET_REFRESH_MS, useEvery } from '@/components/graveyard/useEvery'
 import { useApi } from '@/hooks/useApi'
 import { kaluta, type Memorial } from '@/lib/api'
+import PublicShell from '@/components/landing/PublicShell'
+import { KL_BTN_GHOST } from '@/components/landing/kl-classes'
 
 /**
  * /memorial/:code — where the QR code on a resting place leads.
@@ -19,40 +21,44 @@ export default function MemorialPublic() {
   useEvery(memorial.reload, TICKET_REFRESH_MS)
 
   return (
-    <section className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
-      {memorial.loading && !memorial.data && (
-        <p className="text-center text-sm text-text-mid" role="status">
-          Opening the memorial…
-        </p>
-      )}
-      {!memorial.loading && !memorial.data && (
-        <div className="mx-auto max-w-md py-16 text-center">
-          <Landmark size={26} className="mx-auto text-text-mid" aria-hidden="true" />
-          <h1 className="mt-3 font-display text-2xl text-text-hi">This memorial cannot be found</h1>
-          <p className="mt-2 text-sm text-text-mid">
-            Check the code, or ask the family for the link. A memorial its family keeps private is only
-            visible to them.
+    <PublicShell>
+      <section className="mx-auto max-w-3xl px-4 pb-16 pt-8 sm:px-6 sm:pt-12">
+        {memorial.loading && !memorial.data && (
+          <p className="text-center text-sm text-[var(--kl-low)]" role="status">
+            Opening the memorial…
           </p>
-          <Link to="/" className="mt-5 inline-block text-sm font-semibold text-text-hi underline underline-offset-2">
-            Go to Kinjy
-          </Link>
-        </div>
-      )}
-      {memorial.data && (
-        <>
-          {memorial.data.is_admin && (
-            <div className="mb-4 flex justify-end">
-              <Link
-                to={`/graveyard?open=${memorial.data.id}`}
-                className="inline-flex items-center gap-1.5 rounded-full border border-text-low/40 px-4 py-2 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-text-hi"
-              >
-                <Settings size={12} aria-hidden="true" /> Manage this memorial
-              </Link>
-            </div>
-          )}
-          <MemorialView memorial={memorial.data} onChanged={memorial.reload} />
-        </>
-      )}
-    </section>
+        )}
+        {!memorial.loading && !memorial.data && (
+          <div className="mx-auto max-w-md rounded-[20px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] px-8 py-14 text-center shadow-[0_24px_48px_-34px_var(--kl-shadow)]">
+            <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[#F6EBD3] text-[#8A6414]">
+              <Landmark size={26} aria-hidden="true" />
+            </span>
+            <h1 className="mt-5 text-[1.6rem] font-bold leading-tight tracking-[-0.035em]">This memorial cannot be found</h1>
+            <p className="mt-3 text-[0.95rem] leading-relaxed text-[var(--kl-mid)]">
+              Check the code, or ask the family for the link. A memorial its family keeps private is only
+              visible to them.
+            </p>
+            <Link to="/" className={`${KL_BTN_GHOST} mt-6 !py-3 !text-[15px]`}>
+              Go to Kinjy
+            </Link>
+          </div>
+        )}
+        {memorial.data && (
+          <>
+            {memorial.data.is_admin && (
+              <div className="mb-4 flex justify-end">
+                <Link
+                  to={`/graveyard?open=${memorial.data.id}`}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] px-5 py-2.5 text-sm font-semibold transition-colors hover:border-[var(--kl-gold)] hover:text-[var(--kl-gold-deep)]"
+                >
+                  <Settings size={14} aria-hidden="true" /> Manage this memorial
+                </Link>
+              </div>
+            )}
+            <MemorialView memorial={memorial.data} onChanged={memorial.reload} />
+          </>
+        )}
+      </section>
+    </PublicShell>
   )
 }

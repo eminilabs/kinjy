@@ -68,10 +68,10 @@ export default function LandingFeatures() {
                   {g.i}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-base font-bold">{g.name}</div>
+                  <div className="text-base font-bold">{t(g.name)}</div>
                   <div className="flex items-center gap-1.5 text-[13px] text-[var(--kl-low)]">
                     <span className="kl-pulse h-[7px] w-[7px] rounded-full bg-[var(--kl-gold-deep)]" />
-                    {g.meta}
+                    {t(g.meta)}
                   </div>
                 </div>
                 <span className="rounded-[20px] border border-[var(--kl-invert-border)] bg-[var(--kl-invert)] px-4 py-[9px] text-[13px] font-semibold text-[var(--kl-invert-ink)]">{t('landing.features.join')}</span>
@@ -98,9 +98,9 @@ export default function LandingFeatures() {
               <div className="kl-grow h-full rounded-[9px]" style={{ background: 'linear-gradient(90deg, #F0C878, #D9A648, #8FB8E8)', ['--kl-dur' as string]: '4s' }} />
             </div>
             <div className="my-3.5 flex flex-wrap gap-2">
-              {COMPOSER_TOOLS.map((t) => (
-                <span key={t} className="rounded-[20px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] px-[13px] py-2 text-[13px] font-semibold">
-                  {t}
+              {COMPOSER_TOOLS.map((tool) => (
+                <span key={tool} className="rounded-[20px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] px-[13px] py-2 text-[13px] font-semibold">
+                  {t(tool)}
                 </span>
               ))}
             </div>

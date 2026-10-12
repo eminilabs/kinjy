@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Camera, CameraOff, Radio, Send, Users } from 'lucide-react'
-import AppShell, { RailCard } from '@/components/app/AppShell'
+import AppShell from '@/components/app/AppShell'
 import { useApi } from '@/hooks/useApi'
 import { useAuth } from '@/hooks/useAuth'
 import { useRealtime } from '@/hooks/useRealtime'
@@ -114,25 +114,15 @@ export default function Live() {
     }
   }
 
+  const label = 'mono-data text-[0.7rem] font-bold uppercase tracking-[0.15em] text-gold-soft'
+
   return (
     <AppShell
-      title="Live"
-      subtitle="Real-time rooms. The chat is live; video broadcasting is not built yet."
-      action={
-        <span
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold',
-            connected ? 'border-emerald-400/30 text-emerald-200' : 'border-amber-400/30 text-amber-200',
-          )}
-        >
-          <Radio size={12} aria-hidden="true" />
-          {connected ? 'Chat live' : 'Reconnecting…'}
-        </span>
-      }
       aside={
         <>
-          <RailCard title="What works here">
-            <ul className="space-y-2 text-xs leading-relaxed text-text-mid">
+          <section className="cloud-card p-5">
+            <p className={cn(label, 'mb-3')}>What works here</p>
+            <ul className="space-y-3 text-sm leading-relaxed text-text-mid">
               <li>
                 <strong className="text-text-hi">Chat is real.</strong> Messages travel over the same
                 WebSocket as direct messages and reach every participant instantly.
@@ -147,19 +137,21 @@ export default function Live() {
                 a host assistant, highlights marked during the broadcast — needs that pipeline first.
               </li>
             </ul>
-          </RailCard>
-          <RailCard title="Rooms">
-            <ul className="space-y-1.5">
+          </section>
+          <section className="cloud-card p-5">
+            <p className={cn(label, 'mb-3')}>Rooms</p>
+            <ul className="space-y-1">
               {(rooms.data?.items ?? []).slice(0, 6).map((room) => (
                 <li key={room.id}>
                   <button
                     type="button"
                     onClick={() => void openRoom(room.id)}
+                    aria-current={roomId === room.id ? 'true' : undefined}
                     className={cn(
-                      'w-full truncate rounded-card-sm px-2 py-1.5 text-start text-xs',
+                      'w-full truncate rounded-xl px-3 py-2 text-start text-sm font-medium transition-colors',
                       roomId === room.id
-                        ? 'bg-gold/10 text-gold-soft'
-                        : 'text-text-mid hover:bg-white/5 hover:text-text-hi',
+                        ? 'bg-gold/15 text-gold-soft'
+                        : 'text-text-mid hover:bg-text-hi/[0.05] hover:text-text-hi',
                     )}
                   >
                     {room.title ?? room.id.slice(0, 16)}
@@ -167,56 +159,82 @@ export default function Live() {
                 </li>
               ))}
               {(rooms.data?.items ?? []).length === 0 && (
-                <li className="text-xs text-text-low">No rooms yet.</li>
+                <li className="px-1 text-sm text-text-low">No rooms yet.</li>
               )}
             </ul>
-          </RailCard>
+          </section>
         </>
       }
     >
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+        <div className="min-w-0">
+          <p className="mono-data text-[0.72rem] font-bold uppercase tracking-[0.15em] text-gold-soft">Live</p>
+          <h1 className="mt-2 text-[clamp(38px,5vw,56px)] font-bold leading-[1.02] tracking-[-0.045em] text-text-hi">
+            Talk in real time
+          </h1>
+          <p className="mt-3 max-w-xl text-[0.95rem] leading-relaxed text-text-low">
+            Real-time rooms. The chat is live; video broadcasting is not built yet.
+          </p>
+        </div>
+        <span
+          className={cn(
+            'inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold',
+            connected ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-500/10 text-amber-200',
+          )}
+        >
+          <span
+            aria-hidden="true"
+            className={cn('h-2 w-2 rounded-full', connected ? 'bg-emerald-400' : 'bg-amber-400')}
+          />
+          {connected ? 'Chat live' : 'Reconnecting…'}
+        </span>
+      </header>
+
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
         {/* Stage */}
-        <div className="overflow-hidden rounded-card-md border border-white/8 bg-black">
-          <div className="relative aspect-video">
+        <div className="cloud-card overflow-hidden">
+          <div className="relative aspect-video bg-black">
             <video ref={videoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
             {!cameraOn && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-center">
-                <Radio size={26} className="text-text-low" aria-hidden="true" />
-                <p className="max-w-sm px-6 text-sm text-text-mid">
+                <span className="grid h-14 w-14 place-items-center rounded-2xl bg-white/10 text-white/80">
+                  <Radio size={26} aria-hidden="true" />
+                </span>
+                <p className="max-w-sm px-6 text-sm leading-relaxed text-white/80">
                   Turn your camera on to preview what you would broadcast. It stays on this device —
                   Kinjy cannot send it anywhere yet.
                 </p>
               </div>
             )}
             {cameraOn && (
-              <span className="absolute start-3 top-3 rounded-full bg-red-500/90 px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-white">
+              <span className="absolute start-3 top-3 rounded-full bg-red-500/90 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wide text-white">
                 Preview only
               </span>
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 border-t border-white/8 bg-ink-2/60 p-3">
+          <div className="flex flex-wrap items-center gap-3 p-4">
             <button
               type="button"
               onClick={toggleCamera}
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/12 px-4 py-2 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
+              className="inline-flex items-center gap-2 rounded-full border border-[var(--cloud-border)] px-5 py-2.5 text-sm font-semibold text-text-mid hover:border-gold/50 hover:text-gold-soft"
             >
-              {cameraOn ? <CameraOff size={13} aria-hidden="true" /> : <Camera size={13} aria-hidden="true" />}
+              {cameraOn ? <CameraOff size={15} aria-hidden="true" /> : <Camera size={15} aria-hidden="true" />}
               {cameraOn ? 'Stop camera' : 'Start camera'}
             </button>
 
-            <form onSubmit={startRoom} className="ms-auto flex gap-2">
+            <form onSubmit={startRoom} className="flex min-w-0 flex-1 gap-2 sm:ms-auto sm:flex-none">
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Name a room…"
                 aria-label="Room name"
-                className="rounded-full border border-white/10 bg-ink/60 px-3 py-2 text-xs text-text-hi placeholder:text-text-low focus:border-gold/40 focus:outline-none"
+                className="min-w-0 flex-1 rounded-full border border-transparent bg-text-hi/[0.07] px-5 py-2.5 text-sm text-text-hi placeholder:text-text-low focus:border-gold/50 focus:bg-transparent focus:outline-none sm:w-52 sm:flex-none"
               />
               <button
                 type="submit"
                 disabled={!title.trim()}
-                className="rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-2 text-xs font-bold text-ink disabled:opacity-40"
+                className="shrink-0 rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-2.5 text-sm font-bold text-ink disabled:opacity-40"
               >
                 Open room
               </button>
@@ -225,45 +243,60 @@ export default function Live() {
         </div>
 
         {/* Live chat */}
-        <div className="flex min-h-[420px] flex-col rounded-card-md border border-white/8 bg-ink-2/60 p-4">
-          <h2 className="mb-3 inline-flex items-center gap-2 border-b border-white/8 pb-3 text-sm font-semibold text-text-hi">
-            <Users size={14} className="text-gold" aria-hidden="true" />
+        <div className="cloud-card flex min-h-[380px] flex-col p-5">
+          <h2 className="mb-4 flex items-center gap-2.5 border-b border-[var(--cloud-border)] pb-4 text-[1.05rem] font-bold tracking-[-0.02em] text-text-hi">
+            <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-gold/15 text-gold-soft">
+              <Users size={16} aria-hidden="true" />
+            </span>
             Live chat
           </h2>
 
           {!roomId ? (
-            <p className="m-auto text-center text-sm text-text-low">
-              Open a room to start chatting.
-            </p>
+            <div className="m-auto max-w-[14rem] text-center">
+              <p className="text-base font-bold tracking-[-0.02em] text-text-hi">No room open</p>
+              <p className="mt-1 text-sm leading-relaxed text-text-low">Open a room to start chatting.</p>
+            </div>
           ) : (
             <>
-              <div className="flex-1 space-y-2 overflow-y-auto">
+              <div className="flex-1 space-y-3 overflow-y-auto pe-1">
                 {messages.length === 0 && <p className="text-sm text-text-low">Say something first.</p>}
-                {messages.map((message) => (
-                  <p key={message.id} className="text-sm">
-                    <span className="font-semibold text-gold-soft">
-                      {message.sender_id === user?.id ? 'You' : `@${message.sender_id.slice(0, 10)}`}
-                    </span>{' '}
-                    <span className="text-text-mid">{message.body}</span>
-                  </p>
-                ))}
+                {messages.map((message) => {
+                  const mine = message.sender_id === user?.id
+                  return (
+                    <div key={message.id} className={cn('flex flex-col', mine ? 'items-end' : 'items-start')}>
+                      <span className="mono-data mb-0.5 px-1 text-[0.68rem] text-text-low">
+                        {mine ? 'You' : `@${message.sender_id.slice(0, 10)}`}
+                      </span>
+                      <p
+                        className={cn(
+                          'max-w-[85%] whitespace-pre-wrap break-words rounded-[18px] px-3.5 py-2 text-[0.92rem] leading-snug',
+                          mine
+                            ? 'bg-gradient-to-br from-gold-soft to-gold text-ink'
+                            : 'bg-text-hi/[0.07] text-text-hi',
+                        )}
+                      >
+                        {message.body}
+                      </p>
+                    </div>
+                  )
+                })}
               </div>
 
-              <form onSubmit={send} className="mt-3 flex gap-2 border-t border-white/8 pt-3">
+              <form onSubmit={send} className="mt-4 flex gap-2 border-t border-[var(--cloud-border)] pt-4">
                 <input
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   placeholder="Message the room…"
                   aria-label="Live chat message"
-                  className="w-full rounded-full border border-white/10 bg-ink/60 px-3 py-2 text-sm text-text-hi placeholder:text-text-low focus:border-gold/40 focus:outline-none"
+                  className="w-full min-w-0 rounded-full border border-transparent bg-text-hi/[0.07] px-4 py-2.5 text-sm text-text-hi placeholder:text-text-low focus:border-gold/50 focus:bg-transparent focus:outline-none"
                 />
                 <button
                   type="submit"
                   disabled={!draft.trim()}
                   aria-label="Send"
-                  className="shrink-0 rounded-full bg-gradient-to-br from-gold-soft to-gold px-3.5 text-ink disabled:opacity-40"
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-gold-soft to-gold text-ink disabled:opacity-40"
                 >
-                  <Send size={14} />
+                  <Send size={16} />
                 </button>
               </form>
             </>
@@ -272,7 +305,7 @@ export default function Live() {
       </div>
 
       {error && (
-        <p role="alert" className="mt-4 text-sm text-amber-200">
+        <p role="alert" className="mt-5 rounded-xl bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
           {error}
         </p>
       )}

@@ -49,7 +49,7 @@ function DemoTabs({ written, video }: { written: React.ReactNode; video: React.R
   const [tab, setTab] = useState<'written' | 'video'>('written')
   return (
     <div className="mt-3">
-      <div className="flex gap-1 rounded-full border border-white/10 bg-ink/50 p-1" role="tablist">
+      <div className="flex gap-1 rounded-full border border-[var(--kl-paper-2)] bg-[var(--kl-paper)] p-1" role="tablist">
         <button
           type="button"
           role="tab"
@@ -57,7 +57,7 @@ function DemoTabs({ written, video }: { written: React.ReactNode; video: React.R
           onClick={() => setTab('written')}
           className={cn(
             'flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-[0.68rem] font-bold transition-colors',
-            tab === 'written' ? 'bg-gold/90 text-ink' : 'text-text-mid hover:text-text-hi',
+            tab === 'written' ? 'kl-sheen' : 'text-[var(--kl-mid)] hover:text-[var(--kl-ink)]',
           )}
         >
           <ImageIcon size={11} aria-hidden="true" /> Written + images
@@ -69,7 +69,7 @@ function DemoTabs({ written, video }: { written: React.ReactNode; video: React.R
           onClick={() => setTab('video')}
           className={cn(
             'flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-[0.68rem] font-bold transition-colors',
-            tab === 'video' ? 'bg-gold/90 text-ink' : 'text-text-mid hover:text-text-hi',
+            tab === 'video' ? 'kl-sheen' : 'text-[var(--kl-mid)] hover:text-[var(--kl-ink)]',
           )}
         >
           <Play size={11} aria-hidden="true" /> Video clip
@@ -143,15 +143,15 @@ export default function ScriptedDemo() {
   const listening = phase === 1 || phase === 4
 
   return (
-    <div ref={rootRef} className="cloud-card relative w-full overflow-hidden p-5 md:p-6">
+    <div ref={rootRef} className="relative w-full overflow-hidden rounded-[20px] border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] p-5 shadow-[0_24px_48px_-34px_var(--kl-shadow)] md:p-6">
       {/* Panel header replica */}
-      <div className="mb-5 flex items-center gap-3 border-b border-white/10 pb-4">
+      <div className="mb-5 flex items-center gap-3 border-b border-[var(--kl-paper-2)] pb-4">
         <Orb size={38} state={listening ? 'listening' : phase === 2 || phase === 5 ? 'thinking' : 'idle'} />
         <div>
           <p className="text-sm font-bold">Kinjy Assistant</p>
-          <p className="caption text-[0.66rem]">live replica · scripted demo</p>
+          <p className="kl-mono text-[0.66rem] text-[var(--kl-low)]">live replica · scripted demo</p>
         </div>
-        <span className="ms-auto rounded-full border border-sky/30 bg-sky/10 px-2.5 py-1 text-[0.62rem] font-bold text-sky">
+        <span className="ms-auto rounded-full bg-[#E3ECF7] px-2.5 py-1 text-[0.65rem] font-bold text-[#2F6BA8]">
           MEMBER
         </span>
       </div>
@@ -160,12 +160,12 @@ export default function ScriptedDemo() {
         {/* Exchange 1 — English voice question */}
         {phase >= 1 && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: EASE }} className="flex justify-end">
-            <div className="max-w-[85%] rounded-card-md rounded-ee-sm bg-indigo/45 px-4 py-3 text-sm">
-              <span className="mb-1.5 flex items-center gap-2 text-[0.6rem] font-bold uppercase tracking-widest text-sky">
+            <div className="max-w-[85%] rounded-[16px] rounded-ee-sm bg-[#E4E5FA] px-4 py-3 text-sm text-[#1B1E3A]">
+              <span className="mb-1.5 flex items-center gap-2 text-[0.62rem] font-bold uppercase tracking-widest text-[#4A52E0]">
                 {phase === 1 ? <Waveform bars={8} /> : <Mic size={10} aria-hidden="true" />}
                 Voice · English
               </span>
-              {phase === 1 ? <span className="text-text-mid">Listening…</span> : q1}
+              {phase === 1 ? <span className="text-[#5A5F86]">Listening…</span> : q1}
             </div>
           </motion.div>
         )}
@@ -173,25 +173,25 @@ export default function ScriptedDemo() {
         {/* Answer 1 — dual format */}
         {phase >= 3 && (
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: EASE }} className="flex justify-start">
-            <div className="max-w-[94%] rounded-card-md rounded-es-sm border border-white/10 border-s-2 border-s-gold bg-white/[0.05] px-4 py-3">
+            <div className="max-w-[94%] rounded-[16px] rounded-es-sm border border-[var(--kl-paper-2)] border-s-2 border-s-[var(--kl-gold)] bg-[var(--kl-paper)] px-4 py-3">
               <p className="text-sm leading-relaxed">{feed.answer.en}</p>
               <DemoTabs
                 written={
                   <div>
                     <ol className="mb-3 space-y-2">
                       {feed.steps?.map((step, i) => (
-                        <li key={step} className="flex items-start gap-2.5 text-[0.8rem] text-text-mid">
-                          <span className="mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gold-soft to-gold font-mono text-[0.58rem] font-bold text-ink">
+                        <li key={step} className="flex items-start gap-2.5 text-[0.85rem] text-[var(--kl-mid)]">
+                          <span className="mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full kl-sheen kl-mono text-[0.6rem] font-bold">
                             {i + 1}
                           </span>
                           {step}
                         </li>
                       ))}
                     </ol>
-                    <img src={feed.image} alt={feed.imageAlt} loading="lazy" className="mb-3 w-full rounded-card-sm border border-white/10" />
+                    <img src={feed.image} alt={feed.imageAlt} loading="lazy" className="mb-3 w-full rounded-[12px] border border-[var(--kl-paper-2)]" />
                     <Link
                       to={feed.deepLink?.to ?? '/feeds'}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-sky/30 bg-sky/10 px-3 py-1.5 text-[0.68rem] font-bold text-sky hover:border-sky/60"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] px-3 py-1.5 text-[0.72rem] font-bold transition-colors hover:border-[var(--kl-gold)] hover:text-[var(--kl-gold-deep)]"
                     >
                       Open in app: {feed.deepLink?.label} <ArrowUpRight size={11} aria-hidden="true" />
                     </Link>
@@ -201,7 +201,7 @@ export default function ScriptedDemo() {
               />
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <ProvenanceTag kind="ai-generated" />
-                <span className="font-mono text-[0.6rem] text-text-low">From: {feed.module} · updated {feed.version}</span>
+                <span className="kl-mono text-[0.62rem] text-[var(--kl-low)]">From: {feed.module} · updated {feed.version}</span>
               </div>
             </div>
           </motion.div>
@@ -210,12 +210,12 @@ export default function ScriptedDemo() {
         {/* Exchange 2 — Kiswahili voice question */}
         {phase >= 4 && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: EASE }} className="flex justify-end">
-            <div className="max-w-[85%] rounded-card-md rounded-ee-sm bg-indigo/45 px-4 py-3 text-sm">
-              <span className="mb-1.5 flex items-center gap-2 text-[0.6rem] font-bold uppercase tracking-widest text-sky">
+            <div className="max-w-[85%] rounded-[16px] rounded-ee-sm bg-[#E4E5FA] px-4 py-3 text-sm text-[#1B1E3A]">
+              <span className="mb-1.5 flex items-center gap-2 text-[0.62rem] font-bold uppercase tracking-widest text-[#4A52E0]">
                 {phase === 4 ? <Waveform bars={8} /> : <Mic size={10} aria-hidden="true" />}
                 Voice · Kiswahili
               </span>
-              {phase === 4 ? <span className="text-text-mid">Inasikiliza…</span> : q2}
+              {phase === 4 ? <span className="text-[#5A5F86]">Inasikiliza…</span> : q2}
             </div>
           </motion.div>
         )}
@@ -223,20 +223,20 @@ export default function ScriptedDemo() {
         {/* Answer 2 — mirrored in Kiswahili */}
         {phase >= 6 && (
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: EASE }} className="flex justify-start">
-            <div className="max-w-[94%] rounded-card-md rounded-es-sm border border-white/10 border-s-2 border-s-gold bg-white/[0.05] px-4 py-3">
-              <p className="mb-2 inline-flex rounded-full border border-sky/30 bg-sky/10 px-2.5 py-1 text-[0.62rem] font-bold text-sky">
+            <div className="max-w-[94%] rounded-[16px] rounded-es-sm border border-[var(--kl-paper-2)] border-s-2 border-s-[var(--kl-gold)] bg-[var(--kl-paper)] px-4 py-3">
+              <p className="mb-2 inline-flex rounded-full bg-[#E3ECF7] px-2.5 py-1 text-[0.65rem] font-bold text-[#2F6BA8]">
                 Replying in Kiswahili · matches your language automatically
               </p>
               <p className="text-sm leading-relaxed">{family.answer.sw}</p>
               <DemoTabs
                 written={
-                  <img src={family.image} alt={family.imageAlt} loading="lazy" className="w-full rounded-card-sm border border-white/10" />
+                  <img src={family.image} alt={family.imageAlt} loading="lazy" className="w-full rounded-[12px] border border-[var(--kl-paper-2)]" />
                 }
                 video={<DemoVideoPlayer title="Onyesho la demo · Uthibitisho wa familia" steps={familyClip} lang="sw" />}
               />
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <ProvenanceTag kind="ai-generated" />
-                <span className="font-mono text-[0.6rem] text-text-low">Kutoka: {family.module} · updated {family.version}</span>
+                <span className="kl-mono text-[0.62rem] text-[var(--kl-low)]">Kutoka: {family.module} · updated {family.version}</span>
               </div>
             </div>
           </motion.div>
@@ -244,11 +244,11 @@ export default function ScriptedDemo() {
       </div>
 
       {/* Replay */}
-      <div className="mt-5 flex justify-center border-t border-white/10 pt-4">
+      <div className="mt-5 flex justify-center border-t border-[var(--kl-paper-2)] pt-4">
         <button
           type="button"
           onClick={replay}
-          className="inline-flex items-center gap-2 rounded-full cloud-glass px-4 py-2 text-[0.72rem] font-bold text-text-mid transition-colors hover:text-gold-soft"
+          className="inline-flex items-center gap-2 rounded-full border border-[var(--kl-paper-2)] bg-[var(--kl-surface)] px-4 py-2 text-[0.78rem] font-bold text-[var(--kl-mid)] transition-colors hover:border-[var(--kl-gold)] hover:text-[var(--kl-gold-deep)]"
         >
           <RotateCcw size={12} aria-hidden="true" /> Replay the conversation
         </button>

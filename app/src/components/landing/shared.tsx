@@ -162,7 +162,7 @@ function AccountLinks({ stacked = false }: { stacked?: boolean }) {
   )
 }
 
-function ThemeToggle() {
+export function ThemeToggle() {
   const { theme, toggle } = useLandingTheme()
   const { t } = useTranslation()
   const toDark = theme === 'light'

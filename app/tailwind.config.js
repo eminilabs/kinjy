@@ -116,6 +116,10 @@ module.exports = {
       },
       maxWidth: {
         container: "1240px",
+        // The signed-in app, which is three columns of dense content rather
+        // than a page of prose. 1240 left a third of a desktop empty and made
+        // everything read small.
+        app: "1600px",
       },
       keyframes: {
         "accordion-down": {

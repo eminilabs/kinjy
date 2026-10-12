@@ -42,7 +42,7 @@ const HeroMiniTree = memo(function HeroMiniTree() {
   return (
     <svg
       viewBox="0 0 144 166"
-      className="h-auto w-full drop-shadow-[0_12px_24px_rgba(36,31,22,0.35)]"
+      className="h-auto w-full drop-shadow-[0_12px_24px_var(--kl-shadow)]"
       role="img"
       aria-label="A small family tree: one person, their parents, grandparents, partner and child"
     >
@@ -74,7 +74,7 @@ const HeroMiniTree = memo(function HeroMiniTree() {
             cx={n.x}
             cy={n.y}
             r={isOwner ? 11 : 8}
-            fill={isOwner ? 'url(#miniGold)' : '#FFFDF8'}
+            fill={isOwner ? 'url(#miniGold)' : 'var(--kl-surface)'}
             stroke="#D9A648"
             strokeWidth={isOwner ? 2 : 1.4}
             initial={reduced ? false : { scale: 0, opacity: 0 }}

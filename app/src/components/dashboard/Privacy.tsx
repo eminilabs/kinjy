@@ -108,7 +108,7 @@ export default function Privacy() {
   const accepted = connections.data?.accepted.length ?? 0
 
   return (
-    <div className="grid gap-5 lg:grid-cols-2">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
       <Panel
         title="Who can reach you"
         subtitle="Following is always open. Everything below is your call."
@@ -137,7 +137,7 @@ export default function Privacy() {
                           'rounded-full border px-3 py-1 text-xs font-semibold',
                           value === choice.id
                             ? 'border-gold/50 bg-gold/10 text-gold-soft'
-                            : 'border-white/12 text-text-mid hover:text-text-hi',
+                            : 'border-[var(--cloud-border)] text-text-mid hover:text-text-hi',
                         )}
                       >
                         {choice.label}
@@ -149,7 +149,7 @@ export default function Privacy() {
             })}
 
             {FEATURES.assistant && (
-              <li className="border-t border-white/8 pt-4">
+              <li className="border-t border-[var(--cloud-border)] pt-4">
                 <label className="flex items-start gap-2.5">
                   <input
                     type="checkbox"
@@ -171,7 +171,7 @@ export default function Privacy() {
               </li>
             )}
 
-            <li className="border-t border-white/8 pt-4">
+            <li className="border-t border-[var(--cloud-border)] pt-4">
               <label className="flex items-start gap-2.5">
                 <input
                   type="checkbox"
@@ -193,7 +193,7 @@ export default function Privacy() {
             </li>
 
             {FEATURES.familyTreeApp && (
-              <li className="border-t border-white/8 pt-4">
+              <li className="border-t border-[var(--cloud-border)] pt-4">
                 <label className="flex items-start gap-2.5">
                   <input
                     type="checkbox"

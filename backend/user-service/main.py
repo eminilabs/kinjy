@@ -586,6 +586,9 @@ def public_profile(handle: str, db: OrmSession = Depends(get_db)):
 def follow(user_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
     if user_id == principal.user_id:
         raise HTTPException(status_code=400, detail="You cannot follow yourself")
+    # Somebody has to be on the other end. Without this a follow row, and a
+    # bump to a followers_count, were written for any string in the path.
+    _ensure_profile(db, user_id)
     if db.scalar(
         select(models.Block).where(
             models.Block.user_id == user_id, models.Block.blocked_id == principal.user_id
@@ -1408,6 +1411,10 @@ def set_preferences(payload: PreferencesIn, principal: CurrentUser, db: OrmSessi
 def block(user_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
     if user_id == principal.user_id:
         raise HTTPException(status_code=400, detail="You cannot block yourself")
+    # As with follow: a block is a statement about a member, so there has to be
+    # one. Unblocking deliberately does not check - a member who has since been
+    # deleted must still be removable from your block list.
+    _ensure_profile(db, user_id)
     if not db.scalar(
         select(models.Block).where(
             models.Block.user_id == principal.user_id, models.Block.blocked_id == user_id
@@ -1579,12 +1586,39 @@ def _connection_between(db: OrmSession, a: str, b: str) -> models.Connection | N
 
 
 def _prefs(db: OrmSession, user_id: str) -> models.Preferences:
+    """This member's settings, creating the row only for a member who exists.
+
+    It used to create one for whatever id it was handed, and it is handed ids
+    from URL paths and from other services. Two consequences, both seen:
+
+    * a request naming a string that is nobody left a settings row behind for
+      it, because reading the row was how the privacy check was done; and
+    * a service asking about a deleted member recreated theirs, so an erased
+      account came back as a row minutes after it was erased.
+
+    Reading settings should not write anything. Where there is no profile the
+    defaults are returned without being stored - the object is never added to
+    the session, so nothing is persisted and the caller still gets real values
+    to check rather than a row of None.
+    """
     prefs = db.get(models.Preferences, user_id)
-    if prefs is None:
-        prefs = models.Preferences(user_id=user_id)
-        db.add(prefs)
-        db.commit()
-    return prefs
+    if prefs is not None:
+        return prefs
+
+    blank = models.Preferences(user_id=user_id)
+    if db.get(models.Profile, user_id) is None:
+        # Column defaults are applied by the database on insert, and this one
+        # is never inserted - so they are filled in here, or every setting
+        # would read as None and a privacy check would have nothing to test.
+        for column in models.Preferences.__table__.columns:
+            default = column.default
+            if default is not None and not default.is_callable and getattr(blank, column.name) is None:
+                setattr(blank, column.name, default.arg)
+        return blank
+
+    db.add(blank)
+    db.commit()
+    return blank
 
 
 def _allowed(setting: str, connected: bool) -> bool:
@@ -1602,6 +1636,19 @@ def send_invitation(
     """Ask to connect. The other person decides."""
     if user_id == principal.user_id:
         raise HTTPException(status_code=400, detail="You cannot connect with yourself")
+
+    # The addressee has to be somebody. Nothing below checked that, and the
+    # checks that follow are no help: _prefs() *creates* a settings row for an
+    # id it has never seen, so a request naming any string at all wrote two
+    # rows - a pending invitation and a preferences record - for a member who
+    # does not exist. It was found by a typo, POST /connections/invite, which
+    # matched this route with user_id="invite" and duly invited it.
+    #
+    # _ensure_profile is the existing answer: it materialises the profile from
+    # auth-service if the event that should have created it was missed, and
+    # raises 404 when auth-service has never heard of them either. So a real
+    # member is still invitable the moment they register, and a string is not.
+    _ensure_profile(db, user_id)
 
     if db.scalar(
         select(models.Block).where(

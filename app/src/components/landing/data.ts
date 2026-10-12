@@ -182,17 +182,17 @@ export const ASSISTANT_SKILLS = [
  */
 export const PLANS = [
   {
-    name: 'landing.plan.free', price: '0 $', cta: 'nav.signUp', tone: 'plain' as const,
+    name: 'landing.plan.free', price: '$0', cta: 'nav.signUp', tone: 'plain' as const,
     features: ['landing.plan.free1', 'landing.plan.free2', 'landing.plan.free3'],
   },
   {
-    name: 'landing.plan.basic', price: '3,99 $', cta: 'landing.plan.basicCta', tone: 'paper' as const,
-    features: ['landing.plan.basic1', 'landing.plan.basic2', 'landing.plan.basic3', 'landing.plan.basic4'],
+    name: 'landing.plan.basic', price: '$3.99', cta: 'landing.plan.basicCta', tone: 'paper' as const,
+    features: ['landing.plan.basic1', 'landing.plan.basic2', 'landing.plan.basic3'],
   },
   {
-    name: 'landing.plan.premium', price: '9,99 $', cta: 'landing.plan.premiumCta', tone: 'night' as const,
+    name: 'landing.plan.premium', price: '$9.99', cta: 'landing.plan.premiumCta', tone: 'night' as const,
     // Heritage AI belongs to the family tree; the same swap as PricingTeaser.
-    features: ['landing.plan.premium1', 'landing.plan.premium2', FEATURES.familyTree ? 'landing.plan.premium3a' : 'landing.plan.premium3b', 'landing.plan.premium4'],
+    features: ['landing.plan.premium1', 'landing.plan.premium2', FEATURES.familyTree ? 'landing.plan.premium3a' : 'landing.plan.premium3b', 'landing.plan.premium4', 'landing.plan.premium5'],
   },
 ]
 
@@ -252,41 +252,41 @@ export const NAV_MORE = openLinks([
 
 const ALL_FOOTER_COLUMNS: { title: string; links: PageLink[] }[] = [
   {
-    title: 'Plateforme',
+    title: 'footer.platform',
     links: [
-      { to: '/platform', label: 'Tous les modules' },
-      { to: '/feeds', label: 'Fils et algorithmes' },
-      { to: '/family', label: 'Arbre familial' },
-      { to: '/memorials', label: 'Cimetière numérique' },
-      { to: '/app', label: 'L’application' },
+      { to: '/platform', label: 'footer.allModules' },
+      { to: '/feeds', label: 'footer.feeds' },
+      { to: '/family', label: 'footer.familyTree' },
+      { to: '/memorials', label: 'footer.memorials' },
+      { to: '/app', label: 'footer.app' },
     ],
   },
   {
-    title: 'Confiance',
+    title: 'footer.trust',
     links: [
-      { to: '/safety', label: 'Sécurité et modération' },
-      { to: '/safety', label: 'Confidentialité' },
-      { to: '/safety', label: 'Transparence' },
-      { to: '/safety', label: 'Suppression du compte' },
+      { to: '/safety', label: 'footer.safety' },
+      { to: '/safety', label: 'footer.privacy' },
+      { to: '/safety', label: 'footer.transparency' },
+      { to: '/safety', label: 'footer.deletion' },
     ],
   },
   {
-    title: 'Économie',
+    title: 'footer.economy',
     links: [
-      { to: '/creators', label: 'Creator Studio' },
-      { to: '/commerce', label: 'Marketplace' },
-      { to: '/commerce', label: 'Publicité' },
-      { to: '/payments', label: 'Paiements et crypto' },
-      { to: '/creators', label: 'Kinjy Leaders' },
+      { to: '/creators', label: 'footer.creators' },
+      { to: '/commerce', label: 'footer.marketplace' },
+      { to: '/commerce', label: 'footer.advertising' },
+      { to: '/payments', label: 'footer.payments' },
+      { to: '/creators', label: 'footer.leaders' },
     ],
   },
   {
-    title: 'Développeurs',
+    title: 'footer.developers',
     links: [
-      { to: '/developers', label: 'Développeurs' },
-      { to: '/developers', label: 'AI Gateway' },
-      { to: '/feeds', label: 'Marketplace d’algorithmes' },
-      { to: '/assistant', label: 'Assistant Kinjy' },
+      { to: '/developers', label: 'footer.devDocs' },
+      { to: '/developers', label: 'footer.aiGateway' },
+      { to: '/feeds', label: 'footer.algoMarket' },
+      { to: '/assistant', label: 'footer.assistant' },
     ],
   },
 ]

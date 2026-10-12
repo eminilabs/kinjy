@@ -9,11 +9,23 @@ import { useAuth } from '@/hooks/useAuth'
 import { ApiError, kaluta, type Community } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
-const KIND_META: Record<string, { label: string; icon: typeof Globe; tone: string }> = {
-  public: { label: 'Public', icon: Globe, tone: 'text-text-mid' },
-  private: { label: 'Private · approval needed', icon: Lock, tone: 'text-amber-200' },
-  paid: { label: 'Paid', icon: Lock, tone: 'text-gold-soft' },
+const KIND_META: Record<string, { label: string; icon: typeof Globe; tone: string; tile: string }> = {
+  public: { label: 'Public', icon: Globe, tone: 'text-text-mid', tile: 'bg-sky/15 text-sky' },
+  private: { label: 'Private · approval needed', icon: Lock, tone: 'text-amber-200', tile: 'bg-coral/15 text-coral' },
+  paid: { label: 'Paid', icon: Lock, tone: 'text-gold-soft', tile: 'bg-gold/20 text-gold-soft' },
 }
+
+const pageHeader = (
+  <header className="mb-6">
+    <p className="mono-data text-[0.72rem] font-bold uppercase tracking-[0.15em] text-gold-soft">Communities</p>
+    <h1 className="mt-2 text-[clamp(38px,5vw,56px)] font-bold leading-[1.02] tracking-[-0.045em] text-text-hi">
+      Find your people
+    </h1>
+    <p className="mt-3 max-w-2xl text-[0.95rem] leading-relaxed text-text-low">
+      Public, private, secret or paid spaces. Secret ones never appear in this list — they are reachable by direct link only.
+    </p>
+  </header>
+)
 
 export default function Communities() {
   const [query, setQuery] = useState('')
@@ -81,20 +93,13 @@ export default function Communities() {
       return <section className="mx-auto w-full max-w-3xl px-6 py-12">{view}</section>
     }
     return (
-      <AppShell
-        title="Communities"
-        subtitle="A group — what is posted here, and the box to add to it."
-      >
-        {view}
-      </AppShell>
+      <AppShell>{view}</AppShell>
     )
   }
 
   return (
-    <AppShell
-      title="Communities"
-      subtitle="Public, private, secret or paid spaces. Secret ones never appear in this list — they are reachable by direct link only."
-    >
+    <AppShell>
+      {pageHeader}
       <div className="flex flex-col gap-4 lg:flex-row">
         <form
           onSubmit={(e) => {
@@ -103,20 +108,21 @@ export default function Communities() {
           }}
           className="flex flex-1 gap-2"
         >
-          <label className="flex w-full items-center gap-2.5 rounded-full border border-white/10 bg-ink-2/60 px-4 py-2.5">
-            <Search size={15} className="shrink-0 text-text-low" aria-hidden="true" />
+          <label className="flex w-full items-center gap-3 rounded-full border border-[var(--cloud-border)] bg-[var(--cloud)] px-5 py-3.5 shadow-[0_15px_35px_-22px_rgba(76,62,43,0.35)] transition-colors focus-within:border-gold/60">
+            <Search size={18} className="shrink-0 text-text-low" aria-hidden="true" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search communities…"
               aria-label="Search communities"
-              className="w-full bg-transparent text-sm text-text-hi placeholder:text-text-low focus:outline-none"
+              className="w-full bg-transparent text-base text-text-hi placeholder:text-text-low focus:outline-none"
             />
           </label>
         </form>
       </div>
 
-      <form onSubmit={create} className="cloud-card mt-4 p-5">
+      <form onSubmit={create} className="cloud-card mt-4 p-5 md:p-6">
+        <p className="mono-data mb-3 text-[0.7rem] font-bold uppercase tracking-[0.15em] text-gold-soft">Start a community</p>
         <div className="flex flex-wrap gap-2">
           {(['public', 'private', 'paid'] as const).map((k) => (
             <button
@@ -124,10 +130,10 @@ export default function Communities() {
               type="button"
               onClick={() => setKind(k)}
               className={cn(
-                'rounded-full border px-3.5 py-1.5 text-xs font-semibold capitalize',
+                'rounded-full px-4 py-2 text-sm font-semibold capitalize transition-colors',
                 kind === k
-                  ? 'border-gold/50 bg-gold/10 text-gold-soft'
-                  : 'border-white/12 text-text-mid hover:text-text-hi',
+                  ? 'bg-gold/20 text-gold-soft'
+                  : 'text-text-mid hover:bg-text-hi/[0.07] hover:text-text-hi',
               )}
             >
               {k}
@@ -140,12 +146,12 @@ export default function Communities() {
             onChange={(e) => setName(e.target.value)}
             placeholder="Start a community — Kigoma Farmers"
             aria-label="Community name"
-            className="w-full rounded-full border border-white/10 bg-ink-2/60 px-4 py-2.5 text-sm text-text-hi placeholder:text-text-low focus:border-gold/40 focus:outline-none"
+            className="w-full rounded-full border border-transparent bg-text-hi/[0.07] px-5 py-3 text-[0.95rem] text-text-hi placeholder:text-text-low focus:border-gold/50 focus:bg-transparent focus:outline-none"
           />
           <button
             type="submit"
             disabled={!name.trim() || creating}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-2.5 text-sm font-bold text-ink disabled:opacity-40"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-br from-gold-soft to-gold px-6 py-3 text-sm font-bold text-ink disabled:opacity-40"
           >
             <Plus size={14} aria-hidden="true" />
             Create
@@ -165,30 +171,33 @@ export default function Communities() {
 
       {note && <p className="mt-4 text-sm text-gold-soft">{note}</p>}
 
-      <div className="mt-6 grid gap-3 md:grid-cols-2">
+      <div className="mt-6 grid gap-5 md:grid-cols-2">
         {list.loading && <p className="text-sm text-text-low">Loading communities…</p>}
         {list.error && <p className="text-sm text-amber-200">{list.error}</p>}
         {list.data?.items.length === 0 && (
-          <p className="text-sm text-text-low">No community matches. Start the first one.</p>
+          <div className="cloud-card px-6 py-12 text-center md:col-span-2">
+            <p className="text-base font-semibold text-text-hi">No community matches</p>
+            <p className="mt-1 text-sm text-text-low">Start the first one with the form above.</p>
+          </div>
         )}
         {(list.data?.items ?? []).map((community) => {
           const meta = KIND_META[community.kind] ?? KIND_META.public
           return (
-            <article key={community.id} className="cloud-card p-5">
-              <div className="flex items-start gap-3">
+            <article key={community.id} className="cloud-card flex flex-col p-5 md:p-6">
+              <div className="flex items-start gap-3.5">
                 <span
                   aria-hidden="true"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo/25 text-sky"
+                  className={cn('flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px]', meta.tile)}
                 >
-                  <UsersRound size={17} />
+                  <UsersRound size={21} />
                 </span>
                 <div className="min-w-0">
-                  <h2 className="truncate text-sm font-semibold text-text-hi">
+                  <h2 className="truncate text-lg font-bold leading-tight tracking-[-0.02em] text-text-hi">
                     <Link to={`/communities/${community.slug}`} className="hover:text-gold-soft">
                       {community.name}
                     </Link>
                   </h2>
-                  <p className={cn('caption inline-flex items-center gap-1.5', meta.tone)}>
+                  <p className={cn('mt-1 inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs', meta.tone)}>
                     <meta.icon size={11} aria-hidden="true" />
                     {meta.label}
                     {community.price_usd && ` · $${community.price_usd}`}
@@ -198,26 +207,26 @@ export default function Communities() {
                 </div>
               </div>
               {community.description && (
-                <p className="mt-3 line-clamp-2 text-sm text-text-mid">{community.description}</p>
+                <p className="mt-3.5 line-clamp-2 text-[0.92rem] leading-relaxed text-text-mid">{community.description}</p>
               )}
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="mt-auto flex flex-wrap gap-2 pt-5">
                 <Link
                   to={`/communities/${community.slug}`}
-                  className="rounded-full bg-gradient-to-br from-gold-soft to-gold px-4 py-2 text-xs font-bold text-ink"
+                  className="rounded-full bg-gradient-to-br from-gold-soft to-gold px-5 py-2.5 text-sm font-bold text-ink"
                 >
                   Open
                 </Link>
                 <button
                   type="button"
                   onClick={() => join(community)}
-                  className="rounded-full border border-white/12 px-4 py-2 text-xs font-semibold text-text-mid hover:border-gold/40 hover:text-gold-soft"
+                  className="rounded-full border border-[var(--cloud-border)] px-5 py-2.5 text-sm font-semibold text-text-mid hover:border-gold/50 hover:text-gold-soft"
                 >
                   {community.kind === 'private' ? 'Request to join' : community.kind === 'paid' ? 'Buy access' : 'Join'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setManaging(managing === community.id ? null : community.id)}
-                  className="rounded-full border border-white/12 px-4 py-2 text-xs font-semibold text-text-low hover:border-sky/40 hover:text-sky"
+                  className="rounded-full px-4 py-2.5 text-sm font-semibold text-text-low hover:bg-text-hi/[0.07] hover:text-sky"
                 >
                   {managing === community.id ? 'Close' : 'Manage'}
                 </button>

@@ -20,7 +20,7 @@ const RATES = [
 
 const CLEARING = ['$0.74 CPM', '$0.81 CPM', '$1.12 CPM', '$0.68 CPM']
 
-/** Section 4 — Advertising floor pricing (refinement #13): glass rate-card rows. */
+/** Section 4 — Advertising floor pricing : glass rate-card rows. */
 export default function AdRateCard() {
   const rootRef = useRef<HTMLElement>(null)
   const [tick, setTick] = useState(0)
@@ -49,11 +49,11 @@ export default function AdRateCard() {
   }, [])
 
   return (
-    <section ref={rootRef} className="noise-overlay bg-ink px-6 py-24 md:py-32">
+    <section ref={rootRef} className="kl-pad-x border-t border-[var(--kl-paper-2)] py-[clamp(72px,9vw,120px)]">
       <div className="mx-auto max-w-container">
-        <p className="eyebrow text-center text-gold">Refinement #13</p>
-        <h2 className="h2 mt-4 text-center">Floors, not barriers.</h2>
-        <p className="body-lg mx-auto mt-4 max-w-xl text-center text-text-mid">
+        <p className="kl-mono text-xs uppercase tracking-[.14em] text-[var(--kl-gold-deep)] text-center">Advertising</p>
+        <h2 className="kl-h2 mt-5 text-center">Floors, not barriers.</h2>
+        <p className="text-[17px] leading-[1.55] mx-auto mt-4 max-w-xl text-center text-[var(--kl-mid)]">
           Competitive auction floors mean a neighborhood café and a global brand play by the same honest rules.
         </p>
 
@@ -61,21 +61,21 @@ export default function AdRateCard() {
           {RATES.map((r) => (
             <div
               key={r.product}
-              className="rate-row group flex items-center justify-between gap-4 rounded-card-md border border-white/8 bg-white/[0.03] px-5 py-4 transition-colors duration-200 ease-cloud-ease hover:border-gold/30 hover:bg-white/[0.05]"
+              className="rate-row group flex items-center justify-between gap-4 rounded-[14px] border border-[var(--kl-paper-2)] bg-[var(--kl-paper)] px-5 py-4 transition-colors duration-200 ease-cloud-ease hover:border-gold/30 hover:bg-[var(--kl-paper)]"
             >
-              <span className="flex items-center gap-3 text-sm font-medium text-text-hi">
-                {r.auction && <Gavel size={15} className="text-gold" aria-hidden="true" />}
+              <span className="flex items-center gap-3 text-sm font-medium text-[var(--kl-ink)]">
+                {r.auction && <Gavel size={15} className="text-[var(--kl-gold-deep)]" aria-hidden="true" />}
                 {r.product}
               </span>
               <span className="flex items-center gap-3">
                 {r.auction && (
-                  <span className="mono-data hidden rounded-full border border-gold/25 bg-gold/[0.07] px-2.5 py-0.5 text-[0.65rem] text-gold-soft sm:inline">
+                  <span className="mono-data hidden rounded-full border border-gold/25 bg-gold/[0.07] px-2.5 py-0.5 text-[0.65rem] text-[var(--kl-gold-deep)] sm:inline">
                     clearing now: {CLEARING[tick]}
                   </span>
                 )}
                 <span
                   className={cn(
-                    'mono-data text-text-hi transition-all duration-200 group-hover:text-gold-soft group-hover:[text-shadow:0_0_16px_rgba(217,166,72,0.65)]',
+                    'mono-data text-[var(--kl-ink)] transition-all duration-200 group-hover:text-[var(--kl-gold-deep)] group-hover:[text-shadow:0_0_16px_rgba(217,166,72,0.65)]',
                   )}
                 >
                   {r.floor}
@@ -84,7 +84,7 @@ export default function AdRateCard() {
             </div>
           ))}
         </div>
-        <p className="caption mx-auto mt-6 max-w-xl text-center">
+        <p className="text-xs text-[var(--kl-low)] mx-auto mt-6 max-w-xl text-center">
           Auction floors — AI-adjusted by demand, never below these lines. Human-approved before launch, always.
         </p>
       </div>
