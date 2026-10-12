@@ -113,16 +113,22 @@ function withHashtags(text: string, mentions: Record<string, string> = {}) {
         // stops looking like a handle the moment it has one. The body keeps
         // the handle, because that is what the author typed; this is only how
         // it is shown, and an unresolved handle stays exactly as written.
-        const handle = part.slice(1).toLowerCase()
+        // The full stop after a mention is the sentence's, not part of the
+        // handle. Captured inside it, the name never resolved.
+        const trailing = part.match(/\.+$/)?.[0] ?? ''
+        const token = trailing ? part.slice(0, -trailing.length) : part
+        const handle = token.slice(1).toLowerCase()
         const named = mentions[handle]
         return (
-          <Link
-            key={index}
-            to={`/u/${handle}`}
-            className="font-semibold text-gold-soft hover:underline"
-          >
-            {named || part}
-          </Link>
+          <span key={index}>
+            <Link
+              to={`/u/${handle}`}
+              className="font-semibold text-gold-soft hover:underline"
+            >
+              {named || token}
+            </Link>
+            {trailing}
+          </span>
         )
       }
       if (part.startsWith('#')) {

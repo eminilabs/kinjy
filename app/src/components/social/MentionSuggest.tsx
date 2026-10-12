@@ -19,8 +19,14 @@ import { cn } from '@/lib/utils'
 
 type Person = PersonBrief & { user_id: string }
 
-/** Enough to be a search. One letter matches half the platform. */
-const MIN_QUERY = 1
+/**
+ * Enough to be a search.
+ *
+ * Two, because `/users/search` answers a one-character query with an empty
+ * list - so asking was a wasted request and a wasted moment, and the member
+ * saw nothing happen on the keystroke where something should have.
+ */
+const MIN_QUERY = 2
 /** A list you can take in at a glance, and one request's worth of rows. */
 const LIMIT = 6
 
@@ -191,14 +197,29 @@ export function MentionList({
   const [above, setAbove] = useState(false)
 
   useLayoutEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    const room = window.innerHeight
-    // Only flip when there is a reason to and somewhere to flip to. Without
-    // the second half this trades one off-screen list for another.
-    if (!above && rect.bottom > room - 8 && rect.top > rect.height + 16) setAbove(true)
-    if (above && rect.top < 8) setAbove(false)
+    const place = () => {
+      const el = ref.current
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      // The *visual* viewport, not the layout one. When a phone opens its
+      // keyboard, window.innerHeight does not change on iOS and often does
+      // not on Android either - so a list placed below the box was being put
+      // behind the keyboard, where it is as good as not there. visualViewport
+      // is the part of the page the member can actually see.
+      const view = window.visualViewport
+      const room = (view?.height ?? window.innerHeight) + (view?.offsetTop ?? 0)
+      // Only flip when there is a reason to and somewhere to flip to. Without
+      // the second half this trades one off-screen list for another.
+      if (!above && rect.bottom > room - 8 && rect.top > rect.height + 16) setAbove(true)
+      if (above && rect.top < 8) setAbove(false)
+    }
+    place()
+    // The keyboard opens after the field takes focus, which is after this
+    // list has already decided where to go. Deciding again when the visible
+    // area changes is what makes it follow.
+    const view = window.visualViewport
+    view?.addEventListener('resize', place)
+    return () => view?.removeEventListener('resize', place)
   }, [items, above])
 
   return (

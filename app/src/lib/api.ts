@@ -1754,10 +1754,15 @@ export const kaluta = {
         `/posts/${id}/comments`,
       ),
     comment: (id: string, body: string, parentId?: string) =>
-      api.post<{ id: string; created_at: string; depth: number; parent_id: string | null; reply_to: string | null }>(
-        `/posts/${id}/comments`,
-        { body, parent_id: parentId },
-      ),
+      api.post<{
+        id: string
+        created_at: string
+        depth: number
+        parent_id: string | null
+        reply_to: string | null
+        /** Names for the @mentions in what was just written. */
+        mentions?: Record<string, string>
+      }>(`/posts/${id}/comments`, { body, parent_id: parentId }),
   },
 
   media: {

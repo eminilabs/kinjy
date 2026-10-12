@@ -169,7 +169,14 @@ def _mentioned_handles(body: str) -> list[str]:
     """
     seen: list[str] = []
     for handle in MENTION_RE.findall(body or ""):
-        lowered = handle.lower()
+        # A handle may contain a dot; it does not end with one. "Thanks
+        # @patricko." captured the full stop as part of the name, so the
+        # lookup missed and a mention at the end of a sentence - which is
+        # where most of them are - never got its owner's name or a
+        # notification.
+        lowered = handle.lower().rstrip(".")
+        if len(lowered) < 2:
+            continue
         if lowered not in seen:
             seen.append(lowered)
         if len(seen) >= 50:
@@ -3211,6 +3218,11 @@ def add_comment(post_id: str, payload: CommentIn, principal: CurrentUser, db: Or
         "depth": depth,
         "parent_id": parent_id,
         "reply_to": reply_to,
+        # The names for anyone named in it. The page adds this comment to the
+        # thread itself rather than refetching, so without this the one
+        # comment you just wrote is the one that shows a handle where every
+        # other comment shows a name.
+        "mentions": _mention_names([payload.body or ""]),
     }
 
 

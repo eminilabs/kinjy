@@ -66,17 +66,24 @@ function withMentions(body: string, names: Record<string, string> = {}) {
         if (part.startsWith('@')) {
           // A mention is a person, so it goes to them. It was styled as a link
           // and did nothing, which is the most annoying kind of not-a-link.
-          const handle = part.slice(1).toLowerCase()
+          // A handle may contain a dot but never ends with one, so a
+          // trailing dot is the sentence's full stop and belongs outside the
+          // link - exactly like the punctuation after an address.
+          const trailing = part.match(/\.+$/)?.[0] ?? ''
+          const token = trailing ? part.slice(0, -trailing.length) : part
+          const handle = token.slice(1).toLowerCase()
           const name = names[handle]
           return (
-            <Link
-              key={index}
-              to={`/u/${handle}`}
-              onClick={(event) => event.stopPropagation()}
-              className="font-semibold text-gold-soft hover:underline"
-            >
-              {name || part}
-            </Link>
+            <span key={index}>
+              <Link
+                to={`/u/${handle}`}
+                onClick={(event) => event.stopPropagation()}
+                className="font-semibold text-gold-soft hover:underline"
+              >
+                {name || token}
+              </Link>
+              {trailing}
+            </span>
           )
         }
         return part
