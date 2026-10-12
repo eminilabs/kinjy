@@ -32,6 +32,21 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-kaluta}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}
+      # The management plugin's stats collector was sitting at 95% of a core,
+      # continuously, on a four-core machine - a quarter of the server - and
+      # it had been doing it for days. Measured, not guessed: the busiest
+      # Erlang process by reductions was rabbit_mgmt_external_stats, and
+      # `rabbitmqctl list_queues` timed out at three minutes against a broker
+      # with zero queues.
+      #
+      # Nothing was reading those statistics. This image ships the management
+      # plugin, but `ports: !override []` above means its dashboard has no
+      # published port and cannot be reached from anywhere.
+      #
+      # The broker itself is untouched: same image, same queues, same
+      # credentials. Only the collector stops. The dashboard still loads over
+      # a tunnel if anyone ever wants it; it just shows no per-object metrics.
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbitmq_management_agent disable_metrics_collector true"
 
   gateway: &prod-service
     ports: !override []

@@ -1,15 +1,30 @@
-import { useEffect } from 'react'
+import { Suspense, lazy, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import { useLocation } from 'react-router'
-import gsap from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useAuth } from '@/hooks/useAuth'
 import Navbar from './Navbar'
 import Footer from './Footer'
-import LiveAssistant from './assistant/LiveAssistant'
 import { FEATURES } from '@/lib/features'
 
-gsap.registerPlugin(ScrollTrigger)
+/**
+ * The assistant arrives after the page, not with it.
+ *
+ * It carries its own knowledge base - 148 kB of source, five languages of
+ * answers - and it was imported here, in the shell, so every page downloaded
+ * all of it before rendering anything. A member opening their feed paid for
+ * the answers to questions about the marketing site.
+ *
+ * Lazy, with no fallback: the orb appearing a moment after the page is how
+ * every floating helper behaves, and nothing on the page is waiting for it.
+ */
+const LiveAssistant = lazy(() => import('./assistant/LiveAssistant'))
+
+// GSAP used to be registered here, which is what put the whole of gsap and
+// ScrollTrigger into the entry bundle - downloaded by every visitor and every
+// member on every page, including a feed that has no animation in it. Nothing
+// in this shell uses it: the registration was for components on lazy routes,
+// and every one of those registers the plugin itself. Removing it lets gsap
+// travel with the pages that actually animate.
 
 /**
  * Routes that render `AppShell`, which brings its own top bar, chip nav and
@@ -115,7 +130,11 @@ export default function Layout({ children }: { children: ReactNode }) {
       {!ownChrome && <Navbar />}
       <main className={ownChrome ? undefined : 'pt-[72px]'}>{children}</main>
       {!ownChrome && <Footer />}
-      {showAssistant && <LiveAssistant />}
+      {showAssistant && (
+        <Suspense fallback={null}>
+          <LiveAssistant />
+        </Suspense>
+      )}
       {/* Film grain belongs to the dark surfaces; on white paper it reads as dirt. */}
       {!hasOwnChrome(location.pathname) && <div className="global-grain" aria-hidden="true" />}
     </div>
