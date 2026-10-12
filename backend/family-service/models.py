@@ -225,6 +225,8 @@ class Invitation(Base):
     declined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # What the invitee becomes on accepting. The least there is, unless the inviter says more.
     role: Mapped[str] = mapped_column(String(20), default="viewer", server_default="viewer")
+    # A viewer invitation may open one branch only (see Membership.branch_root_id).
+    branch_root_id: Mapped[str | None] = mapped_column(String(40))
 
 
 class InvitationEvent(Base):
@@ -272,6 +274,9 @@ class Membership(Base):
     person_id: Mapped[str] = mapped_column(ForeignKey(f"{SCHEMA}.persons.id", ondelete="CASCADE"))
     role: Mapped[str] = mapped_column(String(20))
     granted_by: Mapped[str | None] = mapped_column(String(40))
+    # A viewer limited to one branch: this person and their descendants (and partners). No foreign
+    # key on purpose: if that person is ever removed the member must see less, never everything.
+    branch_root_id: Mapped[str | None] = mapped_column(String(40))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
@@ -314,4 +319,23 @@ class ExportEvent(Base):
     people: Mapped[int] = mapped_column(Integer)
     included: Mapped[int] = mapped_column(Integer)
     masked: Mapped[int] = mapped_column(Integer)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class AccessEvent(Base):
+    """Who changed who may see or do what in a tree, and when: roles, branches, trusted contacts.
+
+    Ids and short facts only (a role, a person id): never names, never tree content. Kept for a
+    limited time (memberships.KEEP_ACCESS_EVENTS_DAYS).
+    """
+
+    __tablename__ = "access_events"
+    __table_args__ = (Index("ix_access_event_time", "at"), {"schema": SCHEMA})
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("acc"))
+    actor_id: Mapped[str | None] = mapped_column(String(40))
+    subject_id: Mapped[str | None] = mapped_column(String(40))  # the member the change is about
+    person_id: Mapped[str | None] = mapped_column(String(40))  # an anchor person of the tree
+    kind: Mapped[str] = mapped_column(String(40))
+    detail: Mapped[str | None] = mapped_column(String(200))
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

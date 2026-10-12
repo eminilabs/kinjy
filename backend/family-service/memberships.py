@@ -19,6 +19,7 @@ import graph
 import models
 from common.auth import CurrentUser
 from common.database import SessionLocal, get_db
+import roles as roles_mod
 from roles import best, owners_in, role_in
 
 log = logging.getLogger("family-service")
@@ -119,7 +120,8 @@ def list_members(person_id: str, principal: CurrentUser, db: OrmSession = Depend
     rows = db.scalars(
         select(models.Membership).where(models.Membership.person_id.in_(family.people)).order_by(models.Membership.created_at)
     ).all()
-    persons = {p.id: p for p in db.scalars(select(models.Person).where(models.Person.id.in_({r.person_id for r in rows}))).all()}
+    wanted = {r.person_id for r in rows} | {r.branch_root_id for r in rows if r.branch_root_id}
+    persons = {p.id: p for p in db.scalars(select(models.Person).where(models.Person.id.in_(wanted))).all()}
     return {
         "items": [
             {
@@ -130,10 +132,21 @@ def list_members(person_id: str, principal: CurrentUser, db: OrmSession = Depend
                 # Only their own place names them; a node someone merely added says nothing about the member.
                 "name": persons[r.person_id].given_name if persons[r.person_id].user_id == r.user_id else None,
                 "person_id": r.person_id,
+                "branch": (
+                    {"person_id": r.branch_root_id, "name": persons[r.branch_root_id].given_name if r.branch_root_id in persons else None}
+                    if r.branch_root_id
+                    else None
+                ),
             }
             for r in rows
         ]
     }
+
+
+class BranchIn(BaseModel):
+    """The person whose branch the member may see, or null for the whole tree."""
+
+    person_id: str | None = Field(default=None, max_length=40)
 
 
 def _rows_of(db: OrmSession, user_id: str, people: set[str]) -> list[models.Membership]:
@@ -161,8 +174,37 @@ def change_role(membership_id: str, payload: RoleIn, principal: CurrentUser, db:
         _guard_last_owner(db, row.user_id, people)
     for r in rows:
         r.role = payload.role
+        if payload.role != "viewer":
+            r.branch_root_id = None  # a contributor or owner is never limited to a branch
+    roles_mod.record(db, "role_changed", principal.user_id, row.user_id, row.person_id, payload.role)
     db.commit()
     return {"id": row.id, "role": payload.role}
+
+
+@router.put("/family/members/{membership_id}/branch")
+def set_branch(membership_id: str, payload: BranchIn, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """Limit a viewer to one branch (a person, their descendants and partners), or give the whole tree back."""
+    row = db.get(models.Membership, membership_id)
+    if row is None:
+        raise access.not_found()
+    edges, people, _rows = graph.load_component(db, {row.person_id})
+    if role_in(db, principal.user_id, people) != "owner":
+        raise access.not_found()
+    rows = _rows_of(db, row.user_id, people)
+    if payload.person_id is not None:
+        if best(r.role for r in rows) != "viewer":
+            raise HTTPException(status_code=409, detail="Only a viewer can be limited to a branch")
+        if payload.person_id not in people:
+            raise HTTPException(status_code=400, detail="That person is not in this tree")
+        for r in rows:
+            if not access.in_branch(edges, people, payload.person_id, r.person_id):
+                raise HTTPException(status_code=409, detail="Their own place must be inside that branch")
+    for r in rows:
+        r.branch_root_id = payload.person_id
+    roles_mod.record(db, "branch_set" if payload.person_id else "branch_cleared", principal.user_id, row.user_id, row.person_id, payload.person_id)
+    db.commit()
+    return {"id": row.id, "branch_person_id": payload.person_id}
+
 
 
 @router.delete("/family/members/{membership_id}", status_code=204)
@@ -179,6 +221,7 @@ def remove_member(membership_id: str, principal: CurrentUser, db: OrmSession = D
         _guard_last_owner(db, row.user_id, people)
     for r in rows:
         db.delete(r)
+    roles_mod.record(db, "member_removed" if row.user_id != principal.user_id else "member_left", principal.user_id, row.user_id, row.person_id)
     db.commit()
 
 

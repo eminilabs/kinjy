@@ -148,6 +148,8 @@ class InviteIn(BaseModel):
     """What the invitee becomes. Viewer unless the inviter, being an owner, says contributor."""
 
     role: str = Field(default="viewer", pattern="^(viewer|contributor)$")
+    #: A viewer can be limited to one branch: this person, their descendants and partners.
+    branch_root_id: str | None = Field(default=None, max_length=40)
 
 
 # --- the inviter's side ----------------------------------------------------
@@ -165,6 +167,13 @@ def create_invitation(
     access.require_role(family, "contributor")
     if payload.role not in roles.invitable_roles(family.role):
         raise HTTPException(status_code=403, detail="With your role you can invite people only to view this tree")
+    if payload.branch_root_id is not None:
+        if payload.role != "viewer" or not family.can("owner"):
+            raise HTTPException(status_code=403, detail="Only an owner can limit a viewer to one branch")
+        if payload.branch_root_id not in family.people:
+            raise HTTPException(status_code=400, detail="That person is not in this tree")
+        if not access.in_branch(family.edges, family.people, payload.branch_root_id, person.id):
+            raise HTTPException(status_code=409, detail="The person invited must be inside that branch")
     _limit(f"inv:create:{principal.user_id}", 10, 3600)
 
     if person.user_id is not None:
@@ -197,13 +206,14 @@ def create_invitation(
         token_hash=hash_token(token),
         expires_at=now + timedelta(days=TTL_DAYS),
         role=payload.role,
+        branch_root_id=payload.branch_root_id,
     )
     db.add(inv)
     db.flush()
     _audit(db, inv.id, "created", principal.user_id, person.id)
     db.commit()
     # The only time the token exists outside the invitee's copy.
-    return {"id": inv.id, "token": token, "role": inv.role, "expires_at": inv.expires_at, "path": f"/tree/invite#t={token}"}
+    return {"id": inv.id, "token": token, "role": inv.role, "branch_root_id": inv.branch_root_id, "expires_at": inv.expires_at, "path": f"/tree/invite#t={token}"}
 
 
 @router.get("/family/persons/{person_id}/invitations")
@@ -254,6 +264,10 @@ def lookup_invitation(payload: TokenIn, request: Request, principal: MaybeUser, 
         if person is None or person.user_id is not None:
             raise _invalid()
         result["person_given_name"] = person.given_name
+        result["branch_name"] = None
+        if inv.branch_root_id:
+            root = db.get(models.Person, inv.branch_root_id)
+            result["branch_name"] = root.given_name if root else ""
         result["already_has_node"] = access.my_person(db, principal.user_id) is not None
         result["own"] = inv.created_by == principal.user_id
     return result
@@ -319,7 +333,8 @@ async def accept_invitation(payload: TokenIn, request: Request, principal: Curre
         db.rollback()
         raise _invalid()
 
-    roles.grant(db, principal.user_id, person.id, inv.role, inv.created_by)
+    roles.grant(db, principal.user_id, person.id, inv.role, inv.created_by, inv.branch_root_id)
+    roles.record(db, "member_joined", inv.created_by, principal.user_id, person.id, inv.role + (" branch" if inv.branch_root_id else ""))
     person.user_id = principal.user_id
     person.status = "verified"  # the person themselves has said it is them
     person.verified_at = now

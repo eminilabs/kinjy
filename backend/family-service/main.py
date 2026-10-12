@@ -45,6 +45,8 @@ MIGRATIONS = [
     "WHERE kind IN ('spouse_of', 'sibling_of')",
     # What an invitation makes the invitee: the least, unless the inviter says more.
     f"ALTER TABLE {models.SCHEMA}.invitations ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'viewer'",
+    f"ALTER TABLE {models.SCHEMA}.memberships ADD COLUMN IF NOT EXISTS branch_root_id VARCHAR(40)",
+    f"ALTER TABLE {models.SCHEMA}.invitations ADD COLUMN IF NOT EXISTS branch_root_id VARCHAR(40)",
     f"CREATE UNIQUE INDEX IF NOT EXISTS uq_relationship_filiation ON {models.SCHEMA}.relationships "
     "(from_person_id, to_person_id) "
     "WHERE kind IN ('parent_of', 'adoptive_parent_of', 'guardian_of')",
@@ -252,12 +254,8 @@ def _detail(person: models.Person, principal, family: access.Family, db: OrmSess
 
 
 def _visible_ids(db: OrmSession, user_id: str) -> set[str]:
-    """Everyone in a family the caller belongs to."""
-    mine = access.my_person_ids(db, user_id)
-    if not mine:
-        return set()
-    _edges, people, _rows = graph.load_component(db, mine)
-    return people
+    """Everyone in a family the caller belongs to, and no further than a branch if that is all they were given."""
+    return access.reachable(db, user_id)
 
 
 # ---------------------------------------------------------------------------

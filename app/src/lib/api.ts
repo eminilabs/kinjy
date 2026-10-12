@@ -1915,8 +1915,11 @@ export const kaluta = {
         { decision, note },
       ),
     /** Invite someone to claim a person node as themselves. The link is returned once. */
-    invite: (personId: string, role: 'viewer' | 'contributor' = 'viewer') =>
-      api.post<{ id: string; token: string; role: TreeRole; expires_at: string; path: string }>(`/family/persons/${personId}/invitations`, { role }),
+    invite: (personId: string, role: 'viewer' | 'contributor' = 'viewer', branchRootId?: string) =>
+      api.post<{ id: string; token: string; role: TreeRole; branch_root_id: string | null; expires_at: string; path: string }>(
+        `/family/persons/${personId}/invitations`,
+        { role, ...(branchRootId ? { branch_root_id: branchRootId } : {}) },
+      ),
     invitations: (personId: string) =>
       api.get<{ items: Array<{ id: string; role: TreeRole; status: 'active' | 'accepted' | 'revoked' | 'declined' | 'expired'; created_at: string; expires_at: string }> }>(
         `/family/persons/${personId}/invitations`,
@@ -1924,7 +1927,7 @@ export const kaluta = {
     revokeInvitation: (invitationId: string) => api.delete<void>(`/family/invitations/${invitationId}`),
     /** Public on purpose: a visitor learns only that a link is valid. */
     lookupInvitation: (token: string) =>
-      api.post<{ valid: true; role: TreeRole; person_given_name?: string; already_has_node?: boolean; own?: boolean }>('/family/invitations/lookup', { token }),
+      api.post<{ valid: true; role: TreeRole; branch_name?: string | null; person_given_name?: string; already_has_node?: boolean; own?: boolean }>('/family/invitations/lookup', { token }),
     acceptInvitation: (token: string) => api.post<{ person_id: string; role: TreeRole }>('/family/invitations/accept', { token }),
     declineInvitation: (token: string) => api.post<void>('/family/invitations/decline', { token }),
     /** Owners only: what a GEDCOM export would hold, in numbers. Nothing personal, nothing recorded. */
@@ -1961,9 +1964,23 @@ export const kaluta = {
     },
     /** Owners only. */
     members: (personId: string) =>
-      api.get<{ items: Array<{ id: string; role: TreeRole; since: string; is_me: boolean; name: string | null; person_id: string }> }>(
+      api.get<{
+        items: Array<{
+          id: string
+          role: TreeRole
+          since: string
+          is_me: boolean
+          name: string | null
+          person_id: string
+          /** The one branch this viewer may see, or null for the whole tree. */
+          branch: { person_id: string; name: string | null } | null
+        }>
+      }>(
         `/family/persons/${personId}/members`,
       ),
+    /** Owners only: limit a viewer to one branch (a person, their descendants and partners), or null for the whole tree. */
+    setMemberBranch: (membershipId: string, personId: string | null) =>
+      api.put<{ id: string; branch_person_id: string | null }>(`/family/members/${membershipId}/branch`, { person_id: personId }),
     setMemberRole: (membershipId: string, role: TreeRole) =>
       api.patch<{ id: string; role: TreeRole }>(`/family/members/${membershipId}`, { role }),
     removeMember: (membershipId: string) => api.delete<void>(`/family/members/${membershipId}`),

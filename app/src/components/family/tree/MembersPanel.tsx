@@ -4,6 +4,7 @@ import { useAppTheme } from '@/components/appdemo/theme'
 import { useApi } from '@/hooks/useApi'
 import { ApiError, kaluta, type TreeRole } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import FamilyFinder from './FamilyFinder'
 import { ROLE_LABEL } from './treeRoles'
 
 /**
@@ -15,6 +16,7 @@ export default function MembersPanel({ personId }: { personId: string }) {
   const list = useApi(() => kaluta.family.members(personId), [personId])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [choosing, setChoosing] = useState<string | null>(null)
 
   const run = async (action: () => Promise<unknown>) => {
     setBusy(true)
@@ -59,6 +61,37 @@ export default function MembersPanel({ personId }: { personId: string }) {
                 {m.is_me ? 'Leave' : 'Remove'}
               </button>
             </span>
+            {m.role === 'viewer' && (
+              <span className={cn('w-full text-xs', tok.low)}>
+                {m.branch ? (
+                  <>
+                    Sees only the branch of {m.branch.name ?? 'a person'}: that person, their descendants and partners.{' '}
+                    <button type="button" disabled={busy} onClick={() => run(() => kaluta.family.setMemberBranch(m.id, null))} className="underline underline-offset-2">
+                      Show the whole tree
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    Sees the whole tree.{' '}
+                    <button type="button" disabled={busy} onClick={() => setChoosing(choosing === m.id ? null : m.id)} className="underline underline-offset-2">
+                      Limit to one branch
+                    </button>
+                  </>
+                )}
+                {choosing === m.id && (
+                  <span className="mt-2 block">
+                    <FamilyFinder
+                      label="Find the person whose branch to share"
+                      placeholder="Whose branch? (their descendants and partners)"
+                      onPick={(person) => {
+                        setChoosing(null)
+                        void run(() => kaluta.family.setMemberBranch(m.id, person.id))
+                      }}
+                    />
+                  </span>
+                )}
+              </span>
+            )}
           </li>
         ))}
       </ul>

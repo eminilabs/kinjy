@@ -3,6 +3,8 @@ import { Copy, Send } from 'lucide-react'
 import { useAppTheme } from '@/components/appdemo/theme'
 import { useApi } from '@/hooks/useApi'
 import { ApiError, kaluta, type TreeRole } from '@/lib/api'
+import FamilyFinder from './FamilyFinder'
+import { fullName } from './layout'
 import { ROLE_LABEL, ROLE_MEANING } from './treeRoles'
 import { cn } from '@/lib/utils'
 
@@ -19,6 +21,8 @@ export default function InvitePanel({ personId, name, roles }: { personId: strin
   const [link, setLink] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [role, setRole] = useState<'viewer' | 'contributor'>('viewer')
+  const [branch, setBranch] = useState<{ id: string; name: string } | null>(null)
+  const [limiting, setLimiting] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -28,7 +32,7 @@ export default function InvitePanel({ personId, name, roles }: { personId: strin
     setBusy(true)
     setError(null)
     try {
-      const made = await kaluta.family.invite(personId, role)
+      const made = await kaluta.family.invite(personId, role, role === 'viewer' && limiting ? branch?.id : undefined)
       setLink(`${window.location.origin}${made.path}`)
       setCopied(false)
       list.reload()
@@ -81,6 +85,26 @@ export default function InvitePanel({ personId, name, roles }: { personId: strin
           </select>
           <span className={cn('mt-1 block', tok.low)}>{ROLE_LABEL[role]}: {ROLE_MEANING[role]}.</span>
         </label>
+      )}
+      {roles.includes('contributor') && role === 'viewer' && (
+        <div className={cn('mb-2 text-xs', tok.mid)}>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={limiting} onChange={(e) => { setLimiting(e.target.checked); if (!e.target.checked) setBranch(null) }} />
+            Show only one branch of the family
+          </label>
+          {limiting && (
+            <div className="mt-2">
+              {branch ? (
+                <p>
+                  The branch of <strong>{branch.name}</strong>: that person, their descendants and partners. {name} must be inside it.{' '}
+                  <button type="button" onClick={() => setBranch(null)} className="underline underline-offset-2">Change</button>
+                </p>
+              ) : (
+                <FamilyFinder label="Find the person whose branch to share" placeholder="Whose branch?" onPick={(person) => setBranch({ id: person.id, name: fullName(person) })} />
+              )}
+            </div>
+          )}
+        </div>
       )}
       {roles.length === 1 && <p className={cn('mb-2 text-xs', tok.low)}>{name} will be a Viewer: {ROLE_MEANING.viewer}.</p>}
       {link && (

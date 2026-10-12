@@ -76,6 +76,8 @@ class Family:
     mine: set[str]
     #: The caller's role in this tree ("viewer" | "contributor" | "owner"), None when they hold none.
     role: str | None = None
+    #: True when the caller was given a branch only: `people` and `edges` are then that branch, nothing more.
+    scoped: bool = False
 
     @property
     def viewer_belongs(self) -> bool:
@@ -86,9 +88,65 @@ class Family:
         return self.role is not None and roles.RANK[self.role] >= roles.RANK[minimum]
 
 
+def _descent(edges: graph.Edges, root: str) -> set[str]:
+    """``root``, everyone descended from them, and the partners of those; never anyone's parents or other relatives."""
+    stack, branch = [root], {root}
+    while stack:
+        for child in edges.children.get(stack.pop(), set()):
+            if child not in branch:
+                branch.add(child)
+                stack.append(child)
+    for person in list(branch):
+        branch |= edges.spouses.get(person, set())
+    return branch
+
+
+def in_branch(edges: graph.Edges, people: set[str], root: str, person: str) -> bool:
+    return root in people and person in _descent(edges, root)
+
+
+def branch_of(edges: graph.Edges, people: set[str], root: str | None, anchor: str) -> set[str]:
+    """What a member limited to ``root``'s branch sees: that branch, plus their own place.
+
+    Fails closed: a root that is not in the tree gives only the member's own place.
+    """
+    if not root or root not in people:
+        return {anchor}
+    return (_descent(edges, root) & people) | {anchor}
+
+
 def load_family(db: OrmSession, user_id: str, person_id: str) -> Family:
-    edges, people, _rows = graph.load_component(db, {person_id})
-    return Family(person_id, edges, people, my_person_ids(db, user_id), roles.role_in(db, user_id, people))
+    edges, people, rows = graph.load_component(db, {person_id})
+    mine = my_person_ids(db, user_id)
+    held = db.scalars(
+        select(models.Membership).where(models.Membership.user_id == user_id, models.Membership.person_id.in_(people))
+    ).all() if people else []
+    role = roles.best(m.role for m in held)
+    if held and all(m.branch_root_id for m in held):
+        visible: set[str] = set()
+        for m in held:
+            visible |= branch_of(edges, people, m.branch_root_id, m.person_id)
+        kept = [r for r in rows if r.from_person_id in visible and r.to_person_id in visible]
+        return Family(person_id, graph.edges_from_rows(kept), visible, mine, role, scoped=True)
+    return Family(person_id, edges, people, mine, role)
+
+
+def reachable(db: OrmSession, user_id: str) -> set[str]:
+    """Everyone the caller may see through the roles they hold: whole trees, or only the branches they were given."""
+    held = db.scalars(select(models.Membership).where(models.Membership.user_id == user_id)).all()
+    if not held:
+        return set()
+    whole = {m.person_id for m in held if not m.branch_root_id}
+    out: set[str] = set()
+    if whole:
+        _e, people, _r = graph.load_component(db, whole)
+        out |= people
+    for m in held:
+        if m.branch_root_id:
+            edges, people, _r = graph.load_component(db, {m.person_id})
+            if m.person_id not in out:
+                out |= branch_of(edges, people, m.branch_root_id, m.person_id)
+    return out
 
 
 def owner_preferences(db: OrmSession, person_id: str) -> dict:
@@ -123,6 +181,8 @@ def require_can_read(db: OrmSession, principal, family: Family) -> None:
 
     # A member reads the tree they hold a role in, whatever anyone else has set.
     if family.role is not None:
+        if family.scoped and family.root not in family.people:
+            raise not_found()  # outside the branch they were given
         return
 
     prefs = owner_preferences(db, family.root)

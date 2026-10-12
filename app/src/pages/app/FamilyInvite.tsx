@@ -4,7 +4,7 @@ import { ApiError, kaluta, type TreeRole } from '@/lib/api'
 import { useAuth } from '@/hooks/useAuth'
 import { forgetInvite, pendingInvite, rememberInvite, tokenFromHash } from '@/components/family/tree/inviteToken'
 
-type Look = { state: 'loading' } | { state: 'invalid' } | { state: 'visitor' } | { state: 'member'; name: string; hasNode: boolean; own: boolean; role: TreeRole }
+type Look = { state: 'loading' } | { state: 'invalid' } | { state: 'visitor' } | { state: 'member'; name: string; hasNode: boolean; own: boolean; role: TreeRole; branch: string | null }
 
 const NEXT = encodeURIComponent('/tree/invite')
 
@@ -39,7 +39,7 @@ export default function FamilyInvite() {
       .lookupInvitation(token)
       .then((r) => {
         if (!live) return
-        setLook(signedIn ? { state: 'member', name: r.person_given_name ?? '', hasNode: Boolean(r.already_has_node), own: Boolean(r.own), role: r.role } : { state: 'visitor' })
+        setLook(signedIn ? { state: 'member', name: r.person_given_name ?? '', hasNode: Boolean(r.already_has_node), own: Boolean(r.own), role: r.role, branch: r.branch_name ?? null } : { state: 'visitor' })
       })
       .catch(() => live && setLook({ state: 'invalid' }))
     return () => {
@@ -119,8 +119,13 @@ export default function FamilyInvite() {
                 If you accept, you join this family tree as {look.role === 'viewer' ? 'a viewer' : 'a contributor'}
               </h2>
               <p className="mt-2 text-sm text-text-mid">Your account is attached to {look.name}’s place, and you will be able to see:</p>
+              {look.branch !== null && (
+                <p className="mt-2 text-sm font-semibold text-text-hi">
+                  Only one branch of the family: {look.branch || 'the person chosen'}, their descendants and their partners. The rest of the tree stays hidden from you.
+                </p>
+              )}
               <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-text-mid">
-                <li>every person connected to that place by the family links already recorded: parents, partners, children, brothers and sisters, and the people beyond them;</li>
+                <li>{look.branch !== null ? 'every person in that branch' : 'every person connected to that place by the family links already recorded: parents, partners, children, brothers and sisters, and the people beyond them'};</li>
                 <li>for each of them: name, gender if given, dates and places of birth and death, photo, biography and how they are related to you;</li>
                 <li>the photos, documents and recordings kept for those people.</li>
               </ul>
