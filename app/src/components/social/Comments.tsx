@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CornerDownRight, Loader2, Send, ThumbsUp } from 'lucide-react'
 import { useAppTheme } from '@/components/appdemo/theme'
+import { MentionList, useMentionSuggest } from './MentionSuggest'
 import { ApiError, kaluta, type CommentNode } from '@/lib/api'
 import { isLink, LINK_RE, splitTrailing } from '@/lib/linkify'
 import { cn } from '@/lib/utils'
@@ -120,6 +121,9 @@ export default function Comments({
   const [replyTo, setReplyTo] = useState<CommentNode | null>(null)
   const [sending, setSending] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  // Finishing an @mention as it is typed. Handles are no longer shown
+  // anywhere in the app, so nobody can be expected to recall one.
+  const mention = useMentionSuggest(body, setBody, inputRef)
 
   const load = async () => {
     try {
@@ -481,11 +485,30 @@ export default function Comments({
               size={32}
             />
           </span>
-          <div className={cn('flex min-w-0 flex-1 items-center rounded-full', tok.input)}>
+          <div className={cn('relative flex min-w-0 flex-1 items-center rounded-full', tok.input)}>
+            {/* Above the box rather than below it: a comment composer sits at
+                the bottom of a thread, and a list dropped underneath would be
+                off the screen or under the keyboard. */}
+            {mention.open && (
+              <MentionList
+                items={mention.items}
+                index={mention.index}
+                onPick={mention.pick}
+                onHover={mention.setIndex}
+              />
+            )}
             <input
               ref={inputRef}
               value={body}
               onChange={(e) => setBody(e.target.value)}
+              onKeyDown={(event) => {
+                // The list owns the arrows and Enter while it is open: Enter
+                // in this box sends the comment, and choosing a name is not
+                // sending it.
+                if (mention.onKeyDown(event)) event.preventDefault()
+              }}
+              onKeyUp={mention.sync}
+              onClick={mention.sync}
               placeholder={replyTo ? 'Write a reply…' : 'Write a comment…'}
               aria-label={replyTo ? 'Write a reply' : 'Write a comment'}
               className={cn(

@@ -124,12 +124,24 @@ export default function VideoPlayer({
     <div ref={wrapRef} className={cn('group relative overflow-hidden bg-black', className)}>
       <video
         ref={ref}
-        src={src}
+        // No poster is stored for a video, so the first frame is made to be
+        // one: `#t=0.1` asks the browser to seek a tenth of a second in and
+        // paint what it finds there. Without it a video in a feed is a black
+        // rectangle until somebody presses play - which is what "the videos
+        // have no thumbnail" was. The fragment never reaches the server, so
+        // it cannot disturb the signed URL it is appended to.
+        src={poster ? src : `${src}#t=0.1`}
         poster={poster ?? undefined}
         muted={muted}
         playsInline
         loop={false}
-        preload={autoplay ? 'metadata' : 'none'}
+        // Always metadata, never 'none'. Tying this to the autoplay
+        // preference meant a member who had turned autoplay off downloaded
+        // nothing at all - and a video that has fetched nothing has no frame
+        // to show, so their whole feed was black boxes. Metadata is a few
+        // kilobytes fetched with a range request; it is not the video, and it
+        // is what buys the still image above.
+        preload="metadata"
         onClick={toggle}
         className={cn(
           'w-full cursor-pointer bg-black',

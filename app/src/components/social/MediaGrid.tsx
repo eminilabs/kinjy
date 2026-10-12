@@ -285,7 +285,10 @@ function Tile({
     return (
       <div className={cn('relative w-full overflow-hidden bg-black', className)}>
         <VideoPlayer
-          src={item.url}
+          // The local copy, like the pictures. A video is read in pieces as
+          // it plays and again on every seek, and each of those pieces was a
+          // round trip to object storage.
+          src={preview(item.url) ?? item.url}
           autoplay={autoplay}
           onExpand={() => onOpen(index)}
           className="h-full w-full"

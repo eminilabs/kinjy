@@ -296,7 +296,9 @@ function Short({ post, active, muted, onToggleMute, currentUserId, autoplay }: S
                 to={`/u/${post.author.handle}`}
                 className="text-sm font-bold text-white hover:underline"
               >
-                @{post.author.handle}
+                {/* Their name, like everywhere else. The link still goes to
+                    the handle, which is the address. */}
+                {post.author.display_name || `@${post.author.handle}`}
               </Link>
             ) : (
               <span className="text-sm font-bold text-white">

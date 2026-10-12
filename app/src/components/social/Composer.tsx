@@ -24,6 +24,7 @@ import { useAppTheme } from '@/components/appdemo/theme'
 import MemberAvatar from './MemberAvatar'
 import { ApiError, kaluta, type Post, type UploadedMedia } from '@/lib/api'
 import RichTextEditor from './RichTextEditor'
+import { MentionList, useMentionSuggest } from './MentionSuggest'
 import { onChange } from '@/lib/live'
 import { htmlToText } from '@/lib/richtext'
 import { LANGUAGES } from '@/i18n'
@@ -166,6 +167,10 @@ export default function Composer({
   const [open, setOpen] = useState(false)
   const [kind, setKind] = useState<Kind>('text')
   const [body, setBody] = useState('')
+  const bodyRef = useRef<HTMLTextAreaElement>(null)
+  // Finishing an @mention as it is typed, in the box where most of them are
+  // written.
+  const mention = useMentionSuggest(body, (next) => setBody(next.slice(0, MAX)), bodyRef)
   const [headline, setHeadline] = useState('')
   // previewUrl is local, made from the file the member picked. The server's own
   // address cannot be the preview: an upload nobody has attached to a post yet is
@@ -522,19 +527,36 @@ export default function Composer({
                 <RichTextEditor value={body} onChange={setBody} />
               </div>
             ) : (
-              <textarea
-                value={body}
-                onChange={(e) => setBody(e.target.value.slice(0, MAX))}
-                rows={4}
-                placeholder={`What's on your mind, ${user?.display_name?.split(' ')[0] ?? 'friend'}?`}
-                aria-label="Post body"
-                autoFocus
-                className={cn(
-                  'mt-3 w-full resize-none bg-transparent text-base focus:outline-none',
-                  tok.text,
-                  'placeholder:opacity-60',
+              <div className="relative">
+                <textarea
+                  ref={bodyRef}
+                  value={body}
+                  onChange={(e) => setBody(e.target.value.slice(0, MAX))}
+                  onKeyDown={(event) => {
+                    // Arrows and Enter belong to the list while it is open.
+                    if (mention.onKeyDown(event)) event.preventDefault()
+                  }}
+                  onKeyUp={mention.sync}
+                  onClick={mention.sync}
+                  rows={4}
+                  placeholder={`What's on your mind, ${user?.display_name?.split(' ')[0] ?? 'friend'}?`}
+                  aria-label="Post body"
+                  autoFocus
+                  className={cn(
+                    'mt-3 w-full resize-none bg-transparent text-base focus:outline-none',
+                    tok.text,
+                    'placeholder:opacity-60',
+                  )}
+                />
+                {mention.open && (
+                  <MentionList
+                    items={mention.items}
+                    index={mention.index}
+                    onPick={mention.pick}
+                    onHover={mention.setIndex}
+                  />
                 )}
-              />
+              </div>
             )}
 
             {/* Live confirmation that a #tag was recognised. Without it, typing

@@ -876,11 +876,11 @@ def backfill_previews(limit: int = 50, dry_run: bool = True, db: OrmSession = De
     assets = db.scalars(
         select(models.Asset)
         .where(
-            models.Asset.kind == "image",
+            models.Asset.kind.in_(("image", "video")),
             models.Asset.preview_path.is_(None),
             models.Asset.private.is_(False),
             models.Asset.status == "ready",
-            models.Asset.content_type.in_(sorted(preview.SOURCES)),
+            models.Asset.content_type.in_(sorted(preview.SOURCES | preview.PLAYABLE)),
             # Big ones wherever they are stored, and *every* remote one
             # however small: a 30 kB thumbnail fetched through UploadCenter's
             # API and then from object storage is slow for reasons that have
@@ -961,10 +961,10 @@ def backfill_previews(limit: int = 50, dry_run: bool = True, db: OrmSession = De
         select(func.count())
         .select_from(models.Asset)
         .where(
-            models.Asset.kind == "image",
+            models.Asset.kind.in_(("image", "video")),
             models.Asset.preview_path.is_(None),
             models.Asset.private.is_(False),
-            models.Asset.content_type.in_(sorted(preview.SOURCES)),
+            models.Asset.content_type.in_(sorted(preview.SOURCES | preview.PLAYABLE)),
             or_(models.Asset.size_bytes > 120 * 1024, models.Asset.external_id.isnot(None)),
         )
     )

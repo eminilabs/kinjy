@@ -183,7 +183,7 @@ export default function MediaLightbox({
           // between the card and the full-size view. Unmuted here: opening a
           // video full-size is asking to watch it.
           <VideoPlayer
-            src={item.url ?? ''}
+            src={preview(item.url) ?? item.url ?? ''}
             autoplay
             startMuted={false}
             fill

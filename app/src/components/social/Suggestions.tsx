@@ -93,10 +93,12 @@ export function People({ limit = 4, title = 'People to follow' }: { limit?: numb
                     {person.display_name}
                   </Link>
                 </p>
-                <p className={cn('mt-0.5 truncate text-xs', tok.low)}>
-                  @{person.handle}
-                  {person.city ? ` · ${person.city}` : ''}
-                </p>
+                {/* Where they are, when we know. The handle used to be here
+                    and is an address, not an introduction: deciding whether to
+                    follow somebody is about who they are and where they are. */}
+                {person.city && (
+                  <p className={cn('mt-0.5 truncate text-xs', tok.low)}>{person.city}</p>
+                )}
               </div>
             </div>
             <div className="mt-2.5 grid grid-cols-2 gap-2">

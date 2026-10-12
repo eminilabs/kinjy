@@ -41,6 +41,14 @@ QUALITY = 80
 # SVG is not a raster image.
 SOURCES = {"image/jpeg", "image/png", "image/webp"}
 
+# Video is never re-encoded - there is no ffmpeg here and transcoding is a
+# different job - but it is still worth keeping a copy of. A video is read in
+# pieces as somebody watches and seeks, and every one of those pieces was a
+# fresh signed-link lookup and a fresh fetch from object storage. That is what
+# "the videos do not play properly" is: not a decoding problem, a distance
+# problem, repeated for every seek.
+PLAYABLE = {"video/mp4", "video/webm", "video/quicktime"}
+
 PREVIEW_CONTENT_TYPE = "image/webp"
 PREVIEW_SUFFIX = ".webp"
 
@@ -63,6 +71,10 @@ def wanted(content_type: str, size_bytes: int, remote: bool = False) -> bool:
     So a remote picture always gets one, however small. Local files are left
     alone below the threshold: they are already a disk read away.
     """
+    if content_type in PLAYABLE:
+        # Only when it is far away. A video already on this disk gains nothing
+        # from a second copy of itself, and videos are not small.
+        return remote
     if content_type not in SOURCES:
         return False
     return remote or size_bytes > 120 * 1024
@@ -77,10 +89,13 @@ def localise(source: Path, destination: Path, content_type: str) -> tuple[Path, 
     saving when there is one, and when there is not, copy the bytes anyway so
     the next reader is served from here.
     """
-    derived = destination.with_suffix(PREVIEW_SUFFIX)
-    size = build(source, derived)
-    if size is not None:
-        return derived, size, PREVIEW_CONTENT_TYPE
+    # Only a still picture is worth shrinking. Everything else is copied as it
+    # is: the point of the copy is where the bytes are, not how many.
+    if content_type in SOURCES:
+        derived = destination.with_suffix(PREVIEW_SUFFIX)
+        size = build(source, derived)
+        if size is not None:
+            return derived, size, PREVIEW_CONTENT_TYPE
     verbatim = destination.with_suffix(_SUFFIXES.get(content_type, ".bin"))
     try:
         shutil.copyfile(source, verbatim)
@@ -90,7 +105,15 @@ def localise(source: Path, destination: Path, content_type: str) -> tuple[Path, 
     return verbatim, verbatim.stat().st_size, content_type
 
 
-_SUFFIXES = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
+_SUFFIXES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+    "video/mp4": ".mp4",
+    "video/webm": ".webm",
+    "video/quicktime": ".mov",
+}
 
 
 def build(source: Path, destination: Path) -> int | None:
