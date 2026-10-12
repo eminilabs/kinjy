@@ -172,10 +172,6 @@ export default function Profile() {
                 <dt className={tok.low}>Languages</dt>
                 <dd className={cn('text-end font-medium', tok.text)}>{spoken}</dd>
               </div>
-              <div className="flex justify-between gap-3">
-                <dt className={tok.low}>Handle</dt>
-                <dd className="mono-data font-semibold text-gold-soft">@{profile.handle}</dd>
-              </div>
             </dl>
           </section>
 
@@ -268,8 +264,10 @@ export default function Profile() {
             {profile.display_name}
             {profile.verified && <VerifiedBadge size={22} />}
           </h1>
+          {/* The handle used to sit here and again in the About card. A
+              person is their name; the handle is an address, and the address
+              is already in the URL of the page you are on. */}
           <p className={cn('mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.95rem]', tok.low)}>
-            <span className="mono-data">@{profile.handle}</span>
             {place && (
               <span className="inline-flex items-center gap-1">
                 <MapPin size={13} aria-hidden="true" />

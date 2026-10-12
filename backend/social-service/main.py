@@ -6,6 +6,9 @@ import html as html_module
 import json
 import logging
 import re
+import threading
+import time
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -174,6 +177,74 @@ def _mentioned_handles(body: str) -> list[str]:
     return seen
 
 
+# handle -> display name, for a minute. A thread is full of the same few
+# mentions and a feed repeats them down the page; without this, rendering one
+# screen asks user-service the same question twenty times. Short enough that a
+# renamed member is right again within a minute.
+_MENTION_TTL = 60.0
+_mention_cache: dict[str, tuple[str, float]] = {}
+_mention_lock = threading.Lock()
+
+
+def _mention_names(bodies: Iterable[str]) -> dict[str, str]:
+    """The names behind the @handles in these bodies.
+
+    A mention is stored as the handle, because that is what the author typed
+    and what has to survive an edit. But a handle is an address, and a reader
+    wants the person: "@k_mbeki3" means nothing next to "Kofi Mbeki". So the
+    body keeps the handle and the response carries the names to draw instead.
+
+    Only handles that resolve are returned. "@everyone", an email address and
+    a price all look like mentions to a regex, and a name that cannot be found
+    is left as the handle rather than invented.
+    """
+    handles: list[str] = []
+    for body in bodies:
+        for handle in _mentioned_handles(body):
+            if handle not in handles:
+                handles.append(handle)
+        if len(handles) >= 50:
+            break
+    if not handles:
+        return {}
+
+    now = time.time()
+    names: dict[str, str] = {}
+    ask: list[str] = []
+    with _mention_lock:
+        for handle in handles:
+            hit = _mention_cache.get(handle)
+            if hit and hit[1] > now:
+                names[handle] = hit[0]
+            else:
+                ask.append(handle)
+    if not ask:
+        return names
+
+    try:
+        response = httpx.post(
+            f"{USER_SERVICE}/internal/profiles/by-handle", json={"handles": ask}, timeout=5
+        )
+        response.raise_for_status()
+        people = response.json().get("profiles", {})
+    except Exception as exc:
+        # The handle is still a working link and still readable. Losing the
+        # name is a worse post, not a broken one.
+        log.warning("could not resolve mention names: %s", exc)
+        return names
+
+    with _mention_lock:
+        if len(_mention_cache) > 5000:
+            _mention_cache.clear()
+        for key, profile in people.items():
+            handle = (profile.get("handle") or key or "").lower()
+            name = profile.get("display_name")
+            if handle and name:
+                names[handle] = name
+                _mention_cache[handle] = (name, now + _MENTION_TTL)
+    return names
+
+
 def _notify_mentions(body: str, actor_id: str, post_id: str, where: str) -> None:
     """Tell the people named in a body that they were named.
 
@@ -200,6 +271,13 @@ def _notify_mentions(body: str, actor_id: str, post_id: str, where: str) -> None
 
     actor = _authors({actor_id}).get(actor_id) or {}
     who = actor.get("display_name") or actor.get("handle") or "Someone"
+    # The excerpt is shown to a reader, not stored, so the handles in it are
+    # drawn as names - the same substitution the post itself gets. A
+    # notification saying '@k_mbeki3 look at this' tells you nothing about who
+    # that is, which is the whole point of a notification.
+    excerpt = body or ""
+    for handle, name in _mention_names([excerpt]).items():
+        excerpt = re.sub(rf"@{re.escape(handle)}", f"@{name}", excerpt, flags=re.IGNORECASE)
     for profile in people.values():
         target = profile.get("user_id")
         if not target or target == actor_id:
@@ -208,7 +286,7 @@ def _notify_mentions(body: str, actor_id: str, post_id: str, where: str) -> None
             target,
             kind="mention",
             title=f"{who} mentioned you in a {where}",
-            body=(body or "")[:140],
+            body=excerpt[:140],
             # /p/{id} opens the post in the feed and is the same address a
             # shared link uses, so one route has to keep working rather than
             # two.
@@ -487,6 +565,12 @@ def _post_out(
     signed_media = {
         m.media_id: mediasign.sign_url(m.url, m.media_id, viewer) for m in media
     }
+    # The names behind any @handles in the body, so the card can draw the
+    # person rather than the address. Resolved here rather than at the twelve
+    # call sites, for the same reason `authors` is: four of them had already
+    # forgotten to pass it. Costs nothing for the posts that mention nobody,
+    # which is most of them.
+    mentions = _mention_names([post.body or ""])
     # A feed passes the batch it resolved for the whole page. A single-post
     # response - creating one, editing one, opening one by link - passed
     # nothing, so `author` came back null and the card had no name to show
@@ -507,6 +591,8 @@ def _post_out(
         # profile to link its avatar to.
         "author": (authors or {}).get(post.author_id),
         "body": post.body,
+        # handle -> name, for the @mentions inside that body.
+        "mentions": mentions,
         "format": post.format,
         "lang": post.lang,
         "visibility": post.visibility,
@@ -3213,6 +3299,9 @@ def list_comments(
 
     return {
         "max_depth": MAX_COMMENT_DEPTH,
+        # One map for the whole thread: the same handful of people are named
+        # over and over in a conversation.
+        "mentions": _mention_names([r.body or "" for r in rows]),
         "items": [
             {
                 "id": r.id,

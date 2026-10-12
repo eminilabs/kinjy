@@ -22,7 +22,15 @@ const when = (iso: string) => {
  * Text nodes only — never markup — so a comment cannot inject anything by
  * writing HTML into a mention.
  */
-function withMentions(body: string) {
+/**
+ * `names` maps a handle to the person's display name, as the server resolved
+ * them. A mention is stored as the handle - that is what the author typed and
+ * what has to survive an edit - but "@k_mbeki3" means nothing to a reader
+ * next to "Kofi Mbeki", so the name is what gets drawn. The link still goes
+ * to the handle, and a handle with no name resolved stays as it was rather
+ * than being replaced by a guess.
+ */
+function withMentions(body: string, names: Record<string, string> = {}) {
   return (
     body
       // One split over both, so an @ inside an address - https://x.com/@someone,
@@ -57,14 +65,16 @@ function withMentions(body: string) {
         if (part.startsWith('@')) {
           // A mention is a person, so it goes to them. It was styled as a link
           // and did nothing, which is the most annoying kind of not-a-link.
+          const handle = part.slice(1).toLowerCase()
+          const name = names[handle]
           return (
             <Link
               key={index}
-              to={`/u/${part.slice(1).toLowerCase()}`}
+              to={`/u/${handle}`}
               onClick={(event) => event.stopPropagation()}
               className="font-semibold text-gold-soft hover:underline"
             >
-              {part}
+              {name || part}
             </Link>
           )
         }
@@ -101,6 +111,9 @@ export default function Comments({
 }) {
   const { tok } = useAppTheme()
   const [items, setItems] = useState<CommentNode[] | null>(null)
+  // handle -> name for everyone mentioned anywhere in this thread, resolved
+  // once by the server rather than once per comment by the browser.
+  const [mentions, setMentions] = useState<Record<string, string>>({})
   const [maxDepth, setMaxDepth] = useState(1)
   const [error, setError] = useState<string | null>(null)
   const [body, setBody] = useState('')
@@ -113,6 +126,7 @@ export default function Comments({
       const page = await kaluta.posts.comments(postId)
       setItems(page.items)
       setMaxDepth(page.max_depth)
+      setMentions(page.mentions ?? {})
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not load comments')
     }
@@ -126,6 +140,7 @@ export default function Comments({
         if (cancelled) return
         setItems(page.items)
         setMaxDepth(page.max_depth)
+        setMentions(page.mentions ?? {})
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof ApiError ? err.message : 'Could not load comments')
@@ -275,7 +290,11 @@ export default function Comments({
                 <span className={cn('ms-1.5 inline-flex items-center gap-0.5 font-normal', tok.low)}>
                   <CornerDownRight size={10} aria-hidden="true" />
                   replying to
-                  <span className="font-semibold text-gold-soft">@{node.reply_to_user.handle}</span>
+                  {/* Their name. The handle was what the server happened to
+                      send first, not what a reader is looking for. */}
+                  <span className="font-semibold text-gold-soft">
+                    {node.reply_to_user.display_name || node.reply_to_user.handle}
+                  </span>
                 </span>
               )}
             </p>
@@ -312,7 +331,7 @@ export default function Comments({
               </form>
             ) : (
               <p className={cn('mt-0.5 whitespace-pre-wrap text-[0.9375rem] leading-[1.35]', tok.text)}>
-                {withMentions(node.body)}
+                {withMentions(node.body, mentions)}
                 {node.edited_at && (
                   /* Said plainly, because a reply underneath may be answering
                      words that are no longer there. */

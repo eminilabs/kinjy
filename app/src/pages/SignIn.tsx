@@ -9,7 +9,7 @@ import { Brand, ThemeToggle } from '@/components/landing/shared'
 import { useLandingTheme } from '@/components/landing/useLandingTheme'
 import { useAuth } from '@/hooks/useAuth'
 import { ApiError } from '@/lib/api'
-import { clearPendingRef, pendingRef } from '@/lib/share'
+import { clearPendingRef, pendingInviter, pendingRef, refFromSearch } from '@/lib/share'
 import { OPEN_MODULES, spelled } from '@/lib/features'
 import { cn } from '@/lib/utils'
 
@@ -82,11 +82,19 @@ export default function SignIn() {
   // earlier. Without the second, somebody who arrived on a shared post and
   // read two more pages before signing up credited nobody - the code lived in
   // the URL of the first page and died with it.
-  const [referral, setReferral] = useState(params.get('ref') ?? pendingRef())
+  //
+  // Read through refFromSearch rather than straight off the query string: it
+  // validates, it uppercases, and it knows the other names an invitation
+  // comes back under after a trip through a mail client. `?ref=` with nothing
+  // after it used to count as an answer and silently beat the remembered
+  // code.
+  const [referral, setReferral] = useState(refFromSearch(params.toString()) ?? pendingRef())
   // Whether that code is one this browser remembered rather than one the
   // person in front of us typed. It decides what happens when the server does
   // not recognise it.
-  const referralWasRemembered = !params.get('ref') && Boolean(pendingRef())
+  const referralWasRemembered = !refFromSearch(params.toString()) && Boolean(pendingRef())
+  // Who the stored code belongs to, if ReferralWatch managed to ask.
+  const inviter = pendingInviter()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -315,7 +323,12 @@ export default function SignIn() {
                     placeholder="ABCD1234"
                   />
                   <span className={hint}>
-                    {t('signin.creditsWhoeverInvitedYou')}
+                    {/* A name, when the invitation came with one: "Invited by
+                        Demo" is something a person can check, where a code in
+                        a box is something they have to trust. */}
+                    {inviter && referral === pendingRef()
+                      ? `Invited by ${inviter}`
+                      : t('signin.creditsWhoeverInvitedYou')}
                   </span>
                 </label>
               )}

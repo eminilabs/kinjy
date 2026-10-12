@@ -64,7 +64,7 @@ const PROVENANCE_LABEL: Record<string, string> = {
  * anything through a tag. The same pattern the server uses to extract them, so
  * what is highlighted is exactly what became a topic.
  */
-function withHashtags(text: string) {
+function withHashtags(text: string, mentions: Record<string, string> = {}) {
   return text
     // One split over both, so a hashtag inside a URL's fragment is not turned
     // into a topic link in the middle of an address.
@@ -107,13 +107,21 @@ function withHashtags(text: string) {
       if (part.startsWith('@')) {
         // The person named, linked to their profile - the server has just
         // told them they were named, so the name had better go somewhere.
+        //
+        // Drawn as their name when the server could resolve it, without the
+        // @ - "@Demo Two" reads as a typo, and a name with a space in it
+        // stops looking like a handle the moment it has one. The body keeps
+        // the handle, because that is what the author typed; this is only how
+        // it is shown, and an unresolved handle stays exactly as written.
+        const handle = part.slice(1).toLowerCase()
+        const named = mentions[handle]
         return (
           <Link
             key={index}
-            to={`/u/${part.slice(1).toLowerCase()}`}
+            to={`/u/${handle}`}
             className="font-semibold text-gold-soft hover:underline"
           >
-            {part}
+            {named || part}
           </Link>
         )
       }
@@ -525,7 +533,7 @@ export default function PostCard({
 
       {shared && post.body.trim() !== '' && (
         <p className="mb-3 whitespace-pre-wrap text-[0.95rem] leading-relaxed text-text-hi">
-          {withHashtags(post.body)}
+          {withHashtags(post.body, post.mentions ?? {})}
         </p>
       )}
 
@@ -617,13 +625,13 @@ export default function PostCard({
             {/* withHashtags here too: a link does not stop being a link
                 because the reader asked to see the translation beside it. */}
             <p className="whitespace-pre-wrap text-[0.95rem] leading-relaxed text-text-hi">
-              {withHashtags(readableText(plainBody))}
+              {withHashtags(readableText(plainBody), source.mentions ?? {})}
             </p>
           </div>
           <div className="sm:border-s sm:border-white/8 sm:ps-4">
             <p className="caption mb-1 uppercase">{uiLang} · translated</p>
             <p className="whitespace-pre-wrap text-[0.95rem] leading-relaxed text-text-hi">
-              {withHashtags(translation.text)}
+              {withHashtags(translation.text, source.mentions ?? {})}
             </p>
           </div>
         </div>
@@ -692,7 +700,7 @@ export default function PostCard({
               onOpen && 'cursor-pointer',
             )}
           >
-            {withHashtags(readableText(body))}
+            {withHashtags(readableText(body), source.mentions ?? {})}
           </p>
         </Expandable>
         )
@@ -1049,7 +1057,7 @@ export default function PostCard({
 
               {plainBody.trim() !== '' && (
                 <p className="whitespace-pre-wrap text-[0.9375rem] leading-relaxed text-text-hi">
-                  {withHashtags(readableText(plainBody))}
+                  {withHashtags(readableText(plainBody), source.mentions ?? {})}
                 </p>
               )}
 

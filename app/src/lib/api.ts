@@ -422,6 +422,13 @@ export interface PostAuthor {
 }
 
 export interface Post {
+  /**
+   * handle -> display name, for the @mentions in `body`.
+   *
+   * The body keeps the handle, because that is what the author typed and what
+   * must survive an edit; this is what the reader is shown instead.
+   */
+  mentions?: Record<string, string>
   id: string
   author_id: string
   author: PostAuthor | null
@@ -1743,7 +1750,9 @@ export const kaluta = {
     react: (id: string, kind: string) =>
       api.post<{ post_id: string; reactions: ReactionSummary }>(`/posts/${id}/react`, { kind }),
     comments: (id: string) =>
-      api.get<{ max_depth: number; items: CommentNode[] }>(`/posts/${id}/comments`),
+      api.get<{ max_depth: number; mentions?: Record<string, string>; items: CommentNode[] }>(
+        `/posts/${id}/comments`,
+      ),
     comment: (id: string, body: string, parentId?: string) =>
       api.post<{ id: string; created_at: string; depth: number; parent_id: string | null; reply_to: string | null }>(
         `/posts/${id}/comments`,
@@ -2479,6 +2488,19 @@ export const kaluta = {
       return result.user
     },
     me: () => api.get<AuthUser>('/auth/me'),
+
+    /**
+     * Who an invitation code belongs to, or a 404.
+     *
+     * Asked before a code off a link is remembered, so noise in a `?ref=`
+     * cannot displace a real invitation, and so the sign-up page can name the
+     * person who invited you instead of showing a code in a box.
+     */
+    referral: (code: string) =>
+      api.get<{ code: string; display_name: string; handle: string }>(
+        `/auth/referral/${encodeURIComponent(code)}`,
+        { auth: false },
+      ),
 
     /**
      * Whether a reset link can actually be delivered.

@@ -13,6 +13,40 @@
  */
 
 const REF_KEY = 'kinjy.pending_ref'
+/** When it arrived, so support can tell a week-old link from this morning's. */
+const REF_AT_KEY = 'kinjy.pending_ref_at'
+/** Who it belongs to, so the sign-up page can name them. */
+const REF_WHO_KEY = 'kinjy.pending_ref_name'
+
+/**
+ * The shape a code can have: six to eight of A-Z0-9.
+ *
+ * `_referral_code` in auth-service takes `secrets.token_urlsafe(6)`, drops
+ * the two separator characters and uppercases what is left - so eight
+ * characters usually, six or seven when a separator was drawn.
+ *
+ * This is a filter on obvious rubbish, not proof. "WHATSAPP" fits it exactly,
+ * which is why ReferralWatch asks the server before letting a code off a link
+ * displace one already held.
+ */
+const REF_RE = /^[A-Z0-9]{6,8}$/
+
+/**
+ * Pull an invitation out of a URL.
+ *
+ * `ref` is the name the invite links use. The others are what people actually
+ * paste: a link that went through a mail client, a shortener or somebody's
+ * analytics comes back with the code under a different name, and refusing to
+ * read it loses the credit the member earned.
+ */
+export function refFromSearch(search: string): string | null {
+  const params = new URLSearchParams(search)
+  for (const name of ['ref', 'invite', 'invited_by', 'referral', 'referral_code']) {
+    const value = (params.get(name) ?? '').trim().toUpperCase()
+    if (REF_RE.test(value)) return value
+  }
+  return null
+}
 
 /** Where this build lives, for links that will be read outside the app. */
 export function siteOrigin(): string {
@@ -38,11 +72,17 @@ export function postUrl(postId: string, ref?: string | null): string {
  */
 export function rememberRef(ref: string | null | undefined): void {
   if (!ref) return
-  // Codes are 8 characters of A-Z0-9 (see _referral_code in auth-service).
-  // Anything else is somebody playing with the query string.
-  if (!/^[A-Z0-9]{4,16}$/.test(ref)) return
+  const code = ref.trim().toUpperCase()
+  // Anything that is not a code is somebody playing with the query string,
+  // and it must not displace a real one that is already here.
+  if (!REF_RE.test(code)) return
   try {
-    localStorage.setItem(REF_KEY, ref)
+    if (localStorage.getItem(REF_KEY) === code) return
+    localStorage.setItem(REF_KEY, code)
+    localStorage.setItem(REF_AT_KEY, new Date().toISOString())
+    // A new code is a new inviter. Leaving the old name behind would have the
+    // sign-up page welcome somebody on behalf of the wrong person.
+    localStorage.removeItem(REF_WHO_KEY)
   } catch {
     /* private window, blocked storage: the sign-up still works, uncredited */
   }
@@ -61,8 +101,38 @@ export function pendingRef(): string {
 export function clearPendingRef(): void {
   try {
     localStorage.removeItem(REF_KEY)
+    localStorage.removeItem(REF_AT_KEY)
+    localStorage.removeItem(REF_WHO_KEY)
   } catch {
     /* nothing to clear */
+  }
+}
+
+/** The name on the stored invitation, when the server told us one. */
+export function pendingInviter(): string {
+  try {
+    return localStorage.getItem(REF_WHO_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+/** Remember who the stored code belongs to. */
+export function rememberInviter(name: string | null | undefined): void {
+  try {
+    if (name) localStorage.setItem(REF_WHO_KEY, name)
+    else localStorage.removeItem(REF_WHO_KEY)
+  } catch {
+    /* the code still works without a name to put on it */
+  }
+}
+
+/** When the stored invitation arrived, if one has. */
+export function pendingRefAt(): string | null {
+  try {
+    return localStorage.getItem(REF_AT_KEY)
+  } catch {
+    return null
   }
 }
 

@@ -1,11 +1,10 @@
-import { useEffect } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { ArrowRight } from 'lucide-react'
 import PostCard from '@/components/social/PostCard'
 import { useApi } from '@/hooks/useApi'
 import { useAuth } from '@/hooks/useAuth'
 import { kaluta, type Post } from '@/lib/api'
-import { rememberRef } from '@/lib/share'
+import { pendingRef, refFromSearch } from '@/lib/share'
 import PublicShell from '@/components/landing/PublicShell'
 import { Eyebrow } from '@/components/landing/PageKit'
 import { KL_BTN_GHOST, KL_BTN_GOLD } from '@/components/landing/kl-classes'
@@ -30,10 +29,11 @@ export default function PostPage() {
   const { user } = useAuth()
   const post = useApi<Post>(() => kaluta.posts.get(postId), [postId])
 
-  // The invitation that came with the link, kept so it survives the visitor
-  // reading another page or two before they decide to join.
-  const ref = params.get('ref')
-  useEffect(() => rememberRef(ref), [ref])
+  // Remembering the invitation is ReferralWatch's job now, for every page
+  // rather than only this one - a second copy here is how the two drift
+  // apart. What is still this page's job is carrying the code on the Join
+  // button, so the form is right even in a browser that stores nothing.
+  const ref = refFromSearch(params.toString()) || pendingRef() || null
 
   const joinHref = ref ? `/join?mode=signup&ref=${encodeURIComponent(ref)}` : '/join?mode=signup'
 

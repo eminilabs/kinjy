@@ -10,6 +10,8 @@ import logging
 
 import httpx
 import secrets
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException, Request, status
@@ -296,6 +298,67 @@ def logout(payload: schemas.RefreshIn, principal: CurrentUser, db: OrmSession = 
         if session is not None and session.user_id == principal.user_id:
             session.revoked_at = _now()
             db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Invitations
+# ---------------------------------------------------------------------------
+
+# How many codes one address may look up in a minute. An invitation code is
+# meant to be passed around, and this answers only "does it exist, and whose
+# is it" - but a lookup that answers as fast as you can ask it is a way to map
+# the whole space, so it is capped. Generous enough that nobody browsing ever
+# meets it.
+REF_LOOKUPS_PER_MINUTE = 30
+_ref_lookups: dict[str, list[float]] = {}
+_ref_lock = threading.Lock()
+
+
+def _ref_lookup_allowed(ip: str | None) -> bool:
+    if not ip:
+        return True
+    now = time.time()
+    with _ref_lock:
+        recent = [t for t in _ref_lookups.get(ip, []) if now - t < 60]
+        # Keeping only the live window also keeps this dict from growing
+        # without bound, which is the usual way an in-process limiter becomes
+        # the leak it was added to prevent.
+        if len(_ref_lookups) > 5000:
+            _ref_lookups.clear()
+        if len(recent) >= REF_LOOKUPS_PER_MINUTE:
+            _ref_lookups[ip] = recent
+            return False
+        recent.append(now)
+        _ref_lookups[ip] = recent
+    return True
+
+
+@app.get("/auth/referral/{code}", tags=["auth"])
+def referral_lookup(code: str, request: Request, db: OrmSession = Depends(get_db)):
+    """Who an invitation code belongs to.
+
+    The browser asks this before it remembers a code off a link, which is what
+    stops `?ref=whatsapp` from a mangled share from displacing the code of the
+    member who actually did the inviting. Guessing the shape client-side
+    cannot do that: a real code is six to eight characters of A-Z0-9 and so is
+    the word "whatsapp".
+
+    It also lets the sign-up page say who invited you, which is the difference
+    between a code in a box and a name you recognise.
+
+    Only the public half of a profile, and 404 for anything unknown - the same
+    answer a wrong code has always got at registration.
+    """
+    ip, _ = _client(request)
+    if not _ref_lookup_allowed(ip):
+        raise HTTPException(status_code=429, detail="Too many lookups. Wait a moment.")
+    cleaned = (code or "").strip().upper()
+    if not cleaned or len(cleaned) > 16:
+        raise HTTPException(status_code=404, detail="Unknown referral code")
+    user = db.scalar(select(models.User).where(models.User.referral_code == cleaned))
+    if user is None or user.status == "deleted":
+        raise HTTPException(status_code=404, detail="Unknown referral code")
+    return {"code": user.referral_code, "display_name": user.display_name, "handle": user.handle}
 
 
 # ---------------------------------------------------------------------------
