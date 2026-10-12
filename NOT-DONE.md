@@ -154,8 +154,8 @@ Each of these was checked against https://kinjy.com, not only locally.
 
 ## 3e. What /family promises, measured against what it does
 
-*Checked 20/08. Partly superseded on 06/10: see "Family tree (06/10)" at the end,
-which records what was found still open and what changed.*
+*Checked 20/08. Superseded: FT-03 to FT-07 (12/10) changed most of this. The current
+state of each promise is in "FT-07: what the product says about the family tree", at the end.*
 
 Checked on production 2026-08-20, promise by promise.
 
@@ -925,3 +925,83 @@ staff are refused). No photos, documents or file links.
   GEDCOM files produced were checked with a strict structural reader written for the tests, not with
   third-party genealogy software.
 - The public `/family` page says "Export anytime": that promise now has a basis for owners (see FT-07).
+
+### FT-03: sharing one branch (built)
+
+A viewer can be limited to a branch: a person, everyone descended from them and the partners of
+those (only the partners themselves, never their parents or other relatives), plus their own place.
+It is applied where the tree is loaded (`access.load_family`, `access.reachable`), so the tree, a
+person, search, the people list, paths, archive, timeline, duplicates, disputes, counts and the
+tree size all show the branch and nothing else. A branch whose root is removed shows less, never
+more. Branches are viewer-only: promoting a member clears it. An owner sets it on an invitation or
+on a member, and the invitee is told exactly what will be hidden. Changes of role, branch and
+joining are in `family.access_events` (ids only, kept 365 days).
+
+- Limits: a co-parent who is not recorded as a spouse is outside the branch; a reader admitted only
+  by the owner's `who_can_see_family` setting still reads the whole tree (that is the owner's explicit,
+  separate choice); exports are owner-only so never limited.
+
+### FT-05: trusted contacts (built)
+
+An owner names up to three members who could take over the tree. Naming gives nothing and the
+contact must accept. To take over they open a succession request: every owner is told, any owner
+or the contact can cancel, and only after 30 days untouched does the contact become an owner (nobody
+is removed). Refused for minors and for members limited to a branch; it lapses if the contact leaves
+the tree or the one who named them is no longer an owner. There is no signal in this service that an
+account is gone, so the owners' silence is what the waiting period measures. Applied by an hourly
+sweep and whenever either side looks at it.
+
+- Limits: the notification to owners is best effort (an in-app notice); nothing is sent by e-mail; an
+  ownerless tree (`ownership_reviews`) has nobody who can name a contact.
+
+### FT-06: heritage and AI, redefined (partly built, AI not)
+
+No safe, real AI is available: the gateway produces only simulated output, and family data may not
+leave local providers. So **nothing is generated and nothing is presented as AI**. Built: a person's
+written memories (plain text, by contributors and owners, removed by their author or an owner, at
+most 100 per person), a timeline from the person's own record and their dated memories, links
+accepted only to our files (`/media/`) or https, no AI fields in the API. Not built: photo, document
+and recording upload for people (no media-service flow and third-party files are sensitive),
+transcription, restoration, biographies, documentary, voice interview, year in review, reunion
+planner. They need a local model provider in ai-service and a decision on files of other people.
+
+### FT-07: what the product says about the family tree (audit 12/10)
+
+Honoured and now true in the app: private by default; roles; invitation to claim a place; sharing
+one branch (read-only); trusted contacts with a waiting period; GEDCOM export for owners (living and
+unverified hidden, no media); person confirmation with three close relatives for the deceased;
+how-are-we-related and derived relationships; written memories and a timeline.
+
+Rewritten or removed because false, overstated or unjustified:
+- `/family` (hidden): heritage AI, narrated documentary, restoration, voice interview, year in
+  review and reunion planner removed (their simulated demo components deleted); "trees merge through
+  shared Person Nodes" replaced by invitations (separate trees are not merged); "nothing enters
+  unverified" and "verified edges" replaced by what is true (people are confirmed, links are
+  recorded but not verified); sharing, trusted contacts and export now state their real limits; the
+  start buttons now go to sign-up. `VerificationJourney`/`PathFinder` demo captions corrected.
+- A sample post claiming "restored ... with Heritage AI" (`feeds/data.ts`) now describes a written memory.
+- `features.ts` comment and `README.md` brought up to date.
+
+**Still wrong or overstated, outside the family-tree files, left untouched on purpose** (each needs
+its own decision; none is shown while `FEATURES.familyTree` is off unless marked *visible*):
+- Assistant knowledge base (`assistant/knowledgeBase.ts`, five languages, tied to `validate-kb.cjs`'s
+  count of 49 entries): `family-tree` steps say an edge turns VERIFIED; `heritage-ai`,
+  `heritage-interview` and `family-year-review` describe features that do not exist. The assistant is
+  off in the app, but `/assistant/ask` answers from whatever was seeded: check the production table
+  before enabling it, and rewrite these entries.
+- Landing and pricing copy gated by `familyTree` (`locales/*` landing.modules.tree, landing.plan.premium3a
+  "Heritage AI", landing.story.heritage*; `PricingTiers` "heritage graph"; `FinePrint` "family records follow
+  succession" and "full export of ... family tree"): rewrite in the five languages before the flag flips.
+- *Visible*: `platform/data.ts` Digital Graveyard card "Legacy contacts & succession" (memorial legacy
+  contacts are "not available yet" on `/memorials`; trusted contacts for a *tree* now exist, they are a
+  different thing); `appdemo/FamilyTreePeek.tsx` draws every edge as verified; `pages/PostPage.tsx`
+  "Thirteen modules" (hard-coded; the count is `OPEN_MODULES`); `creators/BadgeRow.tsx` "Family
+  Historian" badge (no award logic); the Developers page (`family.path.find`, `/v1/memorials/...`: no public
+  `/v1` API); pricing "Messenger (E2E)" (not end-to-end, see above).
+- `app/.kb-seed.cjs` is a generated, tracked bundle of the knowledge base: stale until reseeded.
+
+**Decision left to the product owner: switching `/family` on.** The page itself is coherent and the
+protections it advertises exist, so it could be opened. It stays off because `FEATURES.familyTree` also
+turns on the landing, pricing and assistant copy above, which is not yet coherent; flipping it would
+publish those lines. Open it once that copy is rewritten, or split the flag so the page opens alone.
+

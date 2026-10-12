@@ -114,7 +114,7 @@ export default function VerificationJourney() {
               (<span className="mono-data text-[0.78rem]">parent_of</span>,{' '}
               <span className="mono-data text-[0.78rem]">spouse_of</span>,{' '}
               <span className="mono-data text-[0.78rem]">adoptive_parent_of</span>…).
-              Nothing is assumed; the edge enters <strong>PENDING</strong>.
+              Nothing is assumed; the new person enters <strong>PENDING</strong>.
             </p>
           </motion.article>
 
@@ -135,10 +135,10 @@ export default function VerificationJourney() {
             </div>
             <h3 className="h3 mt-4 text-paper-ink">2 · Confirm</h3>
             <p className="mt-2 text-[0.95rem] leading-relaxed text-[#5A5245]">
-              The other party confirms the relationship — a gold seal draws in and the
-              edge becomes <strong>VERIFIED</strong>. For the deceased, who cannot
+              A close relative confirms the person — a gold seal draws in and they
+              become <strong>VERIFIED</strong>. For the deceased, who cannot
               speak for themselves, <strong>3 closely-related members</strong> must
-              corroborate:
+              corroborate. (Links between people are recorded but not verified yet.)
             </p>
             <div className="mt-3 flex items-center gap-3 rounded-card-sm bg-[#3FB27F]/8 p-3">
               <div className="flex -space-x-2">
@@ -177,9 +177,9 @@ export default function VerificationJourney() {
             </div>
             <h3 className="h3 mt-4 text-paper-ink">3 · Dispute</h3>
             <p className="mt-2 text-[0.95rem] leading-relaxed text-[#5A5245]">
-              Disagreements open a <strong>structured dispute workflow</strong> — evidence
-              notes, statements from both branches, and admin review. The edge is held,
-              never silently deleted, until the family record is resolved.
+              A member who disagrees can <strong>dispute</strong> a person: they are marked
+              DISPUTED and the reason is recorded. Nothing is silently deleted. There is no
+              review process yet: the family settles it between themselves.
             </p>
           </motion.article>
         </div>
@@ -236,8 +236,8 @@ export default function VerificationJourney() {
           <ShieldCheck size={18} className="text-[#9A6B1F]" />
           <h4 className="mt-2 text-sm font-bold text-paper-ink">AI never infers — never fabricates</h4>
           <p className="caption mt-1 !text-[#6B5F4E]">
-            AI does not infer paternity, religion or ethnicity, and never invents
-            relatives. Only verified edges enter the graph.
+            Nothing in the tree is written by AI: it holds only what members record.
+            Kinjy does not guess paternity, religion or ethnicity, and never invents relatives.
           </p>
           <p className="mono-data mt-2 inline-flex items-center gap-1 rounded-full border border-[#DE5C5C]/40 bg-[#DE5C5C]/8 px-2 py-0.5 text-[0.65rem] text-[#B54343]">
             <AlertTriangle size={10} /> inference: blocked

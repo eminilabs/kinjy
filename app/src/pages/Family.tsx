@@ -1,13 +1,10 @@
 import { Link } from 'react-router'
 import { motion, useReducedMotion } from 'framer-motion'
-import { ArrowRight, Download, KeyRound, Lock } from 'lucide-react'
-import { ArcButton, ProvenanceTag } from '@/components/ui-kit'
+import { ArrowRight, Download, KeyRound, Lock, Share2 } from 'lucide-react'
+import { ArcButton } from '@/components/ui-kit'
 import FamilyTreeGraph from '@/components/family/FamilyTreeGraph'
 import VerificationJourney from '@/components/family/VerificationJourney'
 import PathFinder from '@/components/family/PathFinder'
-import HeritageShowcase from '@/components/family/HeritageShowcase'
-import HeritageInterview from '@/components/family/HeritageInterview'
-import YearInReview from '@/components/family/YearInReview'
 import HeroMiniTree from '@/components/family/HeroMiniTree'
 import WordRise from '@/components/family/WordRise'
 
@@ -27,13 +24,13 @@ const ARCHITECTURE_POINTS = [
     body: 'Level 0 is you. Level 1 Parents above and Children below, Level 2 beyond — indefinite depth, lazy-loaded as you explore.',
   },
   {
-    label: 'Trees merge through shared Person Nodes',
-    body: 'One person, one node, many family views. Your tree and your cousin’s tree are the same graph.',
+    label: 'One person, one node — relatives join by invitation',
+    body: 'Invite a relative to claim their place: they accept explicitly, and nothing is shown to them before. Separate trees are not merged automatically.',
   },
 ]
 
 /**
- * /family — Family Tree & Heritage AI (family.md).
+ * /family — Family Tree. Every claim on this page is one the app keeps (see NOT-DONE.md, FT-07).
  * Paper treatment (archival warmth) with a twilight “engine room” panel
  * for the relationship-graph architecture.
  */
@@ -60,8 +57,8 @@ export default function Family() {
               transition={{ delay: 0.5, duration: 0.6, ease: cloudEase }}
               className="body-lg mt-5 max-w-xl text-[#5A5245]"
             >
-              Persons and relationships — verified by the people who know, computed
-              across infinite generations, and never invented by AI.
+              Persons and relationships — confirmed by the people who know them,
+              computed across as many generations as you record, and never invented by AI.
             </motion.p>
             <motion.div
               initial={reduced ? false : { opacity: 0, y: 16 }}
@@ -69,12 +66,12 @@ export default function Family() {
               transition={{ delay: 0.65, duration: 0.6, ease: cloudEase }}
               className="mt-8 flex flex-wrap gap-3"
             >
-              <ArcButton size="lg">Start your tree</ArcButton>
+              <Link to="/join?mode=signup"><ArcButton size="lg">Start your tree</ArcButton></Link>
               <a
                 href="#verification"
                 className="inline-flex items-center gap-2 rounded-full border border-[#241F16]/20 px-8 py-4 font-semibold text-paper-ink transition-colors duration-200 hover:border-[#D9A648] hover:text-[#9A6B1F]"
               >
-                How verification works ↓
+                How confirmation works ↓
               </a>
             </motion.div>
           </div>
@@ -138,7 +135,7 @@ export default function Family() {
         <div className="mx-auto max-w-container">
           <div className="mx-auto max-w-2xl text-center">
             <p className="eyebrow text-[#9A6B1F]">Trust by corroboration</p>
-            <h2 className="h2 mt-3 text-paper-ink">Nothing enters the tree unverified.</h2>
+            <h2 className="h2 mt-3 text-paper-ink">Every person starts as pending, and is confirmed by those who know them.</h2>
           </div>
           <div className="mt-14">
             <VerificationJourney />
@@ -153,7 +150,7 @@ export default function Family() {
             <p className="eyebrow text-[#9A6B1F]">Path finder</p>
             <h2 className="h2 mt-3 text-paper-ink">“How are we related?”</h2>
             <p className="body-lg mt-4 text-[#5A5245]">
-              Ask the graph. The shortest verified path lights up hop by hop — and the
+              Ask the graph. The shortest recorded path lights up hop by hop — and the
               shared ancestors reveal themselves.
             </p>
           </div>
@@ -163,69 +160,56 @@ export default function Family() {
         </div>
       </section>
 
-      {/* ── Section 5 — Family Heritage AI ────────────────────────────── */}
+      {/* ── Section 5 — Memories and timeline (written by members; nothing is generated) ── */}
       <section className="px-6 py-24">
-        <div className="mx-auto grid max-w-container items-start gap-12 lg:grid-cols-2">
-          <div className="lg:sticky lg:top-28">
-            <p className="eyebrow text-[#9A6B1F]">Family Heritage AI</p>
-            <h2 className="h2 mt-3 text-paper-ink">Your archive, brought back to life.</h2>
-            <ul className="mt-7 space-y-5 text-[1.02rem] leading-relaxed text-[#5A5245]">
+        <div className="mx-auto max-w-container">
+          <div className="mx-auto max-w-2xl text-center">
+            <p className="eyebrow text-[#9A6B1F]">Memories</p>
+            <h2 className="h2 mt-3 text-paper-ink">What the family remembers, kept with the person.</h2>
+            <ul className="mx-auto mt-7 max-w-xl space-y-4 text-left text-[1.02rem] leading-relaxed text-[#5A5245]">
               <li className="flex gap-3">
                 <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-[#D9A648]" />
-                Upload old photos, letters and recordings → AI crafts your{' '}
-                <strong className="text-paper-ink">family history</strong>, an{' '}
-                <strong className="text-paper-ink">interactive timeline</strong>, a narrated{' '}
-                <strong className="text-paper-ink">documentary</strong>, and{' '}
-                <strong className="text-paper-ink">biographies</strong>.
+                Members write <strong className="text-paper-ink">memories</strong> on a person’s page: who they were, what happened, when.
               </li>
               <li className="flex gap-3">
                 <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-[#D9A648]" />
-                Everything becomes a <strong className="text-paper-ink">searchable archive</strong> —
-                “find Grandfather’s 1968 letter” just works.
+                Each person has a <strong className="text-paper-ink">timeline</strong> built from their own record and their dated memories.
               </li>
               <li className="flex gap-3">
                 <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-[#D9A648]" />
-                <span>
-                  <strong className="text-paper-ink">Originals are always preserved</strong> —
-                  AI-enhanced copies live alongside, clearly labeled.{' '}
-                  <ProvenanceTag kind="ai-assisted" className="ml-1 align-middle" />
-                </span>
+                Only members of the tree can read them, as far as their role allows.
               </li>
             </ul>
             <p className="caption mt-6 !text-[#6B5F4E]">
-              AI assists the archive; it never edits the truth. It never infers
-              paternity, religion or ethnicity — and it never fabricates relatives.
+              Nothing here is generated. Photos, documents and recordings, and any AI help to organise them, are not part of Kinjy yet.
             </p>
           </div>
-          <HeritageShowcase />
-        </div>
-      </section>
-
-      {/* ── Section 5b — Heritage Interview Agent ─────────────────────── */}
-      <section className="bg-paper-2 px-6 py-24" aria-label="Heritage Interview Agent">
-        <div className="mx-auto max-w-container">
-          <HeritageInterview />
         </div>
       </section>
 
       {/* ── Section 6 — Privacy & permanence strip ────────────────────── */}
       <section className="bg-paper-2 px-6 py-20">
-        <div className="mx-auto grid max-w-container gap-6 md:grid-cols-3">
+        <div className="mx-auto grid max-w-container gap-6 md:grid-cols-2 lg:grid-cols-4">
           {[
             {
               icon: Lock,
-              title: 'Family-only by default',
-              body: 'Trees are private. Sharing is per-branch — your maternal line never sees the paternal side unless you say so.',
+              title: 'Private by default',
+              body: 'A tree is only seen by the people you invite, and a family tie gives no access by itself. Roles: owner, contributor, viewer.',
+            },
+            {
+              icon: Share2,
+              title: 'Share one branch',
+              body: 'Show a relative one branch only — a person, their descendants and partners — read-only. The rest of the tree stays hidden from them.',
             },
             {
               icon: KeyRound,
-              title: 'Legacy contacts',
-              body: 'Name who stewards the tree if you no longer can, so the record outlives any one keeper.',
+              title: 'Trusted contacts',
+              body: 'Name up to three members who could take over if you cannot. They must accept, and taking over waits 30 days during which any owner can cancel.',
             },
             {
               icon: Download,
-              title: 'Export anytime',
-              body: 'GEDCOM-friendly data portability. Your family data is yours — take it wherever you go.',
+              title: 'Export for owners',
+              body: 'Owners can download the tree as a GEDCOM file. Living people and unverified records are hidden as “Private”; no photos or documents.',
             },
           ].map((c, i) => (
             <motion.div
@@ -246,23 +230,12 @@ export default function Family() {
         </div>
       </section>
 
-      {/* ── Section 6b — Year in review & Reunion Agent ───────────────── */}
-      <section className="px-6 py-24" aria-label="Family year in review and reunion planner">
-        <div className="mx-auto max-w-container">
-          <div className="mx-auto mb-14 max-w-2xl text-center">
-            <p className="eyebrow text-[#9A6B1F]">The year, remembered together</p>
-            <h2 className="h2 mt-3 text-paper-ink">Your family’s year — told back to you, and the next one planned.</h2>
-          </div>
-          <YearInReview />
-        </div>
-      </section>
-
       {/* ── Section 7 — CTA ───────────────────────────────────────────── */}
       <section className="px-6 py-24 text-center">
         <div className="mx-auto max-w-2xl">
           <h2 className="h2 text-paper-ink">Begin with one person. The graph grows with you.</h2>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-            <ArcButton size="lg">Start your family tree</ArcButton>
+            <Link to="/join?mode=signup"><ArcButton size="lg">Start your family tree</ArcButton></Link>
             <Link
               to="/memorials"
               className="inline-flex items-center gap-2 rounded-full border border-[#241F16]/20 px-8 py-4 font-semibold text-paper-ink transition-colors duration-200 hover:border-[#D9A648] hover:text-[#9A6B1F]"

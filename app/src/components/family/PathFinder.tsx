@@ -224,13 +224,13 @@ export default function PathFinder() {
               </>
             ) : (
               <span className="text-[#8A7F6C] not-italic font-sans text-sm">
-                {tracing ? 'Tracing the shortest path across verified edges…' : 'Press the button and watch the graph answer.'}
+                {tracing ? 'Tracing the shortest path across recorded links…' : 'Press the button and watch the graph answer.'}
               </span>
             )}
           </p>
           {ancestorView && (
             <p className="mono-data text-[0.7rem] text-[#2F8F66]">
-              Common ancestors: Baraka ⇄ Neema (great-grandparents) — {path.length - 1} verified hops apart
+              Common ancestors: Baraka ⇄ Neema (great-grandparents) — {path.length - 1} hops apart
             </p>
           )}
         </div>

@@ -50,7 +50,7 @@ http://localhost:8210/docs.
 | user-service | 8202 | `users` | profiles, follows, Circles, preferences, blocks |
 | social-service | 8203 | `social` | posts, feed modes, algorithm marketplace, reactions |
 | community-service | 8204 | `community` | communities, forums, forum-to-knowledge |
-| family-service | 8205 | `family` | the genealogical graph, verification, heritage |
+| family-service | 8205 | `family` | the genealogical graph, roles, invitations, branch sharing, trusted contacts, GEDCOM export, written memories |
 | memorial-service | 8206 | `memorial` | Digital Graveyard, tributes, QR codes |
 | messaging-service | 8207 | `messaging` | E2E messenger, WebSocket delivery, notifications |
 | creator-service | 8208 | `creator` | creator studio, publishing engine, subscriptions |
