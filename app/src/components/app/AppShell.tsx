@@ -88,7 +88,17 @@ export default function AppShell({
   // the largest gradient in the product — never did.
   return (
     <div
-      className="app-shell relative min-h-[100dvh] noise-overlay"
+      className={cn(
+        'app-shell relative noise-overlay',
+        // Exactly the window, and nothing may spill out of it: a workspace
+        // that is already a full screen must not also make the page scroll.
+        // Hard-coding "the window minus 60px of chrome" was the first attempt
+        // and it was wrong the moment the wellbeing bar had something to say -
+        // the page then scrolled by however tall that was. A column that
+        // measures itself cannot drift from whatever the chrome turns out to
+        // be.
+        full ? 'flex h-[100dvh] flex-col overflow-hidden' : 'min-h-[100dvh]',
+      )}
       style={
         resolved === 'light'
           ? { background: 'radial-gradient(circle at 70% -20%, #fff 0, #f8f5ef 48%, #f3efe7 100%)' }
@@ -98,7 +108,7 @@ export default function AppShell({
     >
       {/* Chrome: the app owns the top of the page here — the marketing navbar
           is suppressed on these routes, so this sticks to 0 rather than 72. */}
-      <div className="sticky top-0 z-30">
+      <div className={cn('sticky top-0 z-30', full && 'shrink-0')}>
         <WellbeingBar />
         <AppTopBar />
         {!full && <AppChipBar pathname={location.pathname} search={location.search} />}
@@ -107,7 +117,9 @@ export default function AppShell({
       <div
         className={cn(
           full
-            ? 'grid w-full'
+            // Whatever the chrome left. The phone's tab bar floats over the
+            // bottom, so the content keeps clear of it there and nowhere else.
+            ? 'grid min-h-0 w-full flex-1 pb-[86px] lg:pb-0'
             : 'mx-auto grid w-full max-w-[1320px] gap-[26px] px-4 pb-24 pt-6 md:px-6 lg:pb-16 lg:pt-9',
           !rail
             ? 'lg:grid-cols-[minmax(0,1fr)]'

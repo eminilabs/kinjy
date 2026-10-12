@@ -1308,15 +1308,11 @@ export default function Messages() {
       {/* One workspace, as Messenger draws it: the chats on the left, the open
           conversation on the right, in a single card. On a phone the open
           thread is the whole screen. */}
-      {/* The window, minus the chrome that is actually there: the top bar
-          (56, 60 from md), and on a phone the bottom tab bar too - 96, which
-          is its measured 86 plus the gap that leaves it clear. It used to subtract the chip row and the page
-          padding as well, and what was left over was the thread: a panel
-          inside a page inside a frame. Getting the phone's bottom bar wrong
-          hid the last 97 px of the conversation list underneath it, which is
-          worth a measurement rather than a guess. */}
-      <div className="grid h-[calc(100dvh-56px-96px)] min-w-0 grid-cols-[minmax(0,1fr)] gap-0 md:h-[calc(100dvh-60px-96px)] lg:h-[calc(100dvh-60px)] lg:grid-cols-[360px_minmax(0,1fr)]">
-        <div className={cn('cloud-card flex min-h-0 min-w-0 flex-col overflow-hidden', showThread && 'hidden lg:flex')}>
+      {/* Whatever the shell's full mode left us, and no magic numbers: the
+          chrome measures itself. Square corners and no gap, because the two
+          panels are the screen here rather than cards sitting on a page. */}
+      <div className="grid h-full min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] gap-0 lg:grid-cols-[360px_minmax(0,1fr)]">
+        <div className={cn('cloud-card flex min-h-0 min-w-0 flex-col overflow-hidden !rounded-none', showThread && 'hidden lg:flex')}>
           <div className="space-y-3 px-4 pb-2 pt-4">
             <div className="flex items-center gap-2">
               <h1 className="text-[26px] font-bold leading-none tracking-[-0.03em] text-text-hi">Chats</h1>
@@ -1631,7 +1627,7 @@ export default function Messages() {
         {/* Thread */}
         <div
           className={cn(
-            'cloud-card relative flex min-h-0 min-w-0 flex-col overflow-hidden',
+            'cloud-card relative flex min-h-0 min-w-0 flex-col overflow-hidden !rounded-none',
             !showThread && 'hidden',
             dragging && 'ring-2 ring-inset ring-gold/50',
           )}
