@@ -751,7 +751,14 @@ export default function PostCard({
       )}
 
       <footer className="mt-4 flex flex-wrap items-center gap-1">
-        <Reactions postId={target.id} summary={reactions} onChange={setReactions} />
+        <Reactions
+          postId={target.id}
+          summary={reactions}
+          onChange={setReactions}
+          // Only the author is offered the list of who reacted, and the
+          // server refuses it to anyone else regardless of this.
+          isAuthor={isOwn}
+        />
 
         <button
           type="button"

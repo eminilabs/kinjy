@@ -2876,6 +2876,86 @@ def post_reactions(post_id: str, principal: MaybeUser, db: OrmSession = Depends(
     return _reaction_summary(db, post_id, viewer)
 
 
+@app.get("/posts/{post_id}/reactions/people", tags=["engagement"])
+def post_reaction_people(post_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """Who reacted, for the person who wrote it.
+
+    The counter said "11" and there was no way to find out who the eleven
+    were. The author can now look.
+
+    Only the author. Who liked something is information about eleven other
+    people, not about the post: a reader seeing the list learns who else is
+    here and what they do, which is nobody's to hand out. The author already
+    knows their post was read - this only tells them by whom.
+
+    Newest first, because the question behind "who reacted" is usually "who
+    just reacted".
+    """
+    post = _readable_post(db, post_id, principal.user_id)
+    if post.author_id != principal.user_id:
+        # 404 rather than 403, like the rest of this file: distinguishing
+        # "not yours" from "does not exist" tells somebody which ids are worth
+        # trying.
+        raise HTTPException(status_code=404, detail="Not found")
+
+    rows = db.execute(
+        select(models.Reaction.user_id, models.Reaction.kind, models.Reaction.created_at)
+        .where(models.Reaction.post_id == post_id)
+        .order_by(models.Reaction.created_at.desc())
+        .limit(200)
+    ).all()
+    people = _authors({uid for uid, _, _ in rows})
+    return {
+        "total": len(rows),
+        "items": [
+            {
+                "user_id": uid,
+                "kind": kind,
+                "at": at,
+                "handle": (people.get(uid) or {}).get("handle"),
+                "display_name": (people.get(uid) or {}).get("display_name") or uid[:12],
+                "avatar_url": (people.get(uid) or {}).get("avatar_url"),
+            }
+            for uid, kind, at in rows
+        ],
+    }
+
+
+@app.get("/comments/{comment_id}/likes", tags=["comments"])
+def comment_like_people(comment_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """Who liked a comment, for whoever wrote the comment. Same rule as a post."""
+    comment = db.get(models.Comment, comment_id)
+    if comment is None or comment.status != "published":
+        raise HTTPException(status_code=404, detail="Not found")
+    if comment.author_id != principal.user_id:
+        raise HTTPException(status_code=404, detail="Not found")
+    # The post still gates it: a comment on something you may no longer read
+    # is not readable either, author or not.
+    _readable_post(db, comment.post_id, principal.user_id)
+
+    rows = db.execute(
+        select(models.CommentReaction.user_id, models.CommentReaction.created_at)
+        .where(models.CommentReaction.comment_id == comment_id)
+        .order_by(models.CommentReaction.created_at.desc())
+        .limit(200)
+    ).all()
+    people = _authors({uid for uid, _ in rows})
+    return {
+        "total": len(rows),
+        "items": [
+            {
+                "user_id": uid,
+                "kind": "like",
+                "at": at,
+                "handle": (people.get(uid) or {}).get("handle"),
+                "display_name": (people.get(uid) or {}).get("display_name") or uid[:12],
+                "avatar_url": (people.get(uid) or {}).get("avatar_url"),
+            }
+            for uid, at in rows
+        ],
+    }
+
+
 def _broadcast_reactions(db: OrmSession, post: models.Post, actor: str) -> None:
     """Announce a post's reaction state.
 

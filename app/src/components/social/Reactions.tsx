@@ -3,6 +3,7 @@ import { Heart, Lightbulb, PartyPopper, ThumbsUp, HandHeart } from 'lucide-react
 import type { LucideIcon } from 'lucide-react'
 import { useAppTheme } from '@/components/appdemo/theme'
 import { kaluta, type ReactionSummary } from '@/lib/api'
+import ReactorList from './ReactorList'
 import { cn } from '@/lib/utils'
 
 /** Must match REACTION_KINDS in social-service. */
@@ -28,13 +29,17 @@ export default function Reactions({
   postId,
   summary,
   onChange,
+  isAuthor = false,
 }: {
   postId: string
   summary: ReactionSummary
   onChange: (next: ReactionSummary) => void
+  /** Whether the viewer wrote this post: only they may see who reacted. */
+  isAuthor?: boolean
 }) {
   const { tok } = useAppTheme()
   const [open, setOpen] = useState(false)
+  const [showWho, setShowWho] = useState(false)
   // Leaving the trigger should not snatch the picker away mid-reach: the pointer
   // has to travel, and a stray pixel between the two used to cancel the whole
   // interaction. A short grace period makes the gesture forgiving.
@@ -132,16 +137,40 @@ export default function Reactions({
         )}
       </div>
 
-      {summary.total > 0 && (
-        <span className={cn('inline-flex items-center gap-0.5 text-xs', tok.low)}>
-          {present.map(([kind]) => {
-            const meta = BY_ID.get(kind)
-            if (!meta) return null
-            return <meta.icon key={kind} size={11} className={meta.tint} aria-hidden="true" />
-          })}
-          <span className="ms-0.5">{summary.total}</span>
-        </span>
-      )}
+      {summary.total > 0 &&
+        // For the author the count is a question with an answer, so it is a
+        // button. For everyone else it is a number, so it is not: the server
+        // refuses them the list, and a control that always fails is worse
+        // than no control.
+        (isAuthor ? (
+          <button
+            type="button"
+            onClick={() => setShowWho(true)}
+            aria-label={`See who reacted (${summary.total})`}
+            className={cn(
+              'inline-flex items-center gap-0.5 rounded-full px-1 text-xs hover:underline',
+              tok.low,
+            )}
+          >
+            {present.map(([kind]) => {
+              const meta = BY_ID.get(kind)
+              if (!meta) return null
+              return <meta.icon key={kind} size={11} className={meta.tint} aria-hidden="true" />
+            })}
+            <span className="ms-0.5">{summary.total}</span>
+          </button>
+        ) : (
+          <span className={cn('inline-flex items-center gap-0.5 text-xs', tok.low)}>
+            {present.map(([kind]) => {
+              const meta = BY_ID.get(kind)
+              if (!meta) return null
+              return <meta.icon key={kind} size={11} className={meta.tint} aria-hidden="true" />
+            })}
+            <span className="ms-0.5">{summary.total}</span>
+          </span>
+        ))}
+
+      {showWho && <ReactorList postId={postId} onClose={() => setShowWho(false)} />}
     </div>
   )
 }

@@ -571,6 +571,16 @@ export interface WellbeingStatus {
   over_limit: boolean
 }
 
+/** One person in a "who reacted" list. */
+export interface Reactor {
+  user_id: string
+  kind: string
+  at: string
+  handle: string | null
+  display_name: string
+  avatar_url: string | null
+}
+
 export interface CommentAuthor {
   id: string
   handle: string
@@ -1757,6 +1767,12 @@ export const kaluta = {
     /** Set, switch or clear a reaction. Tapping the current one clears it. */
     react: (id: string, kind: string) =>
       api.post<{ post_id: string; reactions: ReactionSummary }>(`/posts/${id}/react`, { kind }),
+    /** Who reacted to a post. The server allows this to its author only. */
+    reactionPeople: (id: string) =>
+      api.get<{ total: number; items: Reactor[] }>(`/posts/${id}/reactions/people`),
+    /** Who liked a comment. Its author only, likewise. */
+    commentLikePeople: (id: string) =>
+      api.get<{ total: number; items: Reactor[] }>(`/comments/${id}/likes`),
     comments: (id: string) =>
       api.get<{ max_depth: number; mentions?: Record<string, string>; items: CommentNode[] }>(
         `/posts/${id}/comments`,
