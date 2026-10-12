@@ -69,11 +69,15 @@ export const NAV_DESTINATIONS: ChromeKey[] = (
 /** Shorts is ours, not in the blueprint's original list — appended, not inserted. */
 export const EXTRA_NAV: Array<{ key: string; route: string; label: string }> = [
   { key: 'shorts', route: '/shorts', label: 'Shorts' },
+  // A member's own numbers. In the drawer rather than pinned by default: it
+  // is a page you visit, not one you live on.
+  { key: 'stats', route: '/stats', label: 'Your numbers' },
 ]
 
 /** Which chip should look active for the current location. */
-export function activeKeyFor(pathname: string, search: string): ChromeKey | 'shorts' | null {
+export function activeKeyFor(pathname: string, search: string): ChromeKey | 'shorts' | 'stats' | null {
   if (pathname === '/shorts') return 'shorts'
+  if (pathname === '/stats') return 'stats'
   // Every feed mode is still Home — the mode is a state of that page, so the
   // chip must not jump around as the member switches tabs inside it.
   if (pathname === '/hub') {

@@ -48,6 +48,7 @@ const Explore = lazy(() => import('./pages/app/Explore'))
 const Live = lazy(() => import('./pages/app/Live'))
 const Shorts = lazy(() => import('./pages/app/Shorts'))
 const Earn = lazy(() => import('./pages/app/Earn'))
+const Stats = lazy(() => import('./pages/app/Stats'))
 const Supervision = lazy(() => import('./pages/app/Supervision'))
 const TrustSafety = lazy(() => import('./pages/TrustSafety'))
 const Moderation = lazy(() => import('./pages/app/Moderation'))
@@ -75,7 +76,7 @@ const APP_ROUTE_PREFIXES = [
   '/hub', '/p', '/explore', '/messages', '/communities', '/forums', '/circles',
   '/connections', '/u', '/dashboard', '/market', '/tree', '/graveyard',
   '/memorial', '/live', '/shorts', '/earn', '/supervision', '/settings',
-  '/moderation', '/trust-safety', '/admin',
+  '/moderation', '/trust-safety', '/admin', '/stats',
 ]
 
 function PageFallback() {
@@ -172,6 +173,8 @@ export default function App() {
           <Route path="/live" element={gated('live', <Live />, '/hub')} />
           <Route path="/shorts" element={<Shorts />} />
           <Route path="/earn" element={<Earn />} />
+          {/* A member's own numbers, and who joined on their link. */}
+          <Route path="/stats" element={<Stats />} />
           {/* Notifications about supervision link here, so the path is fixed. */}
           <Route path="/supervision" element={<Supervision />} />
           <Route path="/settings/supervision" element={<Supervision />} />

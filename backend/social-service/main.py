@@ -3415,6 +3415,86 @@ def list_comments(
     }
 
 
+def _excerpt(body: str | None, limit: int = 120) -> str:
+    """A line of a post, for a list that is not showing the post.
+
+    An article's body is HTML, so taken raw it puts "<p>An article body..."
+    in front of somebody as though that were what they had written. Tags out,
+    entities back to characters, whitespace collapsed.
+    """
+    text = re.sub(r"<[^>]+>", " ", body or "")
+    text = html_module.unescape(text)
+    return re.sub(r"\s+", " ", text).strip()[:limit]
+
+
+@app.get("/stats/me", tags=["engagement"])
+def my_stats(principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """What this member's writing has done.
+
+    Their own, and only their own: these are the numbers behind somebody's
+    posts, and a leaderboard of who gets read is not something this platform
+    hands out.
+
+    Counted from the posts rather than by walking the reaction and comment
+    tables - the counters on a post are what every other screen already shows,
+    so a total that disagreed with them would be the one that is wrong.
+    """
+    published = and_(models.Post.author_id == principal.user_id, models.Post.status == "published")
+    totals = db.execute(
+        select(
+            func.count(),
+            func.coalesce(func.sum(models.Post.likes_count), 0),
+            func.coalesce(func.sum(models.Post.comments_count), 0),
+            func.coalesce(func.sum(models.Post.reposts_count), 0),
+            func.coalesce(func.sum(models.Post.views_count), 0),
+        ).where(published)
+    ).one()
+
+    since = datetime.now(timezone.utc) - timedelta(days=30)
+    recent = db.scalar(
+        select(func.count()).select_from(models.Post).where(published, models.Post.created_at >= since)
+    ) or 0
+
+    # The five that travelled furthest, by the sum of what people did with
+    # them rather than by views: a post seen by many and answered by nobody is
+    # not the one somebody wants to be shown.
+    top = db.scalars(
+        select(models.Post)
+        .where(published)
+        .order_by((models.Post.likes_count + models.Post.comments_count + models.Post.reposts_count).desc())
+        .limit(5)
+    ).all()
+
+    comments_written = db.scalar(
+        select(func.count())
+        .select_from(models.Comment)
+        .where(models.Comment.author_id == principal.user_id, models.Comment.status == "published")
+    ) or 0
+
+    posts, likes, comments, reposts, views = totals
+    return {
+        "posts": posts,
+        "posts_last_30_days": recent,
+        "reactions_received": int(likes),
+        "comments_received": int(comments),
+        "reposts_received": int(reposts),
+        "views": int(views),
+        "comments_written": comments_written,
+        "top_posts": [
+            {
+                "id": p.id,
+                "body": _excerpt(p.body),
+                "created_at": p.created_at,
+                "likes": p.likes_count,
+                "comments": p.comments_count,
+                "reposts": p.reposts_count,
+                "views": p.views_count,
+            }
+            for p in top
+        ],
+    }
+
+
 @app.get("/internal/stats", tags=["internal"])
 def stats(db: OrmSession = Depends(get_db)):
     return {

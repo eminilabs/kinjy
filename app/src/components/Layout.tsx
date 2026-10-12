@@ -45,6 +45,7 @@ const APP_ROUTES = [
   '/market',
   '/explore',
   '/earn',
+  '/stats',
   '/live',
   '/shorts',
   '/supervision',

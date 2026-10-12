@@ -571,6 +571,36 @@ export interface WellbeingStatus {
   over_limit: boolean
 }
 
+/** Someone who joined on this member's invitation. */
+export interface Referral {
+  user_id: string
+  handle: string
+  display_name: string
+  joined_at: string
+  kyc_verified: boolean
+  status: string
+}
+
+/** What a member's own writing has done. */
+export interface MyStats {
+  posts: number
+  posts_last_30_days: number
+  reactions_received: number
+  comments_received: number
+  reposts_received: number
+  views: number
+  comments_written: number
+  top_posts: Array<{
+    id: string
+    body: string
+    created_at: string
+    likes: number
+    comments: number
+    reposts: number
+    views: number
+  }>
+}
+
 /** One person in a "who reacted" list. */
 export interface Reactor {
   user_id: string
@@ -1690,6 +1720,11 @@ export const kaluta = {
       ),
   },
 
+  stats: {
+    /** This member's own numbers. The server refuses anybody else's. */
+    me: () => api.get<MyStats>('/stats/me'),
+  },
+
   feeds: {
     modes: () => api.get<{ modes: FeedMode[] }>('/feed/modes', { auth: false }),
     algorithms: () => api.get<{ items: Algorithm[] }>('/algorithms', { auth: false }),
@@ -2517,6 +2552,10 @@ export const kaluta = {
       return result.user
     },
     me: () => api.get<AuthUser>('/auth/me'),
+
+    /** The members this one brought in. One level - the programme pays on these. */
+    referrals: () =>
+      api.get<{ total: number; verified: number; items: Referral[] }>('/auth/referrals'),
 
     /**
      * Who an invitation code belongs to, or a 404.

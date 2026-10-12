@@ -333,6 +333,42 @@ def _ref_lookup_allowed(ip: str | None) -> bool:
     return True
 
 
+@app.get("/auth/referrals", tags=["auth"])
+def my_referrals(principal: CurrentUser, limit: int = 200, db: OrmSession = Depends(get_db)):
+    """The people this member brought in. One level, which is the programme.
+
+    The direct programme pays on these and nobody below them, so this is the
+    whole of what a member earns from - and until now there was no way to see
+    it: you could copy your link and never learn whether anyone had used it.
+
+    Only your own. Deleted accounts are left out; a deactivated one stays,
+    because they were still a real sign-up and may come back.
+    """
+    rows = db.scalars(
+        select(models.User)
+        .where(models.User.invited_by == principal.user_id, models.User.status != "deleted")
+        .order_by(models.User.created_at.desc())
+        .limit(max(1, min(limit, 500)))
+    ).all()
+    return {
+        "total": len(rows),
+        # What the programme actually pays on, counted here rather than left
+        # for the page to work out from a list it may have truncated.
+        "verified": sum(1 for r in rows if r.kyc_verified),
+        "items": [
+            {
+                "user_id": r.id,
+                "handle": r.handle,
+                "display_name": r.display_name,
+                "joined_at": r.created_at,
+                "kyc_verified": r.kyc_verified,
+                "status": r.status,
+            }
+            for r in rows
+        ],
+    }
+
+
 @app.get("/auth/referral/{code}", tags=["auth"])
 def referral_lookup(code: str, request: Request, db: OrmSession = Depends(get_db)):
     """Who an invitation code belongs to.
