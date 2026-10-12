@@ -186,7 +186,7 @@ export const PLANS = [
     features: ['landing.plan.free1', 'landing.plan.free2', 'landing.plan.free3'],
   },
   {
-    name: 'landing.plan.basic', price: '$3.99', cta: 'landing.plan.basicCta', tone: 'paper' as const,
+    name: 'landing.plan.basic', price: '$4.99', cta: 'landing.plan.basicCta', tone: 'paper' as const,
     features: ['landing.plan.basic1', 'landing.plan.basic2', 'landing.plan.basic3'],
   },
   {

@@ -5,7 +5,7 @@ import { Eyebrow } from '@/components/landing/PageKit'
 import { MODULE_TONES } from '@/components/platform/tones'
 
 const PACKS = [
-  { icon: Clapperboard, name: 'HD pack', price: '$8', math: 'Basic $3.99/mo unit ≈ $2 → 4× once, HD forever' },
+  { icon: Clapperboard, name: 'HD pack', price: '$8', math: 'Basic $4.99/mo unit ≈ $2.50 → 3× once, HD forever' },
   { icon: Languages, name: 'Translation pack', price: '$12', math: 'Advanced translation unit ≈ $3 → 4× one-off' },
   { icon: Sparkles, name: 'AI credit bundle', price: '$6', math: 'Credit unit ≈ $2 → 3× one-off top-up' },
   { icon: Mail, name: 'Newsletter unlock', price: '$10', math: 'Publishing unit ≈ $2.5 → 4× one-off' },

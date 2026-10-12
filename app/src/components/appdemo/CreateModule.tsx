@@ -116,7 +116,7 @@ export default function CreateModule({ orb }: Props) {
             to="/pricing"
             className="ms-auto inline-flex items-center gap-1 rounded-full border border-gold/40 bg-gold/10 px-3 py-1 text-[0.65rem] font-bold text-gold-soft transition-colors hover:bg-gold/20"
           >
-            Scheduling is Basic · $3.99/mo ↑
+            Scheduling is Basic · $4.99/mo ↑
           </Link>
         </div>
       </div>

@@ -10,7 +10,7 @@ const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 
 const TIERS = [
   { name: 'Free', price: '$0', line: 'Every module, one feed algorithm, ads included.' },
-  { name: 'Basic', price: '$3.99', line: 'Three algorithms, priority translation, more AI credits.' },
+  { name: 'Basic', price: '$4.99', line: 'Three algorithms, priority translation, more AI credits.' },
   {
     name: 'Premium',
     price: '$9.99',

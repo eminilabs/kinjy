@@ -13,7 +13,7 @@ Build an aesthetic, elegant, production-grade website + app (React/TypeScript) f
 7. **Digital Graveyard 2.0** — memorials, QR codes, flowers/candles, guest book, location, reminders, 3 admins + succession.
 8. **Agency pricing** — 20% markup on top of the seller's price; the commission is calculated on the markup, never on the seller's money.
 9. **Creator revenue** — creator 40%, then sponsor 20% and Kinjy Leaders 5% of what Kinjy retains.
-10. **Subscriptions** — Free / Basic $3.99/mo ($39/yr) / Premium $9.99/mo ($99/yr); one-off purchases at 2–4× unit cost.
+10. **Subscriptions** — Free / Basic $4.99/mo ($39/yr) / Premium $9.99/mo ($99/yr); one-off purchases at 2–4× unit cost.
 11. **Ad pricing** — auction floors (CPM $0.50, premium video CPM $1.00, CPC $0.05, CPV $0.005, etc.), AI-adjusted.
 12. **AI Gateway** — provider-independent model router (Kimi, DeepSeek, others) by task/cost/language/latency/privacy.
 13. **Translation system** — provider-independent language gateway: detection, one-click translate, dubbing, lip-sync.

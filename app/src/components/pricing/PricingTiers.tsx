@@ -50,7 +50,7 @@ const TIERS: Tier[] = [
   {
     name: 'Basic',
     tagline: 'For everyday power users.',
-    monthly: 3.99,
+    monthly: 4.99,
     yearly: 39,
     cta: 'Go Basic',
     features: [
