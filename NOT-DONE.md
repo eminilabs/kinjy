@@ -965,46 +965,97 @@ and recording upload for people (no media-service flow and third-party files are
 transcription, restoration, biographies, documentary, voice interview, year in review, reunion
 planner. They need a local model provider in ai-service and a decision on files of other people.
 
-### FT-07: what the product says about the family tree (audit 12/10)
+### FT-07: what the product says about the family tree (audit 12/10, closed 13/10)
 
-Honoured and now true in the app: private by default; roles; invitation to claim a place; sharing
-one branch (read-only); trusted contacts with a waiting period; GEDCOM export for owners (living and
-unverified hidden, no media); person confirmation with three close relatives for the deceased;
-how-are-we-related and derived relationships; written memories and a timeline.
+Honoured and true in the app: private by default; roles; invitation to claim a place; sharing one branch
+(read-only); trusted contacts with a waiting period; GEDCOM export for owners (living and unverified
+hidden, no media); person confirmation with three close relatives for the deceased; how-are-we-related and
+derived relationships; written memories and a timeline.
 
-Rewritten or removed because false, overstated or unjustified:
-- `/family` (hidden): heritage AI, narrated documentary, restoration, voice interview, year in
-  review and reunion planner removed (their simulated demo components deleted); "trees merge through
-  shared Person Nodes" replaced by invitations (separate trees are not merged); "nothing enters
-  unverified" and "verified edges" replaced by what is true (people are confirmed, links are
-  recorded but not verified); sharing, trusted contacts and export now state their real limits; the
-  start buttons now go to sign-up. `VerificationJourney`/`PathFinder` demo captions corrected.
-- A sample post claiming "restored ... with Heritage AI" (`feeds/data.ts`) now describes a written memory.
-- `features.ts` comment and `README.md` brought up to date.
+Corrected (every language that carries the text):
+- `/family` (still hidden): heritage AI, narrated documentary, restoration, voice interview, year in review,
+  reunion planner and "trees merge" removed or replaced; "verified" now says what is verified (people, not
+  links); sharing, trusted contacts and export state their real limits; sign-up buttons. Simulated demo
+  components deleted; `VerificationJourney` / `PathFinder` captions corrected.
+- Landing: `landing.story.heritageText` (5 locales, "every link confirmed" removed) and the Premium line
+  "Heritage AI" (`landing.plan.premium3a`, 5 locales) removed.
+- Pricing: "heritage graph", "full export of ... family tree", "family records follow your succession
+  settings" (gated variants) now say what exists; the home teaser no longer lists Heritage AI;
+  `ModuleConstellation`, `HeroScene`, `platform/data.ts` and the platform visual no longer say "verified
+  genealogy across infinite generations".
+- Assistant knowledge base (`family-tree`, `heritage-ai`, `heritage-interview`, `family-year-review`, five
+  languages): rewritten to what exists, the last three now say "not available yet" and what to do instead;
+  deep links stay on the marketing routes the validator allows. `validate-kb.cjs` passes (49 entries).
+- Samples and demos: a feed sample claiming "restored ... with Heritage AI", a home sample saying
+  "verified our family tree", and the `/app` demo's "VERIFIED" edges ("RECORDED") corrected.
+- The Developers page no longer has a family-tree API example (there is no public `/v1` family API), and
+  the Memorials page no longer has a gated "remembrance gatherings" block (invitations and attendance do not
+  exist).
 
-**Still wrong or overstated, outside the family-tree files, left untouched on purpose** (each needs
-its own decision; none is shown while `FEATURES.familyTree` is off unless marked *visible*):
-- Assistant knowledge base (`assistant/knowledgeBase.ts`, five languages, tied to `validate-kb.cjs`'s
-  count of 49 entries): `family-tree` steps say an edge turns VERIFIED; `heritage-ai`,
-  `heritage-interview` and `family-year-review` describe features that do not exist. The assistant is
-  off in the app, but `/assistant/ask` answers from whatever was seeded: check the production table
-  before enabling it, and rewrite these entries.
-- Landing and pricing copy gated by `familyTree` (`locales/*` landing.modules.tree, landing.plan.premium3a
-  "Heritage AI", landing.story.heritage*; `PricingTiers` "heritage graph"; `FinePrint` "family records follow
-  succession" and "full export of ... family tree"): rewrite in the five languages before the flag flips.
-- *Visible*: `platform/data.ts` Digital Graveyard card "Legacy contacts & succession" (memorial legacy
-  contacts are "not available yet" on `/memorials`; trusted contacts for a *tree* now exist, they are a
-  different thing); `appdemo/FamilyTreePeek.tsx` draws every edge as verified; `pages/PostPage.tsx`
-  "Thirteen modules" (hard-coded; the count is `OPEN_MODULES`); `creators/BadgeRow.tsx` "Family
-  Historian" badge (no award logic); the Developers page (`family.path.find`, `/v1/memorials/...`: no public
-  `/v1` API); pricing "Messenger (E2E)" (not end-to-end, see above).
-- `app/.kb-seed.cjs` is a generated, tracked bundle of the knowledge base: stale until reseeded.
+**Not changed on purpose; no clear link to the family tree** (audit, with a proposed fix; each changes the
+meaning of a claim, so each needs your decision):
+- `platform/data.ts` Digital Graveyard card, bullet "Legacy contacts & succession": succession for
+  *memorials* exists (up to three administrators); *legacy contacts* for memorials are "not available yet" on
+  `/memorials` itself. Propose: "Memorial administrators & succession".
+- `pages/PostPage.tsx` "Thirteen modules": hard-coded; the real number is `OPEN_MODULES`. Propose: `spelled(OPEN_MODULES)`.
+- `creators/BadgeRow.tsx` "Family Historian" badge: nothing awards it. Propose: remove or mark as an example.
+- Developers page (`family.path.find` in `AgentReadable`, `/v1/memorials/...`): there is no public `/v1` API
+  at all; the page is a mock. Propose: a visible "preview, not available" label, or removal.
+- Pricing "Messenger (E2E)" (see the messenger notes above) and the visible "Full export of posts, messages and
+  media": nobody has checked that this export exists. Propose: verify, then keep or reword.
+- `landing.plan.premium3b` "4K video": not checked.
+- `app/.kb-seed.cjs` is a generated, tracked bundle of the knowledge base: stale until reseeded
+  (`node seed-kb.cjs ...`); check the production table before enabling the assistant.
+- `components/home/HeritageBand.tsx`, `ModuleConstellation`/`PricingTeaser` variants: dead or unused code
+  that still carries the old wording; harmless, delete when convenient.
 
-**Decision left to the product owner: switching `/family` on.** The page itself is coherent and the
-protections it advertises exist, so it could be opened. It stays off because `FEATURES.familyTree` also
-turns on the landing, pricing and assistant copy above, which is not yet coherent; flipping it would
-publish those lines. Open it once that copy is rewritten, or split the flag so the page opens alone.
+**`/family` stays off.** Everything the flag switches in the visible product is now true, so it could be
+opened; it is the product owner's decision. Before opening: reseed or check the assistant KB (it
+answers from whatever was seeded), and read the page once in the five languages' navigation (the page
+itself is English only).
 
+#### Release gates before the family-tree functions go to production
+1. **Journal of administration actions.** Platform staff keep the technical power family-service has always
+   given them over a tree: change or remove a link by its id, and edit or remove a node of a tree its owner
+   opened to everyone. They have **no** power to read a private tree. Every such use outside the tree's own
+   rules is now written to `family.access_events` (`admin_change_link`, `admin_edit_person`,
+   `admin_delete_person`: who, which tree, what; no content), and nothing is written when a staff member acts as
+   an ordinary owner. Still required before production: a place where staff can *read* that journal (no screen
+   or endpoint exists), a retention decision (365 days today), and a decision whether this power should exist
+   at all. Admin actions in other services are not covered by this.
+2. **Trees without an owner** (`family.ownership_reviews`). The migration named an owner only where the history
+   shows one beyond doubt, and wrote every other tree to this table (152 on the development data). In such
+   a tree contributors keep what they had, nobody can manage members, invite contributors, export or name a
+   trusted contact. **Nothing makes anyone an owner automatically.** Recommended process, to build as its own task:
+   - an ownership claim, opened by a member who holds a role in the tree, with a short written reason;
+   - every member of the tree is told; the claim runs a waiting period (30 days, as for succession) during which
+     any member can object; with two or more other members, a majority of them must approve instead of waiting;
+   - if nobody objects (or the majority approves) the claimant becomes an owner; if members object, the
+     claim goes to staff for review, with identity checks and a written, journalled decision;
+   - every step goes to the access journal; a tree with a single member and no objection follows the waiting period;
+   - new trees always start with an owner (already true), so the table only shrinks.
+   Until it exists the list is a task list for support, not an automatic grant.
+3. **A real AI feature** (below) must not ship before its own gate.
+
+#### Can IleAI feed FT-06? Evaluation (no code written, no data sent)
+- Facts found: `.env` holds an `ILEAI_API_KEY` (its value was not read or printed); ai-service has **no
+  IleAI provider** (its registry knows `mock`, `kimi`, `deepseek`, `anthropic`, `openai`, and only `mock` counts
+  as local); a web search found no documentation, pricing, hosting location or data policy for a service by
+  that name, so nothing about it can be confirmed.
+- Rule in force: the gateway sends data marked `sensitive` only to local providers. Family data (living
+  relatives, minors, the deceased) is sensitive. An IleAI reached over the internet would therefore be refused
+  for it, unless it is shown to be self-hosted or covered by an agreement that it stores nothing and does not
+  train on inputs.
+- Verdict: **not feasible today**, and not attempted. It becomes feasible if all of these hold: (1) its
+  documentation and data policy are provided and show where it runs, what it keeps and whether it trains on
+  inputs; (2) a provider entry is added in ai-service's gateway (outside Family Tree, so a separate decision)
+  with `local` only if truly local, or a new, explicit "approved processor" class; (3) the first use is narrow
+  and reversible: summarise one memory a member has written, for a verified deceased person, on an owner's
+  explicit opt-in per tree, shown as a draft labelled with provider and model, never written to the graph,
+  published only by a person; (4) tested first on synthetic text only; (5) calls are metered by ai-service as
+  now (tokens, not content) and listed in the access journal.
+- Not suitable even then: restoring photos, transcribing recordings of other people, writing biographies,
+  inferring any relationship or origin: they need files and facts that Kinjy neither stores nor may invent.
 
 ## Layout, cards and the black /hub (06/10)
 

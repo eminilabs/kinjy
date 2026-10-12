@@ -20,14 +20,14 @@ const CARDS = [
     icon: Download,
     title: 'Your data, exportable',
     body: FEATURES.familyTree
-      ? 'Full export of posts, messages, family tree and media — on any plan, including Free.'
+      ? 'Owners can export their family tree as a GEDCOM file — on any plan, including Free.'
       : 'Full export of posts, messages and media — on any plan, including Free.',
   },
   {
     icon: Trash2,
     title: 'Delete forever',
     body: FEATURES.familyTree
-      ? 'Self-service deletion in Settings → Account, GDPR/PDPA compliant. Your graveyard and family records follow your succession settings.'
+      ? 'Self-service deletion in Settings → Account, GDPR/PDPA compliant. Your graveyard follows your succession settings; a family tree can name trusted contacts.'
       : 'Self-service deletion in Settings → Account, GDPR/PDPA compliant. Your graveyard records follow your succession settings.',
     link: { to: '/safety', label: 'Read the safety charter' },
   },

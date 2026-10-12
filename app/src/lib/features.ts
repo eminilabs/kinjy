@@ -21,10 +21,9 @@ export const FEATURES = {
   familyTreeApp: true,
   /**
    * The family tree as the public site presents it: the /family page and every line
-   * of copy that advertises it. The /family page now says only what the app keeps
-   * (roles, one-branch sharing, trusted contacts, GEDCOM export for owners, written
-   * memories). It stays off until the other copy gated by this flag (landing, pricing, the
-   * assistant) is rewritten the same way: the list is in NOT-DONE.md, "FT-07".
+   * of copy that advertises it (landing, pricing, platform, home). All of it now says only
+   * what the app keeps (NOT-DONE.md, FT-07). Left off until the product owner decides to
+   * open it, after reseeding or checking the assistant's knowledge base.
    */
   familyTree: false,
   /** The Kinjy Assistant: the floating orb and the /assistant page. */

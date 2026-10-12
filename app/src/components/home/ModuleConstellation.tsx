@@ -16,7 +16,7 @@ const ALL_MODULES: { icon: string; name: string; desc: string; feature?: Feature
   { icon: 'mod-community', name: 'Communities', desc: 'Interest spaces with their own economies.' },
   { icon: 'mod-message', name: 'Messenger', desc: 'E2E encrypted chat, auto-translated.' },
   { icon: 'mod-creator', name: 'Creator Studio', desc: 'One-to-Many publishing with an AI copilot.' },
-  { icon: 'mod-family', name: 'Family Tree', desc: 'Verified genealogy across infinite generations.', feature: 'familyTree' },
+  { icon: 'mod-family', name: 'Family Tree', desc: 'A family graph, confirmed by those who know them.', feature: 'familyTree' },
   { icon: 'mod-candle', name: 'Digital Graveyard', desc: 'Memorials kept with dignity, forever.' },
   { icon: 'mod-calendar', name: 'Events', desc: 'Gather your circles, online and off.' },
   { icon: 'mod-storefront', name: 'Marketplace', desc: 'Trusted commerce on a fair 20% margin.', feature: 'marketplace' },

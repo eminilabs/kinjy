@@ -38,7 +38,7 @@ const TIERS: Tier[] = [
       { label: '10 feed modes + Chronological & community algorithms', tip: 'Switch how your feed ranks, or opt out of ranking entirely.' },
       { label: 'Standard video quality, standard translation', tip: 'Solid defaults for everyday watching and reading across languages.' },
       FEATURES.familyTree
-        ? { label: 'Family Tree + Digital Graveyard access', tip: 'Build your heritage graph and keep memorials, free forever.' }
+        ? { label: 'Family Tree + Digital Graveyard access', tip: 'Build your family tree and keep memorials, free forever.' }
         : { label: 'Digital Graveyard access', tip: 'Keep memorials with dignity, free forever.' },
       FEATURES.marketplace
         ? { label: 'Messenger (E2E), Events, Marketplace buying', tip: 'Encrypted messages, event planning and buyer-side commerce.' }

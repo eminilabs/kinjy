@@ -132,7 +132,7 @@ export default function FamilyTreePeek({ orb }: Props) {
                       />
                       <text textAnchor="middle" dy={3.5} fontSize={7.5} fontFamily="JetBrains Mono, monospace"
                         fill={e.verified ? '#3FB27F' : '#E0A33E'} fontWeight={600}>
-                        {e.verified ? 'VERIFIED' : 'PENDING'}
+                        {e.verified ? 'RECORDED' : 'PENDING'}
                       </text>
                     </g>
                   )}
@@ -220,13 +220,13 @@ export default function FamilyTreePeek({ orb }: Props) {
               </motion.li>
             ))}
             <li className={cn('pt-1 text-[0.68rem]', tok.low)}>
-              Path crosses {path.length - 1} verified link{path.length > 2 ? 's' : ''}
+              Path crosses {path.length - 1} recorded link{path.length > 2 ? 's' : ''}
             </li>
           </motion.ol>
         )}
 
         <div className={cn('mt-3 flex items-center gap-3 border-t pt-3 text-[0.65rem]', tok.divider.replace('divide-', 'border-'), tok.low)}>
-          <span className="flex items-center gap-1"><ShieldCheck size={11} className="text-success" /> Verified</span>
+          <span className="flex items-center gap-1"><ShieldCheck size={11} className="text-success" /> Recorded</span>
           <span className="flex items-center gap-1"><ShieldQuestion size={11} className="text-warning" /> Pending corroboration</span>
         </div>
       </div>
