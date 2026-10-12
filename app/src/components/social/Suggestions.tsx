@@ -33,6 +33,8 @@ export function People({ limit = 4, title = 'People to follow' }: { limit?: numb
   // dies with the page - which is exactly why somebody who had sent a request
   // an hour earlier came back to a button saying "Connect".
   const [invited, setInvited] = useState<Set<string>>(new Set())
+  // Accepted in this session, so the button says so without a refetch.
+  const [accepted, setAccepted] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
 
@@ -50,11 +52,28 @@ export function People({ limit = 4, title = 'People to follow' }: { limit?: numb
     }
   }
 
-  /** Following is one-way. Connecting asks, and they decide. */
+  /**
+   * Following is one-way. Connecting asks, and they decide.
+   *
+   * Two different actions behind one button, and sending them both down the
+   * invite endpoint is why "Accept" did nothing. Inviting somebody who has
+   * already invited you does accept - but only after that endpoint has
+   * checked whether they accept invitations at all, and a member whose
+   * setting refuses invitations from strangers had their own invitation
+   * refused on the way in. Accepting is answering, so it answers.
+   */
   const invite = async (person: PersonSuggestion) => {
+    const accepting = standing(person) === 'invites_you'
     setBusy(person.user_id)
     setNote(null)
     try {
+      if (accepting) {
+        await kaluta.connections.respond(person.user_id, true)
+        setAccepted((current) => new Set(current).add(person.user_id))
+        announce('connections')
+        setNote(`You and ${person.display_name} are connected.`)
+        return
+      }
       const result = await kaluta.connections.invite(person.user_id)
       setInvited((current) => new Set(current).add(person.user_id))
       announce('connections')
@@ -64,7 +83,13 @@ export function People({ limit = 4, title = 'People to follow' }: { limit?: numb
           : `Invitation sent to ${person.display_name}.`,
       )
     } catch (err) {
-      setNote(err instanceof ApiError ? err.message : 'Could not send the invitation')
+      setNote(
+        err instanceof ApiError
+          ? err.message
+          : accepting
+            ? 'Could not accept the invitation'
+            : 'Could not send the invitation',
+      )
     } finally {
       setBusy(null)
     }
@@ -75,7 +100,11 @@ export function People({ limit = 4, title = 'People to follow' }: { limit?: numb
 
   /** What the Connect button means for this person right now. */
   const standing = (person: PersonSuggestion) =>
-    invited.has(person.user_id) ? 'invited' : (person.connection ?? 'none')
+    accepted.has(person.user_id)
+      ? 'connected'
+      : invited.has(person.user_id)
+        ? 'invited'
+        : (person.connection ?? 'none')
 
   return (
     <RailCard title={title}>

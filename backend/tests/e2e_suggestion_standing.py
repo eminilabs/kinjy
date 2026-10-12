@@ -91,6 +91,34 @@ check("and leaves the pair pending, not doubled",
       standing_of(alice_token, bob["id"]) == "invited",
       str(standing_of(alice_token, bob["id"])))
 
+# What the Accept button does. It used to send another invitation, which the
+# server treats as "they already asked you, so you are connected" - but only
+# after checking whether *they* accept invitations from strangers. Somebody
+# whose setting refuses them had their own invitation refused on the way in,
+# which is why the button did nothing. Answering is a different endpoint.
+# The one who invites is the one with the closed setting: inviting is allowed
+# to them, and the person they invited cannot invite back.
+closed_token, closed = register()
+c.patch("/preferences", headers=auth(closed_token), json={"who_can_invite": "connections"})
+open_token, open_user = register()
+asked = c.post(f"/connections/{open_user['id']}", headers=auth(closed_token), json={"message": None})
+check("a member with a closed setting can still invite", asked.status_code in (200, 201),
+      f"{asked.status_code} {asked.text[:120]}")
+check("the person they asked sees 'invites_you'",
+      standing_of(open_token, closed["id"]) == "invites_you",
+      str(standing_of(open_token, closed["id"])))
+# This is the press that did nothing.
+back = c.post(f"/connections/{closed['id']}", headers=auth(open_token), json={"message": None})
+check("inviting back is refused - which is why Accept must not do that",
+      back.status_code == 403, f"{back.status_code} {back.text[:120]}")
+answer = c.post(f"/connections/{closed['id']}/respond?accept=true", headers=auth(open_token))
+check("answering the invitation works", answer.status_code in (200, 201),
+      f"{answer.status_code} {answer.text[:120]}")
+check("and leaves both sides connected",
+      standing_of(open_token, closed["id"]) == "connected"
+      and standing_of(closed_token, open_user["id"]) == "connected",
+      f"{standing_of(open_token, closed['id'])} / {standing_of(closed_token, open_user['id'])}")
+
 # Accepting moves both sides to connected.
 accepted = c.post(f"/connections/{alice['id']}/respond?accept=true", headers=auth(bob_token))
 check("the recipient can accept", accepted.status_code in (200, 201),

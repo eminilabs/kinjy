@@ -1737,7 +1737,11 @@ def send_invitation(
         kind="invitation",
         title=f"{mine.display_name if mine else 'Someone'} wants to connect",
         body=payload.message,
-        link="/dashboard?tab=privacy",
+        # Where the invitation can actually be answered. It used to point at
+        # the privacy tab of the dashboard, which is where you decide *who may
+        # invite you* - a settings page, not a request. Somebody told they had
+        # an invitation arrived at a page with no invitation on it.
+        link="/connections?tab=incoming",
     )
     return {"status": "pending"}
 

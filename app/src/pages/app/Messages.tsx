@@ -1546,10 +1546,15 @@ export default function Messages() {
                             <span className="block truncate text-sm text-text-hi">
                               {friend.profile?.display_name ?? 'Member'}
                             </span>
-                            <span className="caption block truncate">
-                              {friend.profile?.handle ? `@${friend.profile.handle}` : ''}
-                              {presence[friend.user_id] ? ` · ${lastSeenLabel(presence[friend.user_id], locale)}` : ''}
-                            </span>
+                            {/* When they were last here, and nothing else.
+                                The handle was in front of it: an address,
+                                where the question being answered is "is this
+                                person around". */}
+                            {presence[friend.user_id] && (
+                              <span className="caption block truncate">
+                                {lastSeenLabel(presence[friend.user_id], locale)}
+                              </span>
+                            )}
                           </span>
                           <MessageSquare size={14} className="ms-auto shrink-0 text-text-low" aria-hidden="true" />
                         </button>
@@ -1661,7 +1666,12 @@ export default function Messages() {
                           <PresenceAvatar profile={person} online={presence[person.user_id]?.online} size={28} />
                           <span className="min-w-0">
                             <span className="block truncate text-sm text-text-hi">{person.display_name}</span>
-                            <span className="caption block truncate">@{person.handle}</span>
+                            {/* The city, if we know it. Two people can share
+                                a name and the handle told you nothing useful
+                                about which was which either. */}
+                            {person.city && (
+                              <span className="caption block truncate">{person.city}</span>
+                            )}
                           </span>
                         </button>
                       </li>
@@ -1684,14 +1694,21 @@ export default function Messages() {
               </p>
             )}
 
-            {conversations.loading && !conversations.data && <ConversationSkeleton count={4} />}
-            {conversations.data?.items.length === 0 && (
+            {/* The conversations, unless the member is looking for a person.
+                "See all" opens the whole list of connections and the search
+                box finds people to write to; in both cases the answer being
+                looked for is a person, and the conversations underneath were
+                a second list to scroll past to reach it. */}
+            {!showAllFriends && !searched && conversations.loading && !conversations.data && (
+              <ConversationSkeleton count={4} />
+            )}
+            {!showAllFriends && !searched && conversations.data?.items.length === 0 && (
               <p className="text-sm text-text-low">
                 No conversations yet. Tap a friend above, or use “New”.
               </p>
             )}
 
-            {(() => {
+            {!showAllFriends && !searched && (() => {
               const needle = chatQuery.trim().toLowerCase()
               const shown = (conversations.data?.items ?? []).filter((conversation) => {
                 if (unreadOnly && !((conversation.unread ?? 0) > 0)) return false
@@ -1887,6 +1904,13 @@ export default function Messages() {
                     one holds: "encrypted" alone would let storage encryption
                     pass for end-to-end, which it is not. */}
                 <span
+                  aria-label={
+                    active.encrypted
+                      ? 'End-to-end encrypted'
+                      : active.sealed_at_rest
+                        ? 'Encrypted on our servers'
+                        : 'Not encrypted'
+                  }
                   className="caption ms-auto hidden shrink-0 items-center gap-1 sm:inline-flex"
                   title={
                     active.encrypted
@@ -1901,11 +1925,11 @@ export default function Messages() {
                   ) : (
                     <ShieldOff size={11} aria-hidden="true" />
                   )}
-                  {active.encrypted
-                    ? 'End-to-end encrypted'
-                    : active.sealed_at_rest
-                      ? 'Encrypted on our servers'
-                      : 'Not encrypted'}
+                  {/* The padlock alone. The sentence beside it was the
+                      longest thing in the header, repeated above every
+                      conversation, and it says the same thing every time -
+                      the title still carries the exact wording for anyone who
+                      wants to know which of the three promises holds. */}
                 </span>
               </header>
 
