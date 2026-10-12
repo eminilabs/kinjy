@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import { useLocation } from 'react-router'
 import { useAuth } from '@/hooks/useAuth'
+import BackToTop from './BackToTop'
 import Navbar from './Navbar'
 import Footer from './Footer'
 import { FEATURES } from '@/lib/features'
@@ -130,6 +131,15 @@ export default function Layout({ children }: { children: ReactNode }) {
       {!ownChrome && <Navbar />}
       <main className={ownChrome ? undefined : 'pt-[72px]'}>{children}</main>
       {!ownChrome && <Footer />}
+      {/* Every public page, which is where the tall ones are - and not inside
+          the app, whose panels scroll themselves.
+
+          Not `!ownChrome`: that was the first guard and it excluded exactly
+          the pages this is for. The landing menu's pages - platform, feeds,
+          creators, pricing, payments, safety, developers - are listed as
+          having their own chrome because they draw their own nav, which is
+          unrelated to how far down they go. */}
+      {!inApp && <BackToTop />}
       {showAssistant && (
         <Suspense fallback={null}>
           <LiveAssistant />
