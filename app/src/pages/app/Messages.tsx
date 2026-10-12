@@ -502,12 +502,21 @@ export default function Messages() {
   // --- scrolling ------------------------------------------------------------
   const listRef = useRef<HTMLDivElement>(null)
   const nearBottom = useRef(true)
-  const scrollMode = useRef<'bottom' | 'keep' | { restoreFrom: number }>('bottom')
+  const scrollMode = useRef<'bottom' | 'opened' | 'keep' | { restoreFrom: number }>('opened')
 
   const onScroll = () => {
     const el = listRef.current
     if (el) nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
   }
+
+  /**
+   * Where the member had got to when they opened this conversation.
+   *
+   * Captured on opening and not read again, because `markRead` moves the mark
+   * forward about a second after the thread appears - ask it later and every
+   * conversation looks as though it had been read to the end.
+   */
+  const readMarkOnOpen = useRef<string | null>(null)
 
   // After every change to the thread: stay at the bottom when the reader was
   // there (or just sent something), hold position when history was prepended,
@@ -519,11 +528,35 @@ export default function Messages() {
     const mode = scrollMode.current
     if (typeof mode === 'object') {
       el.scrollTop = el.scrollHeight - mode.restoreFrom
-    } else if (mode === 'bottom' || nearBottom.current) {
+    } else if (mode === 'opened') {
+      // Opening a conversation lands on the first thing not yet read, rather
+      // than at the very bottom: arriving at the newest message means
+      // scrolling back up to find where you stopped, and in a conversation
+      // that has moved on overnight that is a lot of scrolling to read what
+      // you were told about.
+      const mark = readMarkOnOpen.current
+      const since = mark ? new Date(mark).getTime() : null
+      const firstUnread =
+        since === null
+          ? undefined
+          : messages.find(
+              (m) => m.sender_id !== user?.id && new Date(m.created_at).getTime() > since,
+            )
+      const node = firstUnread ? document.getElementById(`msg-${firstUnread.id}`) : null
+      if (node) {
+        // Measured against the scroller rather than through offsetTop, which
+        // is relative to the nearest positioned ancestor and not to this box.
+        // A little above it, so it reads as "carry on from here" rather than
+        // as the top of the window.
+        el.scrollTop += node.getBoundingClientRect().top - el.getBoundingClientRect().top - 16
+      } else {
+        el.scrollTop = el.scrollHeight
+      }
+    } else if (nearBottom.current) {
       el.scrollTop = el.scrollHeight
     }
     scrollMode.current = 'keep'
-  }, [messages])
+  }, [messages, user?.id])
 
   // --- reading ---------------------------------------------------------------
   /** Only when the thread is actually in front of the member. */
@@ -575,7 +608,7 @@ export default function Messages() {
       try {
         const page = await kaluta.messages.list(conversationId)
         if (activeIdRef.current !== conversationId) return
-        scrollMode.current = 'bottom'
+        scrollMode.current = 'opened'
         setMessages(page.items)
         setHasOlder(page.items.length >= PAGE)
         markRead(conversationId)
@@ -1241,8 +1274,23 @@ export default function Messages() {
   const active = conversations.data?.items.find((c) => c.id === activeId)
   const activeOthers = active ? active.participants.filter((p) => p !== user?.id) : []
 
-  const readAt = (conversation: Conversation, uid: string): string | null =>
-    reads[conversation.id]?.[uid] ?? conversation.read_state?.[uid] ?? null
+  const readAt = useCallback(
+    (conversation: Conversation, uid: string): string | null =>
+      reads[conversation.id]?.[uid] ?? conversation.read_state?.[uid] ?? null,
+    [reads],
+  )
+
+  // The read mark is captured the first time each conversation becomes the
+  // active one - once, and before `markRead` moves it forward a second later.
+  // Reading it inside the loader instead looked simpler and was wrong: that
+  // callback closes over whichever conversation was active when it was
+  // created, which on a quick switch is the previous one.
+  const capturedFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (!active || !user || capturedFor.current === active.id) return
+    capturedFor.current = active.id
+    readMarkOnOpen.current = readAt(active, user.id)
+  }, [active, user, readAt])
 
   const typingNames = active
     ? Object.entries(typing[active.id] ?? {})

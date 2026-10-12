@@ -138,7 +138,13 @@ export default function AppShell({
         )}
 
         {/* Centre column */}
-        <main className="min-w-0">
+        {/* `min-h-0` matters only in full mode, and it matters a lot: a grid
+            item's default `min-height: auto` refuses to shrink below its
+            content, so a long conversation list pushed this past the bottom
+            of the window instead of letting the list scroll inside it. The
+            list then had nothing to scroll - it was already as tall as
+            everything in it. */}
+        <main className={cn('min-w-0', full && 'min-h-0')}>
           {(title || action) && (
             <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
               {title ? (
