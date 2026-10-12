@@ -51,7 +51,7 @@ const TIERS: Tier[] = [
     name: 'Basic',
     tagline: 'For everyday power users.',
     monthly: 4.99,
-    yearly: 39,
+    yearly: 49,
     cta: 'Go Basic',
     features: [
       {
@@ -106,15 +106,29 @@ function PriceFigure({ value, yearly }: { value: number; yearly: boolean }) {
       duration: 0.24,
       ease: 'easeOut',
       onUpdate: (v) => setDisplay(v),
+      onComplete: () => setDisplay(value),
     })
-    return () => controls.stop()
+    // A price must not depend on an animation having run. Animations are
+    // driven by frames, and a tab in the background gets none - so switching
+    // to Yearly and looking away left the figure on the monthly number, formatted
+    // with the yearly one's decimals: $4.99 rendered as "$5 / year". This
+    // timer outlives the animation and puts the real number there whatever
+    // happened to the frames.
+    const settle = window.setTimeout(() => setDisplay(value), 400)
+    return () => {
+      controls.stop()
+      window.clearTimeout(settle)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, reduced])
 
   return (
     <span className="flex items-baseline gap-1.5">
       <span className="kl-serif text-[56px] font-semibold leading-none tracking-[-.02em]">
-        ${value === 0 ? '0' : display.toFixed(value % 1 === 0 ? 0 : 2)}
+        {/* Decimals follow the number actually on screen, not the one it is
+            heading towards: mid-flight, 4.08 was being printed as "4" because
+            the target happened to be a whole number. */}
+        ${value === 0 ? '0' : display.toFixed(display % 1 === 0 ? 0 : 2)}
       </span>
       <span className="text-[15px] text-[var(--kl-low)]">{value === 0 ? 'forever' : yearly ? '/ year' : '/ month'}</span>
     </span>
@@ -125,6 +139,15 @@ function PriceFigure({ value, yearly }: { value: number; yearly: boolean }) {
 export default function PricingTiers() {
   const reduced = useReducedMotion()
   const [yearly, setYearly] = useState(false)
+  // Read off the tiers rather than written on the button. It said -18% in
+  // plain text, and the day Basic's year stopped matching Premium's - 39
+  // against 59.88 is 35% off, not 18 - the badge went on claiming the old
+  // number. A figure that cannot drift from the prices beside it.
+  const yearlySaving = Math.round(
+    Math.min(
+      ...TIERS.filter((t) => t.monthly > 0).map((t) => 100 - (t.yearly / (t.monthly * 12)) * 100),
+    ),
+  )
   const join = useJoinTarget()
   const rise = (delay: number) =>
     reduced ? {} : { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.6, delay, ease: EASE } }
@@ -178,7 +201,9 @@ export default function PricingTiers() {
                   <span className="relative">
                     {label}
                     {label === 'Yearly' && (
-                      <span className={cn('kl-mono ml-2 text-[11px]', active ? 'text-[#0B0E1D]/70' : 'text-[var(--kl-gold-deep)]')}>−18%</span>
+                      <span className={cn('kl-mono ml-2 text-[11px]', active ? 'text-[#0B0E1D]/70' : 'text-[var(--kl-gold-deep)]')}>
+                        −{yearlySaving}%
+                      </span>
                     )}
                   </span>
                 </button>

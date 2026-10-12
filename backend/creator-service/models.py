@@ -136,6 +136,6 @@ BADGES = [
 # unit cost, so a subscription always remains the better deal.
 PLANS = {
     "free": {"monthly": "0.00", "yearly": "0.00"},
-    "basic": {"monthly": "4.99", "yearly": "39.00"},
+    "basic": {"monthly": "4.99", "yearly": "49.00"},
     "premium": {"monthly": "9.99", "yearly": "99.00"},
 }
