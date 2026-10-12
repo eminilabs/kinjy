@@ -339,3 +339,40 @@ class AccessEvent(Base):
     kind: Mapped[str] = mapped_column(String(40))
     detail: Mapped[str | None] = mapped_column(String(200))
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class TrustedContact(Base):
+    """Someone an owner has named to be able to take over the tree if the owner cannot.
+
+    Naming grants nothing. The contact must accept; they then hold no extra access either. Only a
+    succession request that the owners let run its waiting period (and any owner can cancel) makes
+    them an owner. Anchored on the owner's own place in the tree.
+    """
+
+    __tablename__ = "trusted_contacts"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "contact_id", "person_id", name="uq_trusted_contact"),
+        Index("ix_trusted_contact_contact", "contact_id"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("tcn"))
+    person_id: Mapped[str] = mapped_column(String(40), index=True)  # the owner's anchor in the tree
+    owner_id: Mapped[str] = mapped_column(String(40))
+    contact_id: Mapped[str] = mapped_column(String(40))
+    status: Mapped[str] = mapped_column(String(20), default="invited")  # invited|active|declined|revoked
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SuccessionRequest(Base):
+    __tablename__ = "succession_requests"
+    __table_args__ = (Index("ix_succession_contact", "contact_id"), {"schema": SCHEMA})
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("suc"))
+    contact_id: Mapped[str] = mapped_column(ForeignKey(f"{SCHEMA}.trusted_contacts.id", ondelete="CASCADE"))
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    effective_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|cancelled|activated
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_by: Mapped[str | None] = mapped_column(String(40))

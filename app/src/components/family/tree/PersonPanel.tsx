@@ -4,12 +4,14 @@ import { useAppTheme } from '@/components/appdemo/theme'
 import { useApi } from '@/hooks/useApi'
 import { ApiError, kaluta, type HowRelated, type ParentRole, type PersonDetail, type RelativeKind } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import ArchivePanel from './ArchivePanel'
 import ExportPanel from './ExportPanel'
 import InvitePanel from './InvitePanel'
 import LinkExisting from './LinkExisting'
 import MembersPanel from './MembersPanel'
 import { ROLE_LABEL, ROLE_MEANING } from './treeRoles'
 import PersonForm from './PersonForm'
+import { TrustedContactMine, TrustedContactOwner } from './TrustedContactPanel'
 import RelativeQuestions from './RelativeQuestions'
 import { emptyValues, toFields, valuesFrom, type FormValues } from './formValues'
 import { isReady, noAnswers, toExtras, type KnownParent } from './relativeExtras'
@@ -299,9 +301,15 @@ export default function PersonPanel({
             </section>
           )}
 
+          <ArchivePanel personId={person.id} name={person.given_name} canAdd={perms.can_link} />
+
           {perms.can_invite && <InvitePanel personId={person.id} name={person.given_name} roles={perms.invite_roles} />}
 
           {perms.can_manage_members && person.is_me && <MembersPanel personId={person.id} />}
+
+          {perms.role === 'owner' && person.is_me && <TrustedContactOwner personId={person.id} />}
+
+          {person.is_me && <TrustedContactMine />}
 
           {perms.role === 'owner' && person.is_me && <ExportPanel personId={person.id} />}
 

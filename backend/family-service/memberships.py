@@ -20,6 +20,7 @@ import models
 from common.auth import CurrentUser
 from common.database import SessionLocal, get_db
 import roles as roles_mod
+import trusted
 from roles import best, owners_in, role_in
 
 log = logging.getLogger("family-service")
@@ -221,6 +222,7 @@ def remove_member(membership_id: str, principal: CurrentUser, db: OrmSession = D
         _guard_last_owner(db, row.user_id, people)
     for r in rows:
         db.delete(r)
+    trusted.lapse_for_member(db, row.user_id, people)
     roles_mod.record(db, "member_removed" if row.user_id != principal.user_id else "member_left", principal.user_id, row.user_id, row.person_id)
     db.commit()
 

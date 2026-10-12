@@ -1962,6 +1962,35 @@ export const kaluta = {
       const today = new Date().toISOString().slice(0, 10).replaceAll('-', '')
       return { blob: await response.blob(), filename: named?.[1] ?? `kinjy-family-${today}.ged` }
     },
+    /** A person's written memories (and any file items), for whoever may read them. */
+    archive: (personId: string) =>
+      api.get<{
+        items: Array<{ id: string; kind: string; title: string; story: string | null; file_url: string | null; happened_on: string | null; mine: boolean; can_delete: boolean }>
+      }>(`/family/heritage?person_id=${personId}`),
+    addMemory: (personId: string, input: { title: string; story: string; happened_on?: string }) =>
+      api.post<{ id: string }>('/family/heritage', { person_id: personId, kind: 'story', title: input.title, transcript: input.story, ...(input.happened_on ? { happened_on: input.happened_on } : {}) }),
+    deleteMemory: (itemId: string) => api.delete<void>(`/family/heritage/${itemId}`),
+    timeline: (personId: string) =>
+      api.get<{ entries: Array<{ date: string; kind: string; label: string }> }>(`/family/timeline/${personId}`),
+    /** Owners only: who they named to be able to take over the tree, and any request waiting. */
+    trustedContacts: (personId: string) =>
+      api.get<{
+        delay_days: number
+        items: Array<{ id: string; status: 'invited' | 'active'; name: string | null; named_by_me: boolean; request: { id: string; requested_at: string; effective_at: string } | null }>
+      }>(`/family/persons/${personId}/trusted-contacts`),
+    nameTrustedContact: (personId: string, membershipId: string) =>
+      api.post<{ id: string; status: string }>(`/family/persons/${personId}/trusted-contacts`, { membership_id: membershipId }),
+    /** The times the caller was named someone's trusted contact. */
+    myDesignations: () =>
+      api.get<{
+        delay_days: number
+        items: Array<{ id: string; status: 'invited' | 'active'; owner_name: string | null; valid: boolean | null; request: { id: string; requested_at: string; effective_at: string } | null }>
+      }>('/family/trusted-contacts/mine'),
+    acceptDesignation: (id: string) => api.post<{ id: string; status: string }>(`/family/trusted-contacts/${id}/accept`, {}),
+    declineDesignation: (id: string) => api.post<void>(`/family/trusted-contacts/${id}/decline`, {}),
+    endDesignation: (id: string) => api.delete<void>(`/family/trusted-contacts/${id}`),
+    requestSuccession: (id: string) => api.post<{ id: string; effective_at: string; delay_days: number }>(`/family/trusted-contacts/${id}/succession`, {}),
+    cancelSuccession: (id: string) => api.delete<void>(`/family/trusted-contacts/${id}/succession`),
     /** Owners only. */
     members: (personId: string) =>
       api.get<{

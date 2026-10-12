@@ -5,7 +5,7 @@ import logging
 from datetime import date, datetime, timezone
 
 from fastapi import Depends, HTTPException, Query
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as OrmSession
@@ -24,6 +24,7 @@ import invitations
 import memberships
 import models
 import roles
+import trusted
 
 log = logging.getLogger("family-service")
 
@@ -56,12 +57,13 @@ app = create_app(
     name="family-service",
     schema=models.SCHEMA,
     migrations=MIGRATIONS,
-    on_startup=[memberships.backfill],
+    on_startup=[memberships.backfill, trusted.start_sweep],
     description="Family tree graph, derived relationships, verification, heritage archive.",
 )
 app.include_router(invitations.router)
 app.include_router(memberships.router)
 app.include_router(exports.router)
+app.include_router(trusted.router)
 
 
 # --- schemas ---------------------------------------------------------------
@@ -204,12 +206,39 @@ class ConfirmIn(BaseModel):
 
 
 class HeritageIn(BaseModel):
+    """One item of a person's archive: a written memory (``story``), or a file the archive points at.
+
+    A story is plain text and needs no file. Anything else points at a file of ours (``/media/...``)
+    or an https address, never a script, a data: blob or plain http.
+    """
+
     person_id: str | None = None
-    kind: str = Field(pattern="^(photo|letter|audio|video|document)$")
+    kind: str = Field(pattern="^(story|photo|letter|audio|video|document)$")
     title: str = Field(min_length=1, max_length=200)
-    source_url: str = Field(max_length=500)
+    source_url: str = Field(default="", max_length=500)
     happened_on: date | None = None
-    transcript: str | None = None
+    transcript: str | None = Field(default=None, max_length=10000)
+
+    @field_validator("source_url")
+    @classmethod
+    def _source(cls, value: str) -> str:
+        if value and not value.startswith(("https://", "/media/")):
+            raise ValueError("source_url must be an https address or a /media/ path")
+        return value
+
+    @model_validator(mode="after")
+    def _shape(self):
+        if self.kind == "story":
+            if not (self.transcript and self.transcript.strip()):
+                raise ValueError("A written memory needs its text")
+            if self.source_url:
+                raise ValueError("A written memory has no file")
+        elif not self.source_url:
+            raise ValueError("This kind of item needs a file address")
+        return self
+
+
+MAX_ITEMS_PER_PERSON = 100
 
 
 def _detail(person: models.Person, principal, family: access.Family, db: OrmSession) -> dict:
@@ -1030,6 +1059,9 @@ def add_heritage(payload: HeritageIn, principal: CurrentUser, db: OrmSession = D
     if payload.person_id:
         access.person_or_404(db, payload.person_id)
         access.require_role(access.load_family(db, principal.user_id, payload.person_id), "contributor")
+        count = db.scalar(select(func.count()).select_from(models.HeritageItem).where(models.HeritageItem.person_id == payload.person_id))
+        if (count or 0) >= MAX_ITEMS_PER_PERSON:
+            raise HTTPException(status_code=409, detail=f"A person's archive holds at most {MAX_ITEMS_PER_PERSON} items")
     item = models.HeritageItem(
         id=new_id("her"),
         uploaded_by=principal.user_id,
@@ -1038,11 +1070,22 @@ def add_heritage(payload: HeritageIn, principal: CurrentUser, db: OrmSession = D
     db.add(item)
     db.commit()
     db.refresh(item)
+    return {"id": item.id, "kind": item.kind, "title": item.title}
+
+
+def _item_view(r: models.HeritageItem, principal, family: access.Family | None) -> dict:
+    mine = r.uploaded_by == principal.user_id
     return {
-        "id": item.id,
-        "title": item.title,
-        "source_url": item.source_url,
-        "note": "The original file is preserved untouched; AI enhancements are stored separately.",
+        "id": r.id,
+        "kind": r.kind,
+        "title": r.title,
+        # The text of a written memory. Plain text: the screen shows it as text, never as markup.
+        "story": r.transcript if r.kind == "story" else None,
+        # Only a file of ours is linked from the screen; an outside address is not opened for readers.
+        "file_url": r.source_url if r.source_url.startswith("/media/") else None,
+        "happened_on": r.happened_on,
+        "mine": mine,
+        "can_delete": bool(family and ((mine and family.can("contributor")) or family.can("owner"))),
     }
 
 
@@ -1054,28 +1097,35 @@ def list_heritage(
     db: OrmSession = Depends(get_db),
 ):
     stmt = select(models.HeritageItem).order_by(models.HeritageItem.created_at.desc())
+    family = None
     if person_id:
         access.person_or_404(db, person_id)
-        access.require_can_read(db, principal, access.load_family(db, principal.user_id, person_id))
+        family = access.load_family(db, principal.user_id, person_id)
+        access.require_can_read(db, principal, family)
         stmt = stmt.where(models.HeritageItem.person_id == person_id)
     else:
         # With no person named, only what the caller uploaded themselves.
         stmt = stmt.where(models.HeritageItem.uploaded_by == principal.user_id)
     rows = db.scalars(stmt.limit(min(limit, 200))).all()
-    return {
-        "items": [
-            {
-                "id": r.id,
-                "kind": r.kind,
-                "title": r.title,
-                "source_url": r.source_url,
-                "enhanced_url": r.enhanced_url,
-                "ai_summary": r.ai_summary,
-                "happened_on": r.happened_on,
-            }
-            for r in rows
-        ]
-    }
+    return {"items": [_item_view(r, principal, family) for r in rows]}
+
+
+@app.delete("/family/heritage/{item_id}", status_code=204, tags=["heritage"])
+def delete_heritage(item_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """Its author (while they may still contribute) or an owner of the tree. A stranger is told it does not exist."""
+    item = db.get(models.HeritageItem, item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+    if item.person_id:
+        family = access.load_family(db, principal.user_id, item.person_id)
+        if not family.viewer_belongs or (item.person_id not in family.people):
+            raise HTTPException(status_code=404, detail="Item not found")
+        if not ((item.uploaded_by == principal.user_id and family.can("contributor")) or family.can("owner")):
+            raise HTTPException(status_code=403, detail="Only its author, or an owner of the tree, can remove it")
+    elif item.uploaded_by != principal.user_id:
+        raise HTTPException(status_code=404, detail="Item not found")
+    db.delete(item)
+    db.commit()
 
 
 @app.get("/family/timeline/{person_id}", tags=["heritage"])
@@ -1084,9 +1134,9 @@ def timeline(person_id: str, principal: CurrentUser, db: OrmSession = Depends(ge
     access.require_can_read(db, principal, access.load_family(db, principal.user_id, person_id))
     entries = []
     if person.birth_date:
-        entries.append({"date": person.birth_date, "kind": "birth", "label": f"Born in {person.birth_place or 'unknown place'}"})
+        entries.append({"date": person.birth_date, "kind": "birth", "label": f"Born in {person.birth_place}" if person.birth_place else "Born"})
     if person.death_date:
-        entries.append({"date": person.death_date, "kind": "death", "label": f"Died in {person.death_place or 'unknown place'}"})
+        entries.append({"date": person.death_date, "kind": "death", "label": f"Died in {person.death_place}" if person.death_place else "Died"})
     for item in db.scalars(
         select(models.HeritageItem).where(models.HeritageItem.person_id == person_id)
     ).all():
