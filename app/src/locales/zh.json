@@ -335,5 +335,8 @@
   "footer.devDocs": "开发者",
   "footer.aiGateway": "AI 网关",
   "footer.algoMarket": "算法市场",
-  "footer.assistant": "Kinjy 助手"
+  "footer.assistant": "Kinjy 助手",
+  "family.person.born": "出生",
+  "family.person.died": "逝世",
+  "family.person.dateNotRecorded": "未记录日期"
 }

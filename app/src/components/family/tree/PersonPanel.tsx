@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AlertTriangle, ArrowLeft, Crosshair, GitBranch, Link2, Pencil, Plus, ShieldCheck, Trash2 } from 'lucide-react'
 import { useAppTheme } from '@/components/appdemo/theme'
 import { useApi } from '@/hooks/useApi'
@@ -16,7 +17,8 @@ import RelativeQuestions from './RelativeQuestions'
 import { emptyValues, toFields, valuesFrom, type FormValues } from './formValues'
 import { isReady, noAnswers, toExtras, type KnownParent } from './relativeExtras'
 import StatusIcon from './Status'
-import { STATUS_LABEL, fullName, initials, lifespan } from './layout'
+import { formatDate, lifeRows } from './lifeDates'
+import { STATUS_LABEL, fullName, initials } from './layout'
 
 const RELATIVES: Array<{ id: RelativeKind; label: string; note?: string }> = [
   { id: 'parent', label: 'Parent' },
@@ -97,6 +99,7 @@ export default function PersonPanel({
   onClose?: () => void
 }) {
   const { tok } = useAppTheme()
+  const { t, i18n } = useTranslation()
   const detail = useApi<PersonDetail>(() => kaluta.family.person(personId), [personId])
   const [mode, setMode] = useState<Mode>({ kind: 'view' })
   const [busy, setBusy] = useState(false)
@@ -220,9 +223,13 @@ export default function PersonPanel({
         ) : (
           person.relation_to_me && <Fact label="Related to you as">{person.relation_to_me}</Fact>
         )}
-        {lifespan(person) && <Fact label="Life">{lifespan(person)}</Fact>}
-        {person.birth_place && <Fact label="Born in">{person.birth_place}</Fact>}
-        {person.death_place && <Fact label="Died in">{person.death_place}</Fact>}
+        {lifeRows(person).map((row) => (
+          <Fact key={row.key} label={t(`family.person.${row.key}`)}>
+            {[row.date ? formatDate(row.date, i18n.language) : null, row.dateNotRecorded ? t('family.person.dateNotRecorded') : null, row.place]
+              .filter(Boolean)
+              .join(' · ')}
+          </Fact>
+        ))}
         {person.other_names && <Fact label="Also known as">{person.other_names}</Fact>}
         {person.gender && <Fact label="Gender">{person.gender}</Fact>}
         {relatives.length > 0 && <Fact label="In the tree">{relatives.join(' · ')}</Fact>}

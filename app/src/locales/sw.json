@@ -335,5 +335,8 @@
   "footer.devDocs": "Waendelezaji",
   "footer.aiGateway": "AI Gateway",
   "footer.algoMarket": "Soko la algoriti",
-  "footer.assistant": "Msaidizi wa Kinjy"
+  "footer.assistant": "Msaidizi wa Kinjy",
+  "family.person.born": "Kuzaliwa",
+  "family.person.died": "Kifo",
+  "family.person.dateNotRecorded": "Tarehe haijarekodiwa"
 }

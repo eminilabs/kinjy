@@ -335,5 +335,8 @@
   "footer.devDocs": "Developers",
   "footer.aiGateway": "AI Gateway",
   "footer.algoMarket": "Algorithm marketplace",
-  "footer.assistant": "Kinjy Assistant"
+  "footer.assistant": "Kinjy Assistant",
+  "family.person.born": "Born",
+  "family.person.died": "Died",
+  "family.person.dateNotRecorded": "Date not recorded"
 }

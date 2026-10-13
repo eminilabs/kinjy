@@ -335,5 +335,8 @@
   "footer.devDocs": "المطورون",
   "footer.aiGateway": "بوابة الذكاء الاصطناعي",
   "footer.algoMarket": "سوق الخوارزميات",
-  "footer.assistant": "مساعد Kinjy"
+  "footer.assistant": "مساعد Kinjy",
+  "family.person.born": "الولادة",
+  "family.person.died": "الوفاة",
+  "family.person.dateNotRecorded": "التاريخ غير مسجَّل"
 }
