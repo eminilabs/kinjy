@@ -22,6 +22,13 @@ class Conversation(Base):
     id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("cnv"))
     kind: Mapped[str] = mapped_column(String(20), default="direct")  # direct|group
     title: Mapped[str | None] = mapped_column(String(140))
+    # What the group is for, shown on its information panel. Groups only: a
+    # direct conversation is two people and needs no explaining.
+    description: Mapped[str | None] = mapped_column(Text)
+    # The one group everybody is in. Exactly one row carries this, and it is
+    # how a new member is found a home without hard-coding an id in two
+    # services.
+    is_welcome: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     created_by: Mapped[str] = mapped_column(String(40))
     encrypted: Mapped[bool] = mapped_column(Boolean, default=True)
     # Set on the conversation, not per message: "disappearing messages" is a

@@ -67,6 +67,10 @@ MIGRATIONS = [
     f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ",
     f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ",
     f"ALTER TABLE {models.SCHEMA}.messages ADD COLUMN IF NOT EXISTS sticker_id VARCHAR(40)",
+    # Groups: what they are for, and which one everybody belongs to.
+    f"ALTER TABLE {models.SCHEMA}.conversations ADD COLUMN IF NOT EXISTS description TEXT",
+    f"ALTER TABLE {models.SCHEMA}.conversations "
+    "ADD COLUMN IF NOT EXISTS is_welcome BOOLEAN NOT NULL DEFAULT FALSE",
     # Conversations that already exist predate the request model, so everyone
     # in them is treated as having accepted. Retro-fitting a request state onto
     # live threads would silently block attachments between people who have
@@ -348,7 +352,8 @@ async def presence(ids: str, principal: CurrentUser):
 class ConversationIn(BaseModel):
     participant_ids: list[str] = Field(min_length=1)
     kind: str = Field(default="direct", pattern="^(direct|group)$")
-    title: str | None = None
+    title: str | None = Field(default=None, max_length=140)
+    description: str | None = Field(default=None, max_length=2_000)
     encrypted: bool = True
 
 
@@ -511,8 +516,15 @@ def create_conversation(payload: ConversationIn, principal: CurrentUser, db: Orm
         id=new_id("cnv"),
         kind=payload.kind,
         title=payload.title,
+        description=payload.description if payload.kind == "group" else None,
         created_by=principal.user_id,
-        encrypted=payload.encrypted,
+        # A group is never end-to-end encrypted, whatever the client asks for.
+        # End-to-end for three or more people needs a group key agreement, and
+        # there is none here - so a group that claimed it would be claiming
+        # something untrue, which is worse than a group that does not claim
+        # it. Group messages are encrypted at rest like everything else, and
+        # the thread header says exactly that.
+        encrypted=payload.encrypted if payload.kind == "direct" else False,
     )
     db.add(conversation)
     db.flush()
@@ -524,7 +536,15 @@ def create_conversation(payload: ConversationIn, principal: CurrentUser, db: Orm
                 role="owner" if uid == principal.user_id else "member",
                 # Starting a conversation is consent to it; being added to one
                 # is not. Everybody else accepts by replying or by accepting.
-                accepted_at=datetime.now(timezone.utc) if uid == principal.user_id else None,
+                #
+                # A group is different: the check above already asked whether
+                # each member allows this person to message them, and a room
+                # that sits in everybody's requests is a room nobody sees.
+                accepted_at=(
+                    datetime.now(timezone.utc)
+                    if uid == principal.user_id or payload.kind == "group"
+                    else None
+                ),
             )
         )
     db.commit()
@@ -561,6 +581,420 @@ class CallSignalIn(BaseModel):
     payload: dict = Field(default_factory=dict)
     media: str = Field(default="audio", pattern="^(audio|video)$")
 
+
+
+# --- groups -----------------------------------------------------------------
+#
+# A group is a conversation with a name, a description and roles. The rules are
+# the ones people already expect from every messenger they use: whoever made it
+# owns it, owners and admins rename it and bring people in, and anybody can walk
+# out. Nothing here is a new idea, which is the point - a group that behaves
+# unlike every other group is a group people get wrong.
+
+
+WELCOME_TITLE = "Welcome to Kinjy"
+WELCOME_DESCRIPTION = (
+    "Everybody on Kinjy is here. Say hello, ask anything, and meet the people "
+    "who joined with you."
+)
+
+
+class GroupEdit(BaseModel):
+    title: str | None = Field(default=None, max_length=140)
+    description: str | None = Field(default=None, max_length=2_000)
+
+
+class MembersIn(BaseModel):
+    user_ids: list[str] = Field(min_length=1, max_length=50)
+
+
+class RoleIn(BaseModel):
+    role: str = Field(pattern="^(admin|member)$")
+
+
+def _group(db: OrmSession, conversation_id: str, user_id: str) -> models.Conversation:
+    """The group, and proof that this member is in it."""
+    _member(db, conversation_id, user_id)
+    conversation = db.get(models.Conversation, conversation_id)
+    if conversation is None or conversation.kind != "group":
+        raise HTTPException(status_code=404, detail="Group not found")
+    return conversation
+
+
+def _runs_group(db: OrmSession, conversation_id: str, user_id: str) -> models.Participant:
+    """Owner or admin. Everybody else is a member, and may read and write."""
+    participant = _member(db, conversation_id, user_id)
+    if participant.role not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="Only the group's admins can do that")
+    return participant
+
+
+def _display_names(user_ids: set[str]) -> dict[str, str]:
+    people = _profiles(user_ids)
+    return {uid: (people.get(uid) or {}).get("display_name") or uid[:12] for uid in user_ids}
+
+
+def _system_message(db: OrmSession, conversation_id: str, text: str) -> None:
+    """A line in the thread about the group itself.
+
+    Stored as a message so it appears in order with the conversation rather
+    than as a banner that is true until the next reload. The sender is empty:
+    nobody said it, the room did.
+    """
+    db.add(
+        models.Message(
+            id=new_id("msg"),
+            conversation_id=conversation_id,
+            sender_id="",
+            encrypted=False,
+            body=text,
+            kind="system",
+        )
+    )
+
+
+@app.get("/conversations/{conversation_id}/participants", tags=["groups"])
+def group_participants(conversation_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """Who is in the room, and who runs it. Members only."""
+    _member(db, conversation_id, principal.user_id)
+    rows = db.scalars(
+        select(models.Participant).where(models.Participant.conversation_id == conversation_id)
+    ).all()
+    people = _profiles({r.user_id for r in rows})
+    # Admins first, then by name: the question this list answers most often is
+    # "who do I ask".
+    order = {"owner": 0, "admin": 1, "member": 2}
+    items = sorted(
+        (
+            {
+                "user_id": r.user_id,
+                "role": r.role,
+                "joined_at": r.joined_at,
+                "handle": (people.get(r.user_id) or {}).get("handle"),
+                "display_name": (people.get(r.user_id) or {}).get("display_name") or r.user_id[:12],
+                "avatar_url": (people.get(r.user_id) or {}).get("avatar_url"),
+            }
+            for r in rows
+        ),
+        key=lambda p: (order.get(p["role"], 3), (p["display_name"] or "").lower()),
+    )
+    return {"total": len(items), "items": items}
+
+
+@app.patch("/conversations/{conversation_id}", tags=["groups"])
+async def edit_group(
+    conversation_id: str,
+    payload: GroupEdit,
+    principal: CurrentUser,
+    db: OrmSession = Depends(get_db),
+):
+    """Rename a group, or change what it says it is for. Admins only."""
+    conversation = _group(db, conversation_id, principal.user_id)
+    _runs_group(db, conversation_id, principal.user_id)
+
+    changed = []
+    if payload.title is not None and payload.title.strip() != (conversation.title or ""):
+        conversation.title = payload.title.strip() or None
+        changed.append("renamed the group to " + (conversation.title or "no name"))
+    if payload.description is not None and payload.description.strip() != (conversation.description or ""):
+        conversation.description = payload.description.strip() or None
+        changed.append("changed the description")
+
+    if changed:
+        who = _display_names({principal.user_id})[principal.user_id]
+        _system_message(db, conversation_id, who + " " + " and ".join(changed) + ".")
+    db.commit()
+    await _publish_to_users(
+        _participant_ids(db, conversation_id),
+        {"type": "conversation", "conversation_id": conversation_id},
+    )
+    return {
+        "id": conversation.id,
+        "title": conversation.title,
+        "description": conversation.description,
+    }
+
+
+async def _announce_joined(
+    db: OrmSession, conversation_id: str, joined: list[str]
+) -> None:
+    """Tell the room that somebody new is in it.
+
+    Everybody who was already there hears about it - which is the request, and
+    also how a group stops feeling like a list of strangers. The new arrivals
+    are not told about themselves.
+    """
+    conversation = db.get(models.Conversation, conversation_id)
+    members = _participant_ids(db, conversation_id)
+    names = ", ".join(_display_names(set(joined)).values())
+    title = (conversation.title if conversation else None) or "a group"
+
+    await _publish_to_users(members, {"type": "conversation", "conversation_id": conversation_id})
+    for uid in members:
+        if uid in set(joined):
+            continue
+        _push_to_member(
+            uid,
+            {
+                "kind": "group_join",
+                "title": names + " joined " + title,
+                "link": "/messages?c=" + conversation_id,
+            },
+        )
+
+
+@app.post("/conversations/{conversation_id}/participants", status_code=201, tags=["groups"])
+async def add_participants(
+    conversation_id: str,
+    payload: MembersIn,
+    principal: CurrentUser,
+    db: OrmSession = Depends(get_db),
+):
+    """Bring people into a group. Admins only.
+
+    Each person's own setting still decides: running a room is not permission
+    to put somebody in it who does not accept messages from you.
+    """
+    _group(db, conversation_id, principal.user_id)
+    _runs_group(db, conversation_id, principal.user_id)
+
+    present = set(_participant_ids(db, conversation_id))
+    added = []
+    for uid in dict.fromkeys(payload.user_ids):
+        if uid in present:
+            continue
+        allowed, reason = permissions.check(principal.user_id, uid, "can_message", "add this member")
+        if not allowed:
+            raise HTTPException(status_code=403, detail=reason)
+        age_ok, age_reason = agecheck.may_open_conversation(db, principal.user_id, uid)
+        if not age_ok:
+            db.commit()
+            raise HTTPException(status_code=403, detail=age_reason)
+        db.add(
+            models.Participant(
+                conversation_id=conversation_id,
+                user_id=uid,
+                role="member",
+                accepted_at=datetime.now(timezone.utc),
+            )
+        )
+        added.append(uid)
+
+    if added:
+        names = ", ".join(_display_names(set(added)).values())
+        who = _display_names({principal.user_id})[principal.user_id]
+        _system_message(db, conversation_id, who + " added " + names + ".")
+    db.commit()
+
+    if added:
+        await _announce_joined(db, conversation_id, added)
+    return {"added": added}
+
+
+@app.delete("/conversations/{conversation_id}/participants/{user_id}", tags=["groups"])
+async def remove_participant(
+    conversation_id: str,
+    user_id: str,
+    principal: CurrentUser,
+    db: OrmSession = Depends(get_db),
+):
+    """Remove somebody, or leave yourself.
+
+    Leaving is always allowed - a room you cannot walk out of is not a room.
+    Removing somebody else is an admin's job, and nobody removes the owner.
+    """
+    conversation = _group(db, conversation_id, principal.user_id)
+    leaving = user_id == principal.user_id
+    if not leaving:
+        _runs_group(db, conversation_id, principal.user_id)
+
+    target = _member(db, conversation_id, user_id)
+    if target.role == "owner" and not leaving:
+        raise HTTPException(status_code=403, detail="The owner cannot be removed")
+    if conversation.is_welcome and not leaving:
+        # Everybody belongs to the welcome group by definition. Removing
+        # somebody from it would be putting them outside the platform's front
+        # door on somebody else's say-so.
+        raise HTTPException(status_code=403, detail="Nobody is removed from the welcome group")
+
+    names = _display_names({user_id, principal.user_id})
+    db.delete(target)
+    _system_message(
+        db,
+        conversation_id,
+        names[user_id] + " left."
+        if leaving
+        else names[principal.user_id] + " removed " + names[user_id] + ".",
+    )
+    db.commit()
+    await _publish_to_users(
+        _participant_ids(db, conversation_id) + [user_id],
+        {"type": "conversation", "conversation_id": conversation_id},
+    )
+    return {"removed": user_id}
+
+
+@app.post("/conversations/{conversation_id}/participants/{user_id}/role", tags=["groups"])
+async def set_participant_role(
+    conversation_id: str,
+    user_id: str,
+    payload: RoleIn,
+    principal: CurrentUser,
+    db: OrmSession = Depends(get_db),
+):
+    """Make somebody an admin, or take it back. Admins only; the owner stays the owner."""
+    _group(db, conversation_id, principal.user_id)
+    _runs_group(db, conversation_id, principal.user_id)
+    target = _member(db, conversation_id, user_id)
+    if target.role == "owner":
+        raise HTTPException(status_code=403, detail="The owner's role cannot be changed")
+
+    if target.role != payload.role:
+        target.role = payload.role
+        names = _display_names({user_id, principal.user_id})
+        _system_message(
+            db,
+            conversation_id,
+            names[principal.user_id] + " made " + names[user_id] + " an admin."
+            if payload.role == "admin"
+            else names[principal.user_id] + " removed " + names[user_id] + " as an admin.",
+        )
+    db.commit()
+    await _publish_to_users(
+        _participant_ids(db, conversation_id),
+        {"type": "conversation", "conversation_id": conversation_id},
+    )
+    return {"user_id": user_id, "role": target.role}
+
+
+def _welcome_group(db: OrmSession) -> models.Conversation:
+    """The group everybody is in, created the first time somebody needs it.
+
+    Found by its flag rather than by a hard-coded id, so the id lives in one
+    place - this table - instead of in two services that can disagree about it.
+    """
+    conversation = db.scalar(
+        select(models.Conversation).where(models.Conversation.is_welcome.is_(True))
+    )
+    if conversation is not None:
+        return conversation
+    conversation = models.Conversation(
+        id=new_id("cnv"),
+        kind="group",
+        title=WELCOME_TITLE,
+        description=WELCOME_DESCRIPTION,
+        created_by="system",
+        encrypted=False,
+        is_welcome=True,
+    )
+    db.add(conversation)
+    db.flush()
+    return conversation
+
+
+class WelcomeIn(BaseModel):
+    user_id: str
+
+
+@app.post("/internal/welcome/join", tags=["internal"])
+async def welcome_join(payload: WelcomeIn, db: OrmSession = Depends(get_db)):
+    """Put a new member in the welcome group.
+
+    Called by auth-service the moment an account exists. An internal HTTP call
+    rather than an event, deliberately: the broker on this platform has no
+    durable queues behind it, so an event published here would be a message
+    nobody receives and a member who silently never joined.
+
+    Idempotent - a retry after a timeout must not add a second row or announce
+    the same person twice.
+    """
+    conversation = _welcome_group(db)
+    already = db.scalar(
+        select(models.Participant).where(
+            models.Participant.conversation_id == conversation.id,
+            models.Participant.user_id == payload.user_id,
+        )
+    )
+    if already is not None:
+        return {"conversation_id": conversation.id, "joined": False}
+
+    db.add(
+        models.Participant(
+            conversation_id=conversation.id,
+            user_id=payload.user_id,
+            role="member",
+            accepted_at=datetime.now(timezone.utc),
+        )
+    )
+    _system_message(
+        db, conversation.id, _display_names({payload.user_id})[payload.user_id] + " joined Kinjy."
+    )
+    db.commit()
+    await _announce_joined(db, conversation.id, [payload.user_id])
+    return {"conversation_id": conversation.id, "joined": True}
+
+
+
+@app.post("/internal/welcome/backfill", tags=["internal"])
+def welcome_backfill(limit: int = 1000, db: OrmSession = Depends(get_db)):
+    """Put everybody who was already here into the welcome group.
+
+    The join at registration only ever catches people who register after it
+    exists, so without this the room everybody is supposed to be in holds
+    whoever happened to sign up since it shipped. Run once after deploying;
+    safe to run again, since a member who is already in it is skipped.
+
+    Deliberately quiet: no system line and no notification for a sweep. A
+    thousand "X joined" lines would bury the room on the day it opens, and the
+    arrivals being announced did not arrive today.
+    """
+    conversation = _welcome_group(db)
+    present = set(
+        db.scalars(
+            select(models.Participant.user_id).where(
+                models.Participant.conversation_id == conversation.id
+            )
+        ).all()
+    )
+
+    added = 0
+    after: str | None = None
+    now = datetime.now(timezone.utc)
+    while added < limit:
+        try:
+            response = httpx.get(
+                "http://user-service:8000/internal/profiles/ids",
+                params={"after": after, "limit": 500} if after else {"limit": 500},
+                timeout=10,
+            )
+            response.raise_for_status()
+            page = response.json()
+        except Exception as exc:
+            log.warning("welcome backfill could not read the member list: %s", exc)
+            break
+
+        ids = page.get("items") or []
+        if not ids:
+            break
+        for uid in ids:
+            if uid in present:
+                continue
+            db.add(
+                models.Participant(
+                    conversation_id=conversation.id,
+                    user_id=uid,
+                    role="member",
+                    accepted_at=now,
+                )
+            )
+            present.add(uid)
+            added += 1
+        after = page.get("next")
+        if not after:
+            break
+
+    db.commit()
+    return {"conversation_id": conversation.id, "added": added, "members": len(present)}
 
 @app.post("/calls/signal", tags=["calls"])
 async def call_signal(
@@ -720,8 +1154,13 @@ def list_conversations(principal: CurrentUser, db: OrmSession = Depends(get_db))
     ).all()
     members: dict[str, list[str]] = {}
     read_state: dict[str, dict[str, str | None]] = {}
+    # This viewer's own role in each room, picked out of the same rows rather
+    # than fetched again per conversation.
+    my_role: dict[str, str] = {}
     for m in memberships:
         members.setdefault(m.conversation_id, []).append(m.user_id)
+        if m.user_id == principal.user_id:
+            my_role[m.conversation_id] = m.role
         read_state.setdefault(m.conversation_id, {})[m.user_id] = (
             m.last_read_at.isoformat() if m.last_read_at else None
         )
@@ -754,6 +1193,14 @@ def list_conversations(principal: CurrentUser, db: OrmSession = Depends(get_db))
                 "id": r.id,
                 "kind": r.kind,
                 "title": r.title,
+                # Groups only, and the one thing a group has that a direct
+                # conversation does not: what it is for.
+                "description": r.description,
+                "is_welcome": r.is_welcome,
+                # What this viewer may do in it, so the page does not have to
+                # fetch the member list to decide whether to show a settings
+                # button.
+                "my_role": my_role.get(r.id, "member"),
                 "encrypted": r.encrypted,
                 "last_message_at": r.last_message_at,
                 "participants": members.get(r.id, []),

@@ -233,6 +233,21 @@ async def register(payload: schemas.RegisterIn, request: Request, db: OrmSession
     except Exception as exc:
         log.warning("could not seed profile for %s: %s", user.id, exc)
 
+    # Into the welcome group, where everybody is. An internal call rather than
+    # the event published above, for the same reason the profile is seeded
+    # here: the broker has no durable queue behind it, so an event would be a
+    # member who silently never joined. Best-effort - a messaging hiccup must
+    # not cost somebody their account - and the join is idempotent, so a
+    # sweep can pick up anyone this missed.
+    try:
+        httpx.post(
+            "http://messaging-service:8000/internal/welcome/join",
+            json={"user_id": user.id},
+            timeout=3,
+        )
+    except Exception as exc:
+        log.warning("could not add %s to the welcome group: %s", user.id, exc)
+
     return schemas.AuthOut(user=schemas.UserOut.model_validate(user), tokens=tokens)
 
 

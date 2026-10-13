@@ -824,10 +824,26 @@ export interface PersonBrief {
   city?: string | null
 }
 
+/** Somebody in a group, with what they may do in it. */
+export interface GroupMember {
+  user_id: string
+  role: 'owner' | 'admin' | 'member'
+  joined_at: string
+  handle: string | null
+  display_name: string
+  avatar_url: string | null
+}
+
 export interface Conversation {
   id: string
   kind: string
   title: string | null
+  /** Groups only: what the room is for. */
+  description?: string | null
+  /** The one room everybody is in. It cannot be left behind by somebody else. */
+  is_welcome?: boolean
+  /** What the viewer may do here: owner and admin run it, member does not. */
+  my_role?: 'owner' | 'admin' | 'member'
   encrypted: boolean
   last_message_at: string
   participants: string[]
@@ -2103,6 +2119,34 @@ export const kaluta = {
         // an encrypted conversation, and no key exchange is implemented yet.
         encrypted: false,
       }),
+    /** A named room. Groups are never end to end: there is no group key. */
+    createGroup: (input: { title: string; description?: string; participantIds: string[] }) =>
+      api.post<{ id: string; encrypted: boolean }>('/conversations', {
+        participant_ids: input.participantIds,
+        kind: 'group',
+        title: input.title,
+        description: input.description,
+        encrypted: false,
+      }),
+    /** Who is in a room and who runs it. Members only. */
+    participants: (conversationId: string) =>
+      api.get<{ total: number; items: GroupMember[] }>(`/conversations/${conversationId}/participants`),
+    editGroup: (conversationId: string, input: { title?: string; description?: string }) =>
+      api.patch<{ id: string; title: string | null; description: string | null }>(
+        `/conversations/${conversationId}`,
+        input,
+      ),
+    addMembers: (conversationId: string, userIds: string[]) =>
+      api.post<{ added: string[] }>(`/conversations/${conversationId}/participants`, {
+        user_ids: userIds,
+      }),
+    removeMember: (conversationId: string, userId: string) =>
+      api.delete<{ removed: string }>(`/conversations/${conversationId}/participants/${userId}`),
+    setRole: (conversationId: string, userId: string, role: 'admin' | 'member') =>
+      api.post<{ user_id: string; role: string }>(
+        `/conversations/${conversationId}/participants/${userId}/role`,
+        { role },
+      ),
     /**
      * A page of the thread, oldest first. `after` catches up after a
      * reconnect; `before` pages back through history.

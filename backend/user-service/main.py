@@ -1993,6 +1993,22 @@ def profiles_by_handle(payload: ProfileHandles, db: OrmSession = Depends(get_db)
     }
 
 
+@app.get("/internal/profiles/ids", tags=["internal"])
+def internal_profile_ids(after: str | None = None, limit: int = 500, db: OrmSession = Depends(get_db)):
+    """Every member's id, a page at a time.
+
+    For the one job that genuinely needs the whole list: putting everybody who
+    was already here into the welcome group, which otherwise only ever
+    contains people who registered after it existed. Paged by id rather than
+    by offset so a registration during the sweep cannot make it skip somebody.
+    """
+    query = select(models.Profile.user_id).order_by(models.Profile.user_id)
+    if after:
+        query = query.where(models.Profile.user_id > after)
+    ids = db.scalars(query.limit(max(1, min(limit, 1000)))).all()
+    return {"items": list(ids), "next": ids[-1] if ids else None}
+
+
 @app.post("/internal/profiles", tags=["internal"])
 def profiles_by_id(payload: ProfileIds, db: OrmSession = Depends(get_db)):
     """Resolve many ids at once.

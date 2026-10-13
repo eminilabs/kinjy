@@ -19,6 +19,7 @@ import {
   ShieldOff,
   Square,
   Trash2,
+  Users,
   Volume2,
   VolumeX,
   Wifi,
@@ -51,6 +52,7 @@ import {
 } from '@/components/social/MessageReply'
 import { ConversationSkeleton, ThreadSkeleton } from '@/components/social/MessageSkeleton'
 import MemberAvatar from '@/components/social/MemberAvatar'
+import GroupPanel, { NewGroupDialog } from '@/components/social/GroupPanel'
 import { useApi } from '@/hooks/useApi'
 import { useRealtime } from '@/hooks/useRealtime'
 import { useAuth } from '@/hooks/useAuth'
@@ -523,6 +525,9 @@ export default function Messages() {
   const seenForSound = useRef<Set<string>>(new Set())
   const [peer, setPeer] = useState('')
   const [composing, setComposing] = useState(false)
+  const [creatingGroup, setCreatingGroup] = useState(false)
+  // The group's own screen: who is in it, who runs it, what it is for.
+  const [showGroup, setShowGroup] = useState(false)
   // Narrowing the list you already have: nothing is fetched.
   const [chatQuery, setChatQuery] = useState('')
   const [unreadOnly, setUnreadOnly] = useState(false)
@@ -1502,6 +1507,19 @@ export default function Messages() {
                 >
                   <Plus size={17} aria-hidden="true" />
                 </button>
+                {/* A group is a different thing from a conversation with one
+                    person: it has a name, a purpose and people you choose
+                    before it exists, so it asks for them first rather than
+                    starting empty. */}
+                <button
+                  type="button"
+                  onClick={() => setCreatingGroup(true)}
+                  aria-label="New group"
+                  title="New group"
+                  className="grid h-9 w-9 place-items-center rounded-full bg-text-hi/[0.07] text-text-hi transition-colors hover:bg-text-hi/[0.1]"
+                >
+                  <Users size={16} aria-hidden="true" />
+                </button>
               </div>
             </div>
 
@@ -1792,10 +1810,23 @@ export default function Messages() {
           </div>
         </div>
 
+        {/* The group's own screen, in place of the thread. On a phone there
+            is no room for both, and on a desktop a third column would squeeze
+            the messages - and you are looking at the group, not at them. */}
+        {showGroup && active?.kind === 'group' && user && (
+          <GroupPanel
+            conversation={active}
+            meId={user.id}
+            onClose={() => setShowGroup(false)}
+            onChanged={() => conversations.reload()}
+          />
+        )}
+
         {/* Thread */}
         <div
           className={cn(
             'cloud-card relative flex min-h-0 min-w-0 flex-col overflow-hidden !rounded-none',
+            showGroup && active?.kind === 'group' && 'hidden',
             !showThread && 'hidden',
             dragging && 'ring-2 ring-inset ring-gold/50',
           )}
@@ -1876,7 +1907,19 @@ export default function Messages() {
                       {titleOf(active, activeOthers)}
                     </Link>
                   ) : (
-                    <p className="truncate text-base font-bold leading-tight text-text-hi">{titleOf(active, activeOthers)}</p>
+                    active.kind === 'group' ? (
+                      // A group's name opens the group, the way a person's
+                      // name opens the person.
+                      <button
+                        type="button"
+                        onClick={() => setShowGroup(true)}
+                        className="block max-w-full truncate text-start text-base font-bold leading-tight text-text-hi hover:text-gold-soft hover:underline"
+                      >
+                        {titleOf(active, activeOthers)}
+                      </button>
+                    ) : (
+                      <p className="truncate text-base font-bold leading-tight text-text-hi">{titleOf(active, activeOthers)}</p>
+                    )
                   )}
                   <p
                     className={cn('truncate text-xs text-text-low', typingNames.length > 0 && 'text-gold-soft')}
@@ -1947,6 +1990,21 @@ export default function Messages() {
                   <p className="text-sm text-text-low">No messages yet. Say hello.</p>
                 )}
                 {messages.map((message, index) => {
+                  // The room talking about itself: somebody joined, left, was
+                  // made an admin, the name changed. Nobody said it, so it
+                  // gets no bubble, no avatar and no sender - a line across
+                  // the thread, in order with everything else, which is why
+                  // it is stored as a message rather than drawn as a banner.
+                  if (message.kind === 'system') {
+                    return (
+                      <p
+                        key={message.client_id ?? message.id}
+                        className="my-3 text-center text-[0.72rem] text-text-low"
+                      >
+                        {message.body}
+                      </p>
+                    )
+                  }
                   const mine = message.sender_id === user?.id
                   const sender = active.profiles?.[message.sender_id]
                   const previous = messages[index - 1]
@@ -2430,6 +2488,16 @@ export default function Messages() {
         confirmLabel="Delete message"
         onConfirm={() => confirmDelete && void removeMessage(confirmDelete)}
       />
+      {creatingGroup && (
+        <NewGroupDialog
+          onClose={() => setCreatingGroup(false)}
+          onCreated={(id) => {
+            setCreatingGroup(false)
+            conversations.reload()
+            setParams({ c: id })
+          }}
+        />
+      )}
     </AppShell>
   )
 }
