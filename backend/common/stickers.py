@@ -1,4 +1,8 @@
-"""The sticker catalogue.
+"""The sticker catalogue, shared by every service that lets somebody react.
+
+Lives in `common` rather than in messaging-service because stickers are not a
+messaging feature: a comment can be answered with one too, and two copies of
+this list is two lists that disagree the first time one is edited.
 
 Held by the server, not the client, for three reasons that all matter more than
 the convenience of hard-coding a list in the app:

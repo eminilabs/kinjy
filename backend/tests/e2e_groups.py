@@ -15,6 +15,10 @@ from datetime import date
 
 import httpx
 
+# Built rather than written as escapes, so the file carries exactly the bytes
+# a member would type.
+NL = chr(10)
+BLANK = NL
 BASE = "http://localhost:8200/api"
 c = httpx.Client(base_url=BASE, timeout=30)
 ok = True
@@ -198,14 +202,12 @@ if groups:
     check("every member of the page has a name",
           all(not p["display_name"].startswith("usr_") for p in page["items"]),
           str([p["display_name"] for p in page["items"][:3]]))
-    # Nobody runs the room everybody is in. It is created by the platform
-    # rather than by a member, so there is no owner to rename it, no admin to
-    # put anybody out of it, and nothing for one member to do to another. The
-    # ordering of admins is tested on a real group above.
-    check("nobody owns the welcome group",
-          all(p["role"] == "member" for p in page["items"]),
-          str([p["role"] for p in page["items"] if p["role"] != "member"]))
-    check("so even an admin elsewhere cannot rename it",
+    # One configured account runs the room everybody is in, and no other member
+    # does. Ordinary members cannot rename it or touch anybody in it, however
+    # many groups of their own they own.
+    owners = [p for p in page["items"] if p["role"] in ("owner", "admin")]
+    check("at most one account runs the welcome group", len(owners) <= 1, str(owners))
+    check("an ordinary member cannot rename the welcome group",
           c.patch(f"/conversations/{welcome}", headers=H(owner_t),
                   json={"title": "Mine now"}).status_code == 403,
           "the welcome group was renamed by a member")
@@ -227,6 +229,39 @@ if groups:
     check("the thread names whoever wrote in it",
           thread.get("profiles", {}).get(fresh["id"], {}).get("display_name") == "Test Newcomer",
           str(list((thread.get("profiles") or {}).values())[:2]))
+
+print(BLANK + "Messages that are more than one line")
+
+# A line break has to survive the round trip. The composer was an <input>,
+# which cannot hold one, so this is the thing that was impossible.
+multi = NL.join(["First line.", "Second line.", "", "*bold* and _italic_ and `code`"])
+r = c.post(f"/conversations/{group}/messages", headers=H(owner_t), json={"body": multi})
+check("a message keeps its line breaks", r.status_code in (200, 201), f"{r.status_code} {r.text[:120]}")
+thread = c.get(f"/conversations/{group}/messages", headers=H(owner_t)).json()
+stored = next((m["body"] for m in thread["items"] if m.get("body") == multi), None)
+check("stored exactly as written, marks and all", stored == multi, repr(stored))
+
+print(BLANK + "A group's photo and cover")
+
+r = c.patch(f"/conversations/{group}", headers=H(owner_t),
+            json={"avatar_asset_id": "mda_doesnotexist"})
+check("an image that does not exist is refused", r.status_code == 422, f"{r.status_code} {r.text[:120]}")
+r = c.patch(f"/conversations/{group}", headers=H(owner_t), json={"avatar_asset_id": None})
+check("and removing one is allowed", r.status_code == 200, f"{r.status_code} {r.text[:120]}")
+check("the group reports its photo and cover",
+      "avatar_url" in r.json() and "cover_url" in r.json(), str(r.json()))
+
+listed = next((i for i in c.get("/conversations", headers=H(owner_t)).json()["items"]
+               if i["id"] == group), None)
+check("and the list carries them too",
+      listed is not None and "avatar_url" in listed and "cover_url" in listed, str(listed))
+
+# Back in the room first: they were removed further up, and somebody who is
+# not in a group gets 404 rather than 403 - which would have passed this check
+# for the wrong reason.
+c.post(f"/conversations/{group}/participants", headers=H(owner_t), json={"user_ids": [later["id"]]})
+r = c.patch(f"/conversations/{group}", headers=H(later_t), json={"avatar_asset_id": None})
+check("a member cannot change the group photo", r.status_code == 403, str(r.status_code))
 
 print("OK" if ok else "FAILED")
 sys.exit(0 if ok else 1)

@@ -157,7 +157,7 @@ class Comment(Base):
 
 
 class CommentReaction(Base):
-    """A like on a comment.
+    """A like, or a sticker, on a comment.
 
     Separate from Reaction, which is keyed on a post: a comment like is a
     different thing counted in a different place, and overloading one table
@@ -174,6 +174,10 @@ class CommentReaction(Base):
 
     comment_id: Mapped[str] = mapped_column(String(40), primary_key=True, index=True)
     user_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    # A sticker from the shared catalogue, or NULL for a plain like. Nullable
+    # rather than defaulted to some "like" id, so every row written before
+    # stickers existed still means exactly what it meant.
+    sticker_id: Mapped[str | None] = mapped_column(String(40))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 

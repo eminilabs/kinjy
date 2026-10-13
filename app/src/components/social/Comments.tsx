@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CornerDownRight, Loader2, Send, ThumbsUp } from 'lucide-react'
+import { CornerDownRight, Loader2, Send, SmilePlus, ThumbsUp } from 'lucide-react'
 import { useAppTheme } from '@/components/appdemo/theme'
 import { MentionList, useMentionSuggest } from './MentionSuggest'
 import { ApiError, kaluta, type CommentNode } from '@/lib/api'
 import { isLink, LINK_RE, splitTrailing } from '@/lib/linkify'
+import MessageInput from '@/components/ui-kit/MessageInput'
 import { cn } from '@/lib/utils'
 import MemberAvatar from './MemberAvatar'
 import { useMyProfile } from '@/hooks/useMyProfile'
+import { useApi } from '@/hooks/useApi'
+import StickerFace from './StickerFace'
+import FloatingPanel from './FloatingPanel'
 import { Link } from 'react-router'
 
 const when = (iso: string) => {
@@ -127,7 +131,7 @@ export default function Comments({
   const [body, setBody] = useState('')
   const [replyTo, setReplyTo] = useState<CommentNode | null>(null)
   const [sending, setSending] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   // Finishing an @mention as it is typed. Handles are no longer shown
   // anywhere in the app, so nobody can be expected to recall one.
   const mention = useMentionSuggest(body, setBody, inputRef)
@@ -178,8 +182,10 @@ export default function Comments({
     requestAnimationFrame(() => inputRef.current?.focus())
   }
 
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault()
+  // Called by the form's submit and by Enter in the box, which is not a
+  // submit now that the box is a textarea.
+  const submit = async (event?: React.FormEvent) => {
+    event?.preventDefault()
     const text = body.trim()
     if (!text || sending) return
     setSending(true)
@@ -243,26 +249,65 @@ export default function Comments({
   }
 
   const me = useMyProfile()
-  const [likeEdits, setLikeEdits] = useState<Record<string, { liked: boolean; likes: number }>>({})
+  interface Reacted {
+    liked: boolean
+    likes: number
+    stickers: Record<string, number>
+    my_sticker: string | null
+  }
+  const [likeEdits, setLikeEdits] = useState<Record<string, Reacted>>({})
+  /** The comment whose sticker picker is open. */
+  const [stickerFor, setStickerFor] = useState<string | null>(null)
+  const stickerPacks = useApi(() => kaluta.messages.stickers(), [])
+  /** A sticker from the catalogue by its id, for drawing one somebody chose. */
+  const stickerById = (id: string) => {
+    for (const pack of stickerPacks.data?.packs ?? []) {
+      const found = pack.stickers.find((sticker) => sticker.id === id)
+      if (found) return found
+    }
+    return null
+  }
 
-  const likeState = (node: Tree) =>
-    likeEdits[node.id] ?? { liked: node.liked ?? false, likes: node.likes ?? 0 }
+  // The server's answer to this reader's own tap wins over the page it was
+  // loaded with: the page is a snapshot, the edit is what just happened.
+  const likeState = (node: Tree): Reacted =>
+    likeEdits[node.id] ?? {
+      liked: node.liked ?? false,
+      likes: node.likes ?? 0,
+      stickers: node.stickers ?? {},
+      my_sticker: node.my_sticker ?? null,
+    }
 
-  const toggleLike = async (node: Tree) => {
+  /**
+   * Answer a comment: a plain like, or a sticker.
+   *
+   * One reaction per person, so choosing a sticker when you had already liked
+   * it moves your one reaction rather than adding a second - the server
+   * decides, and its answer replaces the guess below.
+   */
+  const react = async (node: Tree, stickerId: string | null = null) => {
     const before = likeState(node)
+    const same = before.my_sticker === stickerId && before.liked
     // Optimistic, then corrected by the server's own count - which is the one
-    // that knows about the other people liking it at the same moment.
-    const guess = { liked: !before.liked, likes: before.likes + (before.liked ? -1 : 1) }
+    // that knows about the other people reacting at the same moment.
+    const guess: Reacted = {
+      ...before,
+      liked: !same,
+      likes: before.likes + (before.liked ? (same ? -1 : 0) : 1),
+      my_sticker: same ? null : stickerId,
+    }
     setLikeEdits((current) => ({ ...current, [node.id]: guess }))
     try {
-      const result = await kaluta.posts.likeComment(node.id)
+      const result = await kaluta.posts.likeComment(node.id, stickerId)
       setLikeEdits((current) => ({ ...current, [node.id]: result }))
     } catch {
-      // Put it back. A like that silently did not happen is worse than one
+      // Put it back. A reaction that silently did not happen is worse than one
       // that visibly did not.
       setLikeEdits((current) => ({ ...current, [node.id]: before }))
     }
   }
+
+  const toggleLike = (node: Tree) => void react(node, null)
 
   const Row = ({ node }: { node: Tree }) => {
     if (removed.has(node.id)) return null
@@ -322,10 +367,11 @@ export default function Comments({
                 }}
                 className="mt-1"
               >
-                <input
+                <MessageInput
                   autoFocus
                   value={editing.body}
                   onChange={(e) => setEditing({ id: node.id, body: e.target.value })}
+                  onSubmit={() => void saveEdit()}
                   onKeyDown={(e) => e.key === 'Escape' && setEditing(null)}
                   aria-label="Edit comment"
                   className={cn('w-full rounded-lg px-2 py-1 text-[0.9375rem]', tok.input, tok.text)}
@@ -370,6 +416,16 @@ export default function Comments({
             </button>
             <button
               type="button"
+              id={`cmt-react-${node.id}`}
+              onClick={() => setStickerFor(stickerFor === node.id ? null : node.id)}
+              aria-haspopup="dialog"
+              aria-label="React with a sticker"
+              className={cn('rounded-full p-0.5 hover:text-gold-soft', tok.low)}
+            >
+              <SmilePlus size={13} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
               onClick={() => startReply(node)}
               className={cn('text-[0.75rem] font-semibold hover:underline', tok.low)}
             >
@@ -399,15 +455,82 @@ export default function Comments({
                 Delete
               </button>
             )}
-            {likeState(node).likes > 0 && (
-              /* The count sits on the row, not inside the bubble: a bubble that
-                 changes size when somebody likes it makes the thread jump. */
-              <span className={cn('inline-flex items-center gap-1 text-[0.75rem]', tok.low)}>
-                <ThumbsUp size={11} className="text-gold-soft" aria-hidden="true" />
-                {likeState(node).likes}
-              </span>
-            )}
+            {/* The counts sit on the row, not inside the bubble: a bubble
+                that changes size when somebody reacts makes the thread jump.
+                Plain likes keep the thumb; stickers are shown as themselves,
+                which is the whole point of sending one. */}
+            {(() => {
+              const state = likeState(node)
+              const stickerTotal = Object.values(state.stickers).reduce((sum, n) => sum + n, 0)
+              const plainLikes = state.likes - stickerTotal
+              return (
+                <>
+                  {plainLikes > 0 && (
+                    <span className={cn('inline-flex items-center gap-1 text-[0.75rem]', tok.low)}>
+                      <ThumbsUp size={11} className="text-gold-soft" aria-hidden="true" />
+                      {plainLikes}
+                    </span>
+                  )}
+                  {Object.entries(state.stickers).map(([id, count]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => void react(node, id)}
+                      aria-pressed={state.my_sticker === id}
+                      aria-label={`${count} reacted with this sticker`}
+                      className={cn(
+                        'inline-flex items-center gap-1 rounded-full border px-1.5 text-[0.75rem]',
+                        state.my_sticker === id
+                          ? 'border-gold/50 bg-gold/15'
+                          : 'border-transparent hover:border-[var(--cloud-border)]',
+                        tok.low,
+                      )}
+                    >
+                      {/* A sticker withdrawn from the catalogue still has
+                          rows pointing at it; its id is shown rather than a
+                          blank, so the count is never silently wrong. */}
+                      {(() => {
+                        const sticker = stickerById(id)
+                        return sticker ? (
+                          <StickerFace sticker={sticker} className="text-[15px]" imageClassName="h-4 w-4" />
+                        ) : (
+                          <span aria-hidden="true">•</span>
+                        )
+                      })()}
+                      {count}
+                    </button>
+                  ))}
+                </>
+              )
+            })()}
           </div>
+
+          {stickerFor === node.id && (
+            <FloatingPanel
+              anchor={`cmt-react-${node.id}`}
+              label="Choose a sticker"
+              onClose={() => setStickerFor(null)}
+            >
+              <div className="flex max-w-[260px] flex-wrap gap-0.5">
+                {(stickerPacks.data?.packs ?? []).flatMap((pack) =>
+                  pack.stickers.map((sticker) => (
+                    <button
+                      key={sticker.id}
+                      type="button"
+                      onClick={() => {
+                        void react(node, sticker.id)
+                        setStickerFor(null)
+                      }}
+                      aria-label={sticker.label}
+                      className="flex h-9 w-9 items-center justify-center rounded-full hover:scale-110 hover:bg-white/10"
+                    >
+                      <StickerFace sticker={sticker} className="text-[22px]" imageClassName="h-6 w-6" />
+                    </button>
+                  )),
+                )}
+              </div>
+            </FloatingPanel>
+          )}
 
           {/* Replies indent by margin alone. The rule down the left read as a
               quote block rather than as a thread. */}
@@ -504,10 +627,14 @@ export default function Comments({
                 onHover={mention.setIndex}
               />
             )}
-            <input
+            {/* A textarea, so a comment can have a second paragraph. Enter
+                sends on a keyboard and breaks the line on a phone, where
+                there is no Shift to hold beside it. */}
+            <MessageInput
               ref={inputRef}
               value={body}
               onChange={(e) => setBody(e.target.value)}
+              onSubmit={() => void submit()}
               onKeyDown={(event) => {
                 // The list owns the arrows and Enter while it is open: Enter
                 // in this box sends the comment, and choosing a name is not

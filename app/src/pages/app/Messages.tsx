@@ -32,17 +32,17 @@ import AttachmentMenu from '@/components/social/AttachmentMenu'
 import MediaLightbox from '@/components/social/MediaLightbox'
 import VoiceNotePlayer from '@/components/social/VoiceNotePlayer'
 import {
-  OptionsButton,
-  OwnMessageMenu,
-  ReactButton,
+  MessageMenu,
+  MessageMenuButton,
   ReactionChips,
-  ReactionPicker,
 } from '@/components/social/MessageReactions'
 import EmojiStickerButton from '@/components/social/EmojiStickerPanel'
 import StickerFace from '@/components/social/StickerFace'
 import ConfirmDialog from '@/components/ui-kit/ConfirmDialog'
 import PushToggle from '@/components/app/PushToggle'
 import { playMessageChime, primeSound, setSoundEnabled, soundEnabled } from '@/lib/chime'
+import MessageInput from '@/components/ui-kit/MessageInput'
+import { formatChatText } from '@/lib/chatFormat'
 import {
   ReplyBanner,
   ReplyButton,
@@ -115,38 +115,6 @@ const DAY_MS = 86_400_000
 
 function startOfDay(date: Date): number {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
-}
-
-/**
- * A message's text, with its addresses made followable.
- *
- * The same splitting the feed and the comments use, from lib/linkify, so a
- * link that works in a post works in a message - they were written once and
- * then pasted into both, which is how one of them ends up linkifying
- * something the other does not.
- */
-function withLinks(body: string) {
-  return body
-    .split(LINK_RE)
-    .map((part, index) => {
-      // split() with a capturing group leaves a hole beside every match.
-      if (part === undefined || part === '') return null
-      if (!isLink(part)) return part
-      const { href, text, trailing } = splitTrailing(part)
-      return (
-        <span key={index}>
-          <a
-            href={href}
-            target="_blank"
-            rel="noopener noreferrer nofollow"
-            className="underline underline-offset-2 hover:opacity-80"
-          >
-            {text}
-          </a>
-          {trailing}
-        </span>
-      )
-    })
 }
 
 /** The first address in a message, for the card under it. */
@@ -498,13 +466,11 @@ export default function Messages() {
   // The message the next send answers, and the one just jumped to from a quote.
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
   const [highlightId, setHighlightId] = useState<string | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-  // The reaction picker and the menu of your own message, each anchored to a
-  // bubble by id. By id rather than by a captured rect: the panel is fixed to
-  // the viewport, so a rect measured at the moment of the click leaves it
-  // behind as soon as the thread scrolls.
-  const [picker, setPicker] = useState<{ id: string; withReply: boolean } | null>(null)
-  const [ownMenu, setOwnMenu] = useState<{ id: string } | null>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  // The open message menu, anchored to its bubble by id. By id rather than by
+  // a captured rect: the panel is fixed to the viewport, so a rect measured at
+  // the moment of the click leaves it behind as soon as the thread scrolls.
+  const [menuFor, setMenuFor] = useState<string | null>(null)
   // The sticker packs, as the server curates them.
   const stickerPacks = useApi(() => kaluta.messages.stickers(), [])
   /** A sticker from the catalogue by its id, for a bubble drawn before the server has answered. */
@@ -856,8 +822,10 @@ export default function Messages() {
     setStaged((current) => [...current, ...picked].slice(0, 10))
   }
 
-  const send = (event: React.FormEvent) => {
-    event.preventDefault()
+  // Called by the form's submit and by Enter in the composer, which is not a
+  // submit now that the box is a textarea.
+  const send = (event?: React.FormEvent) => {
+    event?.preventDefault()
     const conversationId = activeIdRef.current
     const text = draft.trim()
     if (!conversationId || !user) return
@@ -1388,6 +1356,36 @@ export default function Messages() {
   // thread, where the eye lands, not a tick-mark on every bubble.
   const nameOf = (message: ChatMessage) =>
     message.sender_id === user?.id ? 'You' : (personIn(message.sender_id)?.display_name ?? 'Member')
+
+  /**
+   * Put a message's words on the clipboard.
+   *
+   * The browser API first, and a hidden textarea when it is not there: the
+   * clipboard API needs a secure context, so on anything served over plain
+   * http - which includes most ways of looking at a staging build - Copy
+   * would do nothing at all and say nothing about it.
+   */
+  const copyText = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      return
+    } catch {
+      // Falls through to the older way rather than giving up.
+    }
+    try {
+      const scratch = document.createElement('textarea')
+      scratch.value = text
+      scratch.setAttribute('readonly', '')
+      scratch.style.position = 'fixed'
+      scratch.style.opacity = '0'
+      document.body.appendChild(scratch)
+      scratch.select()
+      document.execCommand('copy')
+      document.body.removeChild(scratch)
+    } catch {
+      setError('The message could not be copied.')
+    }
+  }
 
   const startReply = (message: ChatMessage) => {
     // A bubble still on its way has no id the server knows yet.
@@ -2139,6 +2137,16 @@ export default function Messages() {
                         )}
                         <div
                           id={`bubble-${message.id}`}
+                          // Right-click opens the message's own menu instead of
+                          // the browser's, which knows nothing about messages.
+                          // Not while text is selected: the native menu is
+                          // where Copy lives for a selection.
+                          onContextMenu={(event) => {
+                            if (message.deleted || message.status || message.id.startsWith('local_')) return
+                            if (!window.getSelection()?.isCollapsed) return
+                            event.preventDefault()
+                            setMenuFor(message.id)
+                          }}
                           className="group/bubble relative flex min-w-0 max-w-[min(75%,34rem)] items-stretch"
                         >
                         {/* Beside the bubble, out of the flow: they must not widen it or push the reactions off its edge. */}
@@ -2150,21 +2158,15 @@ export default function Messages() {
                             />
                           )}
                           {!message.deleted && !message.status && !message.id.startsWith('local_') && (
-                            <ReactButton
-                              label={`React to ${nameOf(message)}`}
-                              onOpen={() => setPicker({ id: message.id, withReply: false })}
-                            />
-                          )}
-                          {mine && !message.deleted && !message.status && !message.id.startsWith('local_') && (
-                            <OptionsButton
-                              label="Edit or delete this message"
-                              onOpen={() => setOwnMenu({ id: message.id })}
+                            <MessageMenuButton
+                              label={`Options for the message from ${nameOf(message)}`}
+                              onOpen={() => setMenuFor(message.id)}
                             />
                           )}
                         </div>
                         <SwipeToReply
                           onReply={() => startReply(message)}
-                          onLongPress={() => setPicker({ id: message.id, withReply: true })}
+                          onLongPress={() => setMenuFor(message.id)}
                           disabled={Boolean(message.status) || Boolean(message.deleted)}
                         >
                         <div
@@ -2237,7 +2239,7 @@ export default function Messages() {
                                   Encrypted — only your device can read this.
                                 </span>
                               ) : (
-                                withLinks(message.body ?? '')
+                                formatChatText(message.body ?? '', message.id)
                               )}
                               {showMeta && (
                                 <>
@@ -2361,14 +2363,11 @@ export default function Messages() {
                     <Pencil size={11} aria-hidden="true" />
                     Editing a message
                   </p>
-                  <input
+                  <MessageInput
                     value={editDraft}
                     onChange={(e) => setEditDraft(e.target.value)}
+                    onSubmit={() => void saveEdit()}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        void saveEdit()
-                      }
                       if (e.key === 'Escape') setEditing(null)
                     }}
                     autoFocus
@@ -2425,10 +2424,18 @@ export default function Messages() {
                   <>
                     <AttachmentMenu onFiles={stage} />
                     <EmojiStickerButton packs={stickerPacks.data?.packs ?? null} onEmoji={insertEmoji} onSticker={sendSticker} />
-                    <input
+                    {/* A textarea, not an input: a message can have more
+                        than one line. Enter sends on a keyboard, Shift+Enter
+                        breaks the line, and on a phone Enter breaks the line
+                        because there is no Shift to hold beside it. The box
+                        is rounded like a pill while it is one line and
+                        squares off as it grows, so it never looks like a
+                        stretched pill. */}
+                    <MessageInput
                       ref={inputRef}
                       value={draft}
                       onChange={(e) => onDraftChange(e.target.value)}
+                      onSubmit={() => void send()}
                       onKeyDown={(e) => {
                         if (e.key === 'Escape' && replyTo) {
                           e.preventDefault()
@@ -2444,7 +2451,10 @@ export default function Messages() {
                       }}
                       placeholder={staged.length ? 'Add a caption…' : 'Write a message…'}
                       aria-label="Message"
-                      className="w-full min-w-0 rounded-full border border-transparent bg-text-hi/[0.07] px-4 py-2.5 text-[15px] text-text-hi placeholder:text-text-low focus:border-gold/50 focus:bg-transparent focus:outline-none"
+                      className={cn(
+                        'w-full min-w-0 border border-transparent bg-text-hi/[0.07] px-4 py-2.5 text-[15px] text-text-hi placeholder:text-text-low focus:border-gold/50 focus:bg-transparent focus:outline-none',
+                        draft.includes('\n') ? 'rounded-card-sm' : 'rounded-[20px]',
+                      )}
                     />
                     {draft.trim() || staged.length ? (
                       <button
@@ -2476,33 +2486,29 @@ export default function Messages() {
           )}
         </div>
       </div>
-      {picker && (() => {
-        const target = messages.find((m) => m.id === picker.id)
+      {menuFor && (() => {
+        const target = messages.find((m) => m.id === menuFor)
         if (!target || target.deleted) return null
+        const own = target.sender_id === user?.id
+        const text = target.encrypted ? '' : (target.body ?? '')
         return (
-          <ReactionPicker
-            anchor={`bubble-${picker.id}`}
+          <MessageMenu
+            anchor={`bubble-${menuFor}`}
             current={target.my_reaction}
+            // Text the server can read: not a sticker, not an end-to-end
+            // encrypted message. The server refuses both anyway; the point is
+            // not to offer what will fail.
+            canEdit={own && !target.encrypted && target.kind !== 'sticker' && Boolean(text.trim())}
+            canDelete={own}
             onPick={(emoji) => void react(target, emoji)}
-            onReply={picker.withReply ? () => startReply(target) : undefined}
-            onClose={() => setPicker(null)}
-          />
-        )
-      })()}
-      {ownMenu && (() => {
-        const target = messages.find((m) => m.id === ownMenu.id)
-        if (!target || target.deleted) return null
-        return (
-          <OwnMessageMenu
-            anchor={`bubble-${ownMenu.id}`}
-            // Text the server can read: not a sticker, not an end-to-end encrypted message.
-            canEdit={!target.encrypted && target.kind !== 'sticker' && Boolean(target.body?.trim())}
+            onReply={() => startReply(target)}
+            onCopy={text.trim() ? () => void copyText(text) : undefined}
             onEdit={() => {
               setEditing(target)
-              setEditDraft(target.body ?? '')
+              setEditDraft(text)
             }}
             onDelete={() => setConfirmDelete(target)}
-            onClose={() => setOwnMenu(null)}
+            onClose={() => setMenuFor(null)}
           />
         )
       })()}

@@ -25,7 +25,7 @@ from common.database import SessionLocal, get_db
 from common.ids import new_id
 from common.service import create_app
 
-from common import ageclient, classifier, mediasign
+from common import ageclient, classifier, mediasign, stickers
 from common.agesafety import engine as age_engine, rating_strictness
 
 import agefilter
@@ -94,6 +94,7 @@ MIGRATIONS: list[str] = [
     # create_all creates tables and never alters one, so a new column on an
     # existing table has to be stated here.
     f"ALTER TABLE {models.SCHEMA}.comments ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ",
+    f"ALTER TABLE {models.SCHEMA}.comment_reactions ADD COLUMN IF NOT EXISTS sticker_id VARCHAR(40)",
 ]
 
 app = create_app(
@@ -1455,34 +1456,92 @@ def delete_comment(comment_id: str, principal: CurrentUser, db: OrmSession = Dep
     return None
 
 
+def _comment_reaction_counts(db: OrmSession, comment_ids: list[str]) -> dict:
+    """How a page of comments was answered: likes, and stickers by id.
+
+    Two queries for the whole page rather than two per comment - a thread of
+    eighty replies would otherwise be a hundred and sixty round trips to draw
+    one screen. A plain like has no sticker id, so the two are counted apart
+    and a comment can carry both.
+    """
+    if not comment_ids:
+        return {"likes": {}, "stickers": {}}
+    likes: dict[str, int] = {}
+    by_sticker: dict[str, dict[str, int]] = {}
+    for cid, sticker_id, n in db.execute(
+        select(
+            models.CommentReaction.comment_id,
+            models.CommentReaction.sticker_id,
+            func.count(),
+        )
+        .where(models.CommentReaction.comment_id.in_(comment_ids))
+        .group_by(models.CommentReaction.comment_id, models.CommentReaction.sticker_id)
+    ).all():
+        likes[cid] = likes.get(cid, 0) + n
+        if sticker_id:
+            by_sticker.setdefault(cid, {})[sticker_id] = n
+    return {"likes": likes, "stickers": by_sticker}
+
+
+class CommentReactionIn(BaseModel):
+    """A sticker to answer a comment with, or nothing for a plain like."""
+
+    sticker_id: str | None = None
+
+
 @app.post("/comments/{comment_id}/reaction", tags=["comments"])
-def toggle_comment_like(comment_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
-    """Like a comment, or take the like back. One call either way.
+def toggle_comment_like(
+    comment_id: str,
+    principal: CurrentUser,
+    payload: CommentReactionIn | None = None,
+    db: OrmSession = Depends(get_db),
+):
+    """Answer a comment with a like or a sticker, or take it back. One call.
 
     A toggle rather than a like and an unlike endpoint: the client knows
     whether it is currently liked, but the server is the one that can say so
     without a race, and two endpoints invite the double-like that the primary
     key would then reject as an error rather than as the no-op it is.
+
+    One reaction per person per comment, so sending a different sticker
+    replaces the one before it rather than stacking - the same rule as a
+    message reaction, because a row of six stickers all from one person is a
+    way to shout in somebody else's thread.
     """
     comment = db.get(models.Comment, comment_id)
     if comment is None or comment.status != "published":
         raise HTTPException(status_code=404, detail="Comment not found")
 
+    sticker_id = (payload.sticker_id if payload else None) or None
+    # Checked against the catalogue, never stored as given: an id the server
+    # does not recognise would be drawn as a blank by every client that reads
+    # this thread afterwards.
+    if sticker_id is not None and stickers.get(sticker_id) is None:
+        raise HTTPException(status_code=422, detail="That sticker does not exist")
+
     existing = db.get(models.CommentReaction, (comment_id, principal.user_id))
-    if existing is not None:
+    if existing is not None and existing.sticker_id == sticker_id:
         db.delete(existing)
         liked = False
+    elif existing is not None:
+        existing.sticker_id = sticker_id
+        liked = True
     else:
-        db.add(models.CommentReaction(comment_id=comment_id, user_id=principal.user_id))
+        db.add(
+            models.CommentReaction(
+                comment_id=comment_id, user_id=principal.user_id, sticker_id=sticker_id
+            )
+        )
         liked = True
     db.commit()
 
-    likes = db.scalar(
-        select(func.count())
-        .select_from(models.CommentReaction)
-        .where(models.CommentReaction.comment_id == comment_id)
-    )
-    return {"liked": liked, "likes": likes or 0}
+    counts = _comment_reaction_counts(db, [comment_id])
+    return {
+        "liked": liked,
+        "likes": counts["likes"].get(comment_id, 0),
+        "stickers": counts["stickers"].get(comment_id, {}),
+        "my_sticker": sticker_id if liked else None,
+    }
 
 
 @app.get("/moderation/decisions", tags=["moderation"])
@@ -3356,27 +3415,23 @@ def list_comments(
     # comment. A thread of eighty replies would otherwise be a hundred and
     # sixty round trips to render one screen.
     ids = [r.id for r in rows]
-    like_counts: dict[str, int] = {}
+    counts = _comment_reaction_counts(db, ids)
+    like_counts = counts["likes"]
+    sticker_counts = counts["stickers"]
     mine: set[str] = set()
-    if ids:
-        like_counts = {
-            cid: n
-            for cid, n in db.execute(
-                select(models.CommentReaction.comment_id, func.count())
-                .where(models.CommentReaction.comment_id.in_(ids))
-                .group_by(models.CommentReaction.comment_id)
-            ).all()
-        }
-        if principal is not None:
-            mine = {
-                cid
-                for (cid,) in db.execute(
-                    select(models.CommentReaction.comment_id).where(
-                        models.CommentReaction.comment_id.in_(ids),
-                        models.CommentReaction.user_id == principal.user_id,
-                    )
-                ).all()
-            }
+    # Which sticker this reader chose, per comment, so their own is drawn as
+    # theirs rather than as one more in the pile.
+    my_sticker: dict[str, str] = {}
+    if ids and principal is not None:
+        for cid, sticker_id in db.execute(
+            select(models.CommentReaction.comment_id, models.CommentReaction.sticker_id).where(
+                models.CommentReaction.comment_id.in_(ids),
+                models.CommentReaction.user_id == principal.user_id,
+            )
+        ).all():
+            mine.add(cid)
+            if sticker_id:
+                my_sticker[cid] = sticker_id
 
     def describe(uid: str | None) -> dict | None:
         if not uid:
@@ -3409,6 +3464,8 @@ def list_comments(
                 "edited_at": r.edited_at,
                 "likes": like_counts.get(r.id, 0),
                 "liked": r.id in mine,
+                "stickers": sticker_counts.get(r.id, {}),
+                "my_sticker": my_sticker.get(r.id),
             }
             for r in rows
         ],

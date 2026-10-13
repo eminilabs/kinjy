@@ -637,6 +637,10 @@ export interface CommentNode {
   /** Likes on this comment, and whether this viewer is one of them. */
   likes: number
   liked: boolean
+  /** Stickers on this comment, by catalogue id, with how many people chose each. */
+  stickers?: Record<string, number>
+  /** The sticker this viewer chose, if they chose one rather than a plain like. */
+  my_sticker?: string | null
 }
 
 export interface PersonSuggestion {
@@ -840,6 +844,9 @@ export interface Conversation {
   title: string | null
   /** Groups only: what the room is for. */
   description?: string | null
+  /** A group's own photo and banner. */
+  avatar_url?: string | null
+  cover_url?: string | null
   /** The one room everybody is in. It cannot be left behind by somebody else. */
   is_welcome?: boolean
   /** What the viewer may do here: owner and admin run it, member does not. */
@@ -1813,9 +1820,20 @@ export const kaluta = {
       api.patch<{ id: string; body: string; edited_at: string }>(`/comments/${commentId}`, { body }),
     /** Remove a comment. The author's own, or any on a post you wrote. */
     deleteComment: (commentId: string) => api.delete<void>(`/comments/${commentId}`),
-    /** Like a comment, or take it back. One call either way; the server answers with the new state. */
-    likeComment: (commentId: string) =>
-      api.post<{ liked: boolean; likes: number }>(`/comments/${commentId}/reaction`, {}),
+    /**
+     * Answer a comment with a like or a sticker, or take it back. One call
+     * either way; the server answers with the new state.
+     *
+     * One reaction per person per comment, so sending a different sticker
+     * replaces the one before it rather than adding to it.
+     */
+    likeComment: (commentId: string, stickerId: string | null = null) =>
+      api.post<{
+        liked: boolean
+        likes: number
+        stickers: Record<string, number>
+        my_sticker: string | null
+      }>(`/comments/${commentId}/reaction`, { sticker_id: stickerId }),
     repost: (id: string, body = '') => api.post<Post>(`/posts/${id}/repost`, { body }),
     undoRepost: (id: string) => api.delete<void>(`/posts/${id}/repost`),
     /**
@@ -2148,11 +2166,27 @@ export const kaluta = {
       api.get<{ total: number; items: GroupMember[]; offset: number; has_more: boolean }>(
         `/conversations/${conversationId}/participants?offset=${offset}`,
       ),
-    editGroup: (conversationId: string, input: { title?: string; description?: string }) =>
-      api.patch<{ id: string; title: string | null; description: string | null }>(
-        `/conversations/${conversationId}`,
-        input,
-      ),
+    /**
+     * Rename a group, say what it is for, or change its photo and banner.
+     * Admins only. An image is applied by the asset id the upload returned;
+     * null takes it off.
+     */
+    editGroup: (
+      conversationId: string,
+      input: {
+        title?: string
+        description?: string
+        avatar_asset_id?: string | null
+        cover_asset_id?: string | null
+      },
+    ) =>
+      api.patch<{
+        id: string
+        title: string | null
+        description: string | null
+        avatar_url: string | null
+        cover_url: string | null
+      }>(`/conversations/${conversationId}`, input),
     addMembers: (conversationId: string, userIds: string[]) =>
       api.post<{ added: string[] }>(`/conversations/${conversationId}/participants`, {
         user_ids: userIds,

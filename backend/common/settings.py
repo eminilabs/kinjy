@@ -166,6 +166,13 @@ UPLOADCENTER_CDN_HOSTS = _str("UPLOADCENTER_CDN_HOSTS", "cdn.uploadscenter.com")
 # else, or UploadCenter being unconfigured, means local. Files already stored
 # stay where they are; each asset records its own provider.
 POST_MEDIA_PROVIDER = _str("POST_MEDIA_PROVIDER", "local")
+
+# Who runs the welcome group - the one room every member is in. Set as an
+# address rather than an account id: an id means nothing in a settings file and
+# is wrong the moment the database is rebuilt, while an address is something an
+# operator can read, check and change. Empty leaves the room with no admin,
+# which is what it had before anybody was named.
+WELCOME_GROUP_ADMIN_EMAIL = _str("WELCOME_GROUP_ADMIN_EMAIL", "godsonferdinand7@gmail.com")
 # How long a media ticket lasts (common/mediasign.py). It was a constant five
 # minutes, which is shorter than people look at a feed: a tab left open, or a
 # picture opened six minutes after the page loaded, asked for a ticket that had

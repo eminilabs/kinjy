@@ -1174,6 +1174,22 @@ def sponsor(user_id: str, db: OrmSession = Depends(get_db)):
     )
 
 
+@app.get("/internal/users/by-email/{email}", tags=["internal"])
+def internal_user_by_email(email: str, db: OrmSession = Depends(get_db)):
+    """One account, found by the address it registered with. Internal only.
+
+    Exists so another service can be configured with a person rather than with
+    an id: an id is meaningless in a settings file and wrong the moment the
+    database is rebuilt, while an address is something an operator can read and
+    check. Never gateway-exposed - an endpoint that turns an address into an
+    account is an endpoint that confirms who has signed up.
+    """
+    user = db.scalar(select(models.User).where(func.lower(models.User.email) == email.strip().lower()))
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"id": user.id, "handle": user.handle, "display_name": user.display_name}
+
+
 @app.get("/internal/users/{user_id}", tags=["internal"])
 def internal_user(user_id: str, db: OrmSession = Depends(get_db)):
     user = db.get(models.User, user_id)

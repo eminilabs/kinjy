@@ -4,6 +4,7 @@ import { Check, LogOut, Pencil, Search, ShieldCheck, UserPlus, X } from 'lucide-
 import MemberAvatar from '@/components/social/MemberAvatar'
 import { useAppTheme } from '@/components/appdemo/theme'
 import { ApiError, kaluta, type Conversation, type GroupMember, type PersonBrief } from '@/lib/api'
+import ProfileImagePicker from '@/components/dashboard/ProfileImagePicker'
 import { cn } from '@/lib/utils'
 
 /**
@@ -57,6 +58,19 @@ export default function GroupPanel({
       })
       .catch(() => setMembers([]))
   }, [conversation.id])
+
+  /**
+   * Put an uploaded photo on the group, or take it off.
+   *
+   * Applied as soon as the upload is ready rather than behind the edit form's
+   * Save: an uploaded image that is never saved is a stored file nothing
+   * references, and closing the panel is exactly when that happens.
+   */
+  const changeImage =
+    (key: 'avatar_asset_id' | 'cover_asset_id') => async (assetId: string | null) => {
+      await kaluta.messages.editGroup(conversation.id, { [key]: assetId })
+      onChanged()
+    }
 
   /** The next page. Admins are on the first one, so this is rarely needed. */
   const loadMore = () => {
@@ -128,6 +142,48 @@ export default function GroupPanel({
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        {/* The group's own face. Above the name because that is the order it
+            is read in, and shown to everybody - only an admin gets the
+            pickers, because only an admin can change them. */}
+        {runs ? (
+          <div className="mb-5 space-y-5">
+            <ProfileImagePicker
+              purpose="avatar"
+              url={conversation.avatar_url ?? null}
+              displayName={conversation.title ?? 'Group'}
+              onChange={changeImage('avatar_asset_id')}
+            />
+            <ProfileImagePicker
+              purpose="cover"
+              url={conversation.cover_url ?? null}
+              displayName={conversation.title ?? 'Group'}
+              onChange={changeImage('cover_asset_id')}
+            />
+          </div>
+        ) : (
+          (conversation.cover_url || conversation.avatar_url) && (
+            <div className="mb-4">
+              {conversation.cover_url && (
+                <img
+                  src={conversation.cover_url}
+                  alt=""
+                  className="h-24 w-full rounded-xl object-cover"
+                />
+              )}
+              {conversation.avatar_url && (
+                <img
+                  src={conversation.avatar_url}
+                  alt=""
+                  className={cn(
+                    'h-16 w-16 rounded-full border-2 border-[var(--cloud-border)] object-cover',
+                    conversation.cover_url ? '-mt-8 ms-3' : '',
+                  )}
+                />
+              )}
+            </div>
+          )
+        )}
+
         {editing ? (
           <form
             onSubmit={(event) => {

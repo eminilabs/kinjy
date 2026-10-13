@@ -572,23 +572,51 @@
 
 @layer base {
   /*
-   * Hidden scrollbars, intact scrolling.
+   * Visible scrollbars, drawn to match the page.
    *
-   * `scrollbar-width: none` + the WebKit pseudo-element remove the track
-   * everywhere. Deliberately NOT `overflow: hidden` — that would take the
-   * scrolling away with it. Keyboard, wheel, touch and programmatic scrolling
-   * all still work; only the chrome is gone.
+   * They used to be hidden everywhere — `scrollbar-width: none` plus the
+   * WebKit pseudo-element. Scrolling still worked, which was the argument for
+   * it, but a pane with no scrollbar does not tell you there is more below,
+   * and it takes away the one control people use to move through a long page
+   * quickly: dragging the thumb. On a desktop with a mouse and no wheel it
+   * took away scrolling altogether.
    *
-   * Focus outlines are untouched: hiding a scrollbar is cosmetic, hiding focus
-   * would lock out anyone navigating by keyboard.
+   * Thin and drawn from the text token rather than from `currentColor`, which
+   * was the first thing tried and is wrong: the root element keeps the
+   * browser's default black, so the *page's* own scrollbar - the big one on
+   * the right - came out black on a dark page and could not be seen at all.
+   * The token is the same colour the theme already uses for text, so the bar
+   * belongs to the page in all three themes without caring which element
+   * happens to be scrolling.
+   *
+   * `transparent` for the track rather than a colour: a visible gutter beside
+   * every scrolling box reads as a seam.
    */
   * {
-    scrollbar-width: none;
-    -ms-overflow-style: none;
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--text-hi-rgb) / 0.3) transparent;
   }
   *::-webkit-scrollbar {
-    width: 0;
-    height: 0;
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    /* The border is what makes it read as thin: it is padding drawn in the
+       track's colour, so the thumb is 4px of colour inside a 10px lane that
+       is still easy to hit with a pointer. */
+    background-color: rgb(var(--text-hi-rgb) / 0.28);
+    background-clip: content-box;
+    border: 3px solid transparent;
+    border-radius: 999px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(var(--text-hi-rgb) / 0.45);
+  }
+  *::-webkit-scrollbar-corner {
+    background: transparent;
   }
 }
 

@@ -29,6 +29,13 @@ class Conversation(Base):
     # how a new member is found a home without hard-coding an id in two
     # services.
     is_welcome: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    # A group's own photo and banner. The url is stored beside the asset id so
+    # drawing the list costs no call to media-service; the id is what lets a
+    # replaced image be cleaned up, and what the ownership check runs against.
+    avatar_url: Mapped[str | None] = mapped_column(String(500))
+    avatar_asset_id: Mapped[str | None] = mapped_column(String(40))
+    cover_url: Mapped[str | None] = mapped_column(String(500))
+    cover_asset_id: Mapped[str | None] = mapped_column(String(40))
     created_by: Mapped[str] = mapped_column(String(40))
     encrypted: Mapped[bool] = mapped_column(Boolean, default=True)
     # Set on the conversation, not per message: "disappearing messages" is a

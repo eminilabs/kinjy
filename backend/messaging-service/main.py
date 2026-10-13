@@ -28,12 +28,13 @@ from common.service import create_app
 import agecheck
 import agenotify
 import models
-import stickers
+from common import stickers
 import webpush
 
 log = logging.getLogger("messaging-service")
 USER_URL = "http://user-service:8000"
 MEDIA_URL = "http://media-service:8000"
+AUTH_URL = "http://auth-service:8000"
 
 
 def _profiles(user_ids: set[str]) -> dict[str, dict]:
@@ -79,6 +80,11 @@ MIGRATIONS = [
     f"ALTER TABLE {models.SCHEMA}.conversations ADD COLUMN IF NOT EXISTS description TEXT",
     f"ALTER TABLE {models.SCHEMA}.conversations "
     "ADD COLUMN IF NOT EXISTS is_welcome BOOLEAN NOT NULL DEFAULT FALSE",
+    # A group's photo and banner.
+    f"ALTER TABLE {models.SCHEMA}.conversations ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(500)",
+    f"ALTER TABLE {models.SCHEMA}.conversations ADD COLUMN IF NOT EXISTS avatar_asset_id VARCHAR(40)",
+    f"ALTER TABLE {models.SCHEMA}.conversations ADD COLUMN IF NOT EXISTS cover_url VARCHAR(500)",
+    f"ALTER TABLE {models.SCHEMA}.conversations ADD COLUMN IF NOT EXISTS cover_asset_id VARCHAR(40)",
     # Conversations that already exist predate the request model, so everyone
     # in them is treated as having accepted. Retro-fitting a request state onto
     # live threads would silently block attachments between people who have
@@ -607,9 +613,52 @@ WELCOME_DESCRIPTION = (
 )
 
 
+GROUP_IMAGES = ("avatar", "cover")
+
+
+def _ready_image_url(asset_id: str, owner_id: str, purpose: str) -> str:
+    """The url of an uploaded image, once media-service vouches for it.
+
+    Fails closed: if media-service cannot confirm the asset the change is
+    refused rather than applied. Not found and not yours give the same answer,
+    so asset ids cannot be probed by trying them.
+    """
+    try:
+        response = httpx.get(f"{MEDIA_URL}/internal/media/{asset_id}", timeout=5)
+    except httpx.HTTPError:
+        raise HTTPException(status_code=503, detail="Images cannot be checked right now. Please try again.")
+    if response.status_code == 404:
+        raise HTTPException(status_code=422, detail="Image not found")
+    if response.status_code != 200:
+        raise HTTPException(status_code=503, detail="Images cannot be checked right now. Please try again.")
+
+    asset = response.json()
+    if asset.get("owner_id") != owner_id:
+        raise HTTPException(status_code=422, detail="Image not found")
+    if asset.get("purpose") != purpose:
+        raise HTTPException(status_code=422, detail=f"This image was not uploaded as a {purpose}")
+    if asset.get("status") != "ready" or not asset.get("url"):
+        raise HTTPException(status_code=409, detail="This image is still being processed")
+    return asset["url"]
+
+
+def _discard_image(asset_id: str, owner_id: str) -> None:
+    """Delete a replaced image. Best effort: the group change already stands."""
+    try:
+        httpx.post(f"{MEDIA_URL}/internal/media/{asset_id}/discard", json={"owner_id": owner_id}, timeout=10)
+    except httpx.HTTPError as exc:
+        log.warning("could not discard replaced group image %s: %s", asset_id, exc)
+
+
 class GroupEdit(BaseModel):
     title: str | None = Field(default=None, max_length=140)
     description: str | None = Field(default=None, max_length=2_000)
+    # Uploaded through the same flow as a profile photo, and applied here by
+    # id. None takes the picture off the group.
+    avatar_asset_id: str | None = None
+    cover_asset_id: str | None = None
+
+    model_config = {"extra": "forbid"}
 
 
 class MembersIn(BaseModel):
@@ -719,6 +768,7 @@ async def edit_group(
     conversation = _group(db, conversation_id, principal.user_id)
     _runs_group(db, conversation_id, principal.user_id)
 
+    sent = payload.model_dump(exclude_unset=True)
     changed = []
     if payload.title is not None and payload.title.strip() != (conversation.title or ""):
         conversation.title = payload.title.strip() or None
@@ -727,10 +777,34 @@ async def edit_group(
         conversation.description = payload.description.strip() or None
         changed.append("changed the description")
 
+    # The photo and the banner. Checked against media-service before they are
+    # applied, and the one they replace is deleted afterwards - an image nobody
+    # references is a file nobody will ever come back for.
+    replaced: list[str] = []
+    for purpose in GROUP_IMAGES:
+        key = f"{purpose}_asset_id"
+        if key not in sent:
+            continue
+        asset_id = sent[key]
+        url = None if asset_id is None else _ready_image_url(asset_id, principal.user_id, purpose)
+        previous = getattr(conversation, key)
+        if previous and previous != asset_id:
+            replaced.append(previous)
+        setattr(conversation, key, asset_id)
+        setattr(conversation, f"{purpose}_url", url)
+        if previous != asset_id:
+            changed.append(
+                ("changed the group photo" if purpose == "avatar" else "changed the group cover")
+                if asset_id
+                else ("removed the group photo" if purpose == "avatar" else "removed the group cover")
+            )
+
     if changed:
         who = _display_names({principal.user_id})[principal.user_id]
         _system_message(db, conversation_id, who + " " + " and ".join(changed) + ".")
     db.commit()
+    for asset_id in replaced:
+        _discard_image(asset_id, principal.user_id)
     await _publish_to_users(
         _participant_ids(db, conversation_id),
         {"type": "conversation", "conversation_id": conversation_id},
@@ -739,6 +813,8 @@ async def edit_group(
         "id": conversation.id,
         "title": conversation.title,
         "description": conversation.description,
+        "avatar_url": conversation.avatar_url,
+        "cover_url": conversation.cover_url,
     }
 
 
@@ -894,6 +970,60 @@ async def set_participant_role(
     return {"user_id": user_id, "role": target.role}
 
 
+def _welcome_admin_id() -> str | None:
+    """The account configured to run the welcome group, if there is one.
+
+    Resolved from the address every time rather than stored: the setting can be
+    pointed at somebody else without a migration, and a typo in it leaves the
+    room with no admin instead of handing it to whoever happens to hold a
+    guessed id.
+    """
+    email = (settings.WELCOME_GROUP_ADMIN_EMAIL or "").strip()
+    if not email:
+        return None
+    try:
+        response = httpx.get(f"{AUTH_URL}/internal/users/by-email/{email}", timeout=5)
+        if response.status_code == 404:
+            log.warning("no account for the configured welcome-group admin %s", email)
+            return None
+        response.raise_for_status()
+        return response.json()["id"]
+    except Exception as exc:
+        log.warning("could not resolve the welcome-group admin: %s", exc)
+        return None
+
+
+def _ensure_welcome_admin(db: OrmSession, conversation: models.Conversation) -> None:
+    """Make the configured account the owner of the welcome group.
+
+    Done on the way past rather than only at creation, because the room exists
+    on every environment already and because the setting can change. Idempotent
+    and cheap: it touches a row only when the role is actually wrong.
+    """
+    admin_id = _welcome_admin_id()
+    if admin_id is None:
+        return
+    row = db.scalar(
+        select(models.Participant).where(
+            models.Participant.conversation_id == conversation.id,
+            models.Participant.user_id == admin_id,
+        )
+    )
+    if row is None:
+        db.add(
+            models.Participant(
+                conversation_id=conversation.id,
+                user_id=admin_id,
+                role="owner",
+                accepted_at=datetime.now(timezone.utc),
+            )
+        )
+    elif row.role != "owner":
+        row.role = "owner"
+    if conversation.created_by != admin_id:
+        conversation.created_by = admin_id
+
+
 def _welcome_group(db: OrmSession) -> models.Conversation:
     """The group everybody is in, created the first time somebody needs it.
 
@@ -904,6 +1034,7 @@ def _welcome_group(db: OrmSession) -> models.Conversation:
         select(models.Conversation).where(models.Conversation.is_welcome.is_(True))
     )
     if conversation is not None:
+        _ensure_welcome_admin(db, conversation)
         return conversation
     conversation = models.Conversation(
         id=new_id("cnv"),
@@ -916,6 +1047,7 @@ def _welcome_group(db: OrmSession) -> models.Conversation:
     )
     db.add(conversation)
     db.flush()
+    _ensure_welcome_admin(db, conversation)
     return conversation
 
 
@@ -1240,6 +1372,8 @@ def list_conversations(principal: CurrentUser, db: OrmSession = Depends(get_db))
                 # conversation does not: what it is for.
                 "description": r.description,
                 "is_welcome": r.is_welcome,
+                "avatar_url": r.avatar_url,
+                "cover_url": r.cover_url,
                 # What this viewer may do in it, so the page does not have to
                 # fetch the member list to decide whether to show a settings
                 # button.
