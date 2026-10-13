@@ -20,8 +20,6 @@ import {
   Square,
   Trash2,
   Users,
-  Volume2,
-  VolumeX,
   Wifi,
   WifiOff,
   X,
@@ -39,8 +37,8 @@ import {
 import EmojiStickerButton from '@/components/social/EmojiStickerPanel'
 import StickerFace from '@/components/social/StickerFace'
 import ConfirmDialog from '@/components/ui-kit/ConfirmDialog'
-import PushToggle from '@/components/app/PushToggle'
-import { playMessageChime, primeSound, setSoundEnabled, soundEnabled } from '@/lib/chime'
+import AlertsToggle from '@/components/app/AlertsToggle'
+import { playMessageChime, primeSound } from '@/lib/chime'
 import MessageInput from '@/components/ui-kit/MessageInput'
 import { formatChatText } from '@/lib/chatFormat'
 import {
@@ -517,7 +515,6 @@ export default function Messages() {
   const [editDraft, setEditDraft] = useState('')
   // The message awaiting a yes, so the dialog can name what is about to happen.
   const [confirmDelete, setConfirmDelete] = useState<ChatMessage | null>(null)
-  const [sound, setSound] = useState(soundEnabled())
   // Message ids already announced. A reconnect replays everything missed, and
   // without this the catch-up is a burst of chimes.
   const seenForSound = useRef<Set<string>>(new Set())
@@ -1525,34 +1522,11 @@ export default function Messages() {
                 </span>
               )}
               <div className="ms-auto flex items-center gap-2">
-                {/* Renders nothing when the browser or this installation cannot
-                    push, so it never offers a switch that does nothing. */}
-                <PushToggle />
-                {/* A sound nobody can switch off is a reason to close the tab. */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = !sound
-                    setSound(next)
-                    setSoundEnabled(next)
-                    // Turning it on is a gesture, the only moment a browser lets
-                    // audio start: unlock here, and play it once - which doubles
-                    // as showing what it sounds like.
-                    if (next) {
-                      primeSound()
-                      playMessageChime()
-                    }
-                  }}
-                  aria-pressed={sound}
-                  aria-label={sound ? 'Sound on for new messages' : 'Sound off for new messages'}
-                  title={sound ? 'Sound on for new messages' : 'Sound off for new messages'}
-                  className={cn(
-                    'grid h-9 w-9 place-items-center rounded-full transition-colors hover:bg-text-hi/[0.1]',
-                    sound ? 'bg-text-hi/[0.07] text-text-hi' : 'text-text-low',
-                  )}
-                >
-                  {sound ? <Volume2 size={16} aria-hidden="true" /> : <VolumeX size={16} aria-hidden="true" />}
-                </button>
+                {/* One switch for both the arrival sound and browser
+                    notifications. A sound nobody can switch off is a reason to
+                    close the tab, and two controls for one intention was one
+                    too many. */}
+                <AlertsToggle />
                 <button
                   type="button"
                   onClick={() => setComposing((v) => !v)}
