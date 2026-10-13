@@ -94,14 +94,11 @@ export default function Navbar() {
         )}
       >
         <div className="mx-auto flex h-full max-w-container items-center justify-between gap-4 px-6">
-          {/* Brand. Signed in, the logo means "home", and home is the feed —
-              the same reading as the "Feeds" link below. Only a visitor who
-              has nothing to go back to gets the marketing page. */}
-          <Link
-            to={user ? '/hub' : '/'}
-            className="flex items-center gap-2.5 shrink-0"
-            aria-label={user ? 'Go to your feed' : 'Kinjy home'}
-          >
+          {/* Brand. The public site's home, signed in or not: this is the
+              marketing chrome, and its logo means this site. The app's own
+              logo (components/app/AppChrome) goes to the feed instead - the
+              home of the thing you are actually in. */}
+          <Link to="/" className="flex items-center gap-2.5 shrink-0" aria-label="Kinjy home">
             <img src="/logo.svg" alt="" className="h-8 w-8" />
             <span className="font-display text-xl font-medium tracking-tight">Kinjy</span>
           </Link>

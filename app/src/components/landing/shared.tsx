@@ -241,20 +241,20 @@ function LanguageMenu() {
 export function LandingNav() {
   const [menuOpen, setMenuOpen] = useState(false)
   const { t } = useTranslation()
-  const { user } = useAuth()
   const ref = useRef<HTMLElement>(null)
   const close = useCallback(() => setMenuOpen(false), [])
   useDismiss(menuOpen, close, ref)
 
   return (
     <nav ref={ref} className="kl-pad-x relative z-10 flex items-center justify-between gap-6 py-[26px]" aria-label={t('nav.menu', 'Navigation')}>
-      {/* Home, which for a member who is signed in means their feed - the
-          page the app itself calls "Accueil". This was the one navigation
-          left pointing at "/" whatever happened, so on every public page -
-          pricing, platform, a shared post - clicking the logo took a member
-          out of Kinjy and back to the page that invites them to join it.
-          Only a visitor, who has no feed, gets the marketing page. */}
-      <Link to={user ? '/hub' : '/'} aria-label={t('nav.home')}>
+      {/* The landing page, signed in or not.
+      
+          The logo means "the home of whatever you are looking at", and on a
+          public page - pricing, platform, a shared post - that is the public
+          site, not the member's feed. Inside the app it is the other way
+          round and AppChrome's logo goes to /hub; the two are not the same
+          control and must not answer the same way. */}
+      <Link to="/" aria-label={t('nav.home')}>
         <Brand />
       </Link>
 
