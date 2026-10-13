@@ -1,36 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowDown, Play } from 'lucide-react'
-import { FEATURES } from '@/lib/features'
 import { KlButton } from '@/components/landing/PageKit'
 import { KL_CARD } from '@/components/landing/kl-classes'
 import { cn } from '@/lib/utils'
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
-
-const FAMILY_QUERY = `query FamilyPath($user: ID!) {
-  user(id: $user) {
-    familyTree {
-      path(to: "demo-243") { level relation }
-    }
-  }
-}`
-
-const FAMILY_RESPONSE = [
-  '{',
-  '  "data": {',
-  '    "user": {',
-  '      "familyTree": {',
-  '        "path": [',
-  '          { "level": 1, "relation": "mother" },',
-  '          { "level": 2, "relation": "grandmother" },',
-  '          { "level": 3, "relation": "great-aunt · VERIFIED" }',
-  '        ]',
-  '      }',
-  '    }',
-  '  }',
-  '}',
-]
 
 const CIRCLE_QUERY = `query CircleFeed($user: ID!) {
   user(id: $user) {
@@ -56,21 +31,21 @@ const CIRCLE_RESPONSE = [
   '}',
 ]
 
-// While the family tree is switched off (lib/features.ts) the hero asks for a
-// member's circles instead: the showcase query should not open a hidden module.
-const QUERY = FEATURES.familyTree ? FAMILY_QUERY : CIRCLE_QUERY
-const RESPONSE_LINES = FEATURES.familyTree ? FAMILY_RESPONSE : CIRCLE_RESPONSE
+// The hero shows a circles query. It used to show a family-tree path when that module was on:
+// there is no public family-tree API (nor a VERIFIED relation), so the example would have promised one.
+const QUERY = CIRCLE_QUERY
+const RESPONSE_LINES = CIRCLE_RESPONSE
 
 /** Syntax-highlight one line of the GraphQL query. */
 function QueryLine({ line }: { line: string }) {
   // keywords gold, punctuation sky-ish, strings gold-soft, identifiers text-hi
-  const parts = line.split(/(\bquery\b|\buser\b|\bfamilyTree\b|\bpath\b|\blevel\b|\brelation\b|\bcircles\b|\bposts\b|\bauthor\b|\btext\b|\$user|\bID!?\b|"[^"]*")/g)
+  const parts = line.split(/(\bquery\b|\buser\b|\bpath\b|\blevel\b|\brelation\b|\bcircles\b|\bposts\b|\bauthor\b|\btext\b|\$user|\bID!?\b|"[^"]*")/g)
   return (
     <>
       {parts.map((p, i) => {
         if (!p) return null
         if (/^(query)$/.test(p)) return <span key={i} className="text-gold font-semibold">{p}</span>
-        if (/^(user|familyTree|path|level|relation|circles|posts|author|text)$/.test(p)) return <span key={i} className="text-gold-soft">{p}</span>
+        if (/^(user|circles|posts|author|text)$/.test(p)) return <span key={i} className="text-gold-soft">{p}</span>
         if (/^\$user$/.test(p)) return <span key={i} className="text-coral">{p}</span>
         if (/^ID/.test(p)) return <span key={i} className="text-sky">{p}</span>
         if (/^"/.test(p)) return <span key={i} className="text-success">{p}</span>

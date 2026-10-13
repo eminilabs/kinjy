@@ -866,7 +866,18 @@ export interface PersonDetail extends Person {
   relation_to_me: string | null
   counts: { parents: number; children: number; spouses: number; siblings: number }
   my_decision: 'confirm' | 'dispute' | null
-  permissions: { can_edit: boolean; can_delete: boolean; can_link: boolean; can_confirm: boolean }
+  permissions: {
+    can_edit: boolean
+    can_delete: boolean
+    can_link: boolean
+    can_confirm: boolean
+    can_invite: boolean
+    /** What the caller may invite someone as: owners both, contributors only a viewer, a viewer nothing. */
+    invite_roles: TreeRole[]
+    can_manage_members: boolean
+    /** The caller's role in this tree; null when they hold none (read through the owner's privacy setting). */
+    role: TreeRole | null
+  }
 }
 
 /** What may be sent for a person. `null` clears a field; leaving it out leaves it alone. */
@@ -900,9 +911,13 @@ export interface RelativeExtras {
   shared_parent_ids?: string[]
 }
 
+/** What a member may do in a tree: read; read and contribute; also manage members. */
+export type TreeRole = 'viewer' | 'contributor' | 'owner'
+
 export interface FamilyTree {
   root: string
   depth: number
+  my_role: TreeRole | null
   /** The caller's own node, if they have added themselves. */
   me: string | null
   /** Everyone in this family; the view may hold fewer. */
@@ -2126,6 +2141,105 @@ export const kaluta = {
         `/family/persons/${personId}/confirm`,
         { decision, note },
       ),
+    /** Invite someone to claim a person node as themselves. The link is returned once. */
+    invite: (personId: string, role: 'viewer' | 'contributor' = 'viewer', branchRootId?: string) =>
+      api.post<{ id: string; token: string; role: TreeRole; branch_root_id: string | null; expires_at: string; path: string }>(
+        `/family/persons/${personId}/invitations`,
+        { role, ...(branchRootId ? { branch_root_id: branchRootId } : {}) },
+      ),
+    invitations: (personId: string) =>
+      api.get<{ items: Array<{ id: string; role: TreeRole; status: 'active' | 'accepted' | 'revoked' | 'declined' | 'expired'; created_at: string; expires_at: string }> }>(
+        `/family/persons/${personId}/invitations`,
+      ),
+    revokeInvitation: (invitationId: string) => api.delete<void>(`/family/invitations/${invitationId}`),
+    /** Public on purpose: a visitor learns only that a link is valid. */
+    lookupInvitation: (token: string) =>
+      api.post<{ valid: true; role: TreeRole; branch_name?: string | null; person_given_name?: string; already_has_node?: boolean; own?: boolean }>('/family/invitations/lookup', { token }),
+    acceptInvitation: (token: string) => api.post<{ person_id: string; role: TreeRole }>('/family/invitations/accept', { token }),
+    declineInvitation: (token: string) => api.post<void>('/family/invitations/decline', { token }),
+    /** Owners only: what a GEDCOM export would hold, in numbers. Nothing personal, nothing recorded. */
+    exportPreview: (personId: string) =>
+      api.get<{
+        format: string
+        people: number
+        included: number
+        masked: number
+        masked_unverified: number
+        masked_living: number
+        omitted_links: Record<string, number>
+        omitted_links_total: number
+        omitted_labels: Record<string, string>
+        warning: string | null
+      }>(`/family/persons/${personId}/export/preview`),
+    /** Owners only. The file is not JSON, so it is fetched here with the same sign-in and refresh as everything else. */
+    exportGedcom: async (personId: string): Promise<{ blob: Blob; filename: string }> => {
+      const send = () =>
+        fetch(`${BASE}/family/persons/${personId}/export`, {
+          method: 'POST',
+          headers: tokens.access ? { Authorization: `Bearer ${tokens.access}` } : {},
+        })
+      let response = await send()
+      if (response.status === 401 && (await refreshAccessToken())) response = await send()
+      if (!response.ok) {
+        const body = await response.json().catch(() => null)
+        throw new ApiError(response.status, typeof body?.detail === 'string' ? body.detail : 'The export did not work.')
+      }
+      const named = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') ?? '')
+      // The header is not readable across origins unless the server exposes it, so there is a name of the same shape to fall back on.
+      const today = new Date().toISOString().slice(0, 10).replaceAll('-', '')
+      return { blob: await response.blob(), filename: named?.[1] ?? `kinjy-family-${today}.ged` }
+    },
+    /** A person's written memories (and any file items), for whoever may read them. */
+    archive: (personId: string) =>
+      api.get<{
+        items: Array<{ id: string; kind: string; title: string; story: string | null; file_url: string | null; happened_on: string | null; mine: boolean; can_delete: boolean }>
+      }>(`/family/heritage?person_id=${personId}`),
+    addMemory: (personId: string, input: { title: string; story: string; happened_on?: string }) =>
+      api.post<{ id: string }>('/family/heritage', { person_id: personId, kind: 'story', title: input.title, transcript: input.story, ...(input.happened_on ? { happened_on: input.happened_on } : {}) }),
+    deleteMemory: (itemId: string) => api.delete<void>(`/family/heritage/${itemId}`),
+    timeline: (personId: string) =>
+      api.get<{ entries: Array<{ date: string; kind: string; label: string }> }>(`/family/timeline/${personId}`),
+    /** Owners only: who they named to be able to take over the tree, and any request waiting. */
+    trustedContacts: (personId: string) =>
+      api.get<{
+        delay_days: number
+        items: Array<{ id: string; status: 'invited' | 'active'; name: string | null; named_by_me: boolean; request: { id: string; requested_at: string; effective_at: string } | null }>
+      }>(`/family/persons/${personId}/trusted-contacts`),
+    nameTrustedContact: (personId: string, membershipId: string) =>
+      api.post<{ id: string; status: string }>(`/family/persons/${personId}/trusted-contacts`, { membership_id: membershipId }),
+    /** The times the caller was named someone's trusted contact. */
+    myDesignations: () =>
+      api.get<{
+        delay_days: number
+        items: Array<{ id: string; status: 'invited' | 'active'; owner_name: string | null; valid: boolean | null; request: { id: string; requested_at: string; effective_at: string } | null }>
+      }>('/family/trusted-contacts/mine'),
+    acceptDesignation: (id: string) => api.post<{ id: string; status: string }>(`/family/trusted-contacts/${id}/accept`, {}),
+    declineDesignation: (id: string) => api.post<void>(`/family/trusted-contacts/${id}/decline`, {}),
+    endDesignation: (id: string) => api.delete<void>(`/family/trusted-contacts/${id}`),
+    requestSuccession: (id: string) => api.post<{ id: string; effective_at: string; delay_days: number }>(`/family/trusted-contacts/${id}/succession`, {}),
+    cancelSuccession: (id: string) => api.delete<void>(`/family/trusted-contacts/${id}/succession`),
+    /** Owners only. */
+    members: (personId: string) =>
+      api.get<{
+        items: Array<{
+          id: string
+          role: TreeRole
+          since: string
+          is_me: boolean
+          name: string | null
+          person_id: string
+          /** The one branch this viewer may see, or null for the whole tree. */
+          branch: { person_id: string; name: string | null } | null
+        }>
+      }>(
+        `/family/persons/${personId}/members`,
+      ),
+    /** Owners only: limit a viewer to one branch (a person, their descendants and partners), or null for the whole tree. */
+    setMemberBranch: (membershipId: string, personId: string | null) =>
+      api.put<{ id: string; branch_person_id: string | null }>(`/family/members/${membershipId}/branch`, { person_id: personId }),
+    setMemberRole: (membershipId: string, role: TreeRole) =>
+      api.patch<{ id: string; role: TreeRole }>(`/family/members/${membershipId}`, { role }),
+    removeMember: (membershipId: string) => api.delete<void>(`/family/members/${membershipId}`),
   },
 
   memorials: {

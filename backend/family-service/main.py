@@ -5,7 +5,7 @@ import logging
 from datetime import date, datetime, timezone
 
 from fastapi import Depends, HTTPException, Query
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as OrmSession
@@ -18,8 +18,13 @@ from common.service import create_app
 
 import access
 import graph
+import exports
 import integrity
+import invitations
+import memberships
 import models
+import roles
+import trusted
 
 log = logging.getLogger("family-service")
 
@@ -39,6 +44,10 @@ MIGRATIONS = [
     f"CREATE UNIQUE INDEX IF NOT EXISTS uq_relationship_symmetric ON {models.SCHEMA}.relationships "
     "(LEAST(from_person_id, to_person_id), GREATEST(from_person_id, to_person_id), kind) "
     "WHERE kind IN ('spouse_of', 'sibling_of')",
+    # What an invitation makes the invitee: the least, unless the inviter says more.
+    f"ALTER TABLE {models.SCHEMA}.invitations ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'viewer'",
+    f"ALTER TABLE {models.SCHEMA}.memberships ADD COLUMN IF NOT EXISTS branch_root_id VARCHAR(40)",
+    f"ALTER TABLE {models.SCHEMA}.invitations ADD COLUMN IF NOT EXISTS branch_root_id VARCHAR(40)",
     f"CREATE UNIQUE INDEX IF NOT EXISTS uq_relationship_filiation ON {models.SCHEMA}.relationships "
     "(from_person_id, to_person_id) "
     "WHERE kind IN ('parent_of', 'adoptive_parent_of', 'guardian_of')",
@@ -48,8 +57,13 @@ app = create_app(
     name="family-service",
     schema=models.SCHEMA,
     migrations=MIGRATIONS,
+    on_startup=[memberships.backfill, trusted.start_sweep],
     description="Family tree graph, derived relationships, verification, heritage archive.",
 )
+app.include_router(invitations.router)
+app.include_router(memberships.router)
+app.include_router(exports.router)
+app.include_router(trusted.router)
 
 
 # --- schemas ---------------------------------------------------------------
@@ -192,12 +206,39 @@ class ConfirmIn(BaseModel):
 
 
 class HeritageIn(BaseModel):
+    """One item of a person's archive: a written memory (``story``), or a file the archive points at.
+
+    A story is plain text and needs no file. Anything else points at a file of ours (``/media/...``)
+    or an https address, never a script, a data: blob or plain http.
+    """
+
     person_id: str | None = None
-    kind: str = Field(pattern="^(photo|letter|audio|video|document)$")
+    kind: str = Field(pattern="^(story|photo|letter|audio|video|document)$")
     title: str = Field(min_length=1, max_length=200)
-    source_url: str = Field(max_length=500)
+    source_url: str = Field(default="", max_length=500)
     happened_on: date | None = None
-    transcript: str | None = None
+    transcript: str | None = Field(default=None, max_length=10000)
+
+    @field_validator("source_url")
+    @classmethod
+    def _source(cls, value: str) -> str:
+        if value and not value.startswith(("https://", "/media/")):
+            raise ValueError("source_url must be an https address or a /media/ path")
+        return value
+
+    @model_validator(mode="after")
+    def _shape(self):
+        if self.kind == "story":
+            if not (self.transcript and self.transcript.strip()):
+                raise ValueError("A written memory needs its text")
+            if self.source_url:
+                raise ValueError("A written memory has no file")
+        elif not self.source_url:
+            raise ValueError("This kind of item needs a file address")
+        return self
+
+
+MAX_ITEMS_PER_PERSON = 100
 
 
 def _detail(person: models.Person, principal, family: access.Family, db: OrmSession) -> dict:
@@ -229,21 +270,21 @@ def _detail(person: models.Person, principal, family: access.Family, db: OrmSess
         },
         "my_decision": decision,
         "permissions": {
-            "can_edit": access.can_edit(principal, person),
-            "can_delete": access.can_delete(principal, person),
-            "can_link": mine,
-            "can_confirm": mine and me is not None,
+            "can_edit": access.can_edit(principal, person, family),
+            "can_delete": access.can_delete(principal, person, family),
+            "can_link": family.can("contributor"),
+            "can_invite": invitations.can_invite(principal, person, family),
+            "invite_roles": roles.invitable_roles(family.role) if invitations.can_invite(principal, person, family) else [],
+            "can_confirm": family.can("contributor") and me is not None,
+            "can_manage_members": family.can("owner"),
+            "role": family.role,
         },
     }
 
 
 def _visible_ids(db: OrmSession, user_id: str) -> set[str]:
-    """Everyone in a family the caller belongs to."""
-    mine = access.my_person_ids(db, user_id)
-    if not mine:
-        return set()
-    _edges, people, _rows = graph.load_component(db, mine)
-    return people
+    """Everyone in a family the caller belongs to, and no further than a branch if that is all they were given."""
+    return access.reachable(db, user_id)
 
 
 # ---------------------------------------------------------------------------
@@ -279,6 +320,9 @@ async def create_person(payload: PersonIn, principal: CurrentUser, db: OrmSessio
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=409, detail="This member already has a person node")
+    # Whoever starts a tree owns it. Nobody else is made a member by being named in it.
+    roles.grant(db, principal.user_id, person.id, "owner", None)
+    db.commit()
     db.refresh(person)
 
     await events.publish("family.person_added", {"person_id": person.id, "by": principal.user_id})
@@ -320,7 +364,8 @@ def list_persons(principal: CurrentUser, limit: int = Query(default=30, ge=1, le
 def get_person(person_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
     person = access.person_or_404(db, person_id)
     family = access.load_family(db, principal.user_id, person_id)
-    access.require_can_read(db, principal, family)
+    if person.user_id != principal.user_id:  # one's own place is always readable by oneself
+        access.require_can_read(db, principal, family)
     return _detail(person, principal, family, db)
 
 
@@ -328,9 +373,12 @@ def get_person(person_id: str, principal: CurrentUser, db: OrmSession = Depends(
 def update_person(person_id: str, payload: PersonUpdate, principal: CurrentUser, db: OrmSession = Depends(get_db)):
     person = access.person_or_404(db, person_id)
     family = access.load_family(db, principal.user_id, person_id)
-    access.require_can_read(db, principal, family)
-    if not access.can_edit(principal, person):
-        raise HTTPException(status_code=403, detail="Only the author or the person themselves can edit this node")
+    if person.user_id != principal.user_id:
+        access.require_can_read(db, principal, family)
+    if not access.can_edit(principal, person, family):
+        raise HTTPException(status_code=403, detail="You may edit what you added, or the place that is yours; an owner may edit any")
+    if principal.is_admin and not access.can_edit(principal, person, family, include_admin=False):
+        roles.record(db, "admin_edit_person", principal.user_id, person.user_id, person.id)  # platform staff acting outside the tree's own rules
 
     changes = payload.model_dump(exclude_unset=True)
     # A field that was sent as null is a field the member cleared; one that was not sent is untouched.
@@ -382,9 +430,22 @@ async def delete_person(person_id: str, principal: CurrentUser, db: OrmSession =
     """
     person = access.person_or_404(db, person_id)
     family = access.load_family(db, principal.user_id, person_id)
-    access.require_can_read(db, principal, family)
-    if not access.can_delete(principal, person):
-        raise HTTPException(status_code=403, detail="Only the author, or the member themselves, can remove this person")
+    if person.user_id != principal.user_id:
+        access.require_can_read(db, principal, family)
+    if not access.can_delete(principal, person, family):
+        raise HTTPException(status_code=403, detail="You may remove what you added, or your own place; an owner may remove any node that is not a member's")
+    if principal.is_admin and not access.can_delete(principal, person, family, include_admin=False):
+        roles.record(db, "admin_delete_person", principal.user_id, person.user_id, person.id)
+
+    # A removal that splits the tree must not leave a part without an owner.
+    memberships.refuse_if_orphaning(db, family.people, {person_id}, f"{person.given_name}")
+
+    # A member's own place anchors their role: removing it must not leave the tree without an owner.
+    held = db.scalars(select(models.Membership).where(models.Membership.person_id.in_(family.people))).all()
+    owners_left = {m.user_id for m in held if m.role == "owner" and m.person_id != person_id}
+    others_hold_roles = any(m.user_id != principal.user_id for m in held)
+    if any(m.role == "owner" and m.person_id == person_id for m in held) and not owners_left and others_hold_roles:
+        raise HTTPException(status_code=409, detail="A tree always keeps an owner: make someone else an owner first")
 
     touching = or_(
         models.Relationship.from_person_id == person_id,
@@ -427,7 +488,7 @@ async def add_relative(
     """
     anchor = access.person_or_404(db, person_id)
     family = access.load_family(db, principal.user_id, person_id)
-    access.require_belongs(family)
+    access.require_role(family, "contributor")
     access.may_link_member(principal, anchor.user_id)
 
     data = payload.person.model_dump()
@@ -600,6 +661,19 @@ def duplicate_candidates(person_id: str, principal: CurrentUser, db: OrmSession 
 # Relationships
 # ---------------------------------------------------------------------------
 
+def _join_plan(db: OrmSession, principal, one: access.Family, two: access.Family) -> tuple[access.Family, access.Family]:
+    """(the tree that stays, the tree of the caller's alone that joins it), or a refusal."""
+    if not (one.viewer_belongs and two.viewer_belongs):
+        raise access.not_found()  # a tree the caller holds no role in is not there to be joined
+    for target, lone in ((one, two), (two, one)):
+        if not target.can("contributor") or not lone.can("owner"):
+            continue
+        holders = set(db.scalars(select(models.Membership.user_id).where(models.Membership.person_id.in_(lone.people))).all())
+        if holders == {principal.user_id}:
+            return target, lone
+    raise HTTPException(status_code=409, detail="These two people are in different trees that have other members; joining trees is not available")
+
+
 @app.post("/family/relationships", status_code=201, tags=["relationships"])
 async def add_relationship(payload: RelationshipIn, principal: CurrentUser, db: OrmSession = Depends(get_db)):
     if payload.kind not in models.Relationship.PRIMITIVES:
@@ -614,21 +688,22 @@ async def add_relationship(payload: RelationshipIn, principal: CurrentUser, db: 
     left = access.person_or_404(db, payload.from_person_id)
     right = access.person_or_404(db, payload.to_person_id)
 
-    # Writing needs a place in the tree: at least one end is in a family the caller belongs to.
-    # The other end is either in one too, or is a member who agrees to be linked (their own
-    # who_can_add_family setting). A stranger's tree, and a person nobody here knows, are
-    # not there to be stitched onto.
-    family_left = access.load_family(db, principal.user_id, left.id)
-    family_right = family_left if right.id in family_left.people else access.load_family(db, principal.user_id, right.id)
-    if not (family_left.viewer_belongs or family_right.viewer_belongs):
-        raise access.not_found()
-    for person, family in ((left, family_left), (right, family_right)):
-        if not family.viewer_belongs and not person.user_id:
-            raise access.not_found()
+    # Writing needs a contributor's role in the tree. Two people from different trees can be linked
+    # only when one tree is the caller's alone (nobody else holds a role in it): that adds a
+    # private tree of theirs to one they may contribute to, and shows nobody anything new.
+    # Joining trees that have other members is a decision of its own and is not available.
+    family = access.load_family(db, principal.user_id, left.id)
+    absorbed: access.Family | None = None
+    if right.id not in family.people:
+        other = access.load_family(db, principal.user_id, right.id)
+        family, absorbed = _join_plan(db, principal, family, other)
+    else:
+        access.require_role(family, "contributor")
+    for person in (left, right):
         access.may_link_member(principal, person.user_id)
 
-    if family_left is family_right:
-        edges = family_left.edges
+    if absorbed is None:
+        edges = family.edges
     else:
         edges, _people, _rows = graph.load_component(db, {left.id, right.id})
     integrity.check_role(payload.kind, payload.role)
@@ -639,6 +714,13 @@ async def add_relationship(payload: RelationshipIn, principal: CurrentUser, db: 
     data.update(from_person_id=from_id, to_person_id=to_id)
     edge = models.Relationship(id=new_id("rel"), asserted_by=principal.user_id, **data)
     db.add(edge)
+    if absorbed is not None:
+        # Their private tree is now part of the other: the role it gave them must not outlive it.
+        db.execute(
+            delete(models.Membership).where(
+                models.Membership.user_id == principal.user_id, models.Membership.person_id.in_(absorbed.people)
+            )
+        )
     try:
         db.commit()
     except IntegrityError:
@@ -657,6 +739,19 @@ async def add_relationship(payload: RelationshipIn, principal: CurrentUser, db: 
     }
 
 
+def _may_change_link(db: OrmSession, principal, edge: models.Relationship, verb: str) -> None:
+    """The one who asserted a link, if still a contributor; an owner of the tree; platform staff as before."""
+    family = access.load_family(db, principal.user_id, edge.from_person_id)
+    if family.can("owner") or (family.can("contributor") and edge.asserted_by == principal.user_id):
+        return
+    if principal.is_admin:
+        roles.record(db, "admin_change_link", principal.user_id, None, edge.from_person_id, f"{verb} {edge.kind}")  # staff acting outside the tree's own rules
+        return
+    if not family.viewer_belongs:
+        raise HTTPException(status_code=404, detail="Relationship not found")
+    raise HTTPException(status_code=403, detail=f"Only the contributor who asserted this link, or an owner, can {verb} it")
+
+
 @app.patch("/family/relationships/{relationship_id}", tags=["relationships"])
 def update_relationship(
     relationship_id: str,
@@ -668,8 +763,7 @@ def update_relationship(
     edge = db.get(models.Relationship, relationship_id)
     if edge is None:
         raise HTTPException(status_code=404, detail="Relationship not found")
-    if edge.asserted_by != principal.user_id and not principal.is_admin:
-        raise HTTPException(status_code=403, detail="Only the member who asserted this edge can change it")
+    _may_change_link(db, principal, edge, "change")
     integrity.check_role(edge.kind, payload.role)
     edge.role = payload.role
     db.commit()
@@ -681,8 +775,9 @@ def delete_relationship(relationship_id: str, principal: CurrentUser, db: OrmSes
     edge = db.get(models.Relationship, relationship_id)
     if edge is None:
         raise HTTPException(status_code=404, detail="Relationship not found")
-    if edge.asserted_by != principal.user_id and not principal.is_admin:
-        raise HTTPException(status_code=403, detail="Only the member who asserted this edge can remove it")
+    _may_change_link(db, principal, edge, "remove")
+    people = access.load_family(db, principal.user_id, edge.from_person_id).people
+    memberships.refuse_if_orphaning(db, people, set(), "this link", removed_edge=edge.id)
     db.execute(
         delete(models.Confirmation).where(
             models.Confirmation.target_type == "relationship", models.Confirmation.target_id == relationship_id
@@ -732,7 +827,7 @@ def tree(
                 "sibling_kind": sibling_kinds.get(member.id),
                 "more": graph.has_more(edges, member.id, shown),
                 "mine": member.id in family.mine,
-                "editable": access.can_edit(principal, member),
+                "editable": access.can_edit(principal, member, family),
             }
         )
     # Full siblings before half siblings, closest relations first.
@@ -750,6 +845,7 @@ def tree(
         "root": person.id,
         "depth": depth,
         "me": me.id if me else None,
+        "my_role": family.role,
         "family_size": len(family.people),
         "truncated": any(node["more"] for node in nodes),
         "nodes": nodes,
@@ -762,7 +858,7 @@ def tree(
                 "role": e.role,
                 "status": e.status,
                 # The server decides who may take a link back, so the screen only offers what would be allowed.
-                "removable": e.asserted_by == principal.user_id or bool(principal.is_admin),
+                "removable": bool(principal.is_admin) or family.can("owner") or (family.can("contributor") and e.asserted_by == principal.user_id),
             }
             for e in links
         ],
@@ -856,7 +952,7 @@ async def confirm_person(
     """
     person = access.person_or_404(db, person_id)
     family = access.load_family(db, principal.user_id, person_id)
-    access.require_belongs(family)
+    access.require_role(family, "contributor")  # corroborating is a contribution: a viewer only reads
     me = access.my_person(db, principal.user_id)
     if me is None:
         raise HTTPException(status_code=400, detail="Add yourself to the tree before confirming others")
@@ -910,6 +1006,9 @@ async def confirm_person(
         )
     ).all():
         confirmer = access.my_person(db, confirmation.member_id)
+        # Only confirmations from members who may still contribute count.
+        if roles.role_in(db, confirmation.member_id, family.people) not in ("contributor", "owner"):
+            continue
         if confirmer is not None and graph.closeness(edges, confirmer.id, person_id) <= CLOSE_ENOUGH:
             close_confirmations += 1
 
@@ -964,7 +1063,10 @@ def list_disputes(principal: CurrentUser, db: OrmSession = Depends(get_db)):
 def add_heritage(payload: HeritageIn, principal: CurrentUser, db: OrmSession = Depends(get_db)):
     if payload.person_id:
         access.person_or_404(db, payload.person_id)
-        access.require_belongs(access.load_family(db, principal.user_id, payload.person_id))
+        access.require_role(access.load_family(db, principal.user_id, payload.person_id), "contributor")
+        count = db.scalar(select(func.count()).select_from(models.HeritageItem).where(models.HeritageItem.person_id == payload.person_id))
+        if (count or 0) >= MAX_ITEMS_PER_PERSON:
+            raise HTTPException(status_code=409, detail=f"A person's archive holds at most {MAX_ITEMS_PER_PERSON} items")
     item = models.HeritageItem(
         id=new_id("her"),
         uploaded_by=principal.user_id,
@@ -973,11 +1075,22 @@ def add_heritage(payload: HeritageIn, principal: CurrentUser, db: OrmSession = D
     db.add(item)
     db.commit()
     db.refresh(item)
+    return {"id": item.id, "kind": item.kind, "title": item.title}
+
+
+def _item_view(r: models.HeritageItem, principal, family: access.Family | None) -> dict:
+    mine = r.uploaded_by == principal.user_id
     return {
-        "id": item.id,
-        "title": item.title,
-        "source_url": item.source_url,
-        "note": "The original file is preserved untouched; AI enhancements are stored separately.",
+        "id": r.id,
+        "kind": r.kind,
+        "title": r.title,
+        # The text of a written memory. Plain text: the screen shows it as text, never as markup.
+        "story": r.transcript if r.kind == "story" else None,
+        # Only a file of ours is linked from the screen; an outside address is not opened for readers.
+        "file_url": r.source_url if r.source_url.startswith("/media/") else None,
+        "happened_on": r.happened_on,
+        "mine": mine,
+        "can_delete": bool(family and ((mine and family.can("contributor")) or family.can("owner"))),
     }
 
 
@@ -989,28 +1102,35 @@ def list_heritage(
     db: OrmSession = Depends(get_db),
 ):
     stmt = select(models.HeritageItem).order_by(models.HeritageItem.created_at.desc())
+    family = None
     if person_id:
         access.person_or_404(db, person_id)
-        access.require_can_read(db, principal, access.load_family(db, principal.user_id, person_id))
+        family = access.load_family(db, principal.user_id, person_id)
+        access.require_can_read(db, principal, family)
         stmt = stmt.where(models.HeritageItem.person_id == person_id)
     else:
         # With no person named, only what the caller uploaded themselves.
         stmt = stmt.where(models.HeritageItem.uploaded_by == principal.user_id)
     rows = db.scalars(stmt.limit(min(limit, 200))).all()
-    return {
-        "items": [
-            {
-                "id": r.id,
-                "kind": r.kind,
-                "title": r.title,
-                "source_url": r.source_url,
-                "enhanced_url": r.enhanced_url,
-                "ai_summary": r.ai_summary,
-                "happened_on": r.happened_on,
-            }
-            for r in rows
-        ]
-    }
+    return {"items": [_item_view(r, principal, family) for r in rows]}
+
+
+@app.delete("/family/heritage/{item_id}", status_code=204, tags=["heritage"])
+def delete_heritage(item_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """Its author (while they may still contribute) or an owner of the tree. A stranger is told it does not exist."""
+    item = db.get(models.HeritageItem, item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+    if item.person_id:
+        family = access.load_family(db, principal.user_id, item.person_id)
+        if not family.viewer_belongs or (item.person_id not in family.people):
+            raise HTTPException(status_code=404, detail="Item not found")
+        if not ((item.uploaded_by == principal.user_id and family.can("contributor")) or family.can("owner")):
+            raise HTTPException(status_code=403, detail="Only its author, or an owner of the tree, can remove it")
+    elif item.uploaded_by != principal.user_id:
+        raise HTTPException(status_code=404, detail="Item not found")
+    db.delete(item)
+    db.commit()
 
 
 @app.get("/family/timeline/{person_id}", tags=["heritage"])
@@ -1019,9 +1139,9 @@ def timeline(person_id: str, principal: CurrentUser, db: OrmSession = Depends(ge
     access.require_can_read(db, principal, access.load_family(db, principal.user_id, person_id))
     entries = []
     if person.birth_date:
-        entries.append({"date": person.birth_date, "kind": "birth", "label": f"Born in {person.birth_place or 'unknown place'}"})
+        entries.append({"date": person.birth_date, "kind": "birth", "label": f"Born in {person.birth_place}" if person.birth_place else "Born"})
     if person.death_date:
-        entries.append({"date": person.death_date, "kind": "death", "label": f"Died in {person.death_place or 'unknown place'}"})
+        entries.append({"date": person.death_date, "kind": "death", "label": f"Died in {person.death_place}" if person.death_place else "Died"})
     for item in db.scalars(
         select(models.HeritageItem).where(models.HeritageItem.person_id == person_id)
     ).all():

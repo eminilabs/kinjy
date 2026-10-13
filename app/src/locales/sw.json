@@ -176,7 +176,6 @@
   "landing.plan.premiumCta": "Chagua Premium",
   "landing.plan.premium1": "Yote ya Basic",
   "landing.plan.premium2": "Algoriti zote 15",
-  "landing.plan.premium3a": "Heritage AI",
   "landing.plan.premium3b": "Video ya 4K",
   "landing.plan.premium4": "Creator Studio Pro",
   "landing.plan.premium5": "Washa au zima matangazo (yamewashwa kwa chaguo-msingi)",
@@ -222,7 +221,7 @@
   "landing.story.draftTitle": "Safari yetu ya siku tatu kuvuka Vercors",
   "landing.story.draftMeta": "Maelezo na picha 24.",
   "landing.story.heritageTitle": "Historia ya familia yako, ikirithishwa.",
-  "landing.story.heritageText": "Jengeni mti wenu pamoja, kila uhusiano ukithibitishwa na ndugu zako, na fungua kumbukumbu ambapo familia huweka inayoikumbuka.",
+  "landing.story.heritageText": "Jengeni mti wenu pamoja, kila mtu akithibitishwa na wanaomjua, na fungua kumbukumbu ambapo familia huweka inayoikumbuka.",
   "landing.story.memorial": "KUMBUKUMBU",
   "landing.story.memorialMeta": "1938 – 2024 · kumbukumbu 142 zilizoshirikiwa",
   "landing.story.econTitle": "Pata mapato na mtandao unaoukuza.",
@@ -336,5 +335,8 @@
   "footer.devDocs": "Waendelezaji",
   "footer.aiGateway": "AI Gateway",
   "footer.algoMarket": "Soko la algoriti",
-  "footer.assistant": "Msaidizi wa Kinjy"
+  "footer.assistant": "Msaidizi wa Kinjy",
+  "family.person.born": "Kuzaliwa",
+  "family.person.died": "Kifo",
+  "family.person.dateNotRecorded": "Tarehe haijarekodiwa"
 }

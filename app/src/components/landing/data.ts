@@ -191,8 +191,8 @@ export const PLANS = [
   },
   {
     name: 'landing.plan.premium', price: '$9.99', cta: 'landing.plan.premiumCta', tone: 'night' as const,
-    // Heritage AI belongs to the family tree; the same swap as PricingTeaser.
-    features: ['landing.plan.premium1', 'landing.plan.premium2', FEATURES.familyTree ? 'landing.plan.premium3a' : 'landing.plan.premium3b', 'landing.plan.premium4', 'landing.plan.premium5'],
+    // Heritage AI was a Premium line here until it was removed: nothing like it exists (see NOT-DONE.md, FT-07).
+    features: ['landing.plan.premium1', 'landing.plan.premium2', 'landing.plan.premium3b', 'landing.plan.premium4', 'landing.plan.premium5'],
   },
 ]
 

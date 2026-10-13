@@ -10,7 +10,6 @@ import MemorialAnatomy from '@/components/memorials/MemorialAnatomy'
 import VerificationPipeline from '@/components/memorials/VerificationPipeline'
 import QRScanDemo from '@/components/memorials/QRScanDemo'
 import LightCandleModal from '@/components/memorials/LightCandleModal'
-import RemembranceGatherings from '@/components/memorials/RemembranceGatherings'
 import WordRise from '@/components/family/WordRise'
 import { FEATURES } from '@/lib/features'
 
@@ -329,7 +328,6 @@ export default function Memorials() {
         {/* ── Section 5b — Remembrance gatherings (cross-link to Family) ── */}
         {/* The Reunion Agent gathers the family around a remembrance date: it goes
             with the family tree (lib/features.ts). */}
-        {FEATURES.familyTree && <RemembranceGatherings />}
       </div>
 
       {/* ── Section 6 — Legacy & tomorrow: two rows on the landing's

@@ -100,7 +100,7 @@ const ALL_MODULES: ModuleInfo[] = [
     name: 'Family Tree',
     tagline: 'Your bloodline, verified.',
     description:
-      'A verified genealogy graph with infinite levels, corroboration workflows and the question every family asks: “How are we related?”',
+      'A genealogy graph with as many generations as you record, confirmation by close relatives and the question every family asks: “How are we related?”',
     bullets: ['Verified relationship graph', 'Infinite generational levels', 'Path-finder between any two'],
     connections: ['A', 'D', 'I', 'N'],
     cta: { label: 'Explore Family Tree →', to: '/family' },

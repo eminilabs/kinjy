@@ -176,7 +176,6 @@
   "landing.plan.premiumCta": "选择 Premium",
   "landing.plan.premium1": "Basic 的全部内容",
   "landing.plan.premium2": "全部 15 种算法",
-  "landing.plan.premium3a": "Heritage AI",
   "landing.plan.premium3b": "4K 视频",
   "landing.plan.premium4": "Creator Studio Pro",
   "landing.plan.premium5": "可开启或关闭广告（默认开启）",
@@ -222,7 +221,7 @@
   "landing.story.draftTitle": "我们穿越韦科尔的三天",
   "landing.story.draftMeta": "笔记与 24 张照片。",
   "landing.story.heritageTitle": "你家族的故事，传下去。",
-  "landing.story.heritageText": "和家人一起搭建家族树，每一条关系都由亲属确认，并开设纪念页，让家人留下他们记得的事。",
+  "landing.story.heritageText": "和家人一起搭建家族树，每个人都由熟悉他的人确认，并开设纪念页，让家人留下他们记得的事。",
   "landing.story.memorial": "纪念",
   "landing.story.memorialMeta": "1938 – 2024 · 142 份回忆",
   "landing.story.econTitle": "随着你发展的网络一起获得收益。",
@@ -336,5 +335,8 @@
   "footer.devDocs": "开发者",
   "footer.aiGateway": "AI 网关",
   "footer.algoMarket": "算法市场",
-  "footer.assistant": "Kinjy 助手"
+  "footer.assistant": "Kinjy 助手",
+  "family.person.born": "出生",
+  "family.person.died": "逝世",
+  "family.person.dateNotRecorded": "未记录日期"
 }

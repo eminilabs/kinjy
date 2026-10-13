@@ -15,7 +15,7 @@ const TIERS = [
     name: 'Premium',
     price: '$9.99',
     line: FEATURES.familyTree
-      ? 'All 15 algorithms, Heritage AI, Creator Studio Pro, ads on or off.'
+      ? 'All 15 algorithms, Creator Studio Pro, ads on or off.'
       : 'All 15 algorithms, 4K video, Creator Studio Pro, ads on or off.',
     loved: true,
   },

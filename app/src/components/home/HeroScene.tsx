@@ -14,7 +14,7 @@ gsap.registerPlugin(ScrollTrigger)
  *  gives its orbit to the next one rather than leaving a gap in the ring. */
 const CANDIDATE_CHIPS: Array<{ label: string; tip: string; feature?: Feature }> = [
   { label: 'Circles', tip: 'Circles — your people, grouped your way' },
-  { label: 'Family Tree', tip: 'Family Tree — verified genealogy across generations', feature: 'familyTree' },
+  { label: 'Family Tree', tip: 'Family Tree — a family graph confirmed by those who know them', feature: 'familyTree' },
   { label: 'Marketplace', tip: 'Marketplace — trusted commerce with a fair margin', feature: 'marketplace' },
   { label: 'Messages', tip: 'Messages — end-to-end encrypted, auto-translated' },
   { label: 'Memorials', tip: 'Memorials — memory, kept with dignity' },

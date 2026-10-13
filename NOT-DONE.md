@@ -154,8 +154,8 @@ Each of these was checked against https://kinjy.com, not only locally.
 
 ## 3e. What /family promises, measured against what it does
 
-*Checked 20/08. Partly superseded on 06/10: see "Family tree (06/10)" at the end,
-which records what was found still open and what changed.*
+*Checked 20/08. Superseded: FT-03 to FT-07 (12/10) changed most of this. The current
+state of each promise is in "FT-07: what the product says about the family tree", at the end.*
 
 Checked on production 2026-08-20, promise by promise.
 
@@ -829,6 +829,233 @@ server lists things in, and the person you are viewing is not the origin.
 - The line between two parents of the same child belongs to the union and is computed
   from the final positions; a `spouse_of` link is not needed to draw it (and none is
   created). When the pair are also recorded spouses, the spouse line is the one drawn.
+
+
+### FT-01: invite someone to claim their place (built)
+
+A member who added a living adult to their tree can make a link for that person
+(`/tree/invite#t=<token>`) and pass it on themselves; Kinjy sends nothing and stores no
+contact. The token is 256 bits, stored only as a SHA-256, works once, lives 7 days, can be
+withdrawn, declined or superseded (one live link per person), and reads as the same plain
+404 whether it never existed, expired, was used, withdrawn or declined. A visitor learns only
+that a link is good; a signed-in member learns the invited person's given name. Accepting is an
+explicit button: it attaches the account to the node (`status` becomes `verified`, as when
+someone makes their own node), only for an adult account with no node yet (a second place is
+never merged), never the inviter, never a minor (unknown age counts as a minor). Every
+operation is audited (`family.invitation_events`, no token) and expired data is purged lazily
+(invitations 90 days after expiry, events 365 days). Guessing is limited per source address.
+
+Without touching auth-service or `/join`: the token rides in the URL fragment, is remembered
+in the browser, removed from the address bar, and the visitor goes to
+`/join?mode=signup|signin&next=/tree/invite`, which the sign-in page already honours.
+
+Limits, stated rather than hidden:
+- **Accepting makes the member belong to the tree**, so they then read it by the ordinary rule
+  (belonging); the link itself never opens anything. Whether a claimed relative should see the
+  whole connected family is an FT-02/FT-03 question.
+- The acceptance page now says, before the choice, what joining the tree lets the member see
+  (everyone connected through recorded links, their details, the archive kept for them) and do
+  (add relatives and links, confirm or dispute). Limiting that access (for example to a branch
+  or to the nearest relatives) means changing the read rules in family-service `access.py`;
+  that is FT-03, not done here.
+- The author of a node keeps edit rights on it after the claim (existing `created_by` rule).
+- A node under 18 cannot be invited, and a minor's account cannot accept; there is no
+  guardian-led path yet.
+- The rate limit is in memory and per replica; it resets when the service restarts.
+- An account deleted later keeps `Person.user_id` pointing at it: no consumer of
+  `user.deletion_requested` exists in family-service (outside this task's scope).
+- Invitations arriving through `/join?ref=` are not affiliate invitations: no sponsor credit
+  is created, and registration proceeds as it does today.
+- Browser flows (inviter panel, visitor, sign-in round trip, accept, phone) were run with
+  headless Chrome scripts kept outside the repository.
+
+### FT-02: roles in a family tree (built)
+
+A role is held through a membership (`family.memberships`), anchored on the member's own place;
+being a relative gives nothing. **Viewer** reads. **Contributor** adds relatives and links, edits
+and removes what they added, confirms or disputes, adds to the archive, and invites Viewers onto
+nodes they added. **Owner** also edits or removes any node that is not a member's, removes any
+link, manages members (list, change role, remove) and invites Viewers or Contributors. A tree
+always keeps an owner (no demoting, removing or leaving as the last one, and a last owner's own
+place cannot be deleted while others hold roles). Readers admitted only by the owner's
+`who_can_see_family` stay outside membership and read-only. Invitations carry the role (Viewer by
+default) and stop working if the inviter loses the authority to grant it. Confirmations only count
+from members who may still contribute. The server decides everything; `permissions` returns
+`role`, `can_manage_members`, `invite_roles` and the existing flags.
+
+Migration (once, at startup; `family.markers`): existing members become Contributors, so nobody
+loses what they could do. An Owner is named only when exactly one member of a tree added their
+*own* place themselves; any other tree is written to `family.ownership_reviews` and has no owner
+until a person settles it (there is no tool for that yet). People without an account, or without a
+recorded author, never get a membership.
+
+Decisions and limits, stated rather than hidden:
+- **Joining two trees is not done by linking.** A link between two trees is refused unless the
+  second tree is the caller's alone (nobody else holds a role in it); that one is absorbed and the
+  role it gave them goes with it. Linking into another member's tree (previously allowed with the
+  member's `who_can_add_family` consent) now returns 404: use an invitation. Real fusion needs its own design.
+- **Platform admins** keep, for now, the edit/delete access family-service already gave them, distinct from the roles. Whether a dedicated audit trail is needed for it: yes, it should be logged before it is used in production (nothing records it today). The split rule applies to them too.
+- **A viewer may correct the personal details of their own place, and nothing else**: they cannot remove it, create or link people, confirm, dispute, invite or manage members. Contributors and owners may still remove their own place.
+- **Trees left without an owner** by the migration (see `ownership_reviews`) cannot have members
+  managed or contributors invited; contributors keep what they had.
+- **Removing a person or a link that would split a tree** is refused (409, naming who would be left) unless every part keeps an owner; a tree that had no owner is left as it is. As a consequence a person cannot be unlinked from the tree, only removed, unless their part has its own owner.
+- The members panel appears on the owner's own place; an owner with no place of their own (old
+  data) has no screen for it yet.
+
+### FT-04: GEDCOM export (built)
+
+An owner can download their tree as GEDCOM 5.5.1 (UTF-8), after a preview with the numbers
+(`POST /family/persons/{id}/export`, preview at `.../export/preview`). Export only: there is no
+import. Only owners may export: being allowed to read a tree is not being allowed to send it out of
+Kinjy (a contributor, a viewer, a reader admitted by `who_can_see_family`, a stranger and platform
+staff are refused). No photos, documents or file links.
+
+- **Hidden by default.** A person is written in full only if explicitly recorded as deceased (flag or
+  death date) *and* verified. Nobody is judged dead by age. Everyone else is `Private`: no name, sex,
+  dates, places or notes, but still in the structure, so the file shows that they exist and how they are
+  related. The preview, the screen and the file's own header say so, with the counts (living or not
+  recorded as deceased; record not verified).
+- **No invented roles.** HUSB/WIFE come only from the father/mother role a parent link records.
+  Unknown or clashing roles are left out of the family and counted; couples with no recorded roles,
+  guardian links, declared siblings and disputed links are left out and counted, in the preview and in the header.
+- **Recorded:** `family.export_events` (who, when, from which person, people, included, hidden;
+  never the content), kept 365 days; five exports an hour per member (in memory, per replica).
+- Limits: a tree over 4000 people is refused rather than cut; the number of people is not hidden by the masking;
+  the file name is `kinjy-family-YYYYMMDD.ged` (the browser builds it if the server header is not readable);
+  GEDCOM files produced were checked with a strict structural reader written for the tests, not with
+  third-party genealogy software.
+- The public `/family` page says "Export anytime": that promise now has a basis for owners (see FT-07).
+
+### FT-03: sharing one branch (built)
+
+A viewer can be limited to a branch: a person, everyone descended from them and the partners of
+those (only the partners themselves, never their parents or other relatives), plus their own place.
+It is applied where the tree is loaded (`access.load_family`, `access.reachable`), so the tree, a
+person, search, the people list, paths, archive, timeline, duplicates, disputes, counts and the
+tree size all show the branch and nothing else. A branch whose root is removed shows less, never
+more. Branches are viewer-only: promoting a member clears it. An owner sets it on an invitation or
+on a member, and the invitee is told exactly what will be hidden. Changes of role, branch and
+joining are in `family.access_events` (ids only, kept 365 days).
+
+- Limits: a co-parent who is not recorded as a spouse is outside the branch; a reader admitted only
+  by the owner's `who_can_see_family` setting still reads the whole tree (that is the owner's explicit,
+  separate choice); exports are owner-only so never limited.
+
+### FT-05: trusted contacts (built)
+
+An owner names up to three members who could take over the tree. Naming gives nothing and the
+contact must accept. To take over they open a succession request: every owner is told, any owner
+or the contact can cancel, and only after 30 days untouched does the contact become an owner (nobody
+is removed). Refused for minors and for members limited to a branch; it lapses if the contact leaves
+the tree or the one who named them is no longer an owner. There is no signal in this service that an
+account is gone, so the owners' silence is what the waiting period measures. Applied by an hourly
+sweep and whenever either side looks at it.
+
+- Limits: the notification to owners is best effort (an in-app notice); nothing is sent by e-mail; an
+  ownerless tree (`ownership_reviews`) has nobody who can name a contact.
+
+### FT-06: heritage and AI, redefined (partly built, AI not)
+
+No safe, real AI is available: the gateway produces only simulated output, and family data may not
+leave local providers. So **nothing is generated and nothing is presented as AI**. Built: a person's
+written memories (plain text, by contributors and owners, removed by their author or an owner, at
+most 100 per person), a timeline from the person's own record and their dated memories, links
+accepted only to our files (`/media/`) or https, no AI fields in the API. Not built: photo, document
+and recording upload for people (no media-service flow and third-party files are sensitive),
+transcription, restoration, biographies, documentary, voice interview, year in review, reunion
+planner. They need a local model provider in ai-service and a decision on files of other people.
+
+### FT-07: what the product says about the family tree (audit 12/10, closed 13/10)
+
+Honoured and true in the app: private by default; roles; invitation to claim a place; sharing one branch
+(read-only); trusted contacts with a waiting period; GEDCOM export for owners (living and unverified
+hidden, no media); person confirmation with three close relatives for the deceased; how-are-we-related and
+derived relationships; written memories and a timeline.
+
+Corrected (every language that carries the text):
+- `/family` (still hidden): heritage AI, narrated documentary, restoration, voice interview, year in review,
+  reunion planner and "trees merge" removed or replaced; "verified" now says what is verified (people, not
+  links); sharing, trusted contacts and export state their real limits; sign-up buttons. Simulated demo
+  components deleted; `VerificationJourney` / `PathFinder` captions corrected.
+- Landing: `landing.story.heritageText` (5 locales, "every link confirmed" removed) and the Premium line
+  "Heritage AI" (`landing.plan.premium3a`, 5 locales) removed.
+- Pricing: "heritage graph", "full export of ... family tree", "family records follow your succession
+  settings" (gated variants) now say what exists; the home teaser no longer lists Heritage AI;
+  `ModuleConstellation`, `HeroScene`, `platform/data.ts` and the platform visual no longer say "verified
+  genealogy across infinite generations".
+- Assistant knowledge base (`family-tree`, `heritage-ai`, `heritage-interview`, `family-year-review`, five
+  languages): rewritten to what exists, the last three now say "not available yet" and what to do instead;
+  deep links stay on the marketing routes the validator allows. `validate-kb.cjs` passes (49 entries).
+- Samples and demos: a feed sample claiming "restored ... with Heritage AI", a home sample saying
+  "verified our family tree", and the `/app` demo's "VERIFIED" edges ("RECORDED") corrected.
+- The Developers page no longer has a family-tree API example (there is no public `/v1` family API), and
+  the Memorials page no longer has a gated "remembrance gatherings" block (invitations and attendance do not
+  exist).
+
+**Not changed on purpose; no clear link to the family tree** (audit, with a proposed fix; each changes the
+meaning of a claim, so each needs your decision):
+- `platform/data.ts` Digital Graveyard card, bullet "Legacy contacts & succession": succession for
+  *memorials* exists (up to three administrators); *legacy contacts* for memorials are "not available yet" on
+  `/memorials` itself. Propose: "Memorial administrators & succession".
+- `pages/PostPage.tsx` "Thirteen modules": hard-coded; the real number is `OPEN_MODULES`. Propose: `spelled(OPEN_MODULES)`.
+- `creators/BadgeRow.tsx` "Family Historian" badge: nothing awards it. Propose: remove or mark as an example.
+- Developers page (`family.path.find` in `AgentReadable`, `/v1/memorials/...`): there is no public `/v1` API
+  at all; the page is a mock. Propose: a visible "preview, not available" label, or removal.
+- Pricing "Messenger (E2E)" (see the messenger notes above) and the visible "Full export of posts, messages and
+  media": nobody has checked that this export exists. Propose: verify, then keep or reword.
+- `landing.plan.premium3b` "4K video": not checked.
+- `app/.kb-seed.cjs` is a generated, tracked bundle of the knowledge base: stale until reseeded
+  (`node seed-kb.cjs ...`); check the production table before enabling the assistant.
+- `components/home/HeritageBand.tsx`, `ModuleConstellation`/`PricingTeaser` variants: dead or unused code
+  that still carries the old wording; harmless, delete when convenient.
+
+**`/family` stays off.** Everything the flag switches in the visible product is now true, so it could be
+opened; it is the product owner's decision. Before opening: reseed or check the assistant KB (it
+answers from whatever was seeded), and read the page once in the five languages' navigation (the page
+itself is English only).
+
+#### Release gates before the family-tree functions go to production
+1. **Journal of administration actions.** Platform staff keep the technical power family-service has always
+   given them over a tree: change or remove a link by its id, and edit or remove a node of a tree its owner
+   opened to everyone. They have **no** power to read a private tree. Every such use outside the tree's own
+   rules is now written to `family.access_events` (`admin_change_link`, `admin_edit_person`,
+   `admin_delete_person`: who, which tree, what; no content), and nothing is written when a staff member acts as
+   an ordinary owner. Still required before production: a place where staff can *read* that journal (no screen
+   or endpoint exists), a retention decision (365 days today), and a decision whether this power should exist
+   at all. Admin actions in other services are not covered by this.
+2. **Trees without an owner** (`family.ownership_reviews`). The migration named an owner only where the history
+   shows one beyond doubt, and wrote every other tree to this table (152 on the development data). In such
+   a tree contributors keep what they had, nobody can manage members, invite contributors, export or name a
+   trusted contact. **Nothing makes anyone an owner automatically.** Recommended process, to build as its own task:
+   - an ownership claim, opened by a member who holds a role in the tree, with a short written reason;
+   - every member of the tree is told; the claim runs a waiting period (30 days, as for succession) during which
+     any member can object; with two or more other members, a majority of them must approve instead of waiting;
+   - if nobody objects (or the majority approves) the claimant becomes an owner; if members object, the
+     claim goes to staff for review, with identity checks and a written, journalled decision;
+   - every step goes to the access journal; a tree with a single member and no objection follows the waiting period;
+   - new trees always start with an owner (already true), so the table only shrinks.
+   Until it exists the list is a task list for support, not an automatic grant.
+3. **A real AI feature** (below) must not ship before its own gate.
+
+#### Can IleAI feed FT-06? Evaluation (no code written, no data sent)
+- Facts found: `.env` holds an `ILEAI_API_KEY` (its value was not read or printed); ai-service has **no
+  IleAI provider** (its registry knows `mock`, `kimi`, `deepseek`, `anthropic`, `openai`, and only `mock` counts
+  as local); a web search found no documentation, pricing, hosting location or data policy for a service by
+  that name, so nothing about it can be confirmed.
+- Rule in force: the gateway sends data marked `sensitive` only to local providers. Family data (living
+  relatives, minors, the deceased) is sensitive. An IleAI reached over the internet would therefore be refused
+  for it, unless it is shown to be self-hosted or covered by an agreement that it stores nothing and does not
+  train on inputs.
+- Verdict: **not feasible today**, and not attempted. It becomes feasible if all of these hold: (1) its
+  documentation and data policy are provided and show where it runs, what it keeps and whether it trains on
+  inputs; (2) a provider entry is added in ai-service's gateway (outside Family Tree, so a separate decision)
+  with `local` only if truly local, or a new, explicit "approved processor" class; (3) the first use is narrow
+  and reversible: summarise one memory a member has written, for a verified deceased person, on an owner's
+  explicit opt-in per tree, shown as a draft labelled with provider and model, never written to the graph,
+  published only by a person; (4) tested first on synthetic text only; (5) calls are metered by ai-service as
+  now (tokens, not content) and listed in the access journal.
+- Not suitable even then: restoring photos, transcribing recordings of other people, writing biographies,
+  inferring any relationship or origin: they need files and facts that Kinjy neither stores nor may invent.
 
 ## Layout, cards and the black /hub (06/10)
 

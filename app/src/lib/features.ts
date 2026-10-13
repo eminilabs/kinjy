@@ -21,8 +21,9 @@ export const FEATURES = {
   familyTreeApp: true,
   /**
    * The family tree as the public site presents it: the /family page and every line
-   * of copy that advertises it. Off on purpose while that copy promises what is not
-   * built (sharing by branch, export, the Heritage AI screens); see NOT-DONE.md.
+   * of copy that advertises it (landing, pricing, platform, home). All of it now says only
+   * what the app keeps (NOT-DONE.md, FT-07). Left off until the product owner decides to
+   * open it, after reseeding or checking the assistant's knowledge base.
    */
   familyTree: false,
   /** The Kinjy Assistant: the floating orb and the /assistant page. */

@@ -31,6 +31,7 @@ const Communities = lazy(() => import('./pages/app/Communities'))
 const Forums = lazy(() => import('./pages/app/Forums'))
 const Messages = lazy(() => import('./pages/app/Messages'))
 const FamilyTreeApp = lazy(() => import('./pages/app/FamilyTree'))
+const FamilyInvite = lazy(() => import('./pages/app/FamilyInvite'))
 const Graveyard = lazy(() => import('./pages/app/Graveyard'))
 const MemorialPublic = lazy(() => import('./pages/MemorialPublic'))
 const Marketplace = lazy(() => import('./pages/app/Marketplace'))
@@ -111,6 +112,8 @@ export default function App() {
           <Route path="/forums" element={<Forums />} />
           <Route path="/messages" element={<Messages />} />
           <Route path="/tree" element={gated('familyTreeApp', <FamilyTreeApp />, '/hub')} />
+          {/* Where a family invitation link lands. Public: the person invited may have no account yet. */}
+          <Route path="/tree/invite" element={gated('familyTreeApp', <FamilyInvite />, '/hub')} />
           <Route path="/graveyard" element={<Graveyard />} />
           {/* Where a memorial's QR code leads. Public: whoever scans a headstone
               usually has no account. */}

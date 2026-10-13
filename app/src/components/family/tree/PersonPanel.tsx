@@ -1,16 +1,24 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AlertTriangle, ArrowLeft, Crosshair, GitBranch, Link2, Pencil, Plus, ShieldCheck, Trash2 } from 'lucide-react'
 import { useAppTheme } from '@/components/appdemo/theme'
 import { useApi } from '@/hooks/useApi'
 import { ApiError, kaluta, type HowRelated, type ParentRole, type PersonDetail, type RelativeKind } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import ArchivePanel from './ArchivePanel'
+import ExportPanel from './ExportPanel'
+import InvitePanel from './InvitePanel'
 import LinkExisting from './LinkExisting'
+import MembersPanel from './MembersPanel'
+import { ROLE_LABEL, ROLE_MEANING } from './treeRoles'
 import PersonForm from './PersonForm'
+import { TrustedContactMine, TrustedContactOwner } from './TrustedContactPanel'
 import RelativeQuestions from './RelativeQuestions'
 import { emptyValues, toFields, valuesFrom, type FormValues } from './formValues'
 import { isReady, noAnswers, toExtras, type KnownParent } from './relativeExtras'
 import StatusIcon from './Status'
-import { STATUS_LABEL, fullName, initials, lifespan } from './layout'
+import { formatDate, lifeRows } from './lifeDates'
+import { STATUS_LABEL, fullName, initials } from './layout'
 
 const RELATIVES: Array<{ id: RelativeKind; label: string; note?: string }> = [
   { id: 'parent', label: 'Parent' },
@@ -91,6 +99,7 @@ export default function PersonPanel({
   onClose?: () => void
 }) {
   const { tok } = useAppTheme()
+  const { t, i18n } = useTranslation()
   const detail = useApi<PersonDetail>(() => kaluta.family.person(personId), [personId])
   const [mode, setMode] = useState<Mode>({ kind: 'view' })
   const [busy, setBusy] = useState(false)
@@ -214,12 +223,17 @@ export default function PersonPanel({
         ) : (
           person.relation_to_me && <Fact label="Related to you as">{person.relation_to_me}</Fact>
         )}
-        {lifespan(person) && <Fact label="Life">{lifespan(person)}</Fact>}
-        {person.birth_place && <Fact label="Born in">{person.birth_place}</Fact>}
-        {person.death_place && <Fact label="Died in">{person.death_place}</Fact>}
+        {lifeRows(person).map((row) => (
+          <Fact key={row.key} label={t(`family.person.${row.key}`)}>
+            {[row.date ? formatDate(row.date, i18n.language) : null, row.dateNotRecorded ? t('family.person.dateNotRecorded') : null, row.place]
+              .filter(Boolean)
+              .join(' · ')}
+          </Fact>
+        ))}
         {person.other_names && <Fact label="Also known as">{person.other_names}</Fact>}
         {person.gender && <Fact label="Gender">{person.gender}</Fact>}
         {relatives.length > 0 && <Fact label="In the tree">{relatives.join(' · ')}</Fact>}
+        {perms.role && <Fact label="Your role">{ROLE_LABEL[perms.role]}: {ROLE_MEANING[perms.role]}</Fact>}
         {person.biography && (
           <Fact label="About">
             <span className="whitespace-pre-wrap break-words">{person.biography}</span>
@@ -293,6 +307,18 @@ export default function PersonPanel({
               </button>
             </section>
           )}
+
+          <ArchivePanel personId={person.id} name={person.given_name} canAdd={perms.can_link} />
+
+          {perms.can_invite && <InvitePanel personId={person.id} name={person.given_name} roles={perms.invite_roles} />}
+
+          {perms.can_manage_members && person.is_me && <MembersPanel personId={person.id} />}
+
+          {perms.role === 'owner' && person.is_me && <TrustedContactOwner personId={person.id} />}
+
+          {person.is_me && <TrustedContactMine />}
+
+          {perms.role === 'owner' && person.is_me && <ExportPanel personId={person.id} />}
 
           {links.length > 0 && (
             <section className="mt-5 border-t border-white/10 pt-4" aria-labelledby="links-title">

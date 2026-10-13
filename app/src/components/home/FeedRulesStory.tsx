@@ -39,16 +39,16 @@ const POSTS: Record<string, Post> = {
   juma: {
     id: 'juma', author: 'Juma M.', avatarPos: '33% 0%', time: '1 hr',
     text: FEATURES.familyTree
-      ? 'My grandmother just verified our family tree back to 1890. Habari ya leo?'
+      ? 'My grandmother just confirmed our family tree back to 1890. Habari ya leo?'
       : 'My grandmother turned 90 today — the whole street came to sing. Habari ya leo?',
     family: FEATURES.familyTree, translated: true,
   },
   neema: {
     id: 'neema', author: 'Neema T.', avatarPos: '66% 0%', time: '3 hr',
     text: FEATURES.familyTree
-      ? 'New short film: how we restored my father’s 1968 wedding photo with Heritage AI.'
+      ? 'New short film: how we gathered my father’s 1968 wedding story from the whole family.'
       : 'New short film: three days on the dhows of Kilwa, subtitled in five languages.',
-    aiAssisted: true,
+    aiAssisted: !FEATURES.familyTree,
   },
 }
 

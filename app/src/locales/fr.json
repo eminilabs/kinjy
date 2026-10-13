@@ -176,7 +176,6 @@
   "landing.plan.premiumCta": "Choisir Premium",
   "landing.plan.premium1": "Tout le Basic",
   "landing.plan.premium2": "Les 15 algorithmes",
-  "landing.plan.premium3a": "Heritage AI",
   "landing.plan.premium3b": "Vidéo 4K",
   "landing.plan.premium4": "Creator Studio Pro",
   "landing.plan.premium5": "Activez ou désactivez les publicités (activées par défaut)",
@@ -222,7 +221,7 @@
   "landing.story.draftTitle": "Notre traversée du Vercors en trois jours",
   "landing.story.draftMeta": "Notes et 24 photos.",
   "landing.story.heritageTitle": "L’histoire de votre famille, transmise.",
-  "landing.story.heritageText": "Construisez votre arbre à plusieurs, chaque lien confirmé par vos proches, et ouvrez des mémoriaux où la famille dépose ses souvenirs.",
+  "landing.story.heritageText": "Construisez votre arbre à plusieurs, chaque personne confirmée par ceux qui la connaissent, et ouvrez des mémoriaux où la famille dépose ses souvenirs.",
   "landing.story.memorial": "MÉMORIAL",
   "landing.story.memorialMeta": "1938 – 2024 · 142 souvenirs partagés",
   "landing.story.econTitle": "Gagnez avec le réseau que vous faites grandir.",
@@ -336,5 +335,8 @@
   "footer.devDocs": "Développeurs",
   "footer.aiGateway": "AI Gateway",
   "footer.algoMarket": "Marketplace d’algorithmes",
-  "footer.assistant": "Assistant Kinjy"
+  "footer.assistant": "Assistant Kinjy",
+  "family.person.born": "Naissance",
+  "family.person.died": "Décès",
+  "family.person.dateNotRecorded": "Date non renseignée"
 }

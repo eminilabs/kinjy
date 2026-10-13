@@ -483,7 +483,7 @@ export function FamilyTreeVisual() {
   const reduced = useReducedMotion()
   return (
     <div className="cloud-card mx-auto w-full max-w-sm p-5">
-      <svg viewBox="0 0 360 230" className="w-full" role="img" aria-label="Nine-node verified family tree across three generations">
+      <svg viewBox="0 0 360 230" className="w-full" role="img" aria-label="Nine-node family tree across three generations">
         {TREE_EDGES.map(([a, b], i) => {
           const pa = TREE_NODES[a]
           const pb = TREE_NODES[b]

@@ -176,7 +176,6 @@
   "landing.plan.premiumCta": "Choose Premium",
   "landing.plan.premium1": "Everything in Basic",
   "landing.plan.premium2": "All 15 algorithms",
-  "landing.plan.premium3a": "Heritage AI",
   "landing.plan.premium3b": "4K video",
   "landing.plan.premium4": "Creator Studio Pro",
   "landing.plan.premium5": "Switch ads on or off (on by default)",
@@ -222,7 +221,7 @@
   "landing.story.draftTitle": "Our three-day crossing of the Vercors",
   "landing.story.draftMeta": "Notes and 24 photos.",
   "landing.story.heritageTitle": "Your family's story, passed on.",
-  "landing.story.heritageText": "Build your tree together, every link confirmed by your relatives, and open memorials where the family leaves what it remembers.",
+  "landing.story.heritageText": "Build your tree together, each person confirmed by those who know them, and open memorials where the family leaves what it remembers.",
   "landing.story.memorial": "MEMORIAL",
   "landing.story.memorialMeta": "1938 – 2024 · 142 memories shared",
   "landing.story.econTitle": "Earn with the network you grow.",
@@ -336,5 +335,8 @@
   "footer.devDocs": "Developers",
   "footer.aiGateway": "AI Gateway",
   "footer.algoMarket": "Algorithm marketplace",
-  "footer.assistant": "Kinjy Assistant"
+  "footer.assistant": "Kinjy Assistant",
+  "family.person.born": "Born",
+  "family.person.died": "Died",
+  "family.person.dateNotRecorded": "Date not recorded"
 }

@@ -13,7 +13,7 @@ function EndpointTree() {
   const rows = [
     ['GET', '/v1/users/:id', 'text-sky'],
     ['POST', '/v1/posts', 'text-success'],
-    FEATURES.familyTree ? ['GET', '/v1/family-tree/:id/path', 'text-sky'] : ['GET', '/v1/circles/:id/posts', 'text-sky'],
+    ['GET', '/v1/circles/:id/posts', 'text-sky'],
     ['POST', '/v1/memorials/:id/tributes', 'text-success'],
     FEATURES.marketplace ? ['GET', '/v1/marketplace/orders', 'text-sky'] : ['GET', '/v1/forums/:id/threads', 'text-sky'],
   ]
@@ -60,7 +60,7 @@ function WebhookPulses() {
 function ConsentMock() {
   const scopes = [
     ['Read your profile', true],
-    FEATURES.familyTree ? (['Read family tree (L1–L2)', true] as const) : (['Read your circles', true] as const),
+    (['Read your circles', true] as const),
     ['Post on your behalf', false],
   ] as const
   return (
