@@ -26,6 +26,35 @@ function Silhouette({ size }: { size: number }) {
 }
 
 /**
+ * The same, for a room rather than a person: two figures instead of one.
+ *
+ * A group with no photo used to borrow a member's face, and then - once it
+ * stopped doing that - showed the single silhouette above, which says "one
+ * person" about a room of eighteen hundred. Same palette, so a list of
+ * conversations reads as one set of avatars.
+ */
+function GroupSilhouette({ size }: { size: number }) {
+  return (
+    <svg
+      viewBox="0 0 40 40"
+      width={size}
+      height={size}
+      aria-hidden="true"
+      className="block"
+      style={{ width: size, height: size }}
+    >
+      <rect width="40" height="40" fill="#C9CCD1" />
+      {/* The one behind, set back and a little smaller, so two heads read as
+          two people rather than as one person drawn twice. */}
+      <circle cx="27.5" cy="16" r="5.5" fill="#F0F2F5" opacity="0.72" />
+      <path d="M18 34c0-6 4.3-9.6 9.5-9.6S37 28 37 34z" fill="#F0F2F5" opacity="0.72" />
+      <circle cx="15.5" cy="17" r="6.8" fill="#F0F2F5" />
+      <path d="M3.5 36c0-7.2 5.4-12 12-12s12 4.8 12 12z" fill="#F0F2F5" />
+    </svg>
+  )
+}
+
+/**
  * The one avatar in the app.
  *
  * Every surface used to render its own initials block, so an avatar was
@@ -40,6 +69,7 @@ export default function MemberAvatar({
   size = 36,
   ring = false,
   className,
+  group = false,
 }: {
   /** Without a handle there is nowhere to go, so it renders as a plain badge. */
   handle?: string | null
@@ -48,6 +78,8 @@ export default function MemberAvatar({
   size?: number
   ring?: boolean
   className?: string
+  /** A room rather than a person, which changes only what is drawn with no photo. */
+  group?: boolean
 }) {
   const name = displayName?.trim() || handle || 'Member'
   // The URL that failed to load, so a new URL (a changed photo) is tried again.
@@ -74,6 +106,8 @@ export default function MemberAvatar({
           onError={() => setBrokenUrl(avatarUrl ?? null)}
           className="h-full w-full object-cover"
         />
+      ) : group ? (
+        <GroupSilhouette size={size} />
       ) : (
         <Silhouette size={size} />
       )}

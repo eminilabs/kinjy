@@ -818,14 +818,38 @@ async def edit_group(
     }
 
 
+# Above this many people, an arrival is written into the thread and not pushed
+# to anybody. A room of a few dozen wants to know somebody joined; a room of
+# thousands does not want a notification each time, and neither does the member
+# who would receive one for every stranger who signs up.
+ANNOUNCE_PUSH_LIMIT = 50
+
+
 async def _announce_joined(
-    db: OrmSession, conversation_id: str, joined: list[str]
+    db: OrmSession,
+    conversation_id: str,
+    joined: list[str],
+    background: BackgroundTasks | None = None,
 ) -> None:
     """Tell the room that somebody new is in it.
 
     Everybody who was already there hears about it - which is the request, and
-    also how a group stops feeling like a list of strangers. The new arrivals
-    are not told about themselves.
+    also how a group stops feeling like a list of strangers.
+
+    Two things this must not do, both of which it did:
+
+    * **Notify a whole platform.** The welcome group holds every member, so an
+      arrival there was a notification to everybody about a stranger, every
+      time anybody registered. Past ANNOUNCE_PUSH_LIMIT the system line in the
+      thread is the record, and the live `conversation` event still refreshes
+      whoever has the room open.
+    * **Block the server while it does it.** Each push opens a database session
+      and talks to the push service, and this ran inline, once per member,
+      inside an async handler - so registering one account stopped
+      messaging-service answering *anything* for thirty seconds. They are
+      background tasks now, which is what the helper was always written for.
+
+    The new arrivals are not told about themselves.
     """
     conversation = db.get(models.Conversation, conversation_id)
     members = _participant_ids(db, conversation_id)
@@ -833,10 +857,14 @@ async def _announce_joined(
     title = (conversation.title if conversation else None) or "a group"
 
     await _publish_to_users(members, {"type": "conversation", "conversation_id": conversation_id})
+    if background is None or len(members) > ANNOUNCE_PUSH_LIMIT:
+        return
+    arrivals = set(joined)
     for uid in members:
-        if uid in set(joined):
+        if uid in arrivals:
             continue
-        _push_to_member(
+        background.add_task(
+            _push_to_member,
             uid,
             {
                 "kind": "group_join",
@@ -851,6 +879,7 @@ async def add_participants(
     conversation_id: str,
     payload: MembersIn,
     principal: CurrentUser,
+    background: BackgroundTasks,
     db: OrmSession = Depends(get_db),
 ):
     """Bring people into a group. Admins only.
@@ -890,7 +919,7 @@ async def add_participants(
     db.commit()
 
     if added:
-        await _announce_joined(db, conversation_id, added)
+        await _announce_joined(db, conversation_id, added, background)
     return {"added": added}
 
 
@@ -1056,7 +1085,11 @@ class WelcomeIn(BaseModel):
 
 
 @app.post("/internal/welcome/join", tags=["internal"])
-async def welcome_join(payload: WelcomeIn, db: OrmSession = Depends(get_db)):
+async def welcome_join(
+    payload: WelcomeIn,
+    background: BackgroundTasks,
+    db: OrmSession = Depends(get_db),
+):
     """Put a new member in the welcome group.
 
     Called by auth-service the moment an account exists. An internal HTTP call
@@ -1089,7 +1122,7 @@ async def welcome_join(payload: WelcomeIn, db: OrmSession = Depends(get_db)):
         db, conversation.id, _display_names({payload.user_id})[payload.user_id] + " joined Kinjy."
     )
     db.commit()
-    await _announce_joined(db, conversation.id, [payload.user_id])
+    await _announce_joined(db, conversation.id, [payload.user_id], background)
     return {"conversation_id": conversation.id, "joined": True}
 
 

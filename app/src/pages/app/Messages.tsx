@@ -395,6 +395,31 @@ function titleOf(conversation: Conversation, others: string[]): string {
   return others[0] ? `@${others[0].slice(0, 12)}` : 'Conversation'
 }
 
+/**
+ * The face of a conversation.
+ *
+ * A group has its own photo and its own name, so it gets both. It used to
+ * borrow the first other participant's avatar, which meant a group wore one of
+ * its members as its face - and an uploaded group photo was stored and then
+ * never drawn anywhere. With no photo it falls back to the initials of the
+ * group's name, which is at least about the group.
+ *
+ * A direct conversation is the other person, as before.
+ */
+function avatarFor(
+  conversation: Conversation,
+  others: string[],
+): { handle: string; display_name: string; avatar_url: string | null } | PersonBrief | undefined {
+  if (conversation.kind === 'group') {
+    return {
+      handle: '',
+      display_name: titleOf(conversation, others),
+      avatar_url: conversation.avatar_url ?? null,
+    }
+  }
+  return conversation.profiles?.[others[0]]
+}
+
 /** An avatar with the member's online dot. Never a link here: a tap means "write". */
 /**
  * Messenger's grouping: inside a run from one person the corners that face
@@ -409,10 +434,13 @@ function PresenceAvatar({
   profile,
   online,
   size = 36,
+  group = false,
 }: {
   profile: PersonBrief | { handle: string; display_name: string; avatar_url: string | null } | null | undefined
   online?: boolean
   size?: number
+  /** A room rather than a person: only changes what is drawn with no photo. */
+  group?: boolean
 }) {
   return (
     <span className="relative inline-flex shrink-0">
@@ -421,6 +449,7 @@ function PresenceAvatar({
         displayName={profile?.display_name ?? profile?.handle}
         avatarUrl={profile?.avatar_url}
         size={size}
+        group={group}
       />
       {online && (
         <span
@@ -1741,8 +1770,9 @@ export default function Messages() {
                           )}
                         >
                           <PresenceAvatar
-                            profile={conversation.profiles?.[others[0]]}
+                            profile={avatarFor(conversation, others)}
                             online={conversation.kind === 'direct' && presence[others[0]]?.online}
+                            group={conversation.kind === 'group'}
                             size={52}
                           />
                           <span className="min-w-0 flex-1">
@@ -1923,8 +1953,9 @@ export default function Messages() {
                   </Link>
                 ) : (
                   <PresenceAvatar
-                    profile={active.profiles?.[activeOthers[0]]}
+                    profile={avatarFor(active, activeOthers)}
                     online={active.kind === 'direct' && presence[activeOthers[0]]?.online}
+                    group={active.kind === 'group'}
                     size={44}
                   />
                 )}

@@ -230,6 +230,31 @@ if groups:
           thread.get("profiles", {}).get(fresh["id"], {}).get("display_name") == "Test Newcomer",
           str(list((thread.get("profiles") or {}).values())[:2]))
 
+print(BLANK + "Joining a room does not stall the server")
+
+# Registering adds the account to the welcome group, which holds every member
+# of the platform. Announcing that arrival used to send one notification per
+# member, inline, inside an async handler - each one opening a database
+# session and calling the push service. On a room of a couple of thousand that
+# blocked messaging-service entirely for about thirty seconds, so *every*
+# request to it timed out, not just this one.
+#
+# The bound is deliberately loose: this is about an O(members) stall, not about
+# milliseconds, and a loose bound is one that does not fail on a busy machine.
+import time as _time
+
+_started = _time.perf_counter()
+busy_t, busy = register("Test Arrival")
+_elapsed = _time.perf_counter() - _started
+check("registering into a large room is not an O(members) stall",
+      _elapsed < 20, f"took {_elapsed:.1f}s")
+
+_started = _time.perf_counter()
+r = c.get("/stickers", headers=H(busy_t))
+_after = _time.perf_counter() - _started
+check("and the service answers other requests straight after",
+      r.status_code == 200 and _after < 10, f"HTTP {r.status_code} in {_after:.1f}s")
+
 print(BLANK + "Messages that are more than one line")
 
 # A line break has to survive the round trip. The composer was an <input>,
