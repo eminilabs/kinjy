@@ -136,8 +136,7 @@ export default function CloudModeLab() {
           <h2 className="kl-h2 mt-4">Cloud mode. Our visual soul.</h2>
           <p className="kl-lead mt-5 max-w-lg">
             Soft translucent panels. Floating cards. Subtle depth. Low clutter. Configure your
-            ambient sky — Twilight, Dawn, Savanna, Ocean — or switch to Light, Dark, or System
-            anytime.
+            ambient sky — Twilight, Dawn, Savanna, Ocean — or switch to Light or System anytime.
           </p>
           <ul className="mt-6 space-y-2 text-sm text-[var(--kl-mid)]">
             <li className="flex items-center gap-2.5">
