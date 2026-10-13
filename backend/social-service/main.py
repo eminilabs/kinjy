@@ -3471,6 +3471,39 @@ def my_stats(principal: CurrentUser, db: OrmSession = Depends(get_db)):
         .where(models.Comment.author_id == principal.user_id, models.Comment.status == "published")
     ) or 0
 
+    # Thirty days, one row each, including the days with nothing on them: a
+    # chart drawn only from the days somebody posted says they post every day.
+    day = func.date_trunc("day", models.Post.created_at)
+    posted = {
+        d.date(): n
+        for d, n in db.execute(
+            select(day, func.count()).where(published, models.Post.created_at >= since).group_by(day)
+        ).all()
+    }
+    reaction_day = func.date_trunc("day", models.Reaction.created_at)
+    received = {
+        d.date(): n
+        for d, n in db.execute(
+            select(reaction_day, func.count())
+            .select_from(models.Reaction)
+            .join(models.Post, models.Post.id == models.Reaction.post_id)
+            .where(
+                models.Post.author_id == principal.user_id,
+                models.Reaction.created_at >= since,
+            )
+            .group_by(reaction_day)
+        ).all()
+    }
+    today = datetime.now(timezone.utc).date()
+    daily = [
+        {
+            "date": (today - timedelta(days=offset)).isoformat(),
+            "posts": posted.get(today - timedelta(days=offset), 0),
+            "reactions": received.get(today - timedelta(days=offset), 0),
+        }
+        for offset in range(29, -1, -1)
+    ]
+
     posts, likes, comments, reposts, views = totals
     return {
         "posts": posts,
@@ -3480,6 +3513,7 @@ def my_stats(principal: CurrentUser, db: OrmSession = Depends(get_db)):
         "reposts_received": int(reposts),
         "views": int(views),
         "comments_written": comments_written,
+        "daily": daily,
         "top_posts": [
             {
                 "id": p.id,

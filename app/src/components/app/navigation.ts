@@ -71,7 +71,7 @@ export const EXTRA_NAV: Array<{ key: string; route: string; label: string }> = [
   { key: 'shorts', route: '/shorts', label: 'Shorts' },
   // A member's own numbers. In the drawer rather than pinned by default: it
   // is a page you visit, not one you live on.
-  { key: 'stats', route: '/stats', label: 'Your numbers' },
+  { key: 'stats', route: '/stats', label: 'Statistics' },
 ]
 
 /** Which chip should look active for the current location. */

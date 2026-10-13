@@ -590,6 +590,8 @@ export interface MyStats {
   reposts_received: number
   views: number
   comments_written: number
+  /** One row a day for the last 30 days, including the empty ones. */
+  daily: Array<{ date: string; posts: number; reactions: number }>
   top_posts: Array<{
     id: string
     body: string
