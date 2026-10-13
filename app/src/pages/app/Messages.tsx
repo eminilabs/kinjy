@@ -571,29 +571,20 @@ export default function Messages() {
     if (typeof mode === 'object') {
       el.scrollTop = el.scrollHeight - mode.restoreFrom
     } else if (mode === 'opened') {
-      // Opening a conversation lands on the first thing not yet read, rather
-      // than at the very bottom: arriving at the newest message means
-      // scrolling back up to find where you stopped, and in a conversation
-      // that has moved on overnight that is a lot of scrolling to read what
-      // you were told about.
-      const mark = readMarkOnOpen.current
-      const since = mark ? new Date(mark).getTime() : null
-      const firstUnread =
-        since === null
-          ? undefined
-          : messages.find(
-              (m) => m.sender_id !== user?.id && new Date(m.created_at).getTime() > since,
-            )
-      const node = firstUnread ? document.getElementById(`msg-${firstUnread.id}`) : null
-      if (node) {
-        // Measured against the scroller rather than through offsetTop, which
-        // is relative to the nearest positioned ancestor and not to this box.
-        // A little above it, so it reads as "carry on from here" rather than
-        // as the top of the window.
-        el.scrollTop += node.getBoundingClientRect().top - el.getBoundingClientRect().top - 16
-      } else {
-        el.scrollTop = el.scrollHeight
-      }
+      // Opening a conversation lands on the newest message.
+      //
+      // It used to land on the first thing not yet read, which sounds kinder
+      // and is not: a thread you last opened a month ago has a read mark a
+      // month old, so "the first unread" is a message near the top and the
+      // conversation opened in its own history. The member then scrolls down
+      // past everything to reach the part they came for, which is where the
+      // conversation actually is. Every messenger opens at the bottom for
+      // that reason.
+      //
+      // What was behind the request - not losing your place - is served by
+      // the unread divider below, which marks where you stopped without
+      // moving you there.
+      el.scrollTop = el.scrollHeight
     } else if (nearBottom.current) {
       el.scrollTop = el.scrollHeight
     }
@@ -1388,6 +1379,24 @@ export default function Messages() {
     window.setTimeout(() => setHighlightId((current) => (current === id ? null : current)), 1500)
   }
 
+  /**
+   * The first message that arrived after the member last read this thread.
+   *
+   * Null when they were up to date, which is the common case and draws
+   * nothing. Computed from the mark captured at opening: `markRead` moves the
+   * real one to the end a second later, so reading it live would mean the
+   * divider never appeared.
+   */
+  const firstUnreadId = (() => {
+    const mark = readMarkOnOpen.current
+    if (!mark) return null
+    const since = new Date(mark).getTime()
+    return (
+      messages.find((m) => m.sender_id !== user?.id && new Date(m.created_at).getTime() > since)
+        ?.id ?? null
+    )
+  })()
+
   const lastMine = [...messages].reverse().find((m) => m.sender_id === user?.id && !m.status)
   const seenBy =
     active && lastMine
@@ -1995,6 +2004,22 @@ export default function Messages() {
                     : sender
                   return (
                     <div key={message.client_id ?? message.id}>
+                      {/* Where you stopped last time. The thread opens at the
+                          newest message, so this is not a place you are taken
+                          to - it is a mark you meet on the way back up, which
+                          is what somebody looking for "what did I miss"
+                          actually needs. Drawn from the read mark as it was
+                          when the conversation opened, before marking it read
+                          moved it to the end. */}
+                      {firstUnreadId === message.id && (
+                        <div className="my-4 flex items-center gap-3" role="separator">
+                          <span className="h-px flex-1 bg-gold/40" />
+                          <span className="rounded-full bg-gold/15 px-3 py-1 text-xs font-semibold text-gold-soft">
+                            Unread messages
+                          </span>
+                          <span className="h-px flex-1 bg-gold/40" />
+                        </div>
+                      )}
                       {newDay && (
                         <div className="my-4 flex items-center gap-3" role="separator">
                           <span className="h-px flex-1 bg-[var(--cloud-border)]" />
