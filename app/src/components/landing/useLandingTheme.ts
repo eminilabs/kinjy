@@ -26,10 +26,10 @@ function useSystemDark(): boolean {
 /**
  * Light or dark for the landing page.
  *
- * A member who picked a display mode gets it here too (Cloud and Dark both
- * read as dark). Everyone else follows their system: the app's own default is
- * Cloud, and applying it here would show every first-time visitor a dark page
- * whatever their device is set to.
+ * A member who picked a display mode gets it here too (Cloud reads as dark).
+ * Everyone else follows their system: the app's own default is Cloud, and
+ * applying it here would show every first-time visitor a dark page whatever
+ * their device is set to.
  *
  * `toggle` writes the same setting as the app's switcher, so the choice
  * carries into the app after sign-in.
@@ -44,5 +44,6 @@ export function useLandingTheme() {
     : systemDark
       ? 'dark'
       : 'light'
-  return { theme, toggle: () => setMode(theme === 'dark' ? 'light' : 'dark') }
+  // Cloud, not Dark: dark mode was removed, and Cloud is this platform's dark page.
+  return { theme, toggle: () => setMode(theme === 'dark' ? 'light' : 'cloud') }
 }

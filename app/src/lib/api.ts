@@ -846,7 +846,17 @@ export interface Conversation {
   my_role?: 'owner' | 'admin' | 'member'
   encrypted: boolean
   last_message_at: string
+  /**
+   * Everybody in a direct conversation; only a few faces of a group.
+   *
+   * The welcome group holds the whole platform, so a list that carried every
+   * member of every room carried most of the platform on every poll. Use
+   * `participant_count` for the size, and the thread's own `profiles` to name
+   * whoever actually wrote something.
+   */
   participants: string[]
+  /** How many people are really in it, however few are listed above. */
+  participant_count?: number
   /** Resolved by messaging-service so the list can show people, not ids. */
   profiles?: Record<string, PersonBrief>
   unread?: number
@@ -2128,9 +2138,16 @@ export const kaluta = {
         description: input.description,
         encrypted: false,
       }),
-    /** Who is in a room and who runs it. Members only. */
-    participants: (conversationId: string) =>
-      api.get<{ total: number; items: GroupMember[] }>(`/conversations/${conversationId}/participants`),
+    /**
+     * Who is in a room and who runs it, a page at a time. Members only.
+     *
+     * Paged because the welcome group holds the whole platform: admins come
+     * first, so the first page is the part anybody actually reads.
+     */
+    participants: (conversationId: string, offset = 0) =>
+      api.get<{ total: number; items: GroupMember[]; offset: number; has_more: boolean }>(
+        `/conversations/${conversationId}/participants?offset=${offset}`,
+      ),
     editGroup: (conversationId: string, input: { title?: string; description?: string }) =>
       api.patch<{ id: string; title: string | null; description: string | null }>(
         `/conversations/${conversationId}`,
@@ -2156,7 +2173,7 @@ export const kaluta = {
       if (options.after) query.set('after', options.after)
       if (options.before) query.set('before', options.before)
       const qs = query.toString()
-      return api.get<{ items: Message[] }>(
+      return api.get<{ items: Message[]; profiles?: Record<string, PersonBrief> }>(
         `/conversations/${conversationId}/messages${qs ? `?${qs}` : ''}`,
       )
     },

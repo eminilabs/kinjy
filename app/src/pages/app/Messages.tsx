@@ -499,9 +499,12 @@ export default function Messages() {
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
   const [highlightId, setHighlightId] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  // The reaction picker and the menu of your own message, each anchored to a bubble.
-  const [picker, setPicker] = useState<{ id: string; rect: DOMRect; withReply: boolean } | null>(null)
-  const [ownMenu, setOwnMenu] = useState<{ id: string; rect: DOMRect } | null>(null)
+  // The reaction picker and the menu of your own message, each anchored to a
+  // bubble by id. By id rather than by a captured rect: the panel is fixed to
+  // the viewport, so a rect measured at the moment of the click leaves it
+  // behind as soon as the thread scrolls.
+  const [picker, setPicker] = useState<{ id: string; withReply: boolean } | null>(null)
+  const [ownMenu, setOwnMenu] = useState<{ id: string } | null>(null)
   // The sticker packs, as the server curates them.
   const stickerPacks = useApi(() => kaluta.messages.stickers(), [])
   /** A sticker from the catalogue by its id, for a bubble drawn before the server has answered. */
@@ -523,6 +526,15 @@ export default function Messages() {
   // Message ids already announced. A reconnect replays everything missed, and
   // without this the catch-up is a burst of chimes.
   const seenForSound = useRef<Set<string>>(new Set())
+  /**
+   * Who wrote what is on screen, as the thread itself reports it.
+   *
+   * The conversation list used to carry a profile for every member of every
+   * room. The welcome group holds the whole platform, so that was most of the
+   * platform on every poll of the list. The senders of the page being read are
+   * a handful of people, and they are the only ones a thread has to name.
+   */
+  const [senders, setSenders] = useState<Record<string, PersonBrief>>({})
   const [peer, setPeer] = useState('')
   const [composing, setComposing] = useState(false)
   const [creatingGroup, setCreatingGroup] = useState(false)
@@ -647,6 +659,7 @@ export default function Messages() {
         const page = await kaluta.messages.list(conversationId)
         if (activeIdRef.current !== conversationId) return
         scrollMode.current = 'opened'
+        setSenders(page.profiles ?? {})
         setMessages(page.items)
         setHasOlder(page.items.length >= PAGE)
         markRead(conversationId)
@@ -698,6 +711,8 @@ export default function Messages() {
     try {
       const page = await kaluta.messages.list(conversationId, { before: oldest.id })
       if (activeIdRef.current !== conversationId) return
+      // Older history can be from people who have not spoken since.
+      setSenders((current) => ({ ...current, ...(page.profiles ?? {}) }))
       const el = listRef.current
       scrollMode.current = { restoreFrom: el ? el.scrollHeight - el.scrollTop : 0 }
       setMessages((current) => mergeMessages(current, page.items))
@@ -1083,6 +1098,10 @@ export default function Messages() {
   const unwritten = useMemo(() => {
     const spoken = new Set<string>()
     for (const c of conversations.data?.items ?? []) {
+      // Direct conversations only. Being in the welcome group together is not
+      // having written to each other, and now that the welcome group holds
+      // everybody, counting groups here would empty this list completely.
+      if (c.kind === 'group') continue
       for (const p of c.participants) if (p !== user?.id) spoken.add(p)
     }
     return friends
@@ -1094,7 +1113,12 @@ export default function Messages() {
 
   const presenceIds = useMemo(() => {
     const ids = new Set<string>(friends.map((f) => f.user_id))
-    for (const c of conversations.data?.items ?? []) c.participants.forEach((p) => ids.add(p))
+    // Groups are skipped on purpose: asking who is online among every member
+    // of a room that holds the whole platform is a presence poll the size of
+    // the platform, every few seconds, for a green dot nobody is looking at.
+    for (const c of conversations.data?.items ?? []) {
+      if (c.kind !== 'group') c.participants.forEach((p) => ids.add(p))
+    }
     if (user) ids.delete(user.id)
     return [...ids].sort()
   }, [friends, conversations.data, user])
@@ -1350,16 +1374,20 @@ export default function Messages() {
     readMarkOnOpen.current = readAt(active, user.id)
   }, [active, user, readAt])
 
+  /** A member of the open conversation, whether the thread or the list named them. */
+  const personIn = (userId: string): PersonBrief | undefined =>
+    senders[userId] ?? active?.profiles?.[userId]
+
   const typingNames = active
     ? Object.entries(typing[active.id] ?? {})
         .filter(([uid, until]) => uid !== user?.id && until > Date.now())
-        .map(([uid]) => active.profiles?.[uid]?.display_name ?? 'Someone')
+        .map(([uid]) => personIn(uid)?.display_name ?? 'Someone')
     : []
 
   // The receipt goes under my latest stored message only — one "Seen" per
   // thread, where the eye lands, not a tick-mark on every bubble.
   const nameOf = (message: ChatMessage) =>
-    message.sender_id === user?.id ? 'You' : (active?.profiles?.[message.sender_id]?.display_name ?? 'Member')
+    message.sender_id === user?.id ? 'You' : (personIn(message.sender_id)?.display_name ?? 'Member')
 
   const startReply = (message: ChatMessage) => {
     // A bubble still on its way has no id the server knows yet.
@@ -1423,8 +1451,12 @@ export default function Messages() {
     if (!active) return null
     if (typingNames.length) return `${typingNames.join(', ')} ${typingNames.length > 1 ? 'are' : 'is'} typing…`
     if (active.kind === 'direct' && activeOthers[0]) return lastSeenLabel(presence[activeOthers[0]], locale)
-    const online = activeOthers.filter((uid) => presence[uid]?.online).length
-    return `${activeOthers.length + 1} members${online ? ` · ${online} online` : ''}`
+    // The real size, which is not the number of faces the list was sent: a
+    // group's participant list is capped there, and this one says 1823.
+    // No "N online" either - presence is not polled for a whole room, so the
+    // honest answer is none and the honest thing is not to claim a number.
+    const total = active.participant_count ?? activeOthers.length + 1
+    return `${total} ${total === 1 ? 'member' : 'members'}`
   })()
 
   return (
@@ -2006,7 +2038,7 @@ export default function Messages() {
                     )
                   }
                   const mine = message.sender_id === user?.id
-                  const sender = active.profiles?.[message.sender_id]
+                  const sender = personIn(message.sender_id)
                   const previous = messages[index - 1]
                   // A new day gets a separator; within a day, messages from the
                   // same person a few minutes apart sit together as one burst.
@@ -2105,7 +2137,10 @@ export default function Messages() {
                             {!burstNext && <PresenceAvatar profile={sender} size={28} />}
                           </span>
                         )}
-                        <div className="group/bubble relative flex min-w-0 max-w-[min(75%,34rem)] items-stretch">
+                        <div
+                          id={`bubble-${message.id}`}
+                          className="group/bubble relative flex min-w-0 max-w-[min(75%,34rem)] items-stretch"
+                        >
                         {/* Beside the bubble, out of the flow: they must not widen it or push the reactions off its edge. */}
                         <div className={cn('absolute inset-y-0 flex items-center', mine ? 'end-full' : 'start-full')}>
                           {!message.deleted && (
@@ -2117,22 +2152,19 @@ export default function Messages() {
                           {!message.deleted && !message.status && !message.id.startsWith('local_') && (
                             <ReactButton
                               label={`React to ${nameOf(message)}`}
-                              onOpen={(rect) => setPicker({ id: message.id, rect, withReply: false })}
+                              onOpen={() => setPicker({ id: message.id, withReply: false })}
                             />
                           )}
                           {mine && !message.deleted && !message.status && !message.id.startsWith('local_') && (
                             <OptionsButton
                               label="Edit or delete this message"
-                              onOpen={(rect) => setOwnMenu({ id: message.id, rect })}
+                              onOpen={() => setOwnMenu({ id: message.id })}
                             />
                           )}
                         </div>
                         <SwipeToReply
                           onReply={() => startReply(message)}
-                          onLongPress={() => {
-                            const rect = document.getElementById(`msg-${message.id}`)?.getBoundingClientRect()
-                            if (rect) setPicker({ id: message.id, rect, withReply: true })
-                          }}
+                          onLongPress={() => setPicker({ id: message.id, withReply: true })}
                           disabled={Boolean(message.status) || Boolean(message.deleted)}
                         >
                         <div
@@ -2243,6 +2275,7 @@ export default function Messages() {
                           <ReactionChips
                             counts={message.reactions ?? {}}
                             mine={message.my_reaction}
+                            ownMessage={mine}
                             onToggle={(emoji) => void react(message, emoji)}
                           />
                         )}
@@ -2448,7 +2481,7 @@ export default function Messages() {
         if (!target || target.deleted) return null
         return (
           <ReactionPicker
-            anchor={picker.rect}
+            anchor={`bubble-${picker.id}`}
             current={target.my_reaction}
             onPick={(emoji) => void react(target, emoji)}
             onReply={picker.withReply ? () => startReply(target) : undefined}
@@ -2461,7 +2494,7 @@ export default function Messages() {
         if (!target || target.deleted) return null
         return (
           <OwnMessageMenu
-            anchor={ownMenu.rect}
+            anchor={`bubble-${ownMenu.id}`}
             // Text the server can read: not a sticker, not an end-to-end encrypted message.
             canEdit={!target.encrypted && target.kind !== 'sticker' && Boolean(target.body?.trim())}
             onEdit={() => {

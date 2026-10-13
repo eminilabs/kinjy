@@ -17,15 +17,22 @@ export function ReactionChips({
   counts,
   mine,
   onToggle,
+  ownMessage = false,
 }: {
   counts: Record<string, number>
   mine: string | null | undefined
   onToggle: (emoji: string) => void
+  /** Your own message, which has no avatar gutter beside it. */
+  ownMessage?: boolean
 }) {
   const entries = Object.entries(counts)
   if (!entries.length) return null
   return (
-    <div className="-mt-1.5 mx-2 flex flex-wrap gap-1">
+    // Lined up with the edge of the bubble they belong to. Somebody else's
+    // message is indented past their avatar, so pills with a plain margin sat
+    // under the avatar instead of under the message - the same 36px gutter the
+    // sender's name above the bubble already allows for.
+    <div className={cn('-mt-1.5 flex flex-wrap gap-1', ownMessage ? 'me-2' : 'ms-9')}>
       {entries.map(([emoji, count]) => {
         const chosen = mine === emoji
         return (
@@ -50,11 +57,11 @@ export function ReactionChips({
 }
 
 /** The button beside a bubble that opens the picker. Shown on hover or focus. */
-export function ReactButton({ onOpen, label }: { onOpen: (anchor: DOMRect) => void; label: string }) {
+export function ReactButton({ onOpen, label }: { onOpen: () => void; label: string }) {
   return (
     <button
       type="button"
-      onClick={(e) => onOpen(e.currentTarget.getBoundingClientRect())}
+      onClick={() => onOpen()}
       aria-label={label}
       aria-haspopup="dialog"
       title="React"
@@ -66,11 +73,11 @@ export function ReactButton({ onOpen, label }: { onOpen: (anchor: DOMRect) => vo
 }
 
 /** The button beside your own bubble that opens its options. Same look and timing as the react button. */
-export function OptionsButton({ onOpen, label }: { onOpen: (anchor: DOMRect) => void; label: string }) {
+export function OptionsButton({ onOpen, label }: { onOpen: () => void; label: string }) {
   return (
     <button
       type="button"
-      onClick={(e) => onOpen(e.currentTarget.getBoundingClientRect())}
+      onClick={() => onOpen()}
       aria-label={label}
       aria-haspopup="dialog"
       title="Edit or delete"
@@ -93,7 +100,8 @@ export function ReactionPicker({
   onReply,
   onClose,
 }: {
-  anchor: DOMRect
+  /** The id of the bubble this is about, so the row of emoji sits over it. */
+  anchor: string
   current: string | null | undefined
   onPick: (emoji: string) => void
   onReply?: () => void
@@ -152,7 +160,8 @@ export function OwnMessageMenu({
   onDelete,
   onClose,
 }: {
-  anchor: DOMRect
+  /** The id of the bubble this is about. */
+  anchor: string
   canEdit: boolean
   onEdit: () => void
   onDelete: () => void

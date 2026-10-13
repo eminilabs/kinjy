@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import {
   ChevronDown, Clapperboard, Cloudy, Globe, Home, LayoutGrid,
-  Monitor, Moon, Pin, Search, Sun,
+  Monitor, Pin, Search, Sun,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { MODULE_ICONS } from '@/components/appdemo/Chrome'
@@ -29,13 +29,11 @@ const LANG_LABELS: Record<AppLang, string> = {
 const MODE_ICONS: Record<DisplayMode, LucideIcon> = {
   cloud: Cloudy,
   light: Sun,
-  dark: Moon,
   system: Monitor,
 }
 const MODE_LABELS: Record<DisplayMode, string> = {
   cloud: 'Cloud',
   light: 'Light',
-  dark: 'Dark',
   system: 'System',
 }
 
@@ -82,12 +80,13 @@ export function AppTopBar() {
   return (
     <div className={cn('border-x-0 border-t-0 border-b', tok.card)}>
     <div className="mx-auto flex h-[64px] w-full max-w-[1320px] items-center gap-3 px-4 md:h-[72px] md:gap-6 md:px-6">
-      {/* The marketing navbar is hidden inside the app, so the logo is the way
-          back out to the public site — the same choice the /app design makes. */}
+      {/* Home, which inside the app means the feed. The logo used to leave for
+          the marketing site, so the one thing every app puts a member back on
+          their timeline instead took them out of the app. */}
       <Link
-        to="/"
+        to="/hub"
         className="flex shrink-0 items-center gap-2"
-        aria-label="Back to the Kinjy site"
+        aria-label="Go to your feed"
       >
         <img src="/logo.svg" alt="" className="h-8 w-8" />
         <span className={cn('hidden font-display text-[22px] font-bold lg:block', tok.text)}>Kinjy</span>

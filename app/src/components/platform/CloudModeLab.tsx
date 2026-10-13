@@ -1,16 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { Cloud, Sun, Moon, MonitorCog } from 'lucide-react'
+import { Cloud, Sun, MonitorCog } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar } from './shared'
 import { FEATURES } from '@/lib/features'
 
-type Mode = 'cloud' | 'light' | 'dark' | 'system'
+type Mode = 'cloud' | 'light' | 'system'
 
 const MODES: Array<{ key: Mode; label: string; icon: typeof Cloud }> = [
   { key: 'cloud', label: 'Cloud', icon: Cloud },
   { key: 'light', label: 'Light', icon: Sun },
-  { key: 'dark', label: 'Dark', icon: Moon },
   { key: 'system', label: 'System', icon: MonitorCog },
 ]
 
@@ -35,14 +34,6 @@ function LabWindow({ mode, ambient }: { mode: Exclude<Mode, 'system'>; ambient: 
           text: '#241F16',
           sub: 'rgba(36,31,22,0.6)',
           chip: { background: 'rgba(74,82,224,0.12)', color: '#2E2A6E' },
-        }
-      case 'dark':
-        return {
-          shell: { background: '#0B0E1D' },
-          card: { background: '#12162B', border: '1px solid rgba(255,255,255,0.1)' },
-          text: '#F4F2EE',
-          sub: '#A7ACBF',
-          chip: { background: 'rgba(217,166,72,0.14)', color: '#F0C878' },
         }
       default:
         return {
@@ -126,7 +117,7 @@ export default function CloudModeLab() {
     return () => mq.removeEventListener('change', on)
   }, [])
 
-  const effective: Exclude<Mode, 'system'> = mode === 'system' ? (systemDark ? 'dark' : 'light') : mode
+  const effective: Exclude<Mode, 'system'> = mode === 'system' ? (systemDark ? 'cloud' : 'light') : mode
 
   return (
     // A paper panel like the rest of the page: only the preview window wears

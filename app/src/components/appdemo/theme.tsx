@@ -3,8 +3,8 @@ import type { ReactNode } from 'react'
 import { ROUTE_FOR } from '@/components/app/navigation'
 import { FEATURES, isRouteAvailable } from '@/lib/features'
 
-export type DisplayMode = 'cloud' | 'light' | 'dark' | 'system'
-export type ResolvedMode = 'cloud' | 'light' | 'dark'
+export type DisplayMode = 'cloud' | 'light' | 'system'
+export type ResolvedMode = 'cloud' | 'light'
 export type Ambient = 'twilight' | 'dawn' | 'savanna' | 'ocean'
 export type AppLang = 'en' | 'sw' | 'fr' | 'ar' | 'zh'
 
@@ -58,7 +58,7 @@ export const AMBIENTS: Record<Ambient, { label: string; style: React.CSSProperti
 
 // The accepted values, in one place, so stored preferences can be validated
 // against them instead of being trusted.
-const DISPLAY_MODES = ['cloud', 'light', 'dark', 'system'] as const satisfies readonly DisplayMode[]
+const DISPLAY_MODES = ['cloud', 'light', 'system'] as const satisfies readonly DisplayMode[]
 const AMBIENT_KEYS = ['twilight', 'dawn', 'savanna', 'ocean'] as const satisfies readonly Ambient[]
 const APP_LANGS = ['en', 'sw', 'fr', 'ar', 'zh'] as const satisfies readonly AppLang[]
 
@@ -89,17 +89,6 @@ const TOKENS: Record<ResolvedMode, AppTheme['tok']> = {
     hoverBg: 'hover:bg-black/5',
     input: 'border border-[#e6dfd3] bg-[#f8f5ef]',
     subtleBg: 'bg-black/[0.04]',
-  },
-  dark: {
-    text: 'text-text-hi',
-    mid: 'text-text-mid',
-    low: 'text-text-low',
-    card: 'border border-white/10 bg-ink-2',
-    cardSolid: 'border border-white/10 bg-ink-3',
-    divider: 'divide-white/10',
-    hoverBg: 'hover:bg-white/5',
-    input: 'border border-white/15 bg-ink-3',
-    subtleBg: 'bg-ink-3',
   },
 }
 
@@ -142,6 +131,19 @@ export const NAV_MODULES: ChromeKey[] = (
     'messages', 'live', 'familyTree', 'graveyard', 'explore', 'marketplace', 'create', 'earnings',
   ] as ChromeKey[]
 ).filter((key) => isRouteAvailable(ROUTE_FOR[key])) // the demo shows only what the app opens
+
+// Dark mode was removed. A member who chose it keeps a dark page - Cloud is
+// the nearest thing to it - rather than being dropped onto the default by the
+// validation in `useStored`, which would read a now-invalid value as no choice.
+if (typeof window !== 'undefined') {
+  try {
+    if (localStorage.getItem('kaluta.display_mode') === 'dark') {
+      localStorage.setItem('kaluta.display_mode', 'cloud')
+    }
+  } catch {
+    // A browser with storage switched off has nothing to migrate.
+  }
+}
 
 const AppThemeContext = createContext<AppTheme | null>(null)
 
@@ -206,7 +208,9 @@ export function AppThemeProvider({
   const [lang, setLang] = useStored<AppLang>('kaluta.app_lang', 'en', persist, APP_LANGS)
   const systemDark = useSystemDark()
 
-  const resolved: ResolvedMode = mode === 'system' ? (systemDark ? 'dark' : 'light') : mode
+  // Following the system means Cloud on a dark device: Cloud *is* this
+  // platform's dark page, and it is the one the design is drawn for.
+  const resolved: ResolvedMode = mode === 'system' ? (systemDark ? 'cloud' : 'light') : mode
   const rtl = lang === 'ar'
 
   // Publish the resolved mode to the document so CSS can answer for itself.
@@ -222,11 +226,7 @@ export function AppThemeProvider({
 
   const value = useMemo<AppTheme>(() => {
     const frameStyle: React.CSSProperties =
-      resolved === 'cloud'
-        ? AMBIENTS[ambient].style
-        : resolved === 'light'
-          ? { background: 'var(--k-white)' }
-          : { background: '#0B0E1D' }
+      resolved === 'cloud' ? AMBIENTS[ambient].style : { background: 'var(--k-white)' }
     return {
       mode,
       resolved,

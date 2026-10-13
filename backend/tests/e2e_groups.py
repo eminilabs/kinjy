@@ -174,5 +174,59 @@ if groups:
     check("nobody is put out of the welcome group by somebody else",
           r.status_code == 403, str(r.status_code))
 
+    # The welcome group holds the whole platform, so every response about it is
+    # a response about every member unless it is deliberately bounded. Both of
+    # these were unbounded and both broke: the list resolved names through a
+    # batch endpoint that refuses more than 300 ids and so showed none at all,
+    # and it carried a participant and a read-receipt row per member on every
+    # poll.
+    listed = groups[0]
+    check("the list does not carry every member of a group",
+          len(listed["participants"]) <= 8, str(len(listed["participants"])))
+    check("but it does say how many there are",
+          listed.get("participant_count", 0) >= len(listed["participants"]),
+          str(listed.get("participant_count")))
+    check("and it still resolves the names of the few it sends",
+          len(listed.get("profiles") or {}) == len(listed["participants"]),
+          f"{len(listed.get('profiles') or {})} names for {len(listed['participants'])} people")
+    check("no read receipt per member of a group", not listed.get("read_state"),
+          str(len(listed.get("read_state") or {})))
+
+    r = c.get(f"/conversations/{welcome}/participants", headers=H(fresh_t))
+    page = r.json()
+    check("the member list is a page", len(page["items"]) <= 60, str(len(page["items"])))
+    check("every member of the page has a name",
+          all(not p["display_name"].startswith("usr_") for p in page["items"]),
+          str([p["display_name"] for p in page["items"][:3]]))
+    # Nobody runs the room everybody is in. It is created by the platform
+    # rather than by a member, so there is no owner to rename it, no admin to
+    # put anybody out of it, and nothing for one member to do to another. The
+    # ordering of admins is tested on a real group above.
+    check("nobody owns the welcome group",
+          all(p["role"] == "member" for p in page["items"]),
+          str([p["role"] for p in page["items"] if p["role"] != "member"]))
+    check("so even an admin elsewhere cannot rename it",
+          c.patch(f"/conversations/{welcome}", headers=H(owner_t),
+                  json={"title": "Mine now"}).status_code == 403,
+          "the welcome group was renamed by a member")
+    if page.get("has_more"):
+        second = c.get(f"/conversations/{welcome}/participants?offset={len(page['items'])}",
+                       headers=H(fresh_t)).json()
+        first_ids = {p["user_id"] for p in page["items"]}
+        check("the next page is different people",
+              not first_ids & {p["user_id"] for p in second["items"]},
+              "the pages overlap")
+
+    # A thread has to be able to name its own senders, because the conversation
+    # list no longer carries a profile for every member of the room.
+    said = c.post(f"/conversations/{welcome}/messages", headers=H(fresh_t),
+                  json={"body": "Hello everybody."})
+    check("a member can write in the welcome group", said.status_code in (200, 201),
+          f"{said.status_code} {said.text[:120]}")
+    thread = c.get(f"/conversations/{welcome}/messages", headers=H(owner_t)).json()
+    check("the thread names whoever wrote in it",
+          thread.get("profiles", {}).get(fresh["id"], {}).get("display_name") == "Test Newcomer",
+          str(list((thread.get("profiles") or {}).values())[:2]))
+
 print("OK" if ok else "FAILED")
 sys.exit(0 if ok else 1)

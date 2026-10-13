@@ -141,7 +141,7 @@ class Preferences(Base):
     # disappeared rather than as a feed working exactly as specified.
     default_feed_mode: Mapped[str] = mapped_column(String(30), default="new")
     algorithm_id: Mapped[str] = mapped_column(String(60), default="chronological")
-    display_mode: Mapped[str] = mapped_column(String(20), default="cloud")  # cloud|light|dark|system
+    display_mode: Mapped[str] = mapped_column(String(20), default="cloud")  # cloud|light|system
     data_saver: Mapped[bool] = mapped_column(Boolean, default=False)
     reduced_motion: Mapped[bool] = mapped_column(Boolean, default=False)
     autoplay_media: Mapped[bool] = mapped_column(Boolean, default=True)

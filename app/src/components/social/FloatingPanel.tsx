@@ -6,6 +6,14 @@ import { createPortal } from 'react-dom'
  * A small floating panel (sticker picker, list of who reacted), portalled to <body>: the thread sits inside a
  * backdrop-filtered card, where position:fixed would be relative to the card
  * and the panel would be clipped by the scrolling list.
+ *
+ * `anchor` is the element id of what the panel belongs to, or a fixed rect for
+ * a caller that has no element to point at. An id is preferred and is what the
+ * message pickers pass: the rect is then read again whenever the page moves,
+ * so a panel opened over a bubble stays over that bubble while the thread
+ * scrolls underneath. A captured rect cannot do that - it is a measurement
+ * from the moment of the click, and a fixed panel held at stale coordinates
+ * drifts away from the message it is about.
  */
 export default function FloatingPanel({
   anchor,
@@ -13,7 +21,7 @@ export default function FloatingPanel({
   onClose,
   children,
 }: {
-  anchor: DOMRect
+  anchor: DOMRect | string
   label: string
   onClose: () => void
   children: ReactNode
@@ -33,20 +41,34 @@ export default function FloatingPanel({
   // Placed above the anchor when there is room, below otherwise, and kept inside the screen. Done
   // again whenever the panel changes size: a panel that fills in after opening (the emoji list
   // loads on demand) would otherwise be placed for its empty height and then grow over its anchor.
+  // And again on scroll and resize, so it follows what it is pointing at.
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
     const place = () => {
+      const target =
+        typeof anchor === 'string'
+          ? document.getElementById(anchor)?.getBoundingClientRect()
+          : anchor
+      if (!target) return
       const { width, height } = el.getBoundingClientRect()
-      const above = anchor.top - height - 8
-      const top = above >= 8 ? above : Math.min(anchor.bottom + 8, window.innerHeight - height - 8)
-      const left = Math.min(Math.max(8, anchor.left + anchor.width / 2 - width / 2), window.innerWidth - width - 8)
+      const above = target.top - height - 8
+      const top = above >= 8 ? above : Math.min(target.bottom + 8, window.innerHeight - height - 8)
+      const left = Math.min(Math.max(8, target.left + target.width / 2 - width / 2), window.innerWidth - width - 8)
       setPos((current) => (current && current.top === top && current.left === left ? current : { top, left }))
     }
     place()
     const watcher = new ResizeObserver(place)
     watcher.observe(el)
-    return () => watcher.disconnect()
+    // Capture, because the thread is a scrolling box rather than the window:
+    // a scroll event on it never reaches the window in the bubbling phase.
+    window.addEventListener('scroll', place, true)
+    window.addEventListener('resize', place)
+    return () => {
+      watcher.disconnect()
+      window.removeEventListener('scroll', place, true)
+      window.removeEventListener('resize', place)
+    }
   }, [anchor])
 
   useEffect(() => {

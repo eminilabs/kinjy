@@ -30,6 +30,10 @@ export default function GroupPanel({
 }) {
   const { tok } = useAppTheme()
   const [members, setMembers] = useState<GroupMember[] | null>(null)
+  /** How many are really in it, and whether there are more to fetch. */
+  const [total, setTotal] = useState(0)
+  const [more, setMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
 
@@ -46,9 +50,27 @@ export default function GroupPanel({
   const load = useCallback(() => {
     kaluta.messages
       .participants(conversation.id)
-      .then((page) => setMembers(page.items))
+      .then((page) => {
+        setMembers(page.items)
+        setTotal(page.total)
+        setMore(page.has_more)
+      })
       .catch(() => setMembers([]))
   }, [conversation.id])
+
+  /** The next page. Admins are on the first one, so this is rarely needed. */
+  const loadMore = () => {
+    setLoadingMore(true)
+    kaluta.messages
+      .participants(conversation.id, members?.length ?? 0)
+      .then((page) => {
+        setMembers((current) => [...(current ?? []), ...page.items])
+        setTotal(page.total)
+        setMore(page.has_more)
+      })
+      .catch(() => setNote('Could not load more members'))
+      .finally(() => setLoadingMore(false))
+  }
 
   useEffect(load, [load])
 
@@ -193,7 +215,7 @@ export default function GroupPanel({
 
         <div className="mt-5 flex items-center justify-between gap-2">
           <h3 className={cn('text-[0.8rem] font-semibold', tok.low)}>
-            {members ? `${members.length} ${members.length === 1 ? 'member' : 'members'}` : 'Members'}
+            {members ? `${total} ${total === 1 ? 'member' : 'members'}` : 'Members'}
           </h3>
           {runs && (
             <button
@@ -341,6 +363,21 @@ export default function GroupPanel({
             </li>
           ))}
         </ul>
+
+        {more && (
+          <button
+            type="button"
+            disabled={loadingMore}
+            onClick={loadMore}
+            className={cn(
+              'mt-2 w-full rounded-xl border border-[var(--cloud-border)] px-4 py-2 text-sm font-semibold',
+              tok.text,
+              tok.hoverBg,
+            )}
+          >
+            {loadingMore ? 'Loading…' : `Show more (${total - (members?.length ?? 0)} left)`}
+          </button>
+        )}
 
         {note && <p className="mt-3 text-xs text-amber-200">{note}</p>}
       </div>

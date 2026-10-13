@@ -41,6 +41,10 @@ MIGRATIONS = [
     "ADD COLUMN IF NOT EXISTS family_tree_shared BOOLEAN DEFAULT TRUE",
     f"ALTER TABLE {models.SCHEMA}.profiles ADD COLUMN IF NOT EXISTS avatar_asset_id VARCHAR(40)",
     f"ALTER TABLE {models.SCHEMA}.profiles ADD COLUMN IF NOT EXISTS cover_asset_id VARCHAR(40)",
+    # Dark mode was removed. Cloud is the nearest thing to it, so a member who
+    # chose Dark keeps a dark page rather than being dropped back onto a light
+    # one - and the column stops holding a value the API no longer accepts.
+    f"UPDATE {models.SCHEMA}.preferences SET display_mode = 'cloud' WHERE display_mode = 'dark'",
 ]
 
 app = create_app(
@@ -240,7 +244,7 @@ class CircleDetailOut(CircleOut):
 class PreferencesIn(BaseModel):
     default_feed_mode: str | None = None
     algorithm_id: str | None = None
-    display_mode: str | None = Field(default=None, pattern="^(cloud|light|dark|system)$")
+    display_mode: str | None = Field(default=None, pattern="^(cloud|light|system)$")
     data_saver: bool | None = None
     reduced_motion: bool | None = None
     autoplay_media: bool | None = None

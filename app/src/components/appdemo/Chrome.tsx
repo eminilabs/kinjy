@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import {
   Bell, Coins, Globe, Handshake, Home, Landmark, MessagesSquare, Pin, Plus, Radio,
   Search, Store, TreePine, Users, UsersRound,
-  Compass, CircleUserRound, Flame, Cloudy, Sun, Moon, MonitorSmartphone,
+  Compass, CircleUserRound, Flame, Cloudy, Sun, MonitorSmartphone,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -19,8 +19,8 @@ export const MODULE_ICONS: Partial<Record<ChromeKey, LucideIcon>> = {
 }
 
 const LANG_LABELS: Record<AppLang, string> = { en: 'English', sw: 'Kiswahili', fr: 'Français', ar: 'العربية', zh: '中文' }
-const MODE_ICONS: Record<DisplayMode, LucideIcon> = { cloud: Cloudy, light: Sun, dark: Moon, system: MonitorSmartphone }
-const MODE_LABELS: Record<DisplayMode, string> = { cloud: 'Cloud', light: 'Light', dark: 'Dark', system: 'System' }
+const MODE_ICONS: Record<DisplayMode, LucideIcon> = { cloud: Cloudy, light: Sun, system: MonitorSmartphone }
+const MODE_LABELS: Record<DisplayMode, string> = { cloud: 'Cloud', light: 'Light', system: 'System' }
 
 /* ---------------------------------- Top bar ---------------------------------- */
 

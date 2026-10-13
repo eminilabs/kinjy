@@ -45,15 +45,23 @@ def _profiles(user_ids: set[str]) -> dict[str, dict]:
     """
     if not user_ids:
         return {}
-    try:
-        response = httpx.post(
-            f"{USER_URL}/internal/profiles", json={"ids": sorted(user_ids)}, timeout=5
-        )
-        response.raise_for_status()
-        return response.json()["profiles"]
-    except Exception as exc:
-        log.warning("could not resolve conversation participants: %s", exc)
-        return {}
+    # user-service accepts 300 ids at a time and refuses a longer list. Asking
+    # for a whole group's worth in one body therefore returned nothing at all,
+    # and the room rendered with no names - so the batch is split rather than
+    # trusted to be small. Callers should still ask for the few people they are
+    # about to draw; this only stops a large ask from failing silently.
+    CAP = 300
+    ordered = sorted(user_ids)
+    resolved: dict[str, dict] = {}
+    for start in range(0, len(ordered), CAP):
+        chunk = ordered[start : start + CAP]
+        try:
+            response = httpx.post(f"{USER_URL}/internal/profiles", json={"ids": chunk}, timeout=5)
+            response.raise_for_status()
+            resolved.update(response.json()["profiles"])
+        except Exception as exc:
+            log.warning("could not resolve conversation participants: %s", exc)
+    return resolved
 
 MIGRATIONS = [
     f"ALTER TABLE {models.SCHEMA}.participants ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ",
@@ -654,16 +662,35 @@ def _system_message(db: OrmSession, conversation_id: str, text: str) -> None:
 
 
 @app.get("/conversations/{conversation_id}/participants", tags=["groups"])
-def group_participants(conversation_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
-    """Who is in the room, and who runs it. Members only."""
+def group_participants(
+    conversation_id: str,
+    principal: CurrentUser,
+    limit: int = 60,
+    offset: int = 0,
+    db: OrmSession = Depends(get_db),
+):
+    """Who is in the room, and who runs it. Members only.
+
+    A page at a time. The welcome group holds every member of the platform, so
+    the whole list is neither something anybody scrolls nor something that can
+    be resolved to names in one request.
+    """
     _member(db, conversation_id, principal.user_id)
     rows = db.scalars(
         select(models.Participant).where(models.Participant.conversation_id == conversation_id)
     ).all()
-    people = _profiles({r.user_id for r in rows})
-    # Admins first, then by name: the question this list answers most often is
-    # "who do I ask".
+    # Admins first, then by name, which is the order this list is read in - so
+    # the sort has to happen before the page is cut, and the names needed for
+    # it come from the page's own rows. Roles are few: admins are fetched in
+    # full, and the rest of the page is whoever the offset lands on.
     order = {"owner": 0, "admin": 1, "member": 2}
+    # By id after the role, not by joined_at: the column is nullable and
+    # timezone-aware, and comparing it against a fallback is a TypeError
+    # waiting for the first row that has none. Ids are time-ordered anyway.
+    rows = sorted(rows, key=lambda r: (order.get(r.role, 3), r.user_id))
+    total = len(rows)
+    page = rows[max(0, offset) : max(0, offset) + max(1, min(limit, 200))]
+    people = _profiles({r.user_id for r in page})
     items = sorted(
         (
             {
@@ -674,11 +701,11 @@ def group_participants(conversation_id: str, principal: CurrentUser, db: OrmSess
                 "display_name": (people.get(r.user_id) or {}).get("display_name") or r.user_id[:12],
                 "avatar_url": (people.get(r.user_id) or {}).get("avatar_url"),
             }
-            for r in rows
+            for r in page
         ),
         key=lambda p: (order.get(p["role"], 3), (p["display_name"] or "").lower()),
     )
-    return {"total": len(items), "items": items}
+    return {"total": total, "items": items, "offset": offset, "has_more": offset + len(page) < total}
 
 
 @app.patch("/conversations/{conversation_id}", tags=["groups"])
@@ -1152,6 +1179,7 @@ def list_conversations(principal: CurrentUser, db: OrmSession = Depends(get_db))
     memberships = db.scalars(
         select(models.Participant).where(models.Participant.conversation_id.in_(ids))
     ).all()
+    group_ids = {r.id for r in rows if r.kind == "group"}
     members: dict[str, list[str]] = {}
     read_state: dict[str, dict[str, str | None]] = {}
     # This viewer's own role in each room, picked out of the same rows rather
@@ -1161,11 +1189,26 @@ def list_conversations(principal: CurrentUser, db: OrmSession = Depends(get_db))
         members.setdefault(m.conversation_id, []).append(m.user_id)
         if m.user_id == principal.user_id:
             my_role[m.conversation_id] = m.role
-        read_state.setdefault(m.conversation_id, {})[m.user_id] = (
-            m.last_read_at.isoformat() if m.last_read_at else None
-        )
+        # "Seen" is a thing you say about a direct conversation. In a group it
+        # would be a row per member, which is both meaningless to draw and the
+        # same payload problem as the profiles above.
+        if m.conversation_id not in group_ids:
+            read_state.setdefault(m.conversation_id, {})[m.user_id] = (
+                m.last_read_at.isoformat() if m.last_read_at else None
+            )
 
-    profiles = _profiles({uid for uids in members.values() for uid in uids})
+    # A group now holds everybody - the welcome group is the whole platform -
+    # so resolving every participant of every conversation meant one profile
+    # per member on every poll of this list, and a response carrying thousands
+    # of them. The list only ever draws a few faces per row and a count, so
+    # that is all it asks for. A direct conversation is two people and keeps
+    # both; a thread's own senders come back with the messages.
+    FACES = 8
+    shown: dict[str, list[str]] = {
+        cid: (uids if cid not in group_ids else uids[:FACES])
+        for cid, uids in members.items()
+    }
+    profiles = _profiles({uid for uids in shown.values() for uid in uids})
 
     unread = _unread_by_conversation(db, principal.user_id, ids)
 
@@ -1203,10 +1246,13 @@ def list_conversations(principal: CurrentUser, db: OrmSession = Depends(get_db))
                 "my_role": my_role.get(r.id, "member"),
                 "encrypted": r.encrypted,
                 "last_message_at": r.last_message_at,
-                "participants": members.get(r.id, []),
+                # Everybody for a direct conversation; a few faces for a group,
+                # with the real size beside it.
+                "participants": shown.get(r.id, []),
+                "participant_count": len(members.get(r.id, [])),
                 # Resolved names and avatars, so the list can show people.
                 "profiles": {
-                    uid: profiles.get(uid) for uid in members.get(r.id, []) if profiles.get(uid)
+                    uid: profiles.get(uid) for uid in shown.get(r.id, []) if profiles.get(uid)
                 },
                 "unread": unread.get(r.id, 0),
                 # How far each participant has read — what "Seen" is drawn from.
@@ -1973,7 +2019,12 @@ def list_messages(
                 "created_at": r.created_at,
             }
             for r in rows
-        ]
+        ],
+        # Who wrote this page. One batch for the page, so a thread can name its
+        # senders without the conversation list having to carry a profile for
+        # every member of the room - which, for a group that holds the whole
+        # platform, is most of the platform. A system line has no sender.
+        "profiles": _profiles({r.sender_id for r in rows if r.sender_id}),
     }
 
 

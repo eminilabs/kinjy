@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Cloudy, Languages, MonitorSmartphone, Moon, Share2, Sun } from 'lucide-react'
+import { Cloudy, Languages, MonitorSmartphone, Share2, Sun } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AMBIENTS, useAppTheme } from './theme'
 import type { Ambient, AppLang, DisplayMode } from './theme'
@@ -10,8 +10,7 @@ const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
 const MODES: { id: DisplayMode; label: string; icon: typeof Cloudy; note: string }[] = [
   { id: 'cloud', label: 'Cloud', icon: Cloudy, note: 'Signature · translucent glass over a living sky' },
   { id: 'light', label: 'Light', icon: Sun, note: 'Archival paper · warm and editorial' },
-  { id: 'dark', label: 'Dark', icon: Moon, note: 'Solid ink · no blur, low-power friendly' },
-  { id: 'system', label: 'System', icon: MonitorSmartphone, note: 'Follows your OS preference' },
+  { id: 'system', label: 'System', icon: MonitorSmartphone, note: 'Follows your device: Cloud or Light' },
 ]
 
 const LANGS: { id: AppLang; label: string; sample: string }[] = [
