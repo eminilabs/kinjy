@@ -6,6 +6,7 @@ import ArcButton from './ui-kit/ArcButton'
 import { LANGUAGES } from '@/i18n'
 import { COMPANY } from '@/lib/company'
 import { isRouteAvailable } from '@/lib/features'
+import { useAuth } from '@/hooks/useAuth'
 
 const ALL_COLUMNS: { title: string; links: { label: string; to: string }[] }[] = [
   {
@@ -57,8 +58,16 @@ const COLUMNS = ALL_COLUMNS.map((col) => ({
 /** Footer (§7.3) — twilight field, CTA, link columns. */
 export default function Footer() {
   const { t, i18n } = useTranslation()
+  const { user } = useAuth()
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
+
+  // Nothing to say to somebody who is already here. This footer is a place to
+  // learn what Kinjy is, pick a language and sign up: four columns of
+  // marketing under a page a member reached while signed in. The links it
+  // carries are either in the app's own navigation already or are the sign-up
+  // path they have taken.
+  if (user) return null
 
   return (
     <footer className="relative overflow-hidden twilight-field noise-overlay">

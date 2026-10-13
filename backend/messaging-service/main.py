@@ -2002,6 +2002,15 @@ async def send_message(
     # is enough: ten messages in a row are one reason to come back, not ten.
     link = f"/messages?c={conversation_id}"
     offline = [uid for uid in participants if uid != principal.user_id and not deliveries.get(uid)]
+    # Resolved once for the whole fan-out, and only when there is somebody to
+    # notify: a name lookup per recipient would be a request per member.
+    # `_profiles` rather than `_display_names`, which falls back to a truncated
+    # raw id - and "New message from usr_01M4TW" is worse than no name at all.
+    sender_name = (
+        ((_profiles({principal.user_id}).get(principal.user_id) or {}).get("display_name") or None)
+        if offline
+        else None
+    )
     for uid in offline:
         waiting = db.scalar(
             select(models.Notification.id).where(
@@ -2016,7 +2025,11 @@ async def send_message(
                 models.Notification(
                     user_id=uid,
                     kind="message",
-                    title=f"New message from @{principal.handle}" if principal.handle else "New message",
+                    # The sender's name, not their handle. The token carries
+                    # only the handle, so this is the one lookup it takes to
+                    # stop every message notification reading "@uqg5ptjlh" -
+                    # which on a lock screen names nobody.
+                    title=f"New message from {sender_name}" if sender_name else "New message",
                     # Never the text of an encrypted message: the server has none.
                     # Nor any text at all while encryption at rest is on: the
                     # notification table would be a plaintext copy of the

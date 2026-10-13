@@ -253,6 +253,22 @@ def _mention_names(bodies: Iterable[str]) -> dict[str, str]:
     return names
 
 
+def _name_of(user_id: str) -> str:
+    """What to call somebody in a notification: their name, never their handle.
+
+    A notification is read on a lock screen, out of context. "@k_mbeki3 liked
+    your post" asks the reader to decode a handle before they know whether
+    they care; "Kofi Mbeki liked your post" is the same sentence with the
+    answer already in it. The handle is still how you *reach* a profile - it
+    is just not how a person is introduced.
+
+    Falls back to "Someone" rather than to the handle, because a notification
+    that names nobody is better than one that names an id.
+    """
+    profile = _authors({user_id}).get(user_id) or {}
+    return profile.get("display_name") or "Someone"
+
+
 def _notify_mentions(body: str, actor_id: str, post_id: str, where: str) -> None:
     """Tell the people named in a body that they were named.
 
@@ -1534,6 +1550,19 @@ def toggle_comment_like(
         )
         liked = True
     db.commit()
+
+    # The author of the comment hears who answered it, the same as a post.
+    if liked and comment.author_id != principal.user_id:
+        try:
+            notify.notify(
+                comment.author_id,
+                kind="reaction",
+                title=f"{_name_of(principal.user_id)} reacted to your comment",
+                body=_excerpt(comment.body or "")[:140] or None,
+                link=f"/hub?post={comment.post_id}",
+            )
+        except Exception as exc:
+            log.warning("could not notify the author of a comment reaction: %s", exc)
 
     counts = _comment_reaction_counts(db, [comment_id])
     return {
@@ -2875,6 +2904,42 @@ def publish_algorithm(payload: AlgorithmIn, principal: CurrentUser, db: OrmSessi
 # ranking signals keep working without a migration.
 REACTION_KINDS = ("like", "celebrate", "support", "insightful", "love")
 
+# How each reaction reads in a sentence about somebody doing it.
+REACTION_VERBS = {
+    "like": "liked",
+    "celebrate": "celebrated",
+    "support": "supported",
+    "insightful": "found something insightful in",
+    "love": "loved",
+}
+
+
+def _notify_reacted(db: OrmSession, post: models.Post, actor_id: str, kind: str) -> None:
+    """Tell an author that somebody reacted to what they wrote, and who.
+
+    The reaction was silent: a post could be liked by twenty people and its
+    author would only find out by going back and counting. Naming the person
+    is the whole content of the notification - "somebody reacted" is a number,
+    "Kofi Mbeki liked your post" is news about a person.
+
+    Reacting to your own post is not news, and a reaction taken back is not
+    either, so neither is sent. Best-effort like the rest of the notifications
+    here: the reaction is already committed.
+    """
+    if post.author_id == actor_id:
+        return
+    verb = REACTION_VERBS.get(kind, "reacted to")
+    try:
+        notify.notify(
+            post.author_id,
+            kind="reaction",
+            title=f"{_name_of(actor_id)} {verb} your post",
+            body=_excerpt(post.body or "")[:140] or None,
+            link=f"/hub?post={post.id}",
+        )
+    except Exception as exc:
+        log.warning("could not notify the author of a reaction: %s", exc)
+
 
 class ReactIn(BaseModel):
     kind: str = Field(default="like")
@@ -2925,6 +2990,9 @@ def react(post_id: str, payload: ReactIn, principal: CurrentUser, db: OrmSession
 
     db.commit()
     _broadcast_reactions(db, post, principal.user_id)
+    # Only when one was added or changed: taking a reaction back is not news.
+    if not (existing and existing.kind == payload.kind):
+        _notify_reacted(db, post, principal.user_id, payload.kind)
     return {"post_id": post_id, "reactions": _reaction_summary(db, post_id, principal.user_id)}
 
 
@@ -3049,6 +3117,7 @@ def like(post_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db))
     post.likes_count += 1
     db.commit()
     _broadcast_reactions(db, post, principal.user_id)
+    _notify_reacted(db, post, principal.user_id, "like")
     return {"liked": True, "likes_count": post.likes_count}
 
 
@@ -3337,13 +3406,20 @@ def add_comment(post_id: str, payload: CommentIn, principal: CurrentUser, db: Or
             t for t in targets
             if t == post.author_id or _can_see(post, _viewer_audience(t))
         }
+    actor_name = _name_of(principal.user_id)
     for target in targets:
         live(f"user:{target}", "activity", event_kind="comment",
              post_id=post_id, comment_id=comment.id, actor=principal.user_id)
         notify.notify(
             target,
             kind="comment" if target == post.author_id else "reply",
-            title="Someone replied to you" if target == reply_to else "New comment on your post",
+            # Named, not "Someone". Whose comment it is decides whether you
+            # open it, and the name was known here all along.
+            title=(
+                f"{actor_name} replied to you"
+                if target == reply_to
+                else f"{actor_name} commented on your post"
+            ),
             body=payload.body[:140],
             link=f"/hub?post={post_id}",
         )

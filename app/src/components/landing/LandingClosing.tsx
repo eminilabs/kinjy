@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { ASSISTANT_SKILLS, FOOTER_COLUMNS, PLANS, TESTIMONIALS, TRUST } from './data'
 import { Brand, StoreBadges } from './shared'
 import { useJoinTarget } from './useJoinTarget'
+import { useAuth } from '@/hooks/useAuth'
 
 const NIGHT_FIELD = 'radial-gradient(120% 120% at 20% 0%, #242142 0%, #0B0E1D 65%)'
 
@@ -200,6 +201,13 @@ export function LandingFinalCta() {
 /** The site footer: every public page, in four columns. */
 export function LandingFooter() {
   const { t: tr } = useTranslation()
+  const { user } = useAuth()
+
+  // Not for a member who is signed in - see the note in components/Footer.
+  // Guarded here rather than at each of the three places that draw a footer,
+  // so the rule is one rule and cannot drift between them.
+  if (user) return null
+
   return (
   <footer className="px-2 pb-7 pt-14 text-sm text-[var(--kl-mid)]">
     <div className="grid gap-10" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))' }}>

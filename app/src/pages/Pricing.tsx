@@ -21,8 +21,13 @@ function PricingCta() {
       }
     >
       <div className="mt-12 flex flex-col items-center justify-center gap-4 sm:flex-row">
+        {/* The link already led to the app for somebody signed in; only the
+            words still said "create an account" to a member who has one. The
+            same reading as the footer above: nothing here is addressed to
+            somebody who has already joined. */}
         <Link to={join.to} className={KL_BTN_GOLD}>
-          Create free account <ArrowRight size={17} aria-hidden="true" />
+          {join.to.startsWith('/join') ? 'Create free account' : join.label}{' '}
+          <ArrowRight size={17} aria-hidden="true" />
         </Link>
         <Link to="/app" className={KL_BTN_GHOST}>
           Open the app demo <ArrowRight size={17} aria-hidden="true" />

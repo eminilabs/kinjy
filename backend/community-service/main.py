@@ -1070,11 +1070,21 @@ def add_reply(thread_id: str, payload: ReplyIn, principal: CurrentUser, db: OrmS
     # The thread's author, and the person being replied to, hear about it even
     # when they are not looking at the page.
     parent = db.get(models.Reply, reply.parent_id) if reply.parent_id else None
-    for target in {thread.author_id, parent.author_id if parent else None} - {principal.user_id, None}:
+    targets = {thread.author_id, parent.author_id if parent else None} - {principal.user_id, None}
+    # Named, not "somebody": whose reply it is decides whether you go and read
+    # it, and the name costs one lookup for the whole fan-out.
+    author = (
+        (_profiles({principal.user_id}).get(principal.user_id) or {}).get("display_name")
+        if targets
+        else None
+    )
+    for target in targets:
         notify.notify(
             target,
             kind="forum_reply",
-            title="New reply in a thread you are in",
+            title=f"{author} replied in a thread you are in"
+            if author
+            else "New reply in a thread you are in",
             body=payload.body[:140],
             link=f"/forums?thread={thread_id}",
         )
