@@ -80,13 +80,84 @@ class PublishingOutput(Base):
     job_id: Mapped[str] = mapped_column(String(40), index=True)
     target: Mapped[str] = mapped_column(String(30))
     lang: Mapped[str] = mapped_column(String(5), default="en")
+    # queued -> running -> ready | failed, or unsupported when this server cannot
+    # make it. Text is made inside the request and is born ready; a render
+    # (carousel, audio, video) is queued and finished by media_jobs.
     status: Mapped[str] = mapped_column(String(20), default="queued")
     content: Mapped[str | None] = mapped_column(Text)
     media_url: Mapped[str | None] = mapped_column(String(500))
+    # The files a render made, as media-service holds them: a JSON list of
+    # {id, kind, content_type, alt}. Ids only - a viewable address is minted
+    # fresh on every read, because the tickets in one expire.
+    media: Mapped[str | None] = mapped_column(Text)
     # Anything the engine produced is labelled — the provenance rule applies to
     # the platform's own AI output too, not only to users'.
     provenance: Mapped[str] = mapped_column(String(20), default="ai_generated")
+    # Produced through the stand-in AI provider rather than a real model, so a
+    # "translation" is only a marker on the text. Kept on the row because the
+    # provider can change after the job: what was produced stays what it was.
+    simulated: Mapped[bool] = mapped_column(Boolean, default=False)
     error: Mapped[str | None] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class NewsletterSubscriber(Base):
+    """Somebody who asked, with an e-mail address, to receive one creator's newsletter.
+
+    ``pending`` until they follow the link in the confirmation mail - nothing is ever sent to a
+    pending address - then ``confirmed``; ``unsubscribed`` is final until *they* ask again.
+    There is no token column: the links in the mails are signed (newsletter.py), so nothing a
+    database leak reveals can confirm, or cancel, anybody's subscription.
+    """
+
+    __tablename__ = "newsletter_subscribers"
+    __table_args__ = (UniqueConstraint("creator_id", "email", name="uq_newsletter_subscriber"), {"schema": SCHEMA})
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("nws"))
+    creator_id: Mapped[str] = mapped_column(String(40), index=True)
+    creator_handle: Mapped[str] = mapped_column(String(60), default="")
+    email: Mapped[str] = mapped_column(String(254), index=True)  # lower case
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|confirmed|unsubscribed
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    confirmation_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    unsubscribed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class NewsletterIssue(Base):
+    """One newsletter, sent once to the people who were confirmed at the time."""
+
+    __tablename__ = "newsletter_issues"
+    __table_args__ = {"schema": SCHEMA}
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("iss"))
+    creator_id: Mapped[str] = mapped_column(String(40), index=True)
+    creator_handle: Mapped[str] = mapped_column(String(60))
+    subject: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text)
+    lang: Mapped[str] = mapped_column(String(5), default="en")
+    # queued -> sending -> sent | partial | failed. A restart puts "sending" back in the queue; the
+    # deliveries table is what stops anybody being written to twice.
+    status: Mapped[str] = mapped_column(String(20), default="queued")
+    recipients: Mapped[int] = mapped_column(Integer, default=0)
+    sent: Mapped[int] = mapped_column(Integer, default=0)
+    failed: Mapped[int] = mapped_column(Integer, default=0)
+    skipped: Mapped[int] = mapped_column(Integer, default=0)  # left before their turn came
+    error: Mapped[str | None] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class NewsletterDelivery(Base):
+    """One address, one issue, one result. Its uniqueness is what makes a resumed send safe."""
+
+    __tablename__ = "newsletter_deliveries"
+    __table_args__ = (UniqueConstraint("issue_id", "subscriber_id", name="uq_newsletter_delivery"), {"schema": SCHEMA})
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    issue_id: Mapped[str] = mapped_column(String(40), index=True)
+    subscriber_id: Mapped[str] = mapped_column(String(40))
+    status: Mapped[str] = mapped_column(String(20))  # sent|failed|skipped
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
@@ -109,6 +180,24 @@ class Subscription(Base):
     started_on: Mapped[date] = mapped_column(Date, default=lambda: datetime.now(timezone.utc).date())
     renews_on: Mapped[date | None] = mapped_column(Date)
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SubscriptionGrant(Base):
+    """One verified payment, one immutable period. Legacy subscriptions are not evidence."""
+
+    __tablename__ = "subscription_grants"
+    __table_args__ = {"schema": SCHEMA}
+
+    payment_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(40), index=True)
+    tier: Mapped[str] = mapped_column(String(20))
+    period: Mapped[str] = mapped_column(String(10))
+    amount: Mapped[Decimal] = mapped_column(AMOUNT)
+    mock: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
 class Badge(Base):

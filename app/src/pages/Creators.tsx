@@ -25,7 +25,7 @@ function CreatorsCta() {
       }
     >
       <div className="mt-12 flex flex-col items-center justify-center gap-4 sm:flex-row">
-        <Link to="/app" className={KL_BTN_GOLD}>
+        <Link to="/studio" className={KL_BTN_GOLD}>
           Start creating <ArrowRight size={17} aria-hidden="true" />
         </Link>
         <Link to="/pricing" className={KL_BTN_GHOST}>

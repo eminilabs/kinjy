@@ -1,0 +1,26 @@
+# Points ai-service at the stand-in server in tests/fake_ileai.py instead of at IleAI, so the
+# translation rules can be tested on the live stack with no account, no key and no money.
+#
+#   docker compose -f docker-compose.yml -f backend/tests/compose.fake-ileai.yml up -d --no-deps --force-recreate ai-service
+#   python backend/tests/e2e_translation_rules.py         (it starts the stand-in itself, on :8799)
+#   docker compose up -d --no-deps --force-recreate ai-service     (back to normal)
+#
+# The key below is a made-up one and `environment` beats `env_file`, so a real key in .env.ai is
+# NOT used while this file is applied: nothing can reach IleAI. The credits are small on purpose, so
+# a Free member runs out after two short texts and a Basic one does not; and subscriptions are
+# believed here (off everywhere else) so the test can show a plan counting.
+services:
+  ai-service:
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    environment:
+      AI_LIVE_ENABLED: "true"
+      ILEAI_API_KEY: "emk_test_fake_key_not_a_secret"
+      ILEAI_BASE_URL: "http://host.docker.internal:8799"
+      ILEAI_TRANSLATE_ENGINE: "translate"
+      ILEAI_TRANSLATE_MODEL: ""
+      ILEAI_CHAT_MODEL: ""
+      AI_CREDIT_CHARS: "100"
+      AI_CREDITS_FREE: "4"
+      AI_CREDITS_BASIC: "40"
+      AI_CREDITS_PREMIUM: "100"
+      AI_CREDITS_TRUST_SUBSCRIPTIONS: "true"

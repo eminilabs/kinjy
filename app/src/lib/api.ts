@@ -448,6 +448,8 @@ export interface Post {
   reposted_by_me?: boolean
   created_at: string
   edited_at: string | null
+  status?: string
+  scheduled_for?: string | null
   media: PostMedia[]
   reactions: ReactionSummary
   /** Author's own declaration; a minor's feed never carries these. */
@@ -539,6 +541,12 @@ export interface NewPost {
   provenance?: string
   /** The author declaring adult content, so minors' feeds can exclude it. */
   mature?: boolean
+  /**
+   * Publish later: an ISO time *with* a time zone (`toISOString()` is one), between a minute and a year
+   * from now. The post is judged when it is written and released at this time; until then only its
+   * author can see it, in `kaluta.posts.scheduled()`.
+   */
+  scheduled_for?: string
   media?: Array<{
     media_id: string
     url: string
@@ -972,6 +980,123 @@ export interface DeathReviewItem {
   reports: Array<{ id: number; evidence: string; document_url: string | null; reported_by: string; created_at: string }>
 }
 
+/** What the engine can make, and why it cannot make the rest. */
+export interface CreatorFormats {
+  formats: Array<{ id: string; label: string; available: boolean; reason: string | null; note: string | null }>
+  languages: Array<{ code: string; name: string; native: string }>
+  max_source_chars: number
+  /** True when every AI provider is the stand-in one; null when it could not be asked. */
+  ai: { simulated: boolean | null }
+  /**
+   * What translation is for the person asking. Not available to an account under 18 (or a
+   * visitor): their writing is never sent to a translation provider. `notice` is the disclosure
+   * owed when it is, and only when the provider is a real one.
+   */
+  translation: { available: boolean; reason: string | null; notice: string | null }
+}
+
+/** One file a render made. `url` carries a ticket that expires; ask for the job again for a fresh one. */
+export interface PublishMedia {
+  id: string
+  /** image | audio | video */
+  kind: string
+  content_type: string
+  alt: string
+  /** Pixels, for an image or a video; null for audio. */
+  width: number | null
+  height: number | null
+  /** Length of an audio or video, in seconds. */
+  seconds: number | null
+  url: string
+}
+
+export interface PublishOutput {
+  id: number
+  target: string
+  lang: string
+  /** queued | running (a render is being made) | ready | unsupported | failed */
+  status: string
+  /** Article is HTML (escaped); the others are text. */
+  content: string | null
+  /** The same words with no markup — for showing and copying. */
+  text: string | null
+  media_url: string | null
+  /** The slides, narration or video a render made; empty for text. */
+  media: PublishMedia[]
+  /** original | edited | ai_assisted | ai_generated | verified_source */
+  provenance: string
+  /** Made through the stand-in AI: the text is marked, not really translated. */
+  simulated: boolean
+  error: string | null
+}
+
+export interface PublishJob {
+  job_id: string
+  status: string
+  created_at: string
+  source_text: string | null
+  source_lang: string
+  source_ref: string | null
+  outputs: PublishOutput[]
+}
+
+export interface PublishJobSummary {
+  job_id: string
+  created_at: string
+  status: string
+  source_snippet: string
+  source_lang: string
+  source_ref: string | null
+  targets: string[]
+  target_langs: string[]
+  ready: number
+  failed: number
+  unsupported: number
+  /** Renders still waiting or being made. */
+  pending: number
+}
+
+/** A creator's newsletter list, as the creator may see it: counts, and addresses only masked. */
+export interface NewsletterState {
+  confirmed: number
+  waiting_for_confirmation: number
+  unsubscribed: number
+  /** `a***@example.com` - never a whole address. */
+  preview: string[]
+  /** The public sign-up route for this creator, or null when their handle is unknown. */
+  subscribe_path: string | null
+  /** False when the server has no mail set up: nothing can be sent. */
+  can_send: boolean
+  sending_allowed: boolean
+  plan_allowed: boolean
+}
+
+export interface NewsletterIssue {
+  id: string
+  subject: string
+  /** queued | sending | sent | partial | failed */
+  status: string
+  recipients: number
+  sent: number
+  failed: number
+  /** Left out before their turn came: they unsubscribed meanwhile, or the send was interrupted. */
+  skipped: number
+  error: string | null
+  created_at: string
+  finished_at: string | null
+}
+
+export interface CreatorProfileMe {
+  monetization_enabled: boolean
+  /** The age decision: a minor is told it is not for them rather than refused on press. */
+  monetization_allowed: boolean
+  subscription_price_usd: string | null
+  tagline: string | null
+  share_pct: string
+  subscribers: number
+  badges: Array<{ badge: string; reason: string | null; awarded_at: string }>
+}
+
 export interface Product {
   id: string
   title: string
@@ -1294,7 +1419,56 @@ export interface MyDecision {
   } | null
 }
 
+export interface SubscriptionState {
+  tier: 'free' | 'basic' | 'premium'
+  verified: boolean
+  subscription_id: string | null
+  status: string
+  access_until: string | null
+  mock: boolean
+  renewal_mode: 'manual'
+  features: { scheduled_posts: boolean; newsletter_send: boolean }
+  periods: Array<{ payment_id: string; tier: string; period: string; starts_at: string; ends_at: string; mock: boolean }>
+}
+
+export interface SubscriptionCatalog {
+  currency: string
+  renewal_mode: 'manual'
+  plans: Array<{ tier: SubscriptionState['tier']; price: { monthly: string; yearly: string }; credits: number; features: SubscriptionState['features'] }>
+  planned_features: string[]
+}
+
+export interface SubscriptionPayment {
+  payment_id: string
+  purpose: string
+  status: string
+  amount: string
+  currency: string
+  rail: string
+  mock: boolean
+  tier: string | null
+  period: string | null
+  pay_address: string | null
+  pay_currency: string | null
+  pay_amount: string | null
+  created_at: string
+  settled_at: string | null
+  access_synced: boolean
+}
+
 export const kaluta = {
+  subscriptions: {
+    catalog: () => api.get<SubscriptionCatalog>('/subscriptions/catalog'),
+    me: () => api.get<SubscriptionState>('/subscriptions/me'),
+    options: () => api.get<{ checkout_available: boolean; live_available: boolean; mock_available: boolean; renewal_mode: 'manual' }>('/payments/subscriptions/options'),
+    history: () => api.get<{ items: SubscriptionPayment[] }>('/payments/subscriptions/history'),
+    checkout: (input: { tier: 'basic' | 'premium'; period: 'monthly' | 'yearly' }) => api.post<SubscriptionPayment>('/payments/subscriptions/checkout', input),
+    payment: (id: string) => api.get<SubscriptionPayment>(`/payments/intents/${id}`),
+    simulate: (id: string) => api.post(`/payments/${id}/mock-settle`),
+    simulateRefund: (id: string) => api.post(`/payments/${id}/mock-refund`),
+    sync: (id: string) => api.post<{ access_synced: boolean }>(`/payments/${id}/sync-subscription`),
+    cancel: (id: string) => api.delete<{ cancelled: boolean; access_until: string | null }>(`/subscriptions/${id}`),
+  },
   status: () => api.get<StackStatus>('/status', { auth: false }),
 
   economy: {
@@ -1342,8 +1516,10 @@ export const kaluta = {
     /**
      * One-to-Many (blueprint §Creator Studio): one idea, several formats.
      *
-     * Targets that need a media pipeline come back `unsupported` with the
-     * reason rather than sitting queued forever, so the UI can say why.
+     * Text comes back ready. Carousel, audio and video are rendered after the
+     * request returns: they come back `queued`, and the job is read again until
+     * none is. A target this server cannot make comes back `unsupported` with
+     * the reason, so the UI can say why.
      */
     publish: (input: {
       source_text: string
@@ -1357,25 +1533,46 @@ export const kaluta = {
         status: string
         outputs: number
         ready: number
+        /** Renders queued; the job is polled until this reaches zero. */
+        pending: number
         unsupported: string[]
       }>('/creators/publish', { source_kind: 'text', ...input }),
 
-    job: (jobId: string) =>
-      api.get<{
-        job_id: string
-        status: string
-        outputs: Array<{
-          target: string
-          lang: string
-          status: string
-          content: string | null
-          media_url: string | null
-          provenance: string
-          error: string | null
-        }>
-      }>(`/creators/publish/${jobId}`),
+    job: (jobId: string) => api.get<PublishJob>(`/creators/publish/${jobId}`),
 
-    enable: () => api.post<{ enabled: boolean }>('/creators/enable'),
+    /** The creator's own jobs, newest first. */
+    jobs: (params: { limit?: number; offset?: number } = {}) => {
+      const query = new URLSearchParams()
+      query.set('limit', String(params.limit ?? 20))
+      if (params.offset) query.set('offset', String(params.offset))
+      return api.get<{ total: number; items: PublishJobSummary[] }>(`/creators/publish?${query}`)
+    },
+
+    deleteJob: (jobId: string) => api.delete<void>(`/creators/publish/${jobId}`),
+
+    formats: () => api.get<CreatorFormats>('/creators/formats'),
+
+    newsletter: {
+      subscribers: () => api.get<NewsletterState>('/creators/newsletter/subscribers'),
+      /** Send a ready Studio newsletter (`output_id`) or a subject and a body to everyone who confirmed. */
+      send: (input: { output_id?: number; subject?: string; body?: string }) =>
+        api.post<NewsletterIssue>('/creators/newsletter/send', input),
+      issue: (id: string) => api.get<NewsletterIssue>(`/creators/newsletter/issues/${id}`),
+      /**
+       * Ask to receive a creator's newsletter. Public. The answer is the same whatever the server already
+       * knew about the address, so it cannot be used to find out who is on a list.
+       */
+      subscribe: (handle: string, email: string) =>
+        api.post<{ status: string; message: string }>(
+          `/creators/${encodeURIComponent(handle)}/newsletter/subscribe`,
+          { email },
+          { auth: false },
+        ),
+    },
+
+    me: () => api.get<CreatorProfileMe>('/creators/me'),
+
+    enable: () => api.post<{ user_id: string; monetization_enabled: boolean }>('/creators/enable'),
   },
 
   shorts: {
@@ -1443,6 +1640,10 @@ export const kaluta = {
 
   posts: {
     create: (post: NewPost) => api.post<Post>('/posts', post),
+    /** The author's own posts waiting for their time, soonest first. */
+    scheduled: () => api.get<{ items: Post[] }>('/posts/scheduled'),
+    reschedule: (id: string, scheduled_for: string) => api.patch<Post>(`/posts/${id}/schedule`, { scheduled_for }),
+    publishNow: (id: string) => api.post<Post>(`/posts/${id}/publish-now`),
     get: (id: string) => api.get<Post>(`/posts/${id}`),
     /**
      * The card for a link in a post. Read by the server, not the browser: a
@@ -1578,9 +1779,31 @@ export const kaluta = {
         source_lang: string
         provider?: string
         mock?: boolean
+        /**
+         * Set when the translation was deliberately not made: only a signed-in adult's writing is sent to a
+         * real provider, so a visitor, a minor or an account of unknown age gets the stand-in's placeholder
+         * instead - which must not be shown as a translation.
+         */
+        withheld?: string
         cached: boolean
         noop?: boolean
-      }>('/ai/translate', { text, target_lang, source_lang }, { auth: false }),
+      }>('/ai/translate', { text, target_lang, source_lang }),
+
+    /** The member's AI credits this month: their plan's allowance, what is used, what is left. */
+    credits: () =>
+      api.get<{
+        plan: 'free' | 'basic' | 'premium'
+        /** Whether the recorded plan is believed (it is not until billing confirms subscriptions). */
+        plan_counted: boolean
+        /** Characters of writing one credit covers. */
+        credit_characters: number
+        credits: number
+        used: number
+        left: number
+        renews_on: string
+        /** False for a minor (nothing is ever sent for them) and while no real provider is configured. */
+        spendable: boolean
+      }>('/ai/credits'),
   },
 
   social: {

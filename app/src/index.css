@@ -45,6 +45,12 @@
   :root,
   .twilight-field,
   .force-dark {
+    /* Tells the browser which palette this is, so the parts it draws itself —
+       the list a <select> opens, date pickers, scrollbars, checkboxes — come out
+       dark too. Without it Chrome draws them light, and an option inherits the
+       near-white text colour onto a white list: the choices were there, and
+       invisible until the pointer passed over one. */
+    color-scheme: dark;
     /* Kinjy — Cloud (signature dark) design tokens */
     --ink: #0B0E1D;
     --ink-2: #12162B;
@@ -162,6 +168,16 @@
     color: rgb(var(--text-hi-rgb));
   }
 
+  /* The options of a <select> take the page's own surface and text colours, in
+     both themes. color-scheme above is what makes browsers draw the list in the
+     right theme; this states the colours outright for the ones that draw it
+     themselves and ignore color-scheme for the popup. */
+  select option,
+  select optgroup {
+    background-color: rgb(var(--ink-2-rgb));
+    color: rgb(var(--text-hi-rgb));
+  }
+
   /* Light mode.
    *
    * Defined on the tokens rather than per component. The theme used to live
@@ -172,6 +188,7 @@
    * shadcn bridge below. */
   :root[data-theme='light'],
   .force-light {
+    color-scheme: light;
     /* The landing design's light: a white page, paper for soft panels and
        hairlines, white cards set off by a border rather than by tint. */
     --ink: var(--k-white);

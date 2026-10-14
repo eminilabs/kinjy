@@ -140,7 +140,7 @@ services:
   creator-service:
     <<: *service-base
     container_name: kaluta-creator
-    build: {context: ./backend, dockerfile: Dockerfile, args: {SERVICE: creator-service}}
+    build: {context: ./backend, dockerfile: Dockerfile, args: {SERVICE: creator-service, MEDIA_TOOLS: "1"}}
     ports: ["8208:8000"]
     volumes: ["./backend/creator-service:/app", "./backend/common:/app/common"]
 
@@ -167,6 +167,12 @@ services:
 
   ai-service:
     <<: *service-base
+    # The only service that reads .env.ai: a provider's key sits there, not in .env,
+    # because .env is handed to every container and only this one has a use for it.
+    env_file:
+      - .env
+      - path: .env.ai
+        required: false
     container_name: kaluta-ai
     build: {context: ./backend, dockerfile: Dockerfile, args: {SERVICE: ai-service}}
     ports: ["8212:8000"]
@@ -189,7 +195,7 @@ services:
     restart: unless-stopped
     ports: ["3030:5173"]
     environment:
-      VITE_API_BASE: http://localhost:8200/api
+      VITE_API_BASE: /api
     volumes:
       - ./app:/app
       - kaluta-node-modules:/app/node_modules

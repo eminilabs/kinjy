@@ -1,6 +1,7 @@
 """Kinjy · social-service — posts, feed modes, algorithm marketplace, reactions."""
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import html as html_module
 import json
@@ -13,10 +14,11 @@ import httpx
 from fastapi import BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, delete, func, or_, select
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.orm import Session as OrmSession
+from starlette.concurrency import run_in_threadpool
 
-from common import events, notify, settings
+from common import events, notify, settings, entitlements
 from common.auth import AdminUser, CurrentUser, MaybeUser
 from common.database import SessionLocal, get_db
 from common.ids import new_id
@@ -87,13 +89,24 @@ def seed_algorithms() -> None:
 # content_safety is a new table; create_all makes it, but existing posts have
 # no row. restrict_query treats a missing row as UNCLASSIFIED, i.e. hidden from
 # minors, so the gap is closed in the safe direction until the backfill runs.
-MIGRATIONS: list[str] = []
+MIGRATIONS: list[str] = [
+    f"ALTER TABLE {models.SCHEMA}.posts ADD COLUMN IF NOT EXISTS scheduled_for TIMESTAMPTZ",
+    # What the scheduler asks every few seconds: only the posts waiting for their time.
+    f"CREATE INDEX IF NOT EXISTS ix_posts_scheduled ON {models.SCHEMA}.posts (scheduled_for) WHERE status = 'scheduled'",
+]
+
+
+async def start_scheduler() -> None:
+    """Start the loop that releases scheduled posts. Runs as long as the service does."""
+    asyncio.get_running_loop().create_task(_release_due_posts_forever())
+
 
 app = create_app(
     name="social-service",
     schema=models.SCHEMA,
     description="Posts, multiple feed modes, the algorithm marketplace, reactions and comments.",
-    on_startup=[seed_algorithms],
+    on_startup=[seed_algorithms, start_scheduler],
+    migrations=MIGRATIONS,
 )
 
 
@@ -117,6 +130,9 @@ class PostIn(BaseModel):
     episode_number: int | None = None
     media: list[dict] = Field(default_factory=list)
     mature: bool = False
+    # Publish later. Must carry a time zone (a bare "2026-10-14T09:00" is nobody's 9 o'clock) and be
+    # between a minute and a year away; checked in create_post, where "now" is known.
+    scheduled_for: datetime | None = None
 
 
 class CommentIn(BaseModel):
@@ -429,7 +445,7 @@ def _post_out(
             # Reposts of restricted posts are refused now, but rows from before
             # that rule must not carry a circle post into a stranger's feed.
             and (original.visibility == "public" or original.author_id == viewer)
-            and original.status not in ("removed", "draft")
+            and original.status not in ("removed", "draft", "scheduled")
             else None
         ),
         # Resolved once per response by _reposted_by(); a per-card lookup here
@@ -437,6 +453,8 @@ def _post_out(
         "reposted_by_me": post.id in (reposted if reposted is not None else set()),
         "created_at": post.created_at,
         "edited_at": post.edited_at,
+        "status": post.status,
+        "scheduled_for": post.scheduled_for,
         "media": [
             {
                 "url": signed_media[m.media_id],
@@ -730,8 +748,15 @@ async def create_post(payload: PostIn, principal: CurrentUser, db: OrmSession = 
     if not payload.body.strip() and not payload.media:
         raise HTTPException(status_code=400, detail="A post needs a body or media")
 
+    scheduled_for = _check_schedule(payload.scheduled_for)
+    if scheduled_for is not None:
+        await run_in_threadpool(entitlements.require, principal.user_id, "scheduled_posts")
+        _require_schedule_room(db, principal.user_id)
     media = _verified_media(payload.media, principal.user_id)
-    data = payload.model_dump(exclude={"topics", "media"})
+    data = payload.model_dump(exclude={"topics", "media", "scheduled_for"})
+    if scheduled_for is not None:
+        data["status"] = "scheduled"
+        data["scheduled_for"] = scheduled_for
     # A circle id only means something on a circle post; elsewhere it would be
     # a stray pointer the audience rule might one day read.
     if payload.visibility != "circle":
@@ -789,6 +814,10 @@ async def create_post(payload: PostIn, principal: CurrentUser, db: OrmSession = 
     _restrict_attached_media([m["media_id"] for m in media])
     db.refresh(post)
 
+    if post.status == "scheduled":
+        # Judged and stored now; announced when it is released (_release_due_posts), not before.
+        return _post_out(post, db, viewer=principal.user_id)
+
     await events.publish(
         "post.published",
         {"post_id": post.id, "author_id": post.author_id, "format": post.format, "lang": post.lang},
@@ -801,6 +830,149 @@ async def create_post(payload: PostIn, principal: CurrentUser, db: OrmSession = 
              post_id=post.id, author_id=post.author_id, format=post.format,
              mature=post.mature)
     return _post_out(post, db, viewer=principal.user_id)
+
+
+# ---------------------------------------------------------------------------
+# Scheduled posts
+#
+# A scheduled post is a post like any other, judged when it is written - classified, its media
+# restricted, refused if it must be - and then held back: status "scheduled", visible to nobody
+# but its author until its time. A loop releases what is due. Nothing about the content is
+# decided at release, which is the point: the age rules were applied once, to the thing that
+# will be shown.
+# ---------------------------------------------------------------------------
+
+SCHEDULE_MIN = timedelta(minutes=1)
+SCHEDULE_MAX = timedelta(days=366)
+MAX_SCHEDULED_PER_AUTHOR = 100
+RELEASE_EVERY_SECONDS = 20
+
+
+def _check_schedule(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        raise HTTPException(status_code=400, detail="scheduled_for needs a time zone, for instance 2026-10-14T09:00:00+03:00")
+    value = value.astimezone(timezone.utc)
+    now = datetime.now(timezone.utc)
+    if value < now + SCHEDULE_MIN:
+        raise HTTPException(status_code=400, detail="A post can be scheduled from one minute from now.")
+    if value > now + SCHEDULE_MAX:
+        raise HTTPException(status_code=400, detail="A post can be scheduled up to a year ahead.")
+    return value
+
+
+def _require_schedule_room(db: OrmSession, author_id: str) -> None:
+    waiting = db.scalar(
+        select(func.count()).select_from(models.Post).where(
+            models.Post.author_id == author_id, models.Post.status == "scheduled"
+        )
+    ) or 0
+    if waiting >= MAX_SCHEDULED_PER_AUTHOR:
+        raise HTTPException(status_code=429, detail=f"You have {MAX_SCHEDULED_PER_AUTHOR} posts waiting already. Cancel one or wait for one to go out.")
+
+
+def _release(db: OrmSession, post_id: str) -> dict | None:
+    """Release one scheduled post, once. Returns what to announce, or None if somebody else did it.
+
+    Atomic: the row only changes if it is still scheduled, so two workers (or a worker and a member
+    pressing "publish now") cannot both release it, and a post cancelled or withheld in the meantime
+    is not brought back."""
+    now = datetime.now(timezone.utc)
+    claimed = db.execute(
+        update(models.Post)
+        .where(models.Post.id == post_id, models.Post.status == "scheduled")
+        .values(status="published", created_at=now, scheduled_for=None)
+    ).rowcount
+    if claimed != 1:
+        return None
+    post = db.get(models.Post, post_id)
+    return {
+        "post_id": post.id, "author_id": post.author_id, "format": post.format, "lang": post.lang,
+        "visibility": post.visibility, "mature": post.mature,
+    }
+
+
+def _release_due_posts() -> list[dict]:
+    with SessionLocal() as db:
+        due = db.scalars(
+            select(models.Post.id)
+            .where(models.Post.status == "scheduled", models.Post.scheduled_for <= datetime.now(timezone.utc))
+            .order_by(models.Post.scheduled_for)
+            .limit(50)
+        ).all()
+        released = [info for info in (_release(db, post_id) for post_id in due) if info]
+        db.commit()
+        return released
+
+
+async def _announce(info: dict) -> None:
+    await events.publish(
+        "post.published",
+        {"post_id": info["post_id"], "author_id": info["author_id"], "format": info["format"], "lang": info["lang"]},
+    )
+    if info["visibility"] == "public":
+        await asyncio.to_thread(
+            live, "shorts" if info["format"] == "short" else "feed", "post",
+            post_id=info["post_id"], author_id=info["author_id"], format=info["format"], mature=info["mature"],
+        )
+
+
+async def _release_due_posts_forever() -> None:
+    while True:
+        try:
+            for info in await asyncio.to_thread(_release_due_posts):
+                await _announce(info)
+                log.info("released scheduled post %s", info["post_id"])
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("releasing scheduled posts failed; will try again")
+        await asyncio.sleep(RELEASE_EVERY_SECONDS)
+
+
+class ScheduleIn(BaseModel):
+    scheduled_for: datetime
+
+
+@app.get("/posts/scheduled", tags=["posts"])
+def my_scheduled_posts(principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """The author's own posts that are waiting for their time, soonest first."""
+    rows = db.scalars(
+        select(models.Post)
+        .where(models.Post.author_id == principal.user_id, models.Post.status == "scheduled")
+        .order_by(models.Post.scheduled_for)
+        .limit(MAX_SCHEDULED_PER_AUTHOR)
+    ).all()
+    return {"items": [_post_out(p, db, viewer=principal.user_id) for p in rows]}
+
+
+def _my_scheduled(db: OrmSession, post_id: str, user_id: str) -> models.Post:
+    post = db.get(models.Post, post_id)
+    # 404 for somebody else's post and for one that is not waiting: neither is the caller's to touch.
+    if post is None or post.author_id != user_id or post.status != "scheduled":
+        raise HTTPException(status_code=404, detail="Scheduled post not found")
+    return post
+
+
+@app.patch("/posts/{post_id}/schedule", tags=["posts"])
+def reschedule_post(post_id: str, payload: ScheduleIn, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    post = _my_scheduled(db, post_id, principal.user_id)
+    entitlements.require(principal.user_id, "scheduled_posts")
+    post.scheduled_for = _check_schedule(payload.scheduled_for)
+    db.commit()
+    return _post_out(post, db, viewer=principal.user_id)
+
+
+@app.post("/posts/{post_id}/publish-now", tags=["posts"])
+async def publish_scheduled_now(post_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    _my_scheduled(db, post_id, principal.user_id)
+    info = _release(db, post_id)
+    db.commit()
+    if info is None:  # released a moment ago by the loop: nothing left to do, and nothing wrong
+        raise HTTPException(status_code=409, detail="This post has just been published.")
+    await _announce(info)
+    return _post_out(db.get(models.Post, post_id), db, viewer=principal.user_id)
 
 
 # Declared before /posts/{post_id}: FastAPI matches in order, and the
@@ -1652,7 +1824,7 @@ def _media_to_discard(db: OrmSession, post: models.Post, removed_by: str, previo
 
     Called inside the delete request; the actual deletion runs after the response.
     """
-    if removed_by != post.author_id or previous_status not in ("published", "draft"):
+    if removed_by != post.author_id or previous_status not in ("published", "draft", "scheduled"):
         return []
     reported = db.scalar(
         select(func.count()).select_from(models.ContentReport).where(models.ContentReport.content_id == post.id)
@@ -1896,7 +2068,9 @@ def _readable_post(db: OrmSession, post_id: str, viewer: str | None) -> models.P
     confirm that a restricted post exists.
     """
     post = db.get(models.Post, post_id)
-    if post is None or post.status in ("removed", "draft"):
+    # A scheduled post is nobody's to read, reply to or share until it is released - its author
+    # sees it in their own list of scheduled posts.
+    if post is None or post.status in ("removed", "draft", "scheduled"):
         raise HTTPException(status_code=404, detail="Post not found")
     if not _can_see(post, _viewer_audience(viewer)):
         raise HTTPException(status_code=404, detail="Post not found")
@@ -2014,6 +2188,25 @@ def readable_posts(payload: ReadableIn, db: OrmSession = Depends(get_db)):
     )
     stmt = agefilter.restrict_query(stmt, _viewer_age(payload.viewer))
     return {"post_ids": list(db.scalars(stmt).all())}
+
+
+class MediaUseIn(BaseModel):
+    media_ids: list[str] = Field(default_factory=list, max_length=200)
+
+
+@app.post("/internal/media-in-use", tags=["internal"])
+def media_in_use(payload: MediaUseIn, db: OrmSession = Depends(get_db)):
+    """Which of these files a post still carries.
+
+    For the Creator Studio. A rendered carousel or video belongs to the job that
+    made it until a post takes it; deleting the job must then delete the files
+    nobody uses and leave the ones a post is showing, or removing a job from the
+    history would blank a published post.
+    """
+    ids = list(dict.fromkeys(i for i in payload.media_ids if i))
+    if not ids:
+        return {"in_use": []}
+    return {"in_use": list(db.scalars(select(models.PostMedia.media_id).where(models.PostMedia.media_id.in_(ids)).distinct()).all())}
 
 
 @app.get("/shorts", tags=["shorts"])

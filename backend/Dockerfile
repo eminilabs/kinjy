@@ -19,6 +19,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install --retries 5 --timeout 120 -r /tmp/requirements.txt
 
+# Rendering tools, for the one service that makes media (creator-service): ffmpeg
+# to encode, espeak-ng to speak, Pillow and fonts to draw slides. Behind a build
+# arg so the other twelve images stay as small as they were, and placed after
+# the pip layer above so their layers are still shared.
+ARG MEDIA_TOOLS=0
+COPY requirements-media.txt /tmp/requirements-media.txt
+RUN if [ "$MEDIA_TOOLS" = "1" ]; then \
+        apt-get update && apt-get install -y --no-install-recommends \
+            ffmpeg espeak-ng libraqm0 fonts-dejavu-core fonts-wqy-microhei \
+        && rm -rf /var/lib/apt/lists/* \
+        && pip install --retries 5 --timeout 120 -r /tmp/requirements-media.txt; \
+    fi
+
 # Shared library, then the service itself.
 COPY common /app/common
 

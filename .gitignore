@@ -1,4 +1,10 @@
 .env
+# AI provider keys: read by ai-service only (see docker-compose.yml). Never committed.
+.env.ai
+# ...and any slip of the finger on its name (.env.ai. , .env.ai~ , .env.ai.bak): the template is the only one tracked.
+.env.ai.*
+.env.ai~
+!.env.ai.example
 # Any hand-made copy of it too: a file called .env.backup-2026-10-03 is
 # not matched by the line above, and `git add -A` would publish every
 # secret in it to a public repository.

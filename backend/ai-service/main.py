@@ -10,19 +10,27 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session as OrmSession
 
-from common import settings
-from common.auth import AdminUser, MaybeUser
+from common import agefeatures, settings
+from common.auth import AdminUser, CurrentUser, MaybeUser
 from common.database import get_db
 from common.ids import new_id
 from common.service import create_app
 
 import gateway
+import ileai_adapter
+import limits
 import models
+import plans
+
+# The adapters this service can use. Registering one does not switch it on: a
+# provider is live only with its key and AI_LIVE_ENABLED (gateway.build_registry).
+gateway.register_adapter("ileai", ileai_adapter.IleAIAdapter())
 
 app = create_app(
     name="ai-service",
     schema=models.SCHEMA,
     description="Provider-independent AI gateway, translation, the Kinjy Assistant.",
+    migrations=[f"ALTER TABLE {models.SCHEMA}.ai_calls ADD COLUMN IF NOT EXISTS chars INTEGER DEFAULT 0"],
 )
 
 
@@ -39,6 +47,12 @@ class TranslateIn(BaseModel):
     text: str = Field(min_length=1, max_length=20000)
     source_lang: str | None = None
     target_lang: str
+
+
+class InternalTranslateIn(TranslateIn):
+    # Who the translation is for. Trusted, because this route is on the private network only:
+    # the public gateway never proxies /internal, so a client cannot name somebody else.
+    user_id: str = Field(min_length=1, max_length=40)
 
 
 class AssistIn(BaseModel):
@@ -60,10 +74,31 @@ def _record(db: OrmSession, result: dict, user_id: str | None, sensitive: bool) 
             latency_ms=result["latency_ms"],
             input_tokens=result["input_tokens"],
             output_tokens=result["output_tokens"],
+            chars=result.get("chars", 0),
             cost_usd=result["cost_usd"],
             sensitive=sensitive,
         )
     )
+
+
+def _record_failure(db: OrmSession, task: str, exc: Exception, lang: str | None, user_id: str | None, sensitive: bool) -> None:
+    """A call to a real provider that failed, so a run of "no credit left" or "refused
+    our credentials" shows up in the call log and not only in somebody's complaint.
+    The message is the adapter's own, which never carries a key or a body."""
+    db.add(
+        models.AiCall(
+            id=new_id("aic"),
+            task=task,
+            provider=(getattr(exc, "provider", None) or "unknown")[:40],
+            model="-",
+            lang=lang,
+            user_id=user_id,
+            sensitive=sensitive,
+            succeeded=False,
+            error=str(exc)[:300],
+        )
+    )
+    db.commit()
 
 
 @app.get("/ai/providers", tags=["gateway"])
@@ -82,6 +117,25 @@ def providers():
 
 @app.post("/ai/run", tags=["gateway"])
 def run_task(payload: RunIn, principal: MaybeUser, db: OrmSession = Depends(get_db)):
+    """Run a task through the gateway - but only a task the stand-in answers.
+
+    A task a real provider serves has rules this route does not know: who may send what to
+    whom (the age rule), what a member may spend, what may be cached. /ai/translate has them.
+    Left open here, ``task=translate`` would be a way round every one of them, so it is
+    refused: a task gets a route of its own, with its rules, before it gets a real provider
+    on this one.
+    """
+    try:
+        routed = gateway.route(
+            task=payload.task, lang=payload.lang, sensitive=payload.sensitive, quality_floor=payload.quality_floor
+        )
+    except gateway.NoProviderError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    if routed.name != "mock":
+        raise HTTPException(
+            status_code=400,
+            detail=f"'{payload.task}' is served by a real provider and has its own endpoint (for translation, /ai/translate).",
+        )
     try:
         result = gateway.run(
             task=payload.task,
@@ -93,15 +147,72 @@ def run_task(payload: RunIn, principal: MaybeUser, db: OrmSession = Depends(get_
         )
     except gateway.NoProviderError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
+    except gateway.ProviderError as exc:
+        # The adapter's message is written to be shown; a provider's own error body never is.
+        _record_failure(db, payload.task, exc, payload.lang, principal.user_id if principal else None, payload.sensitive)
+        raise HTTPException(status_code=502, detail=str(exc))
 
     _record(db, result, principal.user_id if principal else None, payload.sensitive)
     db.commit()
     return result
 
 
-@app.post("/ai/translate", tags=["translation"])
-def translate(payload: TranslateIn, principal: MaybeUser, db: OrmSession = Depends(get_db)):
-    """One-click translation with a cache. Auto-detects the source when omitted."""
+def _real_provider_would_serve(source_lang: str | None) -> bool:
+    try:
+        return gateway.route(task="translate", lang=source_lang).name != "mock"
+    except gateway.NoProviderError:
+        return False
+
+
+def _month_start() -> datetime:
+    return datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def _renews_on() -> str:
+    start = _month_start()
+    nxt = (start.replace(day=28) + timedelta(days=4)).replace(day=1)
+    return f"{nxt.day} {nxt.strftime('%B')}"
+
+
+def _allowance_chars(tier: str) -> int:
+    credits = limits.credits_for(
+        tier, free=settings.AI_CREDITS_FREE, basic=settings.AI_CREDITS_BASIC, premium=settings.AI_CREDITS_PREMIUM
+    )
+    return credits * settings.AI_CREDIT_CHARS
+
+
+def _used_this_month(db: OrmSession, user_id: str | None) -> int:
+    return int(db.scalar(
+        select(func.coalesce(func.sum(models.AiCall.chars), 0)).where(
+            models.AiCall.provider != "mock", models.AiCall.user_id == user_id,
+            models.AiCall.succeeded.is_(True), models.AiCall.created_at >= _month_start(),
+        )
+    ) or 0)
+
+
+def _spent_this_month(db: OrmSession) -> float:
+    return float(db.scalar(
+        select(func.coalesce(func.sum(models.AiCall.cost_usd), 0)).where(
+            models.AiCall.provider != "mock", models.AiCall.succeeded.is_(True),
+            models.AiCall.created_at >= _month_start(),
+        )
+    ) or 0)
+
+
+def _do_translate(payload: TranslateIn, user_id: str | None, db: OrmSession) -> dict:
+    """Translate for one member (or nobody), under the rules that make a real provider safe to use.
+
+    * **Only a confirmed adult's writing ever reaches a real provider.** Anybody else - a minor,
+      an account whose age nobody has established, a lookup that failed, a visitor who is not
+      signed in - gets the stand-in's answer, labelled as such and flagged ``withheld``, and
+      the provider is not called. ``agefeatures`` already treats "not a confirmed adult" as a
+      minor, so every doubt resolves to "do not send". This is checked here, where the text
+      would leave the platform, and not only by the callers.
+    * **A made-up translation is never read back from the cache**, and a real one is shared:
+      it was already paid for, and nothing about the next member's text leaves the platform.
+    * **A real call is limited** (limits.py): the member's daily allowance and the platform's
+      monthly budget. Cached answers and the stand-in are not.
+    """
     if payload.target_lang not in settings.SUPPORTED_LANGS:
         raise HTTPException(
             status_code=400, detail=f"Unsupported language. Available: {', '.join(settings.SUPPORTED_LANGS)}"
@@ -111,15 +222,52 @@ def translate(payload: TranslateIn, principal: MaybeUser, db: OrmSession = Depen
     if source_lang == payload.target_lang:
         return {"translated": payload.text, "source_lang": source_lang, "cached": False, "noop": True}
 
+    real_possible = _real_provider_would_serve(source_lang)
+    if real_possible and not (user_id and not agefeatures.profile(user_id).is_minor):
+        try:
+            result = gateway.run(
+                task="translate", prompt=payload.text, lang=source_lang, target_lang=payload.target_lang,
+                sensitive=True,  # the gateway's own rule: sensitive text goes to local providers only
+            )
+        except gateway.NoProviderError as exc:
+            raise HTTPException(status_code=503, detail=str(exc))
+        _record(db, result, user_id, True)
+        db.commit()
+        return {
+            "translated": result["output"], "source_lang": source_lang, "provider": result["provider"],
+            "mock": True, "withheld": "account", "cached": False,
+        }
+
     digest = hashlib.sha256(f"{source_lang}:{payload.target_lang}:{payload.text}".encode()).hexdigest()
-    cached = db.scalar(select(models.Translation).where(models.Translation.source_hash == digest))
+    # A made-up translation is never read back from the cache. Rows written by the
+    # stand-in before this rule are still in the table; once a real provider is
+    # configured they would otherwise be served for ever, for every text seen
+    # before, as if they were answers.
+    cached = db.scalar(
+        select(models.Translation).where(
+            models.Translation.source_hash == digest, models.Translation.provider != "mock"
+        )
+    )
     if cached:
         return {
             "translated": cached.translated_text,
             "source_lang": cached.source_lang,
             "provider": cached.provider,
+            "mock": False,
             "cached": True,
         }
+
+    if real_possible:
+        tier = plans.tier_of(user_id)
+        used = _used_this_month(db, user_id)
+        try:
+            limits.check(
+                spent_this_month=_spent_this_month(db), monthly_budget=settings.AI_MONTHLY_BUDGET_USD,
+                used_this_month_chars=used, allowance_chars=_allowance_chars(tier), text_chars=len(payload.text),
+                tier=tier, credit_chars=settings.AI_CREDIT_CHARS, renews_on=_renews_on(),
+            )
+        except limits.LimitReached as exc:
+            raise HTTPException(status_code=exc.status, detail=str(exc))
 
     try:
         result = gateway.run(
@@ -127,18 +275,24 @@ def translate(payload: TranslateIn, principal: MaybeUser, db: OrmSession = Depen
         )
     except gateway.NoProviderError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
+    except gateway.ProviderError as exc:
+        _record_failure(db, "translate", exc, source_lang, user_id, False)
+        raise HTTPException(status_code=502, detail=str(exc))
 
-    db.add(
-        models.Translation(
-            source_hash=digest,
-            source_lang=source_lang,
-            target_lang=payload.target_lang,
-            source_text=payload.text,
-            translated_text=result["output"],
-            provider=result["provider"],
+    # Only a real answer is worth keeping: the stand-in's is free and instant to
+    # make again, and keeping it only teaches the cache to serve it later.
+    if not result["mock"]:
+        db.add(
+            models.Translation(
+                source_hash=digest,
+                source_lang=source_lang,
+                target_lang=payload.target_lang,
+                source_text=payload.text,
+                translated_text=result["output"],
+                provider=result["provider"],
+            )
         )
-    )
-    _record(db, result, principal.user_id if principal else None, False)
+    _record(db, result, user_id, False)
     db.commit()
     return {
         "translated": result["output"],
@@ -147,6 +301,50 @@ def translate(payload: TranslateIn, principal: MaybeUser, db: OrmSession = Depen
         "mock": result["mock"],
         "cached": False,
     }
+
+
+@app.get("/ai/credits", tags=["translation"])
+def credits(principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    """A member's AI credits this month: what their plan gives, what they have used, what is left.
+
+    ``spendable`` is false for anyone who is not a confirmed adult (their writing is never sent to a
+    provider, so there is nothing to spend) and when no real provider is configured (nothing costs
+    anything). ``plan_counted`` says whether the plan is believed (settings.AI_CREDITS_TRUST_SUBSCRIPTIONS).
+    """
+    tier = plans.tier_of(principal.user_id)
+    allowance = _allowance_chars(tier)
+    used = _used_this_month(db, principal.user_id)
+    unit = settings.AI_CREDIT_CHARS
+    return {
+        "plan": tier,
+        "plan_counted": True,  # only payment-verified receipts can produce a paid plan
+        "credit_characters": unit,
+        "credits": limits.to_credits(allowance, unit),
+        "used": limits.to_credits(allowance, unit) - limits.credits_left(allowance, used, unit),
+        "left": limits.credits_left(allowance, used, unit),
+        "renews_on": _renews_on(),
+        "spendable": _real_provider_would_serve(None) and not agefeatures.profile(principal.user_id).is_minor,
+    }
+
+
+@app.post("/ai/translate", tags=["translation"])
+def translate(payload: TranslateIn, principal: MaybeUser, db: OrmSession = Depends(get_db)):
+    """One-click translation with a cache. Auto-detects the source when omitted.
+
+    Public. With a real provider behind it, only a signed-in confirmed adult gets a real
+    translation; everyone else gets the stand-in's, flagged ``withheld``.
+    """
+    return _do_translate(payload, principal.user_id if principal else None, db)
+
+
+@app.post("/internal/translate", tags=["internal"])
+def translate_for(payload: InternalTranslateIn, db: OrmSession = Depends(get_db)):
+    """The same, for a service translating on a member's behalf (the Creator Studio).
+
+    On the private network only. The caller names the member, so the age rule and the daily
+    allowance apply to *them*, not to the service.
+    """
+    return _do_translate(TranslateIn(text=payload.text, source_lang=payload.source_lang, target_lang=payload.target_lang), payload.user_id, db)
 
 
 def _fold(text: str) -> str:

@@ -1,0 +1,4 @@
+# Only for images built with MEDIA_TOOLS=1 (creator-service). Slides are drawn
+# with Pillow; its wheels bring FreeType, and libraqm (installed beside ffmpeg)
+# is what shapes Arabic.
+Pillow>=10.4.0

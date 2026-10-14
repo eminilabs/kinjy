@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import asyncio
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
@@ -21,6 +22,7 @@ from sqlalchemy.orm import Session as OrmSession
 
 from common import economy, events, settings
 from common import agefeatures
+from common import subscriptions as subscription_rules
 from common.auth import AdminUser, CurrentUser
 from common.database import get_db
 from common.ids import new_id
@@ -28,6 +30,7 @@ from common.service import create_app
 
 import models
 import rails
+import subscription_jobs
 
 log = logging.getLogger("payment-service")
 AUTH_URL = "http://auth-service:8000"
@@ -38,6 +41,15 @@ app = create_app(
     name="payment-service",
     schema=models.SCHEMA,
     description="Checkout into custody, refunds, KinjyKYC, member payout batches.",
+    migrations=[
+        f"ALTER TABLE {models.SCHEMA}.payment_intents ADD COLUMN IF NOT EXISTS {column} {kind}"
+        for column, kind in (
+            ("subscription_tier", "VARCHAR(20)"), ("subscription_period", "VARCHAR(10)"),
+            ("subscription_catalog_version", "INTEGER"), ("subscription_synced_status", "VARCHAR(20)"),
+            ("mock", "BOOLEAN NOT NULL DEFAULT FALSE"), ("pay_amount", "NUMERIC(36,18)"),
+        )
+    ],
+    on_startup=[subscription_jobs.start],
 )
 
 
@@ -84,6 +96,8 @@ def checkout(payload: CheckoutIn, principal: CurrentUser, db: OrmSession = Depen
     # here rather than only on the features that lead to it. A surface that
     # forgot its own check still cannot take a minor's money.
     agefeatures.require(principal.user_id, "payments")
+    if payload.purpose == "subscription":
+        raise HTTPException(status_code=400, detail="Use /payments/subscriptions/checkout; subscription prices are calculated by the server.")
 
     rail = rails.choose_rail(payload.rail, "USD")
     intent = models.PaymentIntent(
@@ -117,6 +131,7 @@ def checkout(payload: CheckoutIn, principal: CurrentUser, db: OrmSession = Depen
         raise HTTPException(status_code=503, detail=str(exc))
 
     intent.external_id = result.get("external_id")
+    intent.mock = bool(result.get("mock"))
     intent.pay_address = result.get("pay_address")
     intent.raw_payload = json.dumps(result.get("raw", result))
     db.commit()
@@ -144,20 +159,66 @@ async def nowpayments_ipn(
     if not rails.verify_ipn_signature(raw, x_nowpayments_sig):
         raise HTTPException(status_code=401, detail="Invalid IPN signature")
 
-    payload = json.loads(raw)
+    try:
+        payload = json.loads(raw)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid callback") from None
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Invalid callback")
+    subscription = await asyncio.to_thread(_subscription_callback, payload, raw, db)
+    if subscription is not None:
+        payment_id, status = subscription
+        if status in ("finished", "refunded"):
+            await asyncio.to_thread(subscription_jobs.deliver, payment_id, status)
+        return {"ok": True}
     intent = db.scalar(
-        select(models.PaymentIntent).where(models.PaymentIntent.id == payload.get("order_id"))
+        select(models.PaymentIntent).where(models.PaymentIntent.id == payload.get("order_id")).with_for_update()
     )
     if intent is None:
         raise HTTPException(status_code=404, detail="Unknown order_id")
 
-    intent.status = payload.get("payment_status", intent.status)
+    if intent.purpose == "subscription":
+        try:
+            subscription_rules.validate_callback(intent, payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
+        # A delayed waiting/failed notification cannot undo settlement; a
+        # delayed finished notification cannot revive a refunded receipt.
+        next_status = payload["payment_status"]
+        if intent.status == "refunded" or (intent.status == "finished" and next_status != "refunded"):
+            next_status = intent.status
+        intent.status = next_status
+    else:
+        intent.status = payload.get("payment_status", intent.status)
     intent.raw_payload = raw.decode()
     if intent.status == "finished" and intent.settled_at is None:
         intent.settled_at = datetime.now(timezone.utc)
         await _on_settled(intent, db)
     db.commit()
+    if intent.purpose == "subscription" and intent.status in ("finished", "refunded"):
+        await asyncio.to_thread(subscription_jobs.deliver, intent.id, intent.status)
     return {"ok": True}
+
+
+def _subscription_callback(payload: dict, raw: bytes, db: OrmSession):
+    intent = db.scalar(select(models.PaymentIntent).where(
+        models.PaymentIntent.id == payload.get("order_id"), models.PaymentIntent.purpose == "subscription",
+    ).with_for_update())
+    if intent is None:
+        return None
+    try:
+        subscription_rules.validate_callback(intent, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    next_status = payload["payment_status"]
+    if intent.status == "refunded" or (intent.status == "finished" and next_status != "refunded"):
+        next_status = intent.status
+    intent.status, intent.raw_payload = next_status, raw.decode()
+    if next_status == "finished" and intent.settled_at is None:
+        intent.settled_at = datetime.now(timezone.utc)
+    payment_id = intent.id
+    db.commit()
+    return payment_id, next_status
 
 
 @app.post("/payments/{payment_id}/mock-settle", tags=["payments"])
@@ -167,17 +228,170 @@ async def mock_settle(payment_id: str, principal: CurrentUser, db: OrmSession = 
     Refuses to run once a real rail is configured — otherwise it would be a way
     to mint settled payments in production.
     """
-    if rails.nowpayments_enabled() or rails.mangopay_enabled():
-        raise HTTPException(status_code=403, detail="A live payment rail is configured; mock settlement is disabled")
+    _require_mock()
 
+    subscription = await asyncio.to_thread(_mock_subscription_settle, payment_id, principal.user_id, db)
+    if subscription:
+        await asyncio.to_thread(subscription_jobs.deliver, payment_id, "finished")
+        return {"payment_id": payment_id, "status": "finished", "mock": True}
+
+    intent = db.scalar(select(models.PaymentIntent).where(models.PaymentIntent.id == payment_id).with_for_update())
+    if intent is None or intent.user_id != principal.user_id:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    if not intent.mock:
+        raise HTTPException(status_code=403, detail="This is not a simulated payment")
+    if intent.status == "refunded":
+        raise HTTPException(status_code=409, detail="A refunded payment cannot be settled again")
+    if intent.settled_at is None:
+        intent.status = "finished"
+        intent.settled_at = datetime.now(timezone.utc)
+        await _on_settled(intent, db)
+    db.commit()
+    if intent.purpose == "subscription":
+        await asyncio.to_thread(subscription_jobs.deliver, intent.id, intent.status)
+    return {"payment_id": payment_id, "status": intent.status, "mock": True}
+
+
+def _mock_subscription_settle(payment_id: str, user_id: str, db: OrmSession) -> bool:
+    intent = db.scalar(select(models.PaymentIntent).where(
+        models.PaymentIntent.id == payment_id, models.PaymentIntent.purpose == "subscription",
+    ).with_for_update())
+    if intent is None:
+        return False
+    if intent.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    if not intent.mock:
+        raise HTTPException(status_code=403, detail="This is not a simulated payment")
+    if intent.status == "refunded":
+        raise HTTPException(status_code=409, detail="A refunded payment cannot be settled again")
+    if intent.settled_at is None:
+        intent.status, intent.settled_at = "finished", datetime.now(timezone.utc)
+    db.commit()
+    return True
+
+
+def _mock_available() -> bool:
+    return subscription_rules.mock_allowed(settings.ENV, live_crypto=rails.nowpayments_enabled(), live_fiat=rails.mangopay_enabled())
+
+
+def _require_mock() -> None:
+    if not _mock_available():
+        raise HTTPException(status_code=403, detail="Payment simulation is disabled outside development or when a live rail is configured")
+
+
+class SubscriptionCheckoutIn(BaseModel):
+    tier: str = Field(pattern="^(basic|premium)$")
+    period: str = Field(default="monthly", pattern="^(monthly|yearly)$")
+    rail: str | None = Field(default=None, pattern="^(nowpayments|mock)$")
+    pay_currency: str = Field(default="usdtbsc", pattern="^[a-z0-9]{2,20}$")
+
+
+def _payment_out(intent: models.PaymentIntent) -> dict:
+    raw = json.loads(intent.raw_payload or "{}")
+    return {
+        "payment_id": intent.id, "purpose": intent.purpose, "status": intent.status,
+        "amount": str(intent.amount), "currency": intent.currency, "rail": intent.rail, "mock": intent.mock,
+        "tier": intent.subscription_tier, "period": intent.subscription_period,
+        "pay_address": intent.pay_address, "pay_currency": intent.pay_currency,
+        "pay_amount": str(intent.pay_amount) if intent.pay_amount is not None else None,
+        "checkout_url": raw.get("checkout_url"), "created_at": intent.created_at,
+        "settled_at": intent.settled_at,
+        "access_synced": intent.subscription_synced_status == intent.status and intent.status in ("finished", "refunded"),
+    }
+
+
+@app.get("/payments/subscriptions/options", tags=["subscriptions"])
+def subscription_options():
+    live = rails.nowpayments_enabled() and bool(settings.NOWPAYMENTS_IPN_SECRET)
+    return {"checkout_available": live or _mock_available(), "live_available": live,
+            "mock_available": _mock_available(), "renewal_mode": "manual"}
+
+
+@app.post("/payments/subscriptions/checkout", status_code=201, tags=["subscriptions"])
+def subscription_checkout(payload: SubscriptionCheckoutIn, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    agefeatures.require(principal.user_id, "payments")
+    if payload.rail == "mock" or not rails.nowpayments_enabled():
+        _require_mock()
+        rail = "mock"
+    else:
+        if not settings.NOWPAYMENTS_IPN_SECRET:
+            raise HTTPException(status_code=503, detail="Subscription checkout needs verified payment notifications before it can accept money.")
+        rail = "nowpayments"
+    intent = models.PaymentIntent(id=new_id("pmt"), user_id=principal.user_id, rail=rail,
+        purpose="subscription", reference="platform", amount=subscription_rules.price(payload.tier, payload.period),
+        currency="USD", pay_currency=payload.pay_currency, subscription_tier=payload.tier,
+        subscription_period=payload.period, subscription_catalog_version=subscription_rules.CATALOG_VERSION,
+        mock=rail == "mock")
+    if rail == "mock":
+        result = {"mock": True}  # no address resembling a real payment destination
+    else:
+        try:
+            result = rails.create_crypto_payment(amount=intent.amount, currency="USD", pay_currency=payload.pay_currency,
+                order_id=intent.id, callback_url=f"{settings.GATEWAY_URL}/api/payments/ipn/nowpayments")
+        except rails.RailError:
+            raise HTTPException(status_code=503, detail="The payment provider is temporarily unavailable. No subscription was activated.") from None
+        details = result.get("raw") or {}
+        if result.get("mock") or not result.get("external_id") or not result.get("pay_address") or not details.get("pay_amount"):
+            raise HTTPException(status_code=503, detail="The provider did not return complete payment instructions.")
+        intent.external_id, intent.pay_address = result["external_id"], result["pay_address"]
+        intent.pay_amount = Decimal(str(details["pay_amount"]))
+    intent.raw_payload = json.dumps(result)
+    db.add(intent)
+    db.commit()
+    return _payment_out(intent)
+
+
+@app.get("/payments/subscriptions/history", tags=["subscriptions"])
+def subscription_payments(principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    rows = db.scalars(select(models.PaymentIntent).where(models.PaymentIntent.user_id == principal.user_id,
+        models.PaymentIntent.purpose == "subscription", models.PaymentIntent.subscription_tier.is_not(None))
+        .order_by(models.PaymentIntent.created_at.desc()).limit(50)).all()
+    return {"items": [_payment_out(row) for row in rows]}
+
+
+@app.get("/internal/payments/{payment_id}/subscription", tags=["internal"])
+def subscription_proof(payment_id: str, db: OrmSession = Depends(get_db)):
+    intent = db.get(models.PaymentIntent, payment_id)
+    if intent is None or intent.purpose != "subscription" or intent.subscription_catalog_version is None:
+        raise HTTPException(status_code=404, detail="Subscription payment not found")
+    return {"payment_id": intent.id, "user_id": intent.user_id, "purpose": intent.purpose,
+        "tier": intent.subscription_tier, "period": intent.subscription_period,
+        "catalog_version": intent.subscription_catalog_version, "amount": str(intent.amount),
+        "currency": intent.currency, "status": intent.status, "settled_at": intent.settled_at, "mock": intent.mock}
+
+
+@app.get("/payments/intents/{payment_id}", tags=["payments"])
+def payment_status(payment_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
     intent = db.get(models.PaymentIntent, payment_id)
     if intent is None or intent.user_id != principal.user_id:
         raise HTTPException(status_code=404, detail="Payment not found")
-    intent.status = "finished"
-    intent.settled_at = datetime.now(timezone.utc)
-    await _on_settled(intent, db)
+    return _payment_out(intent)
+
+
+@app.post("/payments/{payment_id}/sync-subscription", tags=["subscriptions"])
+def sync_subscription(payment_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    intent = db.get(models.PaymentIntent, payment_id)
+    if intent is None or intent.user_id != principal.user_id or intent.purpose != "subscription":
+        raise HTTPException(status_code=404, detail="Subscription payment not found")
+    status = intent.status
+    db.rollback()  # do not keep a read transaction open during delivery
+    if status not in ("finished", "refunded"):
+        raise HTTPException(status_code=409, detail="Payment is not settled")
+    return {"access_synced": subscription_jobs.deliver(payment_id, status)}
+
+
+@app.post("/payments/{payment_id}/mock-refund", tags=["subscriptions"])
+def mock_refund(payment_id: str, principal: CurrentUser, db: OrmSession = Depends(get_db)):
+    _require_mock()
+    intent = db.scalar(select(models.PaymentIntent).where(models.PaymentIntent.id == payment_id).with_for_update())
+    if intent is None or intent.user_id != principal.user_id or intent.purpose != "subscription":
+        raise HTTPException(status_code=404, detail="Subscription payment not found")
+    if not intent.mock or intent.settled_at is None:
+        raise HTTPException(status_code=409, detail="Only a settled simulated subscription can be refunded here")
+    intent.status = "refunded"
     db.commit()
-    return {"payment_id": payment_id, "status": intent.status, "mock": True}
+    subscription_jobs.deliver(intent.id, "refunded")
+    return {"payment_id": intent.id, "status": "refunded", "mock": True}
 
 
 async def _on_settled(intent: models.PaymentIntent, db: OrmSession) -> None:

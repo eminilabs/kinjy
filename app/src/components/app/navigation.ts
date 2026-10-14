@@ -1,3 +1,5 @@
+import { PenLine } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import type { ChromeKey } from '@/components/appdemo/theme'
 import { isRouteAvailable } from '@/lib/features'
 
@@ -66,14 +68,20 @@ export const NAV_DESTINATIONS: ChromeKey[] = (
   ] as ChromeKey[]
 ).filter((key) => isRouteAvailable(ROUTE_FOR[key]))
 
-/** Shorts is ours, not in the blueprint's original list — appended, not inserted. */
-export const EXTRA_NAV: Array<{ key: string; route: string; label: string }> = [
+/**
+ * Shorts and the Studio are ours, not in the blueprint's original list —
+ * appended, not inserted. The Studio is the blueprint's module G (Creator
+ * Studio); "Create" in the list above is the composer, which is one door into it.
+ */
+export const EXTRA_NAV: Array<{ key: string; route: string; label: string; icon?: LucideIcon }> = [
   { key: 'shorts', route: '/shorts', label: 'Shorts' },
+  { key: 'studio', route: '/studio', label: 'Studio', icon: PenLine },
 ]
 
 /** Which chip should look active for the current location. */
-export function activeKeyFor(pathname: string, search: string): ChromeKey | 'shorts' | null {
+export function activeKeyFor(pathname: string, search: string): ChromeKey | 'shorts' | 'studio' | null {
   if (pathname === '/shorts') return 'shorts'
+  if (pathname === '/studio') return 'studio'
   // Every feed mode is still Home — the mode is a state of that page, so the
   // chip must not jump around as the member switches tabs inside it.
   if (pathname === '/hub') {
