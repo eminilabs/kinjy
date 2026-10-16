@@ -69,12 +69,16 @@ class Post(Base):
     series_id: Mapped[str | None] = mapped_column(String(40), index=True)
     episode_number: Mapped[int | None] = mapped_column(Integer)
 
+    # When a scheduled post goes out. Set only while status is "scheduled"; the post is judged
+    # (classified, its media restricted) when it is written, and merely *released* at this time.
+    scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
     likes_count: Mapped[int] = mapped_column(Integer, default=0)
     comments_count: Mapped[int] = mapped_column(Integer, default=0)
     reposts_count: Mapped[int] = mapped_column(Integer, default=0)
     views_count: Mapped[int] = mapped_column(Integer, default=0)
 
-    status: Mapped[str] = mapped_column(String(20), default="published")  # draft|published|hidden|removed
+    status: Mapped[str] = mapped_column(String(20), default="published")  # draft|scheduled|published|hidden|removed
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
     edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

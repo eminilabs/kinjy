@@ -1,12 +1,15 @@
 import { cn } from '@/lib/utils'
 import { provenanceLabel } from './format'
 
+// Normal text colour on every label; what sets an AI or verified one apart is its
+// border. The theme's warning and success colours are 3.2–4.1:1 on a tinted
+// background in light mode — under the 4.5:1 this small text needs.
 const ON_PAGE: Record<string, string> = {
   original: 'bg-text-low/15 text-text-mid',
   edited: 'bg-text-low/15 text-text-mid',
-  ai_assisted: 'bg-warning/15 text-warning',
-  ai_generated: 'bg-warning/15 text-warning',
-  verified_source: 'bg-success/15 text-success',
+  ai_assisted: 'border border-warning/60 bg-warning/10 text-text-hi',
+  ai_generated: 'border border-warning/60 bg-warning/10 text-text-hi',
+  verified_source: 'border border-success/60 bg-success/10 text-text-hi',
 }
 
 // The viewer is black whatever the theme, so it cannot use the theme's tokens:

@@ -94,6 +94,17 @@ VAPID_SUBJECT = _str("VAPID_SUBJECT", "mailto:support@kinjy.com")
 def push_configured() -> bool:
     return bool(VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY)
 
+
+# --- Newsletters (creator-service) ---------------------------------------------
+# A creator writes to people who asked for it, confirmed it by e-mail, and can leave in one click. These
+# numbers keep that from becoming a mail cannon: most newsletters are well under them. A commercial
+# e-mail in some countries must carry the sender's postal address; set it for those.
+NEWSLETTER_MAX_RECIPIENTS = _int("NEWSLETTER_MAX_RECIPIENTS", 1000)
+NEWSLETTER_MAX_ISSUES_PER_DAY = _int("NEWSLETTER_MAX_ISSUES_PER_DAY", 2)
+NEWSLETTER_SEND_INTERVAL_SECONDS = float(_dec("NEWSLETTER_SEND_INTERVAL_SECONDS", "0.2"))
+NEWSLETTER_POSTAL_ADDRESS = _str("NEWSLETTER_POSTAL_ADDRESS")
+
+
 # --- Economy ----------------------------------------------------------------
 # Marketplace / agency: customer price = vendor price * (1 + markup). A vendor
 # listing at $100 with a 20% markup is sold at $120; Kinjy's *revenue* on that
@@ -150,6 +161,30 @@ MANGOPAY_BASE_URL = _str("MANGOPAY_BASE_URL", "https://api.sandbox.mangopay.com"
 
 # --- AI ---------------------------------------------------------------------
 AI_DEFAULT_PROVIDER = _str("AI_DEFAULT_PROVIDER", "mock")
+# The switch for every real provider at once. Off by default and off means off:
+# a key can sit in the environment, even with an adapter written for it, and
+# nothing is sent anywhere until this is turned on. It is also the way to stop
+# spending in a hurry without removing a key.
+AI_LIVE_ENABLED = _str("AI_LIVE_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
+# What a real provider may be asked (ai-service/limits.py). It applies only when a real provider would
+# be called: the stand-in and a cached answer are free.
+#
+# AI credits, by plan (blueprint section 12: Basic "more AI credits"). A credit is AI_CREDIT_CHARS
+# characters sent to the provider; a plan has that many credits a calendar month. At the default, a
+# Free member can translate one full-length text (20,000 characters) a month into one language.
+# Priced at what IleAI's chat engine cost when measured (about 0.07 USD for 20,000 characters), the
+# worst case for a member is: Free 0.07, Basic 0.70, Premium 3.50 USD a month.
+AI_CREDIT_CHARS = _int("AI_CREDIT_CHARS", 1000)
+AI_CREDITS_FREE = _int("AI_CREDITS_FREE", 20)
+AI_CREDITS_BASIC = _int("AI_CREDITS_BASIC", 200)
+AI_CREDITS_PREMIUM = _int("AI_CREDITS_PREMIUM", 1000)
+# Whether a member's plan is believed. POST /subscriptions only *records* a plan: nothing checks that it was
+# paid for, so any member can name themselves Premium. Until billing confirms subscriptions this stays
+# off and every member gets the Free allowance, whatever plan they have recorded.
+AI_CREDITS_TRUST_SUBSCRIPTIONS = _str("AI_CREDITS_TRUST_SUBSCRIPTIONS", "false").strip().lower() in ("1", "true", "yes", "on")
+# The platform's own ceiling, in USD a month, from the cost each real call was recorded with. When it is
+# spent translation pauses for everybody. 5 USD is the size of IleAI's free credit.
+AI_MONTHLY_BUDGET_USD = float(_dec("AI_MONTHLY_BUDGET_USD", "5"))
 
 # --- Media ------------------------------------------------------------------
 MEDIA_ROOT = _str("MEDIA_ROOT", "/data/media")

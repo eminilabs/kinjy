@@ -34,6 +34,8 @@ class AiCall(Base):
     latency_ms: Mapped[int] = mapped_column(Integer, default=0)
     input_tokens: Mapped[int] = mapped_column(Integer, default=0)
     output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    # Characters of the member's writing sent to the provider: what the daily allowance counts.
+    chars: Mapped[int] = mapped_column(Integer, default=0)
     cost_usd: Mapped[float] = mapped_column(Numeric(12, 6), default=0)
     sensitive: Mapped[bool] = mapped_column(default=False)
     succeeded: Mapped[bool] = mapped_column(default=True)

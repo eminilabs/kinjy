@@ -41,6 +41,14 @@ class PaymentIntent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    # Immutable server quote. Old generic "subscription" intents have none and cannot grant access.
+    subscription_tier: Mapped[str | None] = mapped_column(String(20))
+    subscription_period: Mapped[str | None] = mapped_column(String(10))
+    subscription_catalog_version: Mapped[int | None] = mapped_column(Integer)
+    subscription_synced_status: Mapped[str | None] = mapped_column(String(20))
+    mock: Mapped[bool] = mapped_column(Boolean, default=False)
+    pay_amount: Mapped[Decimal | None] = mapped_column(Numeric(36, 18))
+
 
 class PayoutDestination(Base):
     """Where a member wants to be paid. One of the two eligibility gates."""

@@ -379,6 +379,11 @@ export default function PostCard({
       // Pass the author's declared language: the server's detector only
       // separates scripts, so it would call Swahili "English".
       const result = await kaluta.ai.translate(plainBody, uiLang, post.lang)
+      if (result.withheld) {
+        // Not a translation, and not to be shown as one: the placeholder stays out of sight.
+        setNote('Translation is available to signed-in accounts aged 18 and over.')
+        return
+      }
       setTranslation({ text: result.translated, provider: result.provider, mock: result.mock })
     } catch (err) {
       setNote(err instanceof ApiError ? err.message : 'Translation unavailable')
@@ -535,7 +540,9 @@ export default function PostCard({
             </p>
           </div>
           <div className="sm:border-s sm:border-white/8 sm:ps-4">
-            <p className="caption mb-1 uppercase">{uiLang} · translated</p>
+            <p className="caption mb-1 uppercase">
+              {uiLang} · translated{translation.mock ? ' · simulated' : ''}
+            </p>
             <p className="whitespace-pre-wrap text-[0.95rem] leading-relaxed text-text-hi">
               {withHashtags(translation.text)}
             </p>

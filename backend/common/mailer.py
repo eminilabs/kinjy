@@ -34,7 +34,7 @@ def configured() -> bool:
     return settings.mail_configured()
 
 
-def send(to: str, subject: str, body: str) -> None:
+def send(to: str, subject: str, body: str, headers: dict[str, str] | None = None) -> None:
     """Send one plain-text message, or raise.
 
     Plain text only. A reset mail is three lines and a link; HTML would add a
@@ -49,6 +49,12 @@ def send(to: str, subject: str, body: str) -> None:
     message["To"] = to
     message["Subject"] = subject
     message["Auto-Submitted"] = "auto-generated"  # keeps vacation responders quiet
+    for name, value in (headers or {}).items():
+        # Extra headers (List-Unsubscribe, Precedence) come from our own code, never from a request; a line
+        # break in a value would still be a way to inject more of them, so it is refused.
+        if "\n" in name + value or "\r" in name + value:
+            raise MailError("Refusing a header with a line break in it")
+        message[name] = value
     message.set_content(body)
 
     try:

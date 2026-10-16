@@ -226,7 +226,7 @@ export function AppChipBar({ pathname, search }: { pathname: string; search: str
       label: t(key as ChromeKey),
       Icon: MODULE_ICONS[key as ChromeKey] ?? Home,
     })),
-    ...EXTRA_NAV.map((e) => ({ ...e, Icon: Clapperboard })),
+    ...EXTRA_NAV.map((e) => ({ ...e, Icon: e.icon ?? Clapperboard })),
   ]
 
   // The current page always has a chip, even when it is not pinned — otherwise

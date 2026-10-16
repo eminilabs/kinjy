@@ -529,6 +529,7 @@ def serve(
     s: str | None = None,
     exp: str | None = None,
     sig: str | None = None,
+    download: bool = False,
     db: OrmSession = Depends(get_db),
 ):
     """Serve the bytes.
@@ -582,7 +583,7 @@ def serve(
     # Only what a browser can show safely is served inline; anything else
     # (HTML, SVG, archives...) is a download, so an upload can never run as a
     # page on this origin.
-    inline = asset.kind in INLINE_KINDS and not asset.content_type.startswith("image/svg")
+    inline = not download and asset.kind in INLINE_KINDS and not asset.content_type.startswith("image/svg")
     media_type = asset.content_type if inline else "application/octet-stream"
     headers = _serve_headers(asset.content_type if inline else None)
     if asset.access == "restricted":
@@ -796,6 +797,98 @@ def sign_assets(payload: dict):
             for asset_id in asset_ids
         }
     }
+
+
+# What the Creator Studio's renderer makes, and nothing else. Narrower than a
+# post's list on purpose: this door is opened by a service, not a browser, so it
+# takes only the three types that service produces and the sizes they can reach.
+GENERATED_TYPES = {"image/png": "image", "audio/mpeg": "audio", "video/mp4": "video"}
+GENERATED_MAX_BYTES = {"image": 15 * 1024 * 1024, "audio": 60 * 1024 * 1024, "video": 120 * 1024 * 1024}
+
+
+@app.post("/internal/media/ingest", status_code=201, tags=["internal"])
+async def ingest_generated(
+    owner_id: str = Form(...),
+    file: UploadFile = File(...),
+    provenance: str = Form(default="ai_generated"),
+    alt_text: str | None = Form(default=None),
+    derived_from: str | None = Form(default=None),
+    db: OrmSession = Depends(get_db),
+):
+    """Store a file a service made on a member's behalf, as that member's own.
+
+    The Studio's carousels, narrations and videos are rendered inside
+    creator-service, and a post can only carry media its author owns; this is how
+    a rendered file becomes one. It is on the private network (the gateway never
+    proxies ``/internal``) because it names the owner in the request - a public
+    route like that would let anyone upload as anyone.
+
+    Different from ``/media/upload`` in three ways, each deliberate:
+
+    - It is **restricted from the first byte**. Nobody has attached it to a post
+      yet, so nobody has decided who may see it; until then it is served only
+      against a ticket the creator-service mints for its owner.
+    - It is **never deduplicated**. A render is not content someone uploaded
+      twice: two jobs sharing one file would let deleting one job take the
+      other's media with it.
+    - It is **always local**, never sent to UploadCenter. The bytes are ours.
+    """
+    if provenance not in models.Asset.PROVENANCE:
+        raise HTTPException(status_code=400, detail=f"provenance must be one of: {', '.join(models.Asset.PROVENANCE)}")
+    content_type = (file.content_type or "").split(";")[0].strip().lower()
+    kind = GENERATED_TYPES.get(content_type)
+    if kind is None:
+        raise HTTPException(status_code=415, detail=f"Not something the renderer makes: {file.content_type}")
+
+    asset_id = new_id("mda")
+    folder = ROOT / owner_id[:12]
+    folder.mkdir(parents=True, exist_ok=True)
+    destination = folder / f"{asset_id}{Path(file.filename or '').suffix[:10]}"
+
+    digest = hashlib.sha256()
+    written = 0
+    limit = GENERATED_MAX_BYTES[kind]
+    with destination.open("wb") as out:
+        while chunk := await file.read(1024 * 1024):
+            if written == 0 and not signatures.matches(content_type, chunk[: signatures.HEAD_BYTES]):
+                out.close()
+                destination.unlink(missing_ok=True)
+                raise HTTPException(status_code=415, detail=f"The file does not look like {content_type}")
+            written += len(chunk)
+            if written > limit:
+                out.close()
+                destination.unlink(missing_ok=True)
+                raise HTTPException(status_code=413, detail=f"File exceeds the {limit // 1024 // 1024} MB limit")
+            digest.update(chunk)
+            out.write(chunk)
+    if written == 0:
+        destination.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="The file is empty")
+
+    asset = models.Asset(
+        id=asset_id,
+        owner_id=owner_id,
+        filename=file.filename or asset_id,
+        content_type=content_type,
+        size_bytes=written,
+        sha256=digest.hexdigest(),
+        storage_path=str(destination),
+        url=f"{settings.MEDIA_PUBLIC_BASE}/{asset_id}",
+        kind=kind,
+        access="restricted",
+        provenance=provenance,
+        provenance_signed=False,
+        derived_from=derived_from,
+        alt_text=alt_text[:500] if alt_text else None,
+    )
+    db.add(asset)
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        destination.unlink(missing_ok=True)
+        raise
+    return _describe(asset)
 
 
 @app.get("/media/{asset_id}/provenance", tags=["media"])

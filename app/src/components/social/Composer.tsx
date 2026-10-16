@@ -354,7 +354,7 @@ export default function Composer({
           const skipped = job.unsupported.length
             ? ` ${job.unsupported.join(', ')} still needs a media pipeline.`
             : ''
-          publishNote = `Posted. ${job.ready} of ${job.outputs} formats produced.${skipped}`
+          publishNote = `Posted. ${job.ready} of ${job.outputs} formats produced — find them in Studio.${skipped}`
         } catch (err) {
           publishNote =
             err instanceof ApiError

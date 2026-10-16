@@ -45,6 +45,10 @@ const MarketProduct = lazy(() => import('./pages/app/MarketProduct'))
 const Explore = lazy(() => import('./pages/app/Explore'))
 const Live = lazy(() => import('./pages/app/Live'))
 const Shorts = lazy(() => import('./pages/app/Shorts'))
+const Studio = lazy(() => import('./pages/app/Studio'))
+const Subscription = lazy(() => import('./pages/app/Subscription'))
+const NewsletterSubscribe = lazy(() => import('./pages/NewsletterSubscribe'))
+const StudioPrivacy = lazy(() => import('./pages/StudioPrivacy'))
 const Earn = lazy(() => import('./pages/app/Earn'))
 const Supervision = lazy(() => import('./pages/app/Supervision'))
 const TrustSafety = lazy(() => import('./pages/TrustSafety'))
@@ -99,6 +103,9 @@ export default function App() {
               a link that demands a sign-in before showing anything is a link
               nobody forwards. ?ref= carries the sharer's invitation. */}
           <Route path="/p/:postId" element={<PostPage />} />
+          {/* Where a reader asks for a creator's newsletter: public, no account needed. */}
+          <Route path="/newsletter/:handle" element={<NewsletterSubscribe />} />
+          <Route path="/studio/privacy" element={<StudioPrivacy />} />
           <Route path="/dashboard" element={<Dashboard />} />
           {/* The member's real feed. /feeds stays the public marketing page. */}
           <Route path="/hub" element={<SocialHub />} />
@@ -129,6 +136,8 @@ export default function App() {
           <Route path="/explore" element={<Explore />} />
           <Route path="/live" element={gated('live', <Live />, '/hub')} />
           <Route path="/shorts" element={<Shorts />} />
+          <Route path="/studio" element={<Studio />} />
+          <Route path="/subscription" element={<Subscription />} />
           <Route path="/earn" element={<Earn />} />
           {/* Notifications about supervision link here, so the path is fixed. */}
           <Route path="/supervision" element={<Supervision />} />

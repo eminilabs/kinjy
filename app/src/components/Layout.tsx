@@ -31,6 +31,8 @@ const APP_ROUTES = [
   '/earn',
   '/live',
   '/shorts',
+  '/studio',
+  '/subscription',
   '/supervision',
   '/trust-safety',
   '/moderation',

@@ -7,6 +7,7 @@ blueprint, the React frontend and the FastAPI microservice backend.
 Kaluta Society/
 ├── docker-compose.yml        the whole local stack
 ├── .env.example              copy to .env
+├── .env.ai.example           copy to .env.ai: AI provider keys, read by ai-service only
 ├── app/                      React 19 + Vite + Tailwind + shadcn frontend
 ├── backend/
 │   ├── Dockerfile            one image definition, parameterised by SERVICE
@@ -139,7 +140,9 @@ Deliberately explicit, because a half-wired money path is worse than an obvious 
   and the honest "why am I seeing this", escrowed orders, ad floor enforcement.
 - **Mocked, clearly labelled:** payment rails run in mock mode until
   `NOWPAYMENTS_API_KEY` / Mangopay credentials are set; the AI gateway routes
-  and meters for real but every provider currently returns mock output.
+  and meters for real, but no provider has an adapter yet, so every answer is
+  the stand-in's and says `mock: true`. A key alone changes nothing (see "AI
+  provider keys" below).
 - **Not started:** WebAuthn registration/assertion ceremonies (the tables and
   endpoints exist, the ceremony does not), C2PA signing, Mangopay live calls,
   live-streaming, the developer app marketplace.
@@ -296,6 +299,95 @@ place, lights a candle, leaves a flower or signs the guest book.
 
 ```bash
 python backend/tests/e2e_graveyard.py   # 88 checks, live API (needs .env for the staff token)
+```
+
+### Scheduled posts and newsletters (Studio)
+
+- **Scheduled posts.** `POST /posts` with `scheduled_for` (an ISO time with a time zone, a minute to a year ahead).
+  The post is classified and its media restricted when it is written, then held back - visible only to its
+  author, who can list, move, publish or cancel it - and released by a loop in social-service. The Studio's
+  "Post it" panel has "Publish later".
+- **Newsletters.** Readers sign up at `/newsletter/<handle>` (no account), confirm by e-mail, and can leave in one
+  click from any mail. A creator who is a confirmed adult sends a Studio newsletter from its card to the people
+  who confirmed (counts and masked previews only), capped per issue and per day, resuming after a crash and never
+  writing to anyone twice. Needs SMTP (`SMTP_*`); without it the server says so instead of pretending.
+
+### AI provider keys
+
+A provider is used only when **three** things are true: its key is set, an adapter
+that really calls it exists in `backend/ai-service`, and `AI_LIVE_ENABLED=true`.
+It then answers only the tasks its adapter implements; every other task stays with
+the stand-in and says `mock: true`. This is so a key can never remove the
+"Simulated" label from text that is still invented.
+
+- **Keys go in `.env.ai`, not `.env`.** Copy `.env.ai.example`. The file is
+  git-ignored and only ai-service reads it (`docker-compose.yml`); `.env` reaches
+  every container. In production, set the key in the server's environment.
+- `AI_LIVE_ENABLED` (in `.env`) is off by default and is also the way to stop
+  spending in a hurry without removing a key.
+- A key with no adapter is ignored with a warning in ai-service's log, never
+  printed. `/ai/providers` lists each provider with `live: true|false`.
+
+**Who may be translated, and how much.** Only a confirmed adult's writing is ever sent to a real
+provider: a minor, an account whose age is not established and a visitor get the stand-in's answer,
+flagged `withheld`, and in the Studio an honest "not available for accounts under 18". A member has AI
+credits by plan (1 credit = 1,000 characters; Free 20, Basic 200, Premium 1,000 a month - `AI_CREDITS_*`,
+read with `GET /ai/credits`) and the platform a monthly budget (`AI_MONTHLY_BUDGET_USD`, 5): see
+`.env.example`. **Plans are not believed yet** (`AI_CREDITS_TRUST_SUBSCRIPTIONS=false`): nothing checks that
+a recorded subscription was paid, so every member has the Free allowance until billing confirms them.
+A translation is made on a worker, not in the request.
+
+IleAI is the first provider with an adapter (translation only; `docker compose` reads its key from
+`.env.ai` as `ILEAI_API_KEY`, sent in the `X-API-Key` header). It can translate through its DeepL
+endpoint or, while that is down, through a language model (`ILEAI_TRANSLATE_ENGINE=chat`,
+`ILEAI_CHAT_MODEL=gpt-5-mini`): see `.env.ai.example` and NOT-DONE.md before turning it on - the
+rules for minors, the 30-second limit and the budget are not built yet.
+
+```bash
+python -m pytest backend/tests/test_ai_gateway.py backend/tests/test_ileai_adapter.py \
+    backend/tests/test_ai_limits.py backend/tests/test_ai_plans.py backend/tests/test_creator_translation.py \
+    backend/tests/test_newsletter_links.py                                               # 151 checks, no stack
+python backend/tests/e2e_translation_rules.py       # 32 checks; needs ai-service on the stand-in (compose.fake-ileai.yml)
+python backend/tests/e2e_scheduled_posts.py         # 26 checks; waits for the real release loop (about 2 minutes)
+python backend/tests/e2e_newsletters.py             # 44 checks; needs creator-service on the mail sink (compose.fake-smtp.yml)
+python backend/tests/e2e_ai_gateway.py              # 11 checks, live API, stand-in only
+python backend/tests/e2e_studio_real_translation.py # 17 checks, needs a live provider and spends a few cents (skips otherwise)
+python backend/tests/contract_ileai_chat.py         # by hand, spends a few cents (see its docstring)
+```
+
+### Creator Studio — one idea, every format it can really make
+
+`/studio` (creator-service) is the blueprint's module G. A creator writes once,
+chooses a format (article, newsletter, translation) and up to five languages, and
+gets every piece back on screen — each with the label it was made under
+(original, edited, AI assisted, AI generated). A piece can be copied, or posted
+after a last edit, as an article or a text post with that label. What a creator
+makes is kept in a history they can reopen, link to (`/studio?job=…`) and delete.
+
+- **Only what can be made is offered**, asked of the machine
+  (`GET /creators/formats`): a format whose tools are missing is listed with the
+  reason, never accepted and left spinning.
+- **Carousel, audio, short and long video** are rendered in the background
+  (`render.py`, `media_jobs.py`): slides drawn with Pillow, text read by
+  espeak-ng, MP3 and MP4 encoded by ffmpeg, stored at media-service as the
+  creator's own and posted like any upload. The voice is a synthetic one and is
+  labelled so; a video is slides read aloud, not footage. creator-service builds
+  with `MEDIA_TOOLS=1`, so `docker compose build creator-service` after pulling
+  this (the image grows to about 1.5 GB).
+- **The engine rearranges and translates; it does not write.** An article is the
+  creator's words with structure around them, a newsletter the same in an email's
+  shape. Everything is escaped: what a creator types never runs as markup.
+- **The stand-in AI says so.** Until a real provider is live, a "translation"
+  only marks the text with the language. It is labelled **Simulated** and cannot
+  be posted.
+- **Bounded.** 20,000 characters of source, each format and language once.
+- **For adults and minors alike** — monetization is the adults' switch (and the
+  panel says so); the writing tools are not.
+
+```bash
+python backend/tests/e2e_creator_studio.py   # 56 checks, live API
+python backend/tests/e2e_creator_media.py    # 74 checks, real renders (about 2 minutes)
+python backend/tests/e2e_studio_ui.py       # Chromium desktop/phone; needs playwright and compose.fake-smtp.yml
 ```
 
 ### Universal Navigation — the signed-in app
